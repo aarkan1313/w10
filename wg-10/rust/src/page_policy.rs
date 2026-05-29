@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 
 /// Identifies a page in world space at a clipmap level.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PageKey {
     pub level: i32,
     pub origin_x: i64,

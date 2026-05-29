@@ -58,4 +58,32 @@ impl SchedulePolicy {
         let oz = (cz / span).floor() as i64 * span as i64;
         (ox, oz)
     }
+
+    /// The set of page keys the rings need this frame: for each level, a
+    /// (2*radius+1)^2 ring of pages around the velocity-biased centre. Union
+    /// across levels. Deduplicated. Pure function of (cfg, pos, vel).
+    pub fn coverage(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> Vec<PageKey> {
+        let cx = pos_x + vel_x * self.cfg.lead_frames;
+        let cz = pos_z + vel_z * self.cfg.lead_frames;
+        let r = self.cfg.radius_pages;
+        let mut seen: HashSet<PageKey> = HashSet::new();
+        let mut out: Vec<PageKey> = Vec::new();
+        for level in 0..self.cfg.num_levels {
+            let span = self.level_span(level) as i64;
+            let (centre_ox, centre_oz) = self.page_origin(level, cx, cz);
+            for dz in -r..=r {
+                for dx in -r..=r {
+                    let key = PageKey {
+                        level,
+                        origin_x: centre_ox + dx as i64 * span,
+                        origin_z: centre_oz + dz as i64 * span,
+                    };
+                    if seen.insert(key) {
+                        out.push(key);
+                    }
+                }
+            }
+        }
+        out
+    }
 }
