@@ -28,7 +28,7 @@ CHECKS = {
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
         "worldgen_terrain/tests/m3_stream_check.gd",
-        "worldgen_terrain/tests/m3_rings_check.gd",
+        "worldgen_terrain/tests/m3_view_check.gd",
     ],
 }
 
