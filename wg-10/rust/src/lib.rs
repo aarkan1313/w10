@@ -15,6 +15,7 @@ mod schedule_policy;
 mod streamer;
 mod ring_geometry;
 mod clipmap_rings;
+mod terrain_view;
 
 #[cfg(test)]
 mod hash_tests;
