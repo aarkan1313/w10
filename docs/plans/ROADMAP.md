@@ -4,8 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (height layer + .npy reader + height property gate green;
-46 Rust tests green)
+Last updated: 2026-05-29 (M2 GPU formula + parity gate green; 67 Rust tests green)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -48,8 +47,19 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
 ## Milestone 2 — GPU formula + parity
 
-- [ ] GPU compute implementation of the same formula (no readback).
-- [ ] CPU/GPU parity gate (bit-close; documented epsilon only if profiled).
+- [x] GPU compute implementation of the same formula (no readback in production).
+      Done: synthetic-kernel formula (hash→grammar→height) ported to GLSL compute
+      (`height_field.glsl`), dispatched by `Wg10GpuCompute` (RenderingDevice,
+      windowed). Readback exists ONLY in the parity gate (one-off compare), not in
+      the eventual render path (M3).
+- [x] CPU/GPU parity gate (bit-close; documented epsilon only if profiled).
+      Done: Tier-1 family selection EXACT (bit-exact `family_signature` over 576
+      coords); Tier-2 height within f32 epsilon (ABS_EPS=1e-2 m, observed max
+      delta 7.67e-5 m — 130× headroom). Verified on D3D12/RTX 5090 Laptop GPU.
+      `gpu` gate suite runs windowed; `fast` stays headless (4 checks, fail=0).
+      67 Rust unit/property tests green. M2 is a CPU-math + parity milestone —
+      its definition of done is the parity gate, not a visual/fly-test gate
+      (that applies to the render pipeline, M3).
 
 ## Milestone 3 — Render pipeline at speed (the hard part)
 

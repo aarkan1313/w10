@@ -5,7 +5,7 @@ conflicts with code, either the code is wrong or this doc is — reconcile
 immediately, do not let them drift. (That drift is why WorldGen9 is being
 restarted.)
 
-Last updated: 2026-05-28 (added §6.4: modular harness components)
+Last updated: 2026-05-29 (M2: GPU formula + CPU/GPU parity gate green; integer hash; §2.4 and §9 updated)
 
 ---
 
@@ -92,6 +92,27 @@ replaced without touching worldgen; each layer is testable alone.
 Do not force inherently-serial or readback-dependent work onto the GPU (that
 is what made WG9's near path cost 128 ms/chunk). Do not make the GPU
 authoritative for facts the simulation reads.
+
+**M2 status (2026-05-29):** The same deterministic formula (hash→grammar→height)
+now runs on both CPU and GPU via a **GPU-portable integer hash**
+`hash::stable_hash_ints(salt: u32, &[i64]) -> u32` — pure u32-wrapping FNV-1a
+fold, bit-identical on CPU and GLSL `uint`. A hand-ported GLSL compute shader
+(`height_field.glsl`) is dispatched by `Wg10GpuCompute` (RenderingDevice,
+windowed — headless RenderingDevice returns null on this D3D12 setup).
+
+**CPU/GPU parity verified on real hardware (D3D12, RTX 5090):** Tier 1 — family
+selection matches EXACTLY (bit-exact `family_signature`); Tier 2 — height within
+f32 epsilon (observed max delta 7.67e-5 m; ABS_EPS=1e-2 m tolerance, 130x
+headroom). The parity gate (`gpu_parity_check.gd`) **reads back** GPU output for
+comparison; this readback exists ONLY in the gate (a one-off diagnostic compare).
+**Production render streaming is no-readback — that is the M3 render pipeline.**
+
+**Grammar-rolls integer-hash refactor:** the 5 roll sites in `grammar.rs` were
+switched from string-join hashing to `stable_hash_ints` with distinct integer
+salts. Consequence: grammar rolls are a new seed-space (accepted; WG10 grammar was
+never a WG9 parity contract). The WG9-bit-exact bedrock (`hash_grid` / `value_noise`
+/ `fbm` vs `hash_reference.json`) is **untouched**. All grammar property tests still
+pass unchanged.
 
 ---
 
@@ -417,3 +438,16 @@ Each step is not "done" until it meets §7.3.
     single-kernel tiling produces visible creases at footprint seam boundaries
     (C0 continuity, not C1). This is expected and deferred until the renderer can
     show it.
+- **GPU kernel-atlas for varied sizes — named risk (2026-05-29):** the M2 GPU
+  compute shader packs kernels into a flat atlas assuming uniform 4×4 synthetic
+  kernels. Real OpenTopo DEMs have varied sizes; non-uniform kernel sizes may
+  require an atlas layout redesign. Revisit when the real DEM pack is wired.
+- **CPU/GPU parity epsilon (2026-05-29):** ABS_EPS=1e-2 m, REL_EPS=1e-5,
+  justified by f32 mantissa limits. Observed max delta on D3D12/RTX 5090:
+  7.67e-5 m (130× inside tolerance). Widen only if future hardware profile
+  requires it — do not widen speculatively.
+- **GPU compute is windowed-only:** `Wg10GpuCompute` uses a local
+  RenderingDevice which returns null under `--headless` on this D3D12 setup.
+  The `gpu` gate suite therefore runs windowed; the `fast` suite stays headless.
+  The `gpu` gate returns a distinct SKIP code (2) on a no-GPU / headless box so
+  a skip is never miscounted as a pass.
