@@ -59,3 +59,49 @@ fn rejects_pct_sum_at_overflow_boundary() {
     let err = pack::load_pack_str(bad).expect_err("must reject overflow-prone pct sum");
     assert!(err.contains("pct") || err.contains("100"), "error should mention pct range: {err}");
 }
+
+use std::path::Path;
+
+fn fixtures_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../worldgen_terrain/fixtures")
+}
+
+#[test]
+fn load_pack_dir_loads_kernels() {
+    let dir = fixtures_dir();
+    let p = pack::load_pack_dir(&dir, "height_pack.json").expect("height pack loads");
+    // flat + ramp kernels referenced by 5 families -> 2 distinct kernels resolved.
+    let fa = p.family_kernel("fa").expect("fa has a kernel");
+    assert_eq!((fa.kernel.rows, fa.kernel.cols), (4, 4));
+    assert!((fa.relief_m - 1000.0).abs() < 1e-9);
+    assert!((fa.footprint_m - 8192.0).abs() < 1e-9);
+    assert!(fa.kernel.data.iter().all(|v| (*v - 0.5).abs() < 1e-6));
+    let ra = p.family_kernel("ra").expect("ra has a kernel");
+    assert!((ra.relief_m - 600.0).abs() < 1e-9);
+}
+
+#[test]
+fn grammar_only_pack_still_loads_without_kernels() {
+    // the synthetic golden pack ({} families, no kernels) must still load via load_pack_str.
+    let p = pack::load_pack_str(GOLDEN).expect("golden still loads");
+    assert_eq!(p.palettes.len(), 4);
+    // a {} family simply has no kernel entry.
+    assert!(p.family_kernel("mountain").is_none());
+}
+
+#[test]
+fn load_pack_dir_rejects_missing_kernel_file() {
+    // a pack referencing a kernel path that does not exist must error on load.
+    let dir = fixtures_dir();
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/missing.npy","relief_m":1.0,"footprint_m":1.0},"y":{},"z":{}}}"#;
+    let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject missing kernel file");
+    assert!(err.contains("missing.npy") || err.contains("kernel"), "error should name the missing kernel: {err}");
+}
+
+#[test]
+fn load_pack_dir_rejects_bad_relief() {
+    let dir = fixtures_dir();
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/flat.npy","relief_m":0.0,"footprint_m":1.0},"y":{},"z":{}}}"#;
+    let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject relief_m<=0");
+    assert!(err.contains("relief_m"), "error should mention relief_m: {err}");
+}
