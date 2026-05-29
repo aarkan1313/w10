@@ -1,5 +1,7 @@
 use godot::prelude::*;
 use crate::hash;
+use crate::grammar;
+use crate::pack;
 
 /// Thin Godot-facing wrapper over the engine-agnostic `hash` module. The only
 /// file in the crate that imports `godot`. No math lives here.
@@ -42,5 +44,63 @@ impl Wg10Hash {
     #[func]
     fn fbm(&self, x: f64, z: f64, scale_m: f64, seed: i64, octaves: i64) -> f64 {
         hash::fbm(x, z, scale_m, seed, octaves.max(1) as u32)
+    }
+}
+
+/// Thin Godot-facing wrapper over the engine-agnostic grammar. Loads a pack and
+/// answers family-weight queries for headless checks. No math lives here.
+#[derive(GodotClass)]
+#[class(base=RefCounted)]
+pub struct Wg10Grammar {
+    pack: Option<pack::Pack>,
+    base: Base<RefCounted>,
+}
+
+#[godot_api]
+impl IRefCounted for Wg10Grammar {
+    fn init(base: Base<RefCounted>) -> Self {
+        Self { pack: None, base }
+    }
+}
+
+#[godot_api]
+impl Wg10Grammar {
+    /// Load + validate a pack from a JSON string. Returns "" on success or the
+    /// error message on failure (so GDScript can assert on it).
+    #[func]
+    fn load_pack_json(&mut self, json: GString) -> GString {
+        match pack::load_pack_str(&json.to_string()) {
+            Ok(p) => {
+                self.pack = Some(p);
+                GString::new()
+            }
+            Err(e) => GString::from(&e),
+        }
+    }
+
+    /// Family ids present in the blend at (x,z). Parallel to `weight_values`.
+    /// Empty if no pack loaded.
+    #[func]
+    fn family_ids(&self, x: f64, z: f64, seed: i64) -> PackedInt64Array {
+        let mut ids = PackedInt64Array::new();
+        if let Some(p) = &self.pack {
+            for (fam, _weight) in grammar::family_weights(x, z, seed, p).entries() {
+                ids.push(*fam as i64);
+            }
+        }
+        ids
+    }
+
+    /// Blend weights at (x,z), parallel to `family_ids` (same order/length).
+    /// Empty if no pack loaded.
+    #[func]
+    fn weight_values(&self, x: f64, z: f64, seed: i64) -> PackedFloat64Array {
+        let mut weights = PackedFloat64Array::new();
+        if let Some(p) = &self.pack {
+            for (_fam, weight) in grammar::family_weights(x, z, seed, p).entries() {
+                weights.push(*weight);
+            }
+        }
+        weights
     }
 }
