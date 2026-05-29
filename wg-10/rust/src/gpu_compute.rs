@@ -35,18 +35,18 @@ use std::path::Path;
 // ---------------------------------------------------------------------------
 
 /// All constant buffers built from a loaded Pack (pack-invariant, coord-independent).
-pub struct PackBuffers {
-    pub palettes_bytes:   Vec<u8>,
-    pub compat_off_bytes: Vec<u8>,
-    pub compat_flat_bytes: Vec<u8>,
-    pub krec_bytes:       Vec<u8>,
-    pub kparam_bytes:     Vec<u8>,
-    pub kdata_bytes:      Vec<u8>,
-    pub num_palettes:     i32,
+pub(crate) struct PackBuffers {
+    pub(crate) palettes_bytes:   Vec<u8>,
+    pub(crate) compat_off_bytes: Vec<u8>,
+    pub(crate) compat_flat_bytes: Vec<u8>,
+    pub(crate) krec_bytes:       Vec<u8>,
+    pub(crate) kparam_bytes:     Vec<u8>,
+    pub(crate) kdata_bytes:      Vec<u8>,
+    pub(crate) num_palettes:     i32,
 }
 
 /// Build the six static pack buffers from a loaded pack. Pure function, no Godot types.
-pub fn build_pack_buffers(p: &pack::Pack) -> PackBuffers {
+pub(crate) fn build_pack_buffers(p: &pack::Pack) -> PackBuffers {
     let num_fam = p.family_ids.len();
     let num_pal = p.palettes.len();
 
@@ -169,12 +169,12 @@ pub fn build_push_constant(
 }
 
 /// Create a `PackedByteArray` from a byte slice.
-fn bytes_to_pba(bytes: &[u8]) -> PackedByteArray {
+pub(crate) fn bytes_to_pba(bytes: &[u8]) -> PackedByteArray {
     PackedByteArray::from(bytes)
 }
 
 /// Make a storage-buffer RdUniform at the given binding.
-fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
+pub(crate) fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
     let mut u = RdUniform::new_gd();
     u.set_uniform_type(UniformType::STORAGE_BUFFER);
     u.set_binding(binding);

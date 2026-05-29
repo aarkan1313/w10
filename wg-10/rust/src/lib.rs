@@ -8,6 +8,7 @@ mod height;
 mod parity;
 mod bind_worldgen;
 mod gpu_compute;
+mod page_compute;
 
 #[cfg(test)]
 mod hash_tests;
