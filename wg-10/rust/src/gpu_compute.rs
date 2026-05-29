@@ -433,7 +433,9 @@ impl Wg10GpuCompute {
         rd.free_rid(krec_rid);
         rd.free_rid(kparam_rid);
         rd.free_rid(kdata_rid);
-        rd.free_rid(uset);
+        // NOTE: the uniform set is freed transitively when its shader RID is freed.
+        // Freeing `uset` explicitly here would double-free it ("Attempted to free
+        // invalid ID"). Free the pipeline, then the shader (which cascades uset).
         rd.free_rid(pipeline);
         rd.free_rid(shader);
 
