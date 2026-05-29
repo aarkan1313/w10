@@ -314,8 +314,15 @@ impl Wg10GpuCompute {
             .ok_or_else(|| "create_local_rendering_device returned null (headless or Compatibility renderer)".to_string())?;
 
         // --- Compile shader from GLSL source ---
+        // Strip any Godot .gdshader annotations (e.g. `#[compute]`) that are not
+        // valid GLSL directives — the raw GLSL compiler rejects them.
+        let glsl_stripped: String = glsl.lines()
+            .filter(|l| !l.trim_start().starts_with("#["))
+            .collect::<Vec<_>>()
+            .join("\n");
+
         let mut src = RdShaderSource::new_gd();
-        src.set_stage_source(ShaderStage::COMPUTE, glsl);
+        src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
 
         let spirv = rd.shader_compile_spirv_from_source(&src)
             .ok_or_else(|| "shader_compile_spirv_from_source returned null".to_string())?;

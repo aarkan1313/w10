@@ -149,4 +149,13 @@ impl Wg10Height {
             None => 0.0,
         }
     }
+
+    /// CPU family-selection signature at (x,z) — matches the GPU's family_sig.
+    #[func]
+    fn family_signature(&self, x: f64, z: f64, seed: i64) -> i64 {
+        match &self.pack {
+            Some(p) => crate::parity::family_signature(x, z, seed, p) as i64,
+            None => 0,
+        }
+    }
 }

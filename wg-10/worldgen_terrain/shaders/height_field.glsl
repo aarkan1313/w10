@@ -36,12 +36,12 @@ layout(push_constant, std430) uniform Params {
 
 const uint FNV1A_INITIAL = 0x811c9dc5u;
 const uint FNV1A_MULTIPLY = 0x01000193u;
-const uint SALT_PROVINCE_PALETTE = 0x5052_4f56u;
-const uint SALT_PALETTE_LOCAL    = 0x4c4f_4341u;
-const uint SALT_PALETTE_COMPATIBLE = 0x434f_4d50u;
-const uint SALT_PALETTE_RARE     = 0x5241_5245u;
+const uint SALT_PROVINCE_PALETTE = 0x50524f56u;
+const uint SALT_PALETTE_LOCAL    = 0x4c4f4341u;
+const uint SALT_PALETTE_COMPATIBLE = 0x434f4d50u;
+const uint SALT_PALETTE_RARE     = 0x52415245u;
 const uint SALT_FAMILY_ROLL      = 0x46414d49u & 0xffffffffu;
-const uint SALT_SIG              = 0x5349_4753u;
+const uint SALT_SIG              = 0x53494753u;
 const int FAMILIES_PER_PALETTE = 3;
 
 uint fold_u32(uint h, uint word) {
