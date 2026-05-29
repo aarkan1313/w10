@@ -100,6 +100,61 @@ impl Wg10ClipmapRings {
         self.levels.len() as i64
     }
 
+    /// Recenter all level meshes on the camera by translating each level's transform,
+    /// quantized to that level's CELL spacing so vertices stay locked to the world grid
+    /// (no sub-cell swimming). Vertex buffers are untouched — never a rebuild.
+    #[func]
+    pub fn recenter(&mut self, camera_x: f64, camera_z: f64) {
+        for (level, mi) in self.levels.iter_mut().enumerate() {
+            let span = self.base_span * 2f64.powi(level as i32);
+            let cell = span / self.grid_res as f64;
+            let qx = (camera_x / cell).floor() * cell;
+            let qz = (camera_z / cell).floor() * cell;
+            let mut t = mi.get_transform();
+            t.origin = Vector3::new(qx as f32, 0.0, qz as f32);
+            mi.set_transform(t);
+        }
+    }
+
+    /// Bind a level's height page (and its coarser neighbor, for the morph). Pass the SAME
+    /// texture for both `height_tex` and `coarse_tex` to disable the morph for that level
+    /// (e.g. the coarsest level, or a fallback frame). `level_span` is the band's world
+    /// span; `morph_region` is the transition width as a fraction of the span.
+    #[func]
+    pub fn bind_page(
+        &mut self,
+        level: i64,
+        height_tex: Gd<godot::classes::Texture2D>,
+        coarse_tex: Gd<godot::classes::Texture2D>,
+        level_span: f64,
+        coarse_span: f64,
+        height_scale: f64,
+        morph_region: f64,
+        relief_ref: f64,
+    ) {
+        let li = level as usize;
+        if li >= self.levels.len() {
+            godot_error!("Wg10ClipmapRings::bind_page: level {level} out of range");
+            return;
+        }
+        let mi = &mut self.levels[li];
+        let Some(mat_res) = mi.get_material_override() else {
+            godot_error!("Wg10ClipmapRings::bind_page: level {level} has no material");
+            return;
+        };
+        let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
+            godot_error!("Wg10ClipmapRings::bind_page: material is not a ShaderMaterial");
+            return;
+        };
+        mat.set_shader_parameter("height_tex", &height_tex.to_variant());
+        mat.set_shader_parameter("coarse_height_tex", &coarse_tex.to_variant());
+        mat.set_shader_parameter("world_span", &level_span.to_variant());
+        mat.set_shader_parameter("coarse_span", &coarse_span.to_variant());
+        mat.set_shader_parameter("height_scale", &height_scale.to_variant());
+        mat.set_shader_parameter("morph_region", &morph_region.to_variant());
+        mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
+    }
+
     /// Total vertex count across all level meshes (for the recenter-doesn't-rebuild check).
     ///
     /// Reads it back from the live surface arrays so the gate verifies the *actual* mesh
