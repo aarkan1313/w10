@@ -2,6 +2,8 @@ use godot::prelude::*;
 use crate::hash;
 use crate::grammar;
 use crate::pack;
+use crate::height;
+use std::path::Path;
 
 /// Thin Godot-facing wrapper over the engine-agnostic `hash` module. The only
 /// file in the crate that imports `godot`. No math lives here.
@@ -102,5 +104,49 @@ impl Wg10Grammar {
             }
         }
         weights
+    }
+}
+
+/// Thin Godot-facing wrapper over the engine-agnostic height layer. Loads a pack
+/// (resolving kernel .npy files relative to a base dir) and answers height
+/// queries for headless checks. No math lives here.
+#[derive(GodotClass)]
+#[class(base=RefCounted)]
+pub struct Wg10Height {
+    pack: Option<pack::Pack>,
+    base: Base<RefCounted>,
+}
+
+#[godot_api]
+impl IRefCounted for Wg10Height {
+    fn init(base: Base<RefCounted>) -> Self {
+        Self { pack: None, base }
+    }
+}
+
+#[godot_api]
+impl Wg10Height {
+    /// Load + validate a pack from a filesystem directory + file name, resolving
+    /// kernel .npy files relative to that directory. Returns "" on success or the
+    /// error message. `dir` is an absolute or cwd-relative OS path (GDScript
+    /// resolves `res://` to an OS path via ProjectSettings.globalize_path).
+    #[func]
+    fn load_pack_dir(&mut self, dir: GString, file: GString) -> GString {
+        match pack::load_pack_dir(Path::new(&dir.to_string()), &file.to_string()) {
+            Ok(p) => {
+                self.pack = Some(p);
+                GString::new()
+            }
+            Err(e) => GString::from(&e),
+        }
+    }
+
+    /// Elevation at (x,z). Returns 0.0 if no pack is loaded.
+    #[func]
+    fn height(&self, x: f64, z: f64, seed: i64) -> f64 {
+        match &self.pack {
+            Some(p) => height::height(x, z, seed, p),
+            None => 0.0,
+        }
     }
 }
