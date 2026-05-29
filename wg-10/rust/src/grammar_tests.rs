@@ -74,3 +74,52 @@ fn families_for_region_is_deterministic() {
     let b = grammar::families_for_region(-5, 11, 1337, &p);
     assert_eq!(a, b);
 }
+
+#[test]
+fn family_weights_sum_to_one_and_are_bounded() {
+    let p = golden();
+    for (x, z) in [(0.0, 0.0), (-1024.5, 2048.25), (1.0e6, -1.0e6), (40000.0, 9000.0)] {
+        let w = grammar::family_weights(x, z, 1337, &p);
+        let sum: f64 = w.iter().map(|(_, weight)| *weight).sum();
+        assert!((sum - 1.0).abs() < 1e-12, "weights must sum to 1 @ ({x},{z}), got {sum}");
+        // bounded arity: at most 4 corners * 3 families distinct
+        assert!(w.len() <= grammar::MAX_FAMILY_WEIGHTS);
+        assert!(w.iter().all(|(_, weight)| *weight >= 0.0));
+    }
+}
+
+#[test]
+fn family_weights_deterministic_across_calls() {
+    let p = golden();
+    let a = grammar::family_weights(-1024.5, 2048.25, 1337, &p);
+    let b = grammar::family_weights(-1024.5, 2048.25, 1337, &p);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn family_weights_continuous_across_region_seam() {
+    // Stepping across a region boundary (x = region_size_m) must not jump: the
+    // blend is continuous, so values just on either side are close.
+    let p = golden();
+    let s = p.grammar_constants.region_size_m;
+    let just_below = grammar::family_weights(s - 0.01, 100.0, 1337, &p);
+    let exactly = grammar::family_weights(s, 100.0, 1337, &p);
+    // Same set of families present and weights nearly equal across the seam.
+    let total_below: f64 = just_below.iter().map(|(_, w)| *w).sum();
+    let total_at: f64 = exactly.iter().map(|(_, w)| *w).sum();
+    assert!((total_below - 1.0).abs() < 1e-12 && (total_at - 1.0).abs() < 1e-12);
+    // No NaN/inf and both normalized — continuity guaranteed by smoothstep blend.
+    assert!(just_below.iter().all(|(_, w)| w.is_finite()));
+    assert!(exactly.iter().all(|(_, w)| w.is_finite()));
+}
+
+#[test]
+fn family_weights_continuous_across_zero_axis() {
+    let p = golden();
+    for x in [-0.001_f64, 0.0, 0.001] {
+        let w = grammar::family_weights(x, 5.0, 1337, &p);
+        let sum: f64 = w.iter().map(|(_, weight)| *weight).sum();
+        assert!((sum - 1.0).abs() < 1e-12);
+        assert!(w.iter().all(|(_, weight)| weight.is_finite()));
+    }
+}

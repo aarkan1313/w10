@@ -118,3 +118,81 @@ pub fn families_for_region(
     }
     (fams, bias)
 }
+
+/// Max distinct families a blend can contain: 4 region corners x 3 families.
+pub const MAX_FAMILY_WEIGHTS: usize = 4 * FAMILIES_PER_PALETTE;
+
+/// The grammar's hot-path output: a bounded list of (family, weight) pairs that
+/// sum to 1. Fixed-capacity buffer + length — no heap allocation, GPU-shaped
+/// (design §2 constraint #1). `entries()` yields the live slice.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FamilyWeights {
+    buf: [(FamilyId, f64); MAX_FAMILY_WEIGHTS],
+    len: usize,
+}
+
+impl FamilyWeights {
+    fn new() -> Self {
+        Self { buf: [(0, 0.0); MAX_FAMILY_WEIGHTS], len: 0 }
+    }
+    fn add(&mut self, fam: FamilyId, weight: f64) {
+        for i in 0..self.len {
+            if self.buf[i].0 == fam {
+                self.buf[i].1 += weight;
+                return;
+            }
+        }
+        self.buf[self.len] = (fam, weight);
+        self.len += 1;
+    }
+    pub fn entries(&self) -> &[(FamilyId, f64)] {
+        &self.buf[..self.len]
+    }
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    pub fn iter(&self) -> std::slice::Iter<'_, (FamilyId, f64)> {
+        self.entries().iter()
+    }
+}
+
+/// Blend family weights at a world coordinate: 4 region corners, smoothstep
+/// interpolation, fixed-capacity accumulation, normalized to sum 1.
+pub fn family_weights(x: f64, z: f64, seed: i64, pack: &Pack) -> FamilyWeights {
+    let s = pack.grammar_constants.region_size_m;
+    let gx = x / s;
+    let gz = z / s;
+    let rx = gx.floor() as i64;
+    let rz = gz.floor() as i64;
+    let tx = hash::smoothstep_unit(gx - rx as f64);
+    let tz = hash::smoothstep_unit(gz - rz as f64);
+
+    let corners = [
+        (rx, rz, (1.0 - tx) * (1.0 - tz)),
+        (rx + 1, rz, tx * (1.0 - tz)),
+        (rx, rz + 1, (1.0 - tx) * tz),
+        (rx + 1, rz + 1, tx * tz),
+    ];
+
+    let mut out = FamilyWeights::new();
+    for (crx, crz, corner_w) in corners {
+        if corner_w == 0.0 {
+            continue;
+        }
+        let (fams, bias) = families_for_region(crx, crz, seed, pack);
+        for i in 0..FAMILIES_PER_PALETTE {
+            out.add(fams[i], corner_w * bias[i]);
+        }
+    }
+
+    // Normalize to sum 1 (corner weights already sum to 1, bias sums to 1, so
+    // the total is ~1; normalize to kill float drift and guarantee the contract).
+    let total: f64 = out.entries().iter().map(|(_, w)| *w).sum::<f64>().max(1e-12);
+    for i in 0..out.len {
+        out.buf[i].1 /= total;
+    }
+    out
+}
