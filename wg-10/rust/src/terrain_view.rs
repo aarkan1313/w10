@@ -108,13 +108,16 @@ impl Wg10TerrainView {
             };
             let (ox_c, oz_c) = corner(camera_x, camera_z, span_c, self.grid_res);
 
-            // Acquire this level's page and its coarser neighbor (both expected cache
-            // hits — the streamer already produced residency this frame).
+            // Look up this level's page and its coarser neighbor — READ-ONLY. The view is
+            // a CONSUMER: it never triggers a compute (the anti-WG9 render-path rule). Only
+            // the streamer's acquire (above) may produce pages, bounded per frame. A miss
+            // here means the page isn't streamed yet -> coarser fallback below (never black,
+            // never a synchronous compute on the render path).
             let (tex_l, coarse_tex) = {
-                let mut pool = self.pool.as_ref().unwrap().clone();
-                let tex_l = pool.bind_mut().acquire_page(level as i64, ox_l as f64, oz_l as f64);
+                let pool = self.pool.as_ref().unwrap().bind();
+                let tex_l = pool.get_resident_page(level as i64, ox_l as f64, oz_l as f64);
                 let coarse_tex =
-                    pool.bind_mut().acquire_page(coarse_level as i64, ox_c as f64, oz_c as f64);
+                    pool.get_resident_page(coarse_level as i64, ox_c as f64, oz_c as f64);
                 (tex_l, coarse_tex)
             };
 

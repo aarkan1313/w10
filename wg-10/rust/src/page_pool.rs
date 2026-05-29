@@ -386,6 +386,33 @@ impl Wg10PagePool {
     }
 
     // -----------------------------------------------------------------------
+    // get_resident_page  (read-only — NEVER computes; the anti-WG9 render-path rule)
+    // -----------------------------------------------------------------------
+
+    /// Return the page texture for `(level, origin_x, origin_z)` IFF it is already resident,
+    /// else `None`. **Read-only: it NEVER allocates, evicts, or dispatches a compute** — it
+    /// is a pure slot lookup. A CONSUMER (e.g. `Wg10TerrainView`) uses this to fetch a page
+    /// to display without triggering synchronous page production on the render path (the
+    /// WG9 disease). Only the scheduler's `acquire_page` may compute; the view queries.
+    /// On a miss the caller falls back to a coarser resident page (never black).
+    #[func]
+    pub fn get_resident_page(
+        &self,
+        level:    i64,
+        origin_x: f64,
+        origin_z: f64,
+    ) -> Option<Gd<Texture2Drd>> {
+        let policy = self.policy.as_ref()?;
+        let key = PageKey {
+            level:    level as i32,
+            origin_x: origin_x as i64,
+            origin_z: origin_z as i64,
+        };
+        let slot = policy.slot_of(&key)?;
+        self.slot_wrap[slot].clone()
+    }
+
+    // -----------------------------------------------------------------------
     // free_all  (the ONLY place that frees page texture RIDs)
     // -----------------------------------------------------------------------
 

@@ -63,6 +63,15 @@ impl PagePolicy {
         self.map.keys().cloned().collect()
     }
 
+    /// The slot holding `key` if it is currently resident, else None. Pure lookup — no
+    /// LRU touch, no protect, no allocate/evict. Used by the read-only `get_resident_page`
+    /// path so a CONSUMER (the view) can fetch an already-resident page's texture WITHOUT
+    /// triggering a compute (only the scheduler's `acquire` may compute — the anti-WG9 rule:
+    /// no synchronous page production on the render path).
+    pub fn slot_of(&self, key: &PageKey) -> Option<usize> {
+        self.map.get(key).copied()
+    }
+
     pub fn is_protected(&self, key: &PageKey) -> bool {
         self.map.get(key).map_or(false, |s| self.protected.contains(s))
     }
