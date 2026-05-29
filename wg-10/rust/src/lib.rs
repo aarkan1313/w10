@@ -13,6 +13,7 @@ mod page_policy;
 mod page_pool;
 mod schedule_policy;
 mod streamer;
+mod ring_geometry;
 
 #[cfg(test)]
 mod hash_tests;
@@ -30,6 +31,8 @@ mod parity_tests;
 mod page_policy_tests;
 #[cfg(test)]
 mod schedule_policy_tests;
+#[cfg(test)]
+mod ring_geometry_tests;
 
 struct Wg10Terrain;
 
