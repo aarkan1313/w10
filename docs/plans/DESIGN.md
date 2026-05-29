@@ -5,7 +5,7 @@ conflicts with code, either the code is wrong or this doc is — reconcile
 immediately, do not let them drift. (That drift is why WorldGen9 is being
 restarted.)
 
-Last updated: 2026-05-28
+Last updated: 2026-05-28 (added §6.4: modular harness components)
 
 ---
 
@@ -244,6 +244,45 @@ any Godot 4.6 project and work.
 The worldgen formula has no Godot dependency, so it is portable beyond Godot
 and trivially unit-testable.
 
+### 6.4 Modular harness components (camera, movement, diagnostics, profiling, UI)
+
+The same drop-in discipline as §6.2 applies to **everything around** the terrain,
+not just the terrain node. The review scene (§7.4) is the *first consumer* of
+these, but it must only **assemble** them — it must not *contain* their logic.
+
+Each of these is its own self-contained Godot component (addon/scene + script)
+with a narrow interface and **no project-specific dependencies**:
+
+- **Camera** — free-fly + optional ground-follow rig.
+- **Movement / controller** — WASD + Shift speed + mouse look + Space/C vertical;
+  control bindings are config, not hardcoded (touch-mappable, per §7.4).
+- **Diagnostics overlay** — fps + the few stats that matter; reads stats through
+  a narrow interface, knows nothing about terrain internals.
+- **Profiling** — frame-time/p99 capture; a component anything can attach, not
+  wired into one scene.
+- **UI** — overlay/HUD chrome, decoupled from what it displays.
+
+Rules for all harness components (so they transfer scene-to-scene and project-to-
+project, like the terrain addon):
+
+1. **Self-contained:** drop the component's folder into any Godot 4.6 project and
+   it works; no hidden dependency on this project's autoloads, paths, or other
+   components. Each usable in isolation.
+2. **Narrow interface:** a component exposes a small typed surface (signals /
+   exported config / a couple of methods). Consumers wire to that, never to
+   internals. Diagnostics/profiling consume **data through an interface**; they do
+   not reach into terrain or renderer internals.
+3. **Config-driven, no magic numbers** (§6.1): movement feel, camera speeds,
+   key/touch bindings, overlay layout all live in config.
+4. **Composable, not coupled:** components do not depend on each other. The review
+   scene assembles {terrain node + camera + movement + diagnostics + profiling +
+   UI}; remove or swap any one without breaking the rest.
+
+This is the §1 pillars (adaptable / drop-into-any-game) applied to the harness, so
+the tooling is reusable and the review scene stays a thin assembly point. **Built
+when the review scene is built (M3), not before** — captured here so M3 cannot
+quietly grow a monolithic, project-locked scene.
+
 ---
 
 ## 7. Rules (lessons baked in from WG9)
@@ -273,7 +312,9 @@ and trivially unit-testable.
    C = down, and a live diagnostics overlay (fps + the few stats that matter).
    Phone/touch is a target to keep in mind (don't design controls that can't map
    to touch) but is not a first-slice requirement. Free-fly + optional
-   ground-follow.
+   ground-follow. **The scene only *assembles* modular harness components
+   (camera, movement, diagnostics, profiling, UI) per §6.4 — it must not contain
+   their logic, so each transfers scene-to-scene and project-to-project.**
 
 ---
 
