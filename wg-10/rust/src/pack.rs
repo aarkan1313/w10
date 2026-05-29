@@ -80,6 +80,10 @@ pub fn load_pack_str(json: &str) -> Result<Pack, String> {
         ));
     }
 
+    if raw.palettes.is_empty() {
+        return Err("pack has no palettes".to_string());
+    }
+
     // Each palette must have exactly FAMILIES_PER_PALETTE families, and every
     // referenced family must exist in families{}.
     for pal in &raw.palettes {

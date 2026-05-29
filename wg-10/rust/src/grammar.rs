@@ -45,10 +45,10 @@ pub fn palette_for_region(rx: i64, rz: i64, seed: i64, pack: &Pack) -> usize {
     ]) % 100;
 
     let c = &pack.grammar_constants;
-    if (roll as u32) < c.palette_primary_pct {
+    if roll < c.palette_primary_pct {
         return primary;
     }
-    if (roll as u32) < c.palette_primary_pct + c.palette_compatible_pct {
+    if roll < c.palette_primary_pct + c.palette_compatible_pct {
         // compatible neighbor of the primary palette, if any
         let primary_id = &pack.palettes[primary].id;
         if let Some(compat) = pack.compatibility.get(primary_id) {

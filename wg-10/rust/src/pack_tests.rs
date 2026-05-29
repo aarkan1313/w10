@@ -45,6 +45,13 @@ fn rejects_pct_out_of_range() {
 }
 
 #[test]
+fn rejects_empty_palettes() {
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22},"palettes":[],"compatibility":{},"families":{}}"#;
+    let err = pack::load_pack_str(bad).expect_err("must reject empty palettes");
+    assert!(err.contains("palette"), "error should mention palettes: {err}");
+}
+
+#[test]
 fn rejects_pct_sum_at_overflow_boundary() {
     // primary u32::MAX + compatible 2 would wrap to 1 in release with naive u32
     // addition; the u64-widened guard must still reject it.
