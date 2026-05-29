@@ -48,6 +48,8 @@ impl SchedulePolicy {
             "base_span must be an exact integer (got {})", cfg.base_span
         );
         assert!(cfg.radius_pages >= 0, "radius_pages must be >= 0");
+        assert!(cfg.num_levels <= 32, "num_levels must be <= 32 (level spans use 2^level)");
+        assert!(cfg.max_per_frame >= 1, "max_per_frame must be >= 1");
         Self { cfg }
     }
 

@@ -21,6 +21,7 @@ pub struct Wg10Streamer {
     acquired_this_frame: i64,
     released_this_frame: i64,
     full_events: i64,
+    last_coverage_size: i64,
     frame: i64,
     base: Base<RefCounted>,
 }
@@ -34,6 +35,7 @@ impl IRefCounted for Wg10Streamer {
             acquired_this_frame: 0,
             released_this_frame: 0,
             full_events: 0,
+            last_coverage_size: 0,
             frame: 0,
             base,
         }
@@ -68,6 +70,8 @@ impl Wg10Streamer {
     /// One frame of the §5.4 loop. Release departing pages, then acquire up to
     /// max_per_frame pages (synchronous this slice). Records stats. Acquires are
     /// already capped by the policy; we re-assert the cap defensively.
+    /// `acquired_this_frame` counts successful acquires; pool-Full (null) outcomes
+    /// are counted in `full_events`.
     #[func]
     pub fn update(&mut self, camera_x: f64, camera_z: f64, vel_x: f64, vel_z: f64) {
         // Guard: configured?
@@ -83,6 +87,8 @@ impl Wg10Streamer {
             policy.plan_frame(camera_x, camera_z, vel_x, vel_z, &resident)
         };
         let cap = self.policy.as_ref().unwrap().config().max_per_frame as usize;
+        self.last_coverage_size = self.policy.as_ref().unwrap()
+            .coverage(camera_x, camera_z, vel_x, vel_z).len() as i64;
 
         // Release departing pages (cheap, order-independent).
         // Clone the Gd handle into a local before bind_mut() so we don't hold a
@@ -131,6 +137,14 @@ impl Wg10Streamer {
         d.set("released_this_frame", self.released_this_frame);
         d.set("full_events", self.full_events);
         d.set("frame", self.frame);
+        d.set("coverage_size", self.last_coverage_size);
+        let resident = self.pool.as_ref()
+            .map(|p| {
+                let ps = p.bind().stats();
+                ps.get("resident").map(|v| i64::from_variant(&v)).unwrap_or(0)
+            })
+            .unwrap_or(0);
+        d.set("resident", resident);
         d
     }
 
