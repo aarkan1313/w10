@@ -16,6 +16,7 @@ CHECKS = {
     "fast": [
         "worldgen_terrain/tests/hash_parity_check.gd",
         "worldgen_terrain/tests/determinism_check.gd",
+        "worldgen_terrain/tests/grammar_check.gd",
     ],
 }
 
