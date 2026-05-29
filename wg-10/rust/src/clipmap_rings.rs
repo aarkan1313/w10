@@ -131,6 +131,8 @@ impl Wg10ClipmapRings {
         height_scale: f64,
         morph_region: f64,
         relief_ref: f64,
+        coarse_origin_x: f64,
+        coarse_origin_z: f64,
     ) {
         let li = level as usize;
         if li >= self.levels.len() {
@@ -153,6 +155,8 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("height_scale", &height_scale.to_variant());
         mat.set_shader_parameter("morph_region", &morph_region.to_variant());
         mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
+        let coarse_origin = Vector2::new(coarse_origin_x as f32, coarse_origin_z as f32);
+        mat.set_shader_parameter("coarse_origin", &coarse_origin.to_variant());
     }
 
     /// Total vertex count across all level meshes (for the recenter-doesn't-rebuild check).
