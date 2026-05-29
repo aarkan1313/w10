@@ -14,6 +14,7 @@ mod page_pool;
 mod schedule_policy;
 mod streamer;
 mod ring_geometry;
+mod clipmap_rings;
 
 #[cfg(test)]
 mod hash_tests;
