@@ -128,6 +128,38 @@ fn family_weights_continuous_across_region_seam() {
 }
 
 #[test]
+fn family_weights_continuous_across_province_seam() {
+    // A *province* boundary is the stronger continuity case: crossing it changes
+    // the province's primary palette, so the family SET on either side can
+    // differ. The corner blend must still be C0-continuous — a new family fades
+    // in from zero weight rather than appearing as a step. Province boundary at
+    // world-x = province_size_regions * region_size_m.
+    let p = golden();
+    let s = p.grammar_constants.region_size_m;
+    let prov = p.grammar_constants.province_size_regions as f64 * s;
+    let just_below = grammar::family_weights(prov - 0.01, 50.0, 1337, &p);
+    let exactly = grammar::family_weights(prov, 50.0, 1337, &p);
+    // Both normalized.
+    let total_below: f64 = just_below.iter().map(|(_, w)| *w).sum();
+    let total_at: f64 = exactly.iter().map(|(_, w)| *w).sum();
+    assert!((total_below - 1.0).abs() < 1e-12 && (total_at - 1.0).abs() < 1e-12);
+    // Continuity in both directions: every family's weight barely moves over the
+    // 0.01m step (a discontinuity would be O(0.1+); a continuous blend is ~1e-13).
+    for (fam, w_below) in just_below.iter() {
+        let w_at = exactly.iter().find(|(f, _)| f == fam).map(|(_, w)| *w).unwrap_or(0.0);
+        assert!((w_below - w_at).abs() < 1e-3,
+            "family {fam} weight jumped across province seam: below={w_below} at={w_at}");
+    }
+    for (fam, w_at) in exactly.iter() {
+        let w_below = just_below.iter().find(|(f, _)| f == fam).map(|(_, w)| *w).unwrap_or(0.0);
+        assert!((w_at - w_below).abs() < 1e-3,
+            "family {fam} appeared discontinuously at province seam: at={w_at} below={w_below}");
+    }
+    assert!(just_below.iter().all(|(_, w)| w.is_finite()));
+    assert!(exactly.iter().all(|(_, w)| w.is_finite()));
+}
+
+#[test]
 fn family_weights_continuous_across_zero_axis() {
     let p = golden();
     for x in [-0.001_f64, 0.0, 0.001] {
