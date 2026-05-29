@@ -5,7 +5,7 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+protected, zero-churn eviction; PagePolicy 11 headless tests; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 2 done; **slice 3 — stream-ahead scheduler — DESIGNED & spec'd** (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`), not yet built. Latest BUILT slice is still slice 2: page pool single RID owner, LRU+protected, zero-churn eviction; PagePolicy 11 headless tests; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
 
 ---
 
@@ -174,7 +174,16 @@ Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+p
 1. **M3 slice 3 — stream-ahead scheduler:** velocity-aware, bounded
    computes/frame, coarser-page fallback (never black, never stall). This is the
    first slice that USES the pool's acquire/Full under MOTION — the first live
-   frame loop. Then: clipmap rings (concentric, persistent meshes, recenter on
+   frame loop. **DESIGNED & spec'd** (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`,
+   approved) — NOT yet built. Shape: `SchedulePolicy` (pure Rust, no godot —
+   `coverage`/`plan_frame`/`coarser_fallback`, multi-level, bounded acquires,
+   never-black property), `Wg10Streamer` (godot frame-loop driver, synchronous
+   produce this slice), `page_pool.rs` gains `resident_keys()` (only pool change),
+   `m3_stream_check.gd` (m3 suite → 3 checks). Page production is **synchronous**
+   this slice but the scheduler↔pool seam is **async-ready** (scheduler never
+   assumes same-frame residency) so background production drops in later with zero
+   scheduler change. Next: writing-plans → subagent-driven execution → audit.
+   Then: clipmap rings (concentric, persistent meshes, recenter on
    move, L↔L+1 morph), modular harness components (camera/movement,
    diagnostics/profiling, UI overlay), manual fly-test scene, and the real M3
    acceptance gate (p99 < 6 ms + no-black, manually confirmed at ~1000 m/s).
@@ -222,6 +231,16 @@ Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+p
   owner of all page RIDs (DESIGN §5.2). free_all/teardown + two produce-failure
   cleanup sites cover every allocation. The slice-1 one-shot is regression-gated
   via the pool path.
+- **Async page production — DEFERRED (tracked, not a gap):** M3 slice 3 produces
+  pages SYNCHRONOUSLY inside the streamer's `update` (≤ N/frame, so still bounded).
+  The scheduler↔pool seam is deliberately **async-ready** — the scheduler reads only
+  the *observed* resident set and always has a coarser fallback, so it never assumes
+  a page is resident the same frame it was requested. **Trigger to actually build
+  background production:** when a single page compute becomes heavy enough that N
+  synchronous computes blow the frame budget — i.e. multi-pass pages from M5
+  (detail/normals), M6 (biome masks), or M7 (erosion/hydrology). At that point it is
+  a pool/streamer-layer change behind `acquire_page` with ZERO scheduler change.
+  (Spec §1.1, §7.)
 
 ## Build / run gotchas (learned 2026-05-28 wiring the toolchain)
 

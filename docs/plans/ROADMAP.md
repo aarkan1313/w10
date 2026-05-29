@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+protected, zero-churn eviction; PagePolicy headless-tested (11); m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 2 done; slice 3 — stream-ahead scheduler — DESIGNED & spec'd (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`), not yet built; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -99,8 +99,15 @@ Pool driven by explicit acquire/release — NOT a live frame loop. M3 OPEN.
 
 Remaining slices (NOT done):
 
-- [ ] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
-      coarser-page fallback (never black, never stall).
+- [~] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
+      coarser-page fallback (never black, never stall). **DESIGNED & spec'd**
+      (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`, approved) — NOT yet
+      built. `SchedulePolicy` (pure Rust: coverage/plan_frame/coarser_fallback,
+      multi-level, never-black property) + `Wg10Streamer` (godot frame-loop driver)
+      + `page_pool.resident_keys()` + `m3_stream_check.gd`. Synchronous produce this
+      slice; scheduler↔pool seam async-ready (zero scheduler change when background
+      production lands — trigger = heavy multi-pass pages, M5–M7). Next:
+      writing-plans → subagent-driven execution → audit.
 - [ ] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
       move, shader displace + L↔L+1 morph.
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
@@ -143,3 +150,8 @@ Remaining slices (NOT done):
       conclusion in DESIGN §9): methodology sound, cache sufficient. Pack-build
       follow-ups: mask NoData holes; improve family tagging (591/703
       uncategorized).
+- [ ] **Async/background page production** (deferred pool-layer follow-up, tracked
+      from M3 slice 3): scheduler is async-ready; build the background producer
+      behind `Wg10PagePool::acquire_page` when synchronous N-per-frame computes blow
+      the frame budget. **Trigger:** heavy multi-pass pages — M5 (detail/normals),
+      M6 (biome masks), M7 (erosion/hydrology). Zero scheduler change required.
