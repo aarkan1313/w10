@@ -1,23 +1,22 @@
-//! WorldGen10 page compute — Wg10PageCompute GodotClass.
+//! WorldGen10 page compute — Wg10PageCompute GodotClass + `compute_into_texture` producer.
 //!
-//! Writes one height page to an R32F Texture2DRD on the GLOBAL RenderingDevice.
-//! No CPU readback — the texture stays on the GPU for the renderer to sample.
+//! `Wg10PageCompute` is a pack loader: call `load_pack_dir` once, then pass the
+//! loaded pack + buffers to `compute_into_texture` for each dispatch.
+//!
+//! `compute_into_texture` writes terrain heights into a **caller-owned** R32F
+//! texture RID on the GLOBAL RenderingDevice.  The texture-pool (Task 3) is the
+//! single texture owner; this module never creates or frees texture RIDs.
 //!
 //! Key differences from Wg10GpuCompute (M2):
 //!   1. Uses the GLOBAL rd (get_rendering_device), not create_local_rendering_device.
 //!   2. Output is an R32F image2D (binding 0), not storage buffers.
 //!   3. Bindings 1 and 2 are absent (no Coords / OutSig).
 //!   4. No buffer_get_data / texture_get_data — pure fire-and-forget dispatch.
-//!
-//! Lifetime: tex_rid is NOT freed when compute_page returns. It is stored on self
-//! (alongside the wrapping Gd<Texture2Drd>) so Godot keeps it referenced.
-//! For slice-1 (one page, never freed during the run) a leak at process-exit is
-//! acceptable. A future free call should go through self.free_texture().
 
 use godot::prelude::*;
 use godot::classes::{
-    RenderingServer, RdShaderSource, RdTextureFormat, RdTextureView, RdUniform, Texture2Drd,
-    rendering_device::{DataFormat, TextureUsageBits, UniformType, ShaderStage},
+    RenderingDevice, RdShaderSource, RdUniform,
+    rendering_device::{UniformType, ShaderStage},
 };
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, bytes_to_pba, make_storage_uniform, PackBuffers};
@@ -44,7 +43,7 @@ use std::path::Path;
 ///   f32  world_span
 ///   i32  page_px
 ///   i32  _pad×3            (3 × 4 = 12 bytes padding to reach 64)
-fn build_page_push_constant(
+pub(crate) fn build_page_push_constant(
     gc: &pack::GrammarConstants,
     seed: i32,
     num_palettes: i32,
@@ -85,6 +84,137 @@ fn make_image_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
 }
 
 // ---------------------------------------------------------------------------
+// compute_into_texture — free function, writes into a caller-owned texture RID
+// ---------------------------------------------------------------------------
+
+/// Compile and dispatch the page compute shader, writing terrain heights into
+/// `target_rid` (an R32F texture already created by the caller / pool).
+///
+/// The caller owns `target_rid`; this function never frees it.
+/// The shader, pipeline, and 6 pack-data storage buffers ARE freed before return.
+///
+/// `rd`         — mutable reference to the GLOBAL RenderingDevice singleton
+/// `pack`       — loaded terrain pack (grammar constants + kernel data)
+/// `pb`         — pre-built GPU byte buffers for the pack
+/// `target_rid` — R32F STORAGE+SAMPLING texture RID provided by the caller
+/// `glsl_source`— source text of `height_page.glsl` (caller reads the file)
+/// `origin_x/z` — world-space top-left corner of the page (metres)
+/// `world_span` — world-space size of the page in metres
+/// `page_px`    — page resolution in pixels (width == height, multiple of 16)
+/// `seed`       — grammar seed
+pub(crate) fn compute_into_texture(
+    rd: &mut Gd<RenderingDevice>,
+    pack: &pack::Pack,
+    pb: &PackBuffers,
+    target_rid: Rid,
+    glsl_source: &str,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: i64,
+    seed: i64,
+) -> Result<(), String> {
+    // --- Step 1: Strip Godot-specific annotations and compile the GLSL shader ---
+    let glsl_stripped: String = glsl_source.lines()
+        .filter(|l| !l.trim_start().starts_with("#["))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let mut src = RdShaderSource::new_gd();
+    src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
+
+    let spirv = rd.shader_compile_spirv_from_source(&src)
+        .ok_or_else(|| "compute_into_texture: shader_compile_spirv_from_source returned null".to_string())?;
+
+    {
+        let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
+        if !err.is_empty() {
+            return Err(format!("compute_into_texture: GLSL compile error: {err}"));
+        }
+    }
+
+    let shader = rd.shader_create_from_spirv(&spirv);
+    if shader.is_invalid() {
+        return Err("compute_into_texture: shader_create_from_spirv returned invalid RID".to_string());
+    }
+
+    // --- Step 2: Build pack-data storage buffers ---
+    let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
+
+    let palettes_pba    = bytes_to_pba(&pb.palettes_bytes);
+    let compat_off_pba  = bytes_to_pba(&pb.compat_off_bytes);
+    let compat_flat_pba = bytes_to_pba(&pb.compat_flat_bytes);
+    let krec_pba        = bytes_to_pba(&pb.krec_bytes);
+    let kparam_pba      = bytes_to_pba(&pb.kparam_bytes);
+    let kdata_pba       = bytes_to_pba(&pb.kdata_bytes);
+
+    let palettes_rid    = rd.storage_buffer_create_ex(bsize(pb.palettes_bytes.len())).data(&palettes_pba).done();
+    let compat_off_rid  = rd.storage_buffer_create_ex(bsize(pb.compat_off_bytes.len())).data(&compat_off_pba).done();
+    let compat_flat_rid = rd.storage_buffer_create_ex(bsize(pb.compat_flat_bytes.len())).data(&compat_flat_pba).done();
+    let krec_rid        = rd.storage_buffer_create_ex(bsize(pb.krec_bytes.len())).data(&krec_pba).done();
+    let kparam_rid      = rd.storage_buffer_create_ex(bsize(pb.kparam_bytes.len())).data(&kparam_pba).done();
+    let kdata_rid       = rd.storage_buffer_create_ex(bsize(pb.kdata_bytes.len())).data(&kdata_pba).done();
+
+    // --- Step 3: Build uniform set ---
+    // binding 0 = R32F image (output — caller-owned target_rid)
+    // bindings 1, 2 absent (dropped in page shader)
+    // bindings 3–8 = pack data storage buffers
+    let mut uniforms: Array<Gd<RdUniform>> = Array::new();
+    uniforms.push(&make_image_uniform(0, target_rid));
+    uniforms.push(&make_storage_uniform(3, palettes_rid));
+    uniforms.push(&make_storage_uniform(4, compat_off_rid));
+    uniforms.push(&make_storage_uniform(5, compat_flat_rid));
+    uniforms.push(&make_storage_uniform(6, krec_rid));
+    uniforms.push(&make_storage_uniform(7, kparam_rid));
+    uniforms.push(&make_storage_uniform(8, kdata_rid));
+
+    let uset = rd.uniform_set_create(&uniforms, shader, 0);
+
+    // --- Step 4: Push constant ---
+    let push_bytes = build_page_push_constant(
+        &pack.grammar_constants,
+        seed as i32,
+        pb.num_palettes,
+        origin_x as f32,
+        origin_z as f32,
+        world_span as f32,
+        page_px as i32,
+    );
+    let push_pba = bytes_to_pba(&push_bytes);
+
+    // --- Step 5: Pipeline + 2D dispatch ---
+    let px = page_px as u32;
+    let pipeline = rd.compute_pipeline_create(shader);
+    let groups = (px + 15) / 16; // ceil(page_px / 16)
+
+    let cl = rd.compute_list_begin();
+    rd.compute_list_bind_compute_pipeline(cl, pipeline);
+    rd.compute_list_bind_uniform_set(cl, uset, 0);
+    rd.compute_list_set_push_constant(cl, &push_pba, push_pba.len() as u32);
+    rd.compute_list_dispatch(cl, groups, groups, 1);
+    rd.compute_list_end();
+    // NOTE: global RenderingDevice — do NOT submit()/sync() (those are local-
+    // device only; the engine auto-submits recorded compute work at the next
+    // frame draw). The caller renders frames (which flushes this dispatch)
+    // before sampling the texture.
+
+    // --- Cleanup: free transient GPU resources; do NOT free target_rid ---
+    // Uniform set is freed transitively when the shader RID is freed.
+    // Free buffers, pipeline, then shader (which cascades uset).
+    rd.free_rid(palettes_rid);
+    rd.free_rid(compat_off_rid);
+    rd.free_rid(compat_flat_rid);
+    rd.free_rid(krec_rid);
+    rd.free_rid(kparam_rid);
+    rd.free_rid(kdata_rid);
+    rd.free_rid(pipeline);
+    rd.free_rid(shader);
+    // target_rid intentionally NOT freed here — the caller (pool) owns it.
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Godot class
 // ---------------------------------------------------------------------------
 
@@ -93,12 +223,6 @@ fn make_image_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
 pub struct Wg10PageCompute {
     pack: Option<pack::Pack>,
     pack_buffers: Option<PackBuffers>,
-    /// Raw texture RID kept alive on the global RD (NOT freed until self drops or
-    /// free_texture() is called). The renderer holds a reference through tex_wrapper.
-    tex_rid: Option<Rid>,
-    /// Wrapping Texture2DRD — holds the above RID for Godot's scene-side use.
-    /// Storing it here keeps the refcount alive as long as Wg10PageCompute lives.
-    tex_wrapper: Option<Gd<Texture2Drd>>,
     base: Base<RefCounted>,
 }
 
@@ -108,8 +232,6 @@ impl IRefCounted for Wg10PageCompute {
         Self {
             pack: None,
             pack_buffers: None,
-            tex_rid: None,
-            tex_wrapper: None,
             base,
         }
     }
@@ -133,199 +255,6 @@ impl Wg10PageCompute {
             }
             Err(e) => GString::from(format!("pack: {e}").as_str()),
         }
-    }
-
-    /// Dispatch a compute pass that writes terrain heights into a fresh R32F texture.
-    ///
-    /// Returns the Texture2DRD on success (keep it alive; dropping it may release the
-    /// underlying RID), or `None` on error (check Godot's error output).
-    ///
-    /// Parameters:
-    ///   glsl_path  — OS path to `height_page.glsl`
-    ///   origin_x   — world-space X of the page's top-left corner (metres)
-    ///   origin_z   — world-space Z of the page's top-left corner (metres)
-    ///   world_span — world-space size of the page in metres (width == height)
-    ///   page_px    — page resolution in pixels (width == height, must be a multiple of 16)
-    ///   seed       — grammar seed (cast to i32 internally)
-    #[func]
-    pub fn compute_page(
-        &mut self,
-        glsl_path: GString,
-        origin_x: f64,
-        origin_z: f64,
-        world_span: f64,
-        page_px: i64,
-        seed: i64,
-    ) -> Option<Gd<Texture2Drd>> {
-        let pack = match self.pack.as_ref() {
-            Some(p) => p,
-            None => {
-                godot_error!("Wg10PageCompute::compute_page: no pack loaded (call load_pack_dir first)");
-                return None;
-            }
-        };
-        let pb = match self.pack_buffers.as_ref() {
-            Some(pb) => pb,
-            None => {
-                godot_error!("Wg10PageCompute::compute_page: no pack buffers (call load_pack_dir first)");
-                return None;
-            }
-        };
-
-        // --- Step 1: Get the GLOBAL RenderingDevice ---
-        let mut rd = match RenderingServer::singleton().get_rendering_device() {
-            Some(rd) => rd,
-            None => {
-                godot_error!("Wg10PageCompute::compute_page: get_rendering_device() returned null \
-                              (requires Vulkan/Metal/DX12 renderer, not Compatibility or headless)");
-                return None;
-            }
-        };
-
-        // --- Step 2: Compile the GLSL compute shader ---
-        let glsl = match std::fs::read_to_string(glsl_path.to_string()) {
-            Ok(s) => s,
-            Err(e) => {
-                godot_error!("Wg10PageCompute::compute_page: cannot read GLSL file '{}': {}", glsl_path, e);
-                return None;
-            }
-        };
-
-        // Strip Godot-specific annotations (e.g. `#[compute]`) that are not valid GLSL.
-        let glsl_stripped: String = glsl.lines()
-            .filter(|l| !l.trim_start().starts_with("#["))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let mut src = RdShaderSource::new_gd();
-        src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
-
-        let spirv = match rd.shader_compile_spirv_from_source(&src) {
-            Some(s) => s,
-            None => {
-                godot_error!("Wg10PageCompute::compute_page: shader_compile_spirv_from_source returned null");
-                return None;
-            }
-        };
-
-        {
-            let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
-            if !err.is_empty() {
-                godot_error!("Wg10PageCompute::compute_page: GLSL compile error: {}", err);
-                return None;
-            }
-        }
-
-        let shader = rd.shader_create_from_spirv(&spirv);
-        if shader.is_invalid() {
-            godot_error!("Wg10PageCompute::compute_page: shader_create_from_spirv returned invalid RID");
-            return None;
-        }
-
-        // --- Step 3: Create the output R32F texture on the global RD ---
-        let px = page_px as u32;
-        let mut fmt = RdTextureFormat::new_gd();
-        fmt.set_width(px);
-        fmt.set_height(px);
-        fmt.set_format(DataFormat::R32_SFLOAT);
-        // STORAGE for compute imageStore; SAMPLING for the vertex shader to read it.
-        // No CAN_UPDATE: the texture is GPU-written only, never CPU-uploaded.
-        fmt.set_usage_bits(TextureUsageBits::STORAGE_BIT | TextureUsageBits::SAMPLING_BIT);
-        let view = RdTextureView::new_gd();
-
-        // texture_create(format, view) — data array defaults to empty in the _ex builder
-        let tex_rid = rd.texture_create(&fmt, &view);
-        if tex_rid.is_invalid() {
-            godot_error!("Wg10PageCompute::compute_page: texture_create returned invalid RID");
-            rd.free_rid(shader);
-            return None;
-        }
-
-        // --- Step 4: Build pack-data storage buffers ---
-        let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
-
-        let palettes_pba    = bytes_to_pba(&pb.palettes_bytes);
-        let compat_off_pba  = bytes_to_pba(&pb.compat_off_bytes);
-        let compat_flat_pba = bytes_to_pba(&pb.compat_flat_bytes);
-        let krec_pba        = bytes_to_pba(&pb.krec_bytes);
-        let kparam_pba      = bytes_to_pba(&pb.kparam_bytes);
-        let kdata_pba       = bytes_to_pba(&pb.kdata_bytes);
-
-        let palettes_rid    = rd.storage_buffer_create_ex(bsize(pb.palettes_bytes.len())).data(&palettes_pba).done();
-        let compat_off_rid  = rd.storage_buffer_create_ex(bsize(pb.compat_off_bytes.len())).data(&compat_off_pba).done();
-        let compat_flat_rid = rd.storage_buffer_create_ex(bsize(pb.compat_flat_bytes.len())).data(&compat_flat_pba).done();
-        let krec_rid        = rd.storage_buffer_create_ex(bsize(pb.krec_bytes.len())).data(&krec_pba).done();
-        let kparam_rid      = rd.storage_buffer_create_ex(bsize(pb.kparam_bytes.len())).data(&kparam_pba).done();
-        let kdata_rid       = rd.storage_buffer_create_ex(bsize(pb.kdata_bytes.len())).data(&kdata_pba).done();
-
-        // --- Step 5: Build uniform set ---
-        // binding 0 = R32F image (output)
-        // bindings 1, 2 absent (dropped in page shader)
-        // bindings 3–8 = pack data storage buffers
-        let mut uniforms: Array<Gd<RdUniform>> = Array::new();
-        uniforms.push(&make_image_uniform(0, tex_rid));
-        uniforms.push(&make_storage_uniform(3, palettes_rid));
-        uniforms.push(&make_storage_uniform(4, compat_off_rid));
-        uniforms.push(&make_storage_uniform(5, compat_flat_rid));
-        uniforms.push(&make_storage_uniform(6, krec_rid));
-        uniforms.push(&make_storage_uniform(7, kparam_rid));
-        uniforms.push(&make_storage_uniform(8, kdata_rid));
-
-        let uset = rd.uniform_set_create(&uniforms, shader, 0);
-
-        // --- Step 6: Push constant ---
-        let push_bytes = build_page_push_constant(
-            &pack.grammar_constants,
-            seed as i32,
-            pb.num_palettes,
-            origin_x as f32,
-            origin_z as f32,
-            world_span as f32,
-            page_px as i32,
-        );
-        let push_pba = bytes_to_pba(&push_bytes);
-
-        // --- Step 7: Pipeline + 2D dispatch ---
-        let pipeline = rd.compute_pipeline_create(shader);
-        let groups = (px + 15) / 16; // ceil(page_px / 16)
-
-        let cl = rd.compute_list_begin();
-        rd.compute_list_bind_compute_pipeline(cl, pipeline);
-        rd.compute_list_bind_uniform_set(cl, uset, 0);
-        rd.compute_list_set_push_constant(cl, &push_pba, push_pba.len() as u32);
-        rd.compute_list_dispatch(cl, groups, groups, 1);
-        rd.compute_list_end();
-        // NOTE: global RenderingDevice — do NOT submit()/sync() (those are local-
-        // device only; the engine auto-submits recorded compute work at the next
-        // frame draw). The caller renders frames (which flushes this dispatch)
-        // before sampling the texture.
-
-        // --- Cleanup: free transient GPU resources; do NOT free tex_rid ---
-        // Uniform set is freed transitively when the shader RID is freed.
-        // Free buffers, pipeline, then shader (which cascades uset).
-        rd.free_rid(palettes_rid);
-        rd.free_rid(compat_off_rid);
-        rd.free_rid(compat_flat_rid);
-        rd.free_rid(krec_rid);
-        rd.free_rid(kparam_rid);
-        rd.free_rid(kdata_rid);
-        rd.free_rid(pipeline);
-        rd.free_rid(shader);
-        // tex_rid intentionally NOT freed here — the renderer needs it.
-
-        // --- Step 9: Wrap the texture and store for lifetime management ---
-        let mut t = Texture2Drd::new_gd();
-        t.set_texture_rd_rid(tex_rid);
-
-        // Store both the raw RID and the wrapper so they live as long as this object.
-        // LIFETIME: tex_rid is valid as long as we hold it on self and don't free it.
-        // The caller should hold on to the returned Gd<Texture2Drd> (or store it on
-        // a material/mesh); dropping it only decrements the Godot refcount of the
-        // Texture2DRD wrapper — the underlying tex_rid remains alive via self.tex_rid.
-        self.tex_rid = Some(tex_rid);
-        self.tex_wrapper = Some(t.clone());
-
-        Some(t)
     }
 }
 
