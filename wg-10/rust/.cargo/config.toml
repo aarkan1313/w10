@@ -1,0 +1,6 @@
+# Keep this crate's build output inside the project (wg-10/rust/target/) so the
+# project is self-contained and portable: the .gdextension points at a relative
+# res:// path, and copying wg-10/ to another machine or game "just works" after
+# `cargo build`. This overrides any global CARGO_TARGET_DIR for this crate only.
+[build]
+target-dir = "target"
