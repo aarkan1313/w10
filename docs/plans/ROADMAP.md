@@ -4,7 +4,10 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-28
+Last updated: 2026-05-28 (M0 toolchain + gate runner green; M1 hash/noise/fbm
+ported with fixture parity, determinism + seam gates green)
+
+Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
 ---
 
@@ -14,21 +17,27 @@ Last updated: 2026-05-28
 - [x] Three living docs created (DESIGN / ROADMAP / STATUS).
 - [ ] Addon/folder layout decided (drop-in boundary): one terrain node + one
       config resource, narrow public API.
-- [ ] Native backend toolchain set up (**Rust GDExtension**, carried forward
-      from WG9) and loads in Godot 4.6.
-- [ ] Test/gate runner skeleton (headless + renderer-backed), so gates exist
-      before features.
+- [x] Native backend toolchain set up (**Rust GDExtension**, carried forward
+      from WG9) and loads in Godot 4.6. (`wg10_terrain` crate builds; `Wg10Hash`
+      registers and is callable headlessly — verified 2026-05-28.)
+- [x] Test/gate runner skeleton (headless), so gates exist before features.
+      (`tools/gate.py --suite fast`; renderer-backed suites come with M3.)
 
 ## Milestone 1 — Worldgen core (CPU) + parity foundation
 
-- [ ] Port the deterministic formula: hash → noise → region/province → kernel →
-      landform, as pure engine-agnostic math.
+- [~] Port the deterministic formula: hash → noise → region/province → kernel →
+      landform, as pure engine-agnostic math. **DONE: hash → value-noise → fbm**
+      (`wg-10/rust/src/hash.rs`), bit-exact vs WG9 fixture. region/province →
+      kernel → landform are the next plan.
 - [ ] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
       kernels). Core consumes the pack; no source assumptions baked in.
-- [ ] Parity fixtures (hash, noise, provider decisions, sample grids) committed
-      **to git**.
-- [ ] Determinism gate (same coord → same value across callers/runs).
-- [ ] Seam gate including **x=0 / z=0 axis-crossing** exact-zero edges.
+- [~] Parity fixtures (hash, noise, provider decisions, sample grids) committed
+      **to git**. **DONE: hash/noise fixture** (`hash_reference.json` vendored);
+      provider-decision + sample-grid fixtures come with later layers.
+- [x] Determinism gate (same coord → same value across callers/runs).
+      (`determinism_check.gd`, in the fast suite.)
+- [x] Seam gate including **x=0 / z=0 axis-crossing** exact-zero edges.
+      (Rust `value_noise_is_continuous_across_zero_axis` locks floor semantics.)
 
 ## Milestone 2 — GPU formula + parity
 
