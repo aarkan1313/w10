@@ -1,0 +1,146 @@
+//! Wg10TerrainView (DESIGN §6.2) — the drop-in terrain Node3D. Owns Gd handles to the page
+//! pool, the stream-ahead scheduler, and the 3x3 clipmap rings, and ticks the live loop:
+//! streamer.update -> per level per tile (3x3) fetch the resident page via the READ-ONLY
+//! get_resident_page (NEVER computes on the render path), coarser fallback on a miss ->
+//! rings.bind_tile. Owns no RIDs, no meshes, no scheduling math.
+
+use godot::prelude::*;
+use crate::page_pool::Wg10PagePool;
+use crate::streamer::Wg10Streamer;
+use crate::clipmap_rings::Wg10ClipmapRings;
+
+#[derive(GodotClass)]
+#[class(base=Node3D)]
+pub struct Wg10TerrainView {
+    pool: Option<Gd<Wg10PagePool>>,
+    streamer: Option<Gd<Wg10Streamer>>,
+    rings: Option<Gd<Wg10ClipmapRings>>,
+    num_levels: i32,
+    base_span: f64,
+    height_scale: f64,
+    morph_region: f64,
+    relief_ref: f64,
+    base: Base<Node3D>,
+}
+
+#[godot_api]
+impl INode3D for Wg10TerrainView {
+    fn init(base: Base<Node3D>) -> Self {
+        Self {
+            pool: None,
+            streamer: None,
+            rings: None,
+            num_levels: 0,
+            base_span: 0.0,
+            height_scale: 1.0,
+            morph_region: 0.0,
+            relief_ref: 2000.0,
+            base,
+        }
+    }
+}
+
+#[godot_api]
+impl Wg10TerrainView {
+    #[func]
+    pub fn configure(
+        &mut self,
+        pool: Gd<Wg10PagePool>,
+        streamer: Gd<Wg10Streamer>,
+        rings: Gd<Wg10ClipmapRings>,
+        num_levels: i64,
+        base_span: f64,
+        height_scale: f64,
+        morph_region: f64,
+        relief_ref: f64,
+    ) {
+        self.pool = Some(pool);
+        self.streamer = Some(streamer);
+        self.rings = Some(rings);
+        self.num_levels = num_levels as i32;
+        self.base_span = base_span;
+        self.height_scale = height_scale;
+        self.morph_region = morph_region;
+        self.relief_ref = relief_ref;
+    }
+
+    #[func]
+    pub fn update(&mut self, camera_x: f64, camera_z: f64, vel_x: f64, vel_z: f64) {
+        if self.pool.is_none() || self.streamer.is_none() || self.rings.is_none() {
+            godot_error!("Wg10TerrainView: update called before configure()");
+            return;
+        }
+        {
+            let mut streamer = self.streamer.as_ref().unwrap().clone();
+            streamer.bind_mut().update(camera_x, camera_z, vel_x, vel_z);
+        }
+
+        let num = self.num_levels;
+        for level in 0..num {
+            let span_l = self.base_span * 2f64.powi(level);
+            let center_x = (camera_x / span_l).floor() * span_l;
+            let center_z = (camera_z / span_l).floor() * span_l;
+
+            let span_c = if level < num - 1 {
+                self.base_span * 2f64.powi(level + 1)
+            } else {
+                span_l
+            };
+            let coarse_level = if level < num - 1 { level + 1 } else { level };
+
+            for dz in -1..=1 {
+                for dx in -1..=1 {
+                    let po_x = center_x + dx as f64 * span_l;
+                    let po_z = center_z + dz as f64 * span_l;
+
+                    let tc_x = po_x + span_l * 0.5;
+                    let tc_z = po_z + span_l * 0.5;
+                    let co_x = (tc_x / span_c).floor() * span_c;
+                    let co_z = (tc_z / span_c).floor() * span_c;
+
+                    let (tex, coarse_tex) = {
+                        let pool = self.pool.as_ref().unwrap().bind();
+                        let tex = pool.get_resident_page(level as i64, po_x, po_z);
+                        let coarse_tex = pool.get_resident_page(coarse_level as i64, co_x, co_z);
+                        (tex, coarse_tex)
+                    };
+
+                    let (height_tex, morph) = if tex.is_some() {
+                        let m = if level < num - 1 { self.morph_region } else { 0.0 };
+                        (tex, m)
+                    } else {
+                        (coarse_tex.clone(), 0.0)
+                    };
+
+                    if let (Some(ht), Some(ct)) = (height_tex, coarse_tex) {
+                        let mut rings = self.rings.as_ref().unwrap().clone();
+                        rings.bind_mut().bind_tile(
+                            level as i64,
+                            dx as i64,
+                            dz as i64,
+                            ht.upcast::<godot::classes::Texture2D>(),
+                            ct.upcast::<godot::classes::Texture2D>(),
+                            span_l,
+                            span_c,
+                            self.height_scale,
+                            morph,
+                            self.relief_ref,
+                            po_x,
+                            po_z,
+                            co_x,
+                            co_z,
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[func]
+    pub fn stats(&self) -> Dictionary<GString, Variant> {
+        match self.pool.as_ref() {
+            Some(pool) => pool.bind().stats(),
+            None => Dictionary::<GString, Variant>::new(),
+        }
+    }
+}
