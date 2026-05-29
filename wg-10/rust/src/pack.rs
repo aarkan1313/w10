@@ -192,6 +192,24 @@ fn load_pack_impl(json: &str, base: Option<&Path>) -> Result<Pack, String> {
         family_kernels.insert(id.clone(), FamilyKernel { kernel, relief_m, footprint_m });
     }
 
+    // Height-layer contract: if this pack is being loaded with kernels resolved
+    // (base is Some), every family a palette can select MUST have kernel data —
+    // otherwise height() would later panic on a grammar-selected kernel-less
+    // family. Reject at load time with a clear message. (Grammar-only loads with
+    // base=None skip this; the grammar never needs kernels.)
+    if base.is_some() {
+        for pal in &raw.palettes {
+            for fam in &pal.families {
+                if !family_kernels.contains_key(fam) {
+                    return Err(format!(
+                        "palette {:?} references family {:?} which has no kernel data (required when loading a pack with kernels)",
+                        pal.id, fam
+                    ));
+                }
+            }
+        }
+    }
+
     let mut family_ids: Vec<String> = raw.families.keys().cloned().collect();
     family_ids.sort();
 

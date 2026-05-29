@@ -113,3 +113,14 @@ fn load_pack_dir_rejects_bad_relief() {
     let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject relief_m<=0");
     assert!(err.contains("relief_m"), "error should mention relief_m: {err}");
 }
+
+#[test]
+fn load_pack_dir_rejects_palette_family_without_kernel_when_resolving() {
+    // A palette references "y" which has no kernel data. Loading WITH a base
+    // (height layer) must reject it at load time rather than letting height()
+    // panic later. (x uses flat.npy which exists.)
+    let dir = fixtures_dir();
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/flat.npy","relief_m":1.0,"footprint_m":1.0},"y":{},"z":{"kernel":"kernels/flat.npy","relief_m":1.0,"footprint_m":1.0}}}"#;
+    let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject kernel-less family in a palette");
+    assert!(err.contains("no kernel data") || err.contains("\"y\""), "error should name the kernel-less family: {err}");
+}

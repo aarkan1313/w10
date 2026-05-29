@@ -54,7 +54,8 @@ pub fn moderation(slope: f64, moderation_min: f64, strength: f64) -> f64 {
 
 /// Local slope magnitude of a kernel at a world coord: central difference of the
 /// (relief-scaled) sample over one kernel texel in each axis, normalised by the
-/// texel's world size so slope is dimensionless-ish (rise per texel / relief).
+/// texel's world size so slope is a normalized rise (sample delta / relief_m)
+/// over one texel's world width — a tunable heuristic, not a physical gradient.
 fn local_slope(fk: &FamilyKernel, x: f64, z: f64) -> f64 {
     let dx = fk.footprint_m / fk.kernel.cols as f64;
     let dz = fk.footprint_m / fk.kernel.rows as f64;
