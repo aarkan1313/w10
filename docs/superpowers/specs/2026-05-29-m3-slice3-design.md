@@ -165,12 +165,27 @@ pub fn plan_frame(&self, pos: Vec2, vel: Vec2, resident: &HashSet<PageKey>) -> F
 3. `missing = needed - resident`.
 4. **Prioritize `missing`** ascending by a cost key, then truncate to
    `max_per_frame`:
-   - primary: **finest first** (lower `level` = higher detail = more visible) —
-     coarser gaps are covered by even-coarser pages, finer gaps are not;
+   - primary: **coarsest first** (higher `level` first) — the coarse pages ARE the
+     never-black blanket (§2.4); they must be acquired before fine detail or a
+     fast-moving camera outruns the blanket and coverage goes black. A coarsest
+     page is also the fallback for many finer pages, so one coarse acquire protects
+     a wide area. Fine detail then fills in with the remaining budget and refines
+     over the next few frames — the "briefly coarser but correct" guarantee.
    - secondary: **nearest-and-most-ahead-of-motion first** — distance from `centre`
      (the velocity-biased lead point, §2.2), so the pages we're about to fly into
      win ties.
 5. `acquire = prioritized_missing[..max_per_frame]`.
+
+> **Design correction (2026-05-29, from the windowed gate).** This priority was
+> originally specified **finest-first**. The slice-3 windowed gate (`m3_stream_check`)
+> immediately falsified that under sustained fast motion: finest-first lets level-0
+> acquires saturate `max_per_frame` every frame, so the coarse ring at the camera's
+> *new* position is never acquired, the blanket is left behind, and coarsest-level
+> coverage pages — which have no coarser fallback — go BLACK within ~2 frames (1044
+> violations observed). Coarsest-first makes the never-black guarantee **structural**
+> instead of assumed, satisfying the performance/quality pillars. The pure property
+> test (§4.2) missed this because it *constructed* the coarsest ring as resident each
+> frame by fiat; only the gate driving the real budget-limited streamer exposed it.
 
 Bounded-work invariant: `acquire.len() <= max_per_frame` **always**, regardless of
 how large `missing` is (i.e. regardless of camera speed). This is the structural
@@ -189,18 +204,23 @@ extent contains `missing`'s centre (origin re-quantized to `span' = base_span *
 coarser resident page covers the area at all.
 
 **Never-black invariant (the one the gate enforces):** during a coverage sweep, for
-**every** page in `coverage()` that is not resident, `coarser_fallback` returns
-`Some`. Established by construction + maintained by the policy:
+**every** page in `coverage()` that is not resident, *either* it is a coarsest-level
+page that is itself resident, *or* `coarser_fallback` returns `Some`. Established by
+construction + maintained by the policy:
 - the **coarsest** level (`num_levels-1`) has the largest pages and the widest
-  `radius_pages` world footprint; the scheduler keeps coarsest-level coverage
-  resident first-class (it's in `coverage()` like any level, and finest-first
-  prioritization in §2.3 means coarse pages, being few and rarely missing once
-  warm, stay resident);
+  `radius_pages` world footprint. A coarsest page has no coarser fallback, so the
+  invariant for coarsest coverage can ONLY be met by that page being **resident**.
+  The **coarsest-first acquire priority** (§2.3) is what keeps it resident under
+  motion: the coarse ring is acquired before any fine detail, so the blanket tracks
+  the camera instead of being left behind;
 - because coarser pages span `2^(L'-L)`× more ground, a single resident coarse page
   is the fallback for many missing fine pages — so the coarse ring being resident
-  blankets the whole fine region.
-- The gate asserts this holds **even on frame 0** (cold start) by requiring the
-  warm-up to acquire coarsest-first, and **every frame mid-sweep** at high speed.
+  blankets the whole fine region. With `max_per_frame` ≥ the coarse-ring churn per
+  frame (new coarse pages entering coverage as the camera moves), the blanket stays
+  complete and every finer gap resolves to it.
+- The gate asserts this holds **even on frame 0** (cold start) by priming the
+  coarsest ring in warm-up, and **every frame mid-sweep** at high speed. The capacity
+  must hold the coarse blanket plus working fine pages (the gate sizes it so).
 
 This is the contract that also makes the async seam (§1.1) safe: a
 requested-but-not-yet-produced page is just a coverage gap, and every gap has a

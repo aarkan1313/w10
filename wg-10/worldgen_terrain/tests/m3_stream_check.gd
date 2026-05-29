@@ -16,8 +16,15 @@ const SEED := 1337
 const NUM_LEVELS := 3
 const BASE_SPAN := 8192.0
 const RADIUS_PAGES := 1          # 3x3 ring per level -> 27 covered keys/frame
-const LEAD_FRAMES := 4.0
-const MAX_PER_FRAME := 2
+# LEAD_FRAMES * VEL_X must exceed one COARSEST span (BASE_SPAN*2^(NUM_LEVELS-1) =
+# 32768) so the coarse never-black blanket is requested a full page AHEAD of the
+# boundary crossing — stream-ahead's whole point. 8 * 6000 = 48000 > 32768.
+const LEAD_FRAMES := 8.0
+# When the camera crosses a coarsest-page boundary a whole new coarse COLUMN (up to
+# 2*RADIUS+1 = 3 pages) enters coverage at once. MAX_PER_FRAME must absorb that
+# column in the crossing frame or a coarsest page (no coarser fallback) goes black.
+# 3 covers the column; remaining budget after the (rare) crossing fills fine detail.
+const MAX_PER_FRAME := 3
 # Capacity must hold the coarsest ring (9) + headroom so the coarse blanket stays
 # resident and finer detail can stream. 9 (coarsest) + 9 (mid) + slack.
 const CAPACITY := 24
@@ -53,9 +60,12 @@ func _run() -> int:
 	var errs: Array[String] = []
 	var any_missing_served_by_fallback := false
 
-	# Warm-up: prime the coarsest blanket first so frame-0 never-black holds. Acquire
-	# the full coarsest ring at the start position before the sweep.
-	_prime_coarsest(pool, NUM_LEVELS - 1)
+	# Warm-up: let the streamer's OWN coarsest-first loop populate the never-black
+	# blanket at the start pose, instead of hand-priming a guessed ring. We hold the
+	# start pose (with its full velocity, so the lead-ahead coverage is what frame 0
+	# of the sweep will sample) and update until the blanket is resident or a bound
+	# is hit. This exercises the real scheduler, not bespoke test geometry.
+	_warm_up(streamer, pool, 0.0, 0.0, VEL_X, VEL_Z)
 
 	for f in range(FRAMES):
 		var cam_x := VEL_X * float(f)   # straight line along +x
@@ -104,14 +114,24 @@ func _run() -> int:
 
 # --- helpers ---
 
-func _prime_coarsest(pool: Object, coarsest: int) -> void:
-	var span := BASE_SPAN * pow(2.0, coarsest)
-	for dz in range(-RADIUS_PAGES, RADIUS_PAGES + 1):
-		for dx in range(-RADIUS_PAGES, RADIUS_PAGES + 1):
-			var ox := dx * int(span)
-			var oz := dz * int(span)
-			var tex = pool.call("acquire_page", coarsest, float(ox), float(oz))
-			pool.call("release_page", coarsest, float(ox), float(oz))
+# Drive the streamer's own loop at a held pose until the coarsest-level coverage is
+# fully resident (the never-black blanket), or a bound is hit. Uses the real
+# coarsest-first scheduler — no bespoke priming geometry. The bound is generous:
+# the coarsest ring is (2*RADIUS+1)^2 pages and MAX_PER_FRAME>=coarse-column, so a
+# few dozen frames always suffice; the cap just prevents an infinite loop on a bug.
+func _warm_up(streamer: Object, pool: Object, x: float, z: float, vx: float, vz: float) -> void:
+	var coarsest := NUM_LEVELS - 1
+	for _i in range(200):
+		streamer.call("update", x, z, vx, vz)
+		var resident := _key_set(pool.call("resident_keys"))
+		var coverage := _key_list(streamer.call("coverage_keys", x, z, vx, vz))
+		var blanket_complete := true
+		for k in coverage:
+			if k.x == coarsest and not resident.has(k):
+				blanket_complete = false
+				break
+		if blanket_complete:
+			return
 
 func _key_list(flat: PackedInt64Array) -> Array:
 	var out := []
@@ -148,7 +168,7 @@ func _run_sweep_counts(os_dir: String, os_glsl: String) -> Array:
 	pool.call("configure", os_dir, PACK_FILE, os_glsl, CAPACITY, PAGE_PX, BASE_SPAN, SEED)
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
 	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
-	_prime_coarsest(pool, NUM_LEVELS - 1)
+	_warm_up(streamer, pool, 0.0, 0.0, VEL_X, VEL_Z)
 	var seq := []
 	for f in range(FRAMES):
 		streamer.call("update", VEL_X * float(f), 0.0, VEL_X, VEL_Z)
