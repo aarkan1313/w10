@@ -109,3 +109,25 @@ fn release_unknown_key_is_noop() {
     p.release(k(0,5,5)); // never acquired -> no panic
     assert_eq!(p.resident_count(), 0);
 }
+
+#[test]
+fn rollback_frees_the_slot_no_phantom() {
+    let mut p = PagePolicy::new(1);
+    let d = p.acquire(k(0,0,0));                 // Allocate(0), protected
+    assert!(matches!(d, Decision::Allocate(0)));
+    p.rollback(k(0,0,0));                         // producer "failed" -> remove it
+    assert_eq!(p.resident_count(), 0);           // slot is empty again
+    // re-acquiring the SAME key is a fresh Allocate (NOT a phantom Reuse)
+    assert_eq!(p.acquire(k(0,0,0)), Decision::Allocate(0));
+    // and a different key also allocates cleanly into the freed slot after rollback
+    let mut q = PagePolicy::new(1);
+    q.acquire(k(0,0,0)); q.rollback(k(0,0,0));
+    assert_eq!(q.acquire(k(0,9,0)), Decision::Allocate(0));
+}
+
+#[test]
+fn rollback_unknown_key_is_noop() {
+    let mut p = PagePolicy::new(2);
+    p.rollback(k(0,1,1));  // never acquired -> no panic, no change
+    assert_eq!(p.resident_count(), 0);
+}

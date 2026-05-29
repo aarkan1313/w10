@@ -99,6 +99,19 @@ impl PagePolicy {
         }
     }
 
+    /// Roll back a just-decided allocation/eviction when the producer failed to
+    /// fill the slot: remove `key` entirely (unmap + free the slot + unprotect),
+    /// leaving the slot empty and reusable. Use when compute/texture_create fails
+    /// AFTER acquire() already recorded the key, so policy state matches reality
+    /// (no phantom-resident key, no stale mapping). Idempotent.
+    pub fn rollback(&mut self, key: PageKey) {
+        if let Some(slot) = self.map.remove(&key) {
+            self.slots[slot] = None;
+            self.protected.remove(&slot);
+            // stamp left as-is; an empty slot is taken by the free-slot path before LRU.
+        }
+    }
+
     /// Release a page (unprotect; stays resident + LRU-eligible). Idempotent.
     pub fn release(&mut self, key: PageKey) {
         if let Some(&slot) = self.map.get(&key) {

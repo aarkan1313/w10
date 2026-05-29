@@ -6,7 +6,16 @@
 //!
 //! Anti-WG9 rule enforced here: one place creates, one place frees.
 //! `compute_into_texture` frees only ITS own transient buffers/pipeline/shader —
-//! never the page texture RID.  Only `free_all` (teardown) frees page textures.
+//! never the page texture RID.  All `free_rid` on page textures is pool-internal,
+//! at exactly three sites: (a) `free_all` (teardown), (b) Allocate compute-failure
+//! cleanup (free the just-created texture), (c) AllocateEvicting compute-failure
+//! cleanup (drop the now-stale slot texture).  Single-owner discipline holds: only
+//! the pool ever frees page textures.
+//!
+//! On any producer failure (texture_create or compute_into_texture) the pool calls
+//! `PagePolicy::rollback(key)` so policy state matches reality — no phantom-resident
+//! key (which could later panic an eviction `.expect`), no stale mapping returning
+//! wrong/null content on re-acquire.
 
 use godot::prelude::*;
 use godot::classes::{
@@ -215,7 +224,13 @@ impl Wg10PagePool {
                 let tex_rid = self.create_page_texture(&mut rd);
                 let tex_rid = match tex_rid {
                     Some(r) => r,
-                    None    => return None, // error already reported inside
+                    None    => {
+                        // texture_create failed; no texture exists to free.
+                        // Roll back the policy so it has no phantom-protected
+                        // slot (which would later panic an eviction .expect).
+                        self.policy.as_mut().unwrap().rollback(key);
+                        return None; // error already reported inside helper
+                    }
                 };
 
                 // Borrow pack/pb/glsl immutably; no mutable slot access yet.
@@ -231,11 +246,11 @@ impl Wg10PagePool {
 
                 if let Err(e) = result {
                     godot_error!("Wg10PagePool: compute_into_texture failed (slot {slot}): {e}");
-                    // Free the texture we just created — slot is not occupied.
+                    // Free the just-created texture — slot was never stored.
                     rd.free_rid(tex_rid);
-                    // Policy already recorded this slot; unprotect so it is
-                    // LRU-eligible (slot remains None in slot_tex).
-                    self.policy.as_mut().unwrap().release(key);
+                    // Roll back the policy fully: remove the key + free the slot
+                    // so a re-acquire is a fresh Allocate, not a stale Reuse.
+                    self.policy.as_mut().unwrap().rollback(key);
                     return None;
                 }
 
@@ -270,7 +285,18 @@ impl Wg10PagePool {
                     godot_error!(
                         "Wg10PagePool: compute_into_texture failed on eviction (slot {slot}): {e}"
                     );
-                    // Don't free — slot texture RID is still valid GPU memory.
+                    // The slot's texture now holds neither key cleanly: the old
+                    // key was already evicted from the policy by acquire(), and
+                    // the recompute for the new key failed. Drop it so no stale
+                    // content is ever returned. (This is the ONE case
+                    // AllocateEvicting frees — a documented failure path.)
+                    if let Some(old_rid) = self.slot_tex[slot].take() {
+                        rd.free_rid(old_rid);
+                    }
+                    self.slot_wrap[slot] = None;
+                    // Roll back the new key: frees the slot in the policy so a
+                    // future acquire re-allocates it cleanly.
+                    self.policy.as_mut().unwrap().rollback(key);
                     return None;
                 }
 
