@@ -207,8 +207,12 @@ impl Wg10PagePool {
         // glsl is cloned once (cheap vs. GPU dispatch cost); all other reads
         // are scalars copied out of self before any mutable access to
         // slot_tex/slot_wrap.  No unsafe required.
+        // Per-level page span: a level-L page covers world_span * 2^level (Fix #1, slice 5a).
+        // A flat world_span was only correct at level 0; coarser levels must cover 2^L more
+        // ground so the page matches the clipmap band (scheduler/RingLayout level_span).
+        let span_l = self.world_span * 2f64.powi(level as i32);
         let (ox, oz, ws, ppx, sd) =
-            (origin_x, origin_z, self.world_span, self.page_px, self.seed);
+            (origin_x, origin_z, span_l, self.page_px, self.seed);
 
         match decision {
             // ----------------------------------------------------------------
