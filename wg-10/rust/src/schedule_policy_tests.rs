@@ -60,3 +60,42 @@ fn velocity_lead_shifts_centre_in_travel_direction() {
     assert!(!moving.iter().any(|k| k.level == 0 && k.origin_x == 0),
         "origin-0 level-0 page should fall outside the led ring");
 }
+
+use std::collections::HashSet;
+
+fn keyset(items: &[PageKey]) -> HashSet<PageKey> {
+    items.iter().cloned().collect()
+}
+
+#[test]
+fn coarser_fallback_returns_resident_ancestor() {
+    let p = SchedulePolicy::new(cfg()); // base_span 1000, 3 levels
+    // A level-1 page (span 2000) at origin (0,0) covers world [0,2000): it is the
+    // ancestor of the level-0 page (span 1000) at origin (0,0).
+    let l1_ancestor = PageKey { level: 1, origin_x: 0, origin_z: 0 };
+    let resident = keyset(&[l1_ancestor]);
+    let missing = PageKey { level: 0, origin_x: 0, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(missing, &resident), Some(l1_ancestor));
+}
+
+#[test]
+fn coarser_fallback_walks_up_multiple_levels() {
+    let p = SchedulePolicy::new(cfg());
+    // Only the level-2 page (span 4000) at (0,0) is resident; a missing level-0
+    // page at (0,0) must walk past the (absent) level-1 ancestor to level 2.
+    let l2 = PageKey { level: 2, origin_x: 0, origin_z: 0 };
+    let resident = keyset(&[l2]);
+    let missing = PageKey { level: 0, origin_x: 0, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(missing, &resident), Some(l2));
+}
+
+#[test]
+fn coarser_fallback_none_when_no_coarser_resident() {
+    let p = SchedulePolicy::new(cfg());
+    // Nothing resident -> no fallback. Also: a coarsest-level miss has no coarser.
+    let empty = HashSet::new();
+    let missing = PageKey { level: 0, origin_x: 0, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(missing, &empty), None);
+    let coarsest_miss = PageKey { level: 2, origin_x: 0, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(coarsest_miss, &empty), None);
+}

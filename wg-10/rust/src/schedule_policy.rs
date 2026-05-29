@@ -86,4 +86,29 @@ impl SchedulePolicy {
         }
         out
     }
+
+    /// For a needed-but-not-resident page, walk UP the levels (coarser) and return
+    /// the first coarser page that contains `missing`'s area AND is resident.
+    /// Returns None only if no coarser resident page covers the area. This is the
+    /// never-black guarantee: every coverage gap with a resident coarse ancestor
+    /// resolves to lower-detail-but-correct terrain instead of a hole.
+    pub fn coarser_fallback(
+        &self,
+        missing: PageKey,
+        resident: &HashSet<PageKey>,
+    ) -> Option<PageKey> {
+        // Use the centre of the missing page so quantization to the coarser grid
+        // lands on the page that contains it (corner + half-span avoids the seam).
+        let span = self.level_span(missing.level);
+        let cx = missing.origin_x as f64 + span * 0.5;
+        let cz = missing.origin_z as f64 + span * 0.5;
+        for level in (missing.level + 1)..self.cfg.num_levels {
+            let (ox, oz) = self.page_origin(level, cx, cz);
+            let ancestor = PageKey { level, origin_x: ox, origin_z: oz };
+            if resident.contains(&ancestor) {
+                return Some(ancestor);
+            }
+        }
+        None
+    }
 }
