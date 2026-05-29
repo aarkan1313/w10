@@ -73,7 +73,7 @@ pub fn load_pack_str(json: &str) -> Result<Pack, String> {
     if c.province_size_regions <= 0 {
         return Err(format!("province_size_regions must be > 0, got {}", c.province_size_regions));
     }
-    if c.palette_primary_pct + c.palette_compatible_pct > 100 {
+    if c.palette_primary_pct as u64 + c.palette_compatible_pct as u64 > 100 {
         return Err(format!(
             "palette pct out of range: primary {} + compatible {} > 100",
             c.palette_primary_pct, c.palette_compatible_pct

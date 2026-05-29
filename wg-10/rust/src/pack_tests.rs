@@ -8,6 +8,7 @@ fn loads_golden_pack() {
     let p = pack::load_pack_str(GOLDEN).expect("golden pack should load");
     assert_eq!(p.palettes.len(), 4);
     assert_eq!(p.grammar_constants.province_size_regions, 4);
+    assert_eq!(p.grammar_constants.region_size_m, 32768.0);
     // every palette has exactly FAMILIES_PER_PALETTE families
     for pal in &p.palettes {
         assert_eq!(pal.families.len(), pack::FAMILIES_PER_PALETTE);
@@ -40,5 +41,14 @@ fn rejects_pct_out_of_range() {
     // primary 80 + compatible 30 = 110 > 100
     let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":80,"palette_compatible_pct":30},"palettes":[],"compatibility":{},"families":{}}"#;
     let err = pack::load_pack_str(bad).expect_err("must reject pct sum > 100");
+    assert!(err.contains("pct") || err.contains("100"), "error should mention pct range: {err}");
+}
+
+#[test]
+fn rejects_pct_sum_at_overflow_boundary() {
+    // primary u32::MAX + compatible 2 would wrap to 1 in release with naive u32
+    // addition; the u64-widened guard must still reject it.
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":4294967295,"palette_compatible_pct":2},"palettes":[],"compatibility":{},"families":{}}"#;
+    let err = pack::load_pack_str(bad).expect_err("must reject overflow-prone pct sum");
     assert!(err.contains("pct") || err.contains("100"), "error should mention pct range: {err}");
 }
