@@ -30,14 +30,18 @@ func _run() -> int:
 	for fid in pack["families"]:
 		max_relief = maxf(max_relief, float(pack["families"][fid]["relief_m"]))
 
+	# Kernels are z-score normalized (mean 0, std 1); height = sum(weight *
+	# moderation * zscore * relief). Clean terrain stays within ~+-8 sigma, so the
+	# physically-sane bound is a symmetric multiple of max_relief (not [0,relief]).
+	var bound := max_relief * 8.0 + 1.0
 	var errors: Array[String] = []
 	var coords := [Vector2(0, 0), Vector2(-1024.5, 2048.25), Vector2(1e6, -1e6), Vector2(40000.0, 9000.0)]
 	for c in coords:
 		var v: float = h.call("height", c.x, c.y, 1337)
 		if not is_finite(v):
 			errors.append("non-finite @ %s: %s" % [str(c), str(v)])
-		if v < -1.0 or v > max_relief + 1.0:
-			errors.append("out of bounds @ %s: %s (max_relief %s)" % [str(c), str(v), str(max_relief)])
+		if v < -bound or v > bound:
+			errors.append("out of bounds @ %s: %s (bound +-%s)" % [str(c), str(v), str(bound)])
 		var v2: float = h.call("height", c.x, c.y, 1337)
 		if v != v2:
 			errors.append("non-deterministic @ %s" % str(c))

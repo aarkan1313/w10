@@ -102,7 +102,7 @@
    "id": "wetland_0",
    "families": [
     "wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2",
-    "wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2",
+    "wetland__cop30_bulk20260524_wetland_niger_delta_6_2_5_2",
     "wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2"
    ]
   }
@@ -261,10 +261,10 @@
    "relief_m": 390.07269287109375,
    "footprint_m": 189759.688761855
   },
-  "wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2": {
-   "kernel": "kernels/wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2.npy",
-   "relief_m": 623.5032958984375,
-   "footprint_m": 220880.60728915306
+  "wetland__cop30_bulk20260524_wetland_niger_delta_6_2_5_2": {
+   "kernel": "kernels/wetland__cop30_bulk20260524_wetland_niger_delta_6_2_5_2.npy",
+   "relief_m": 376.67303466796875,
+   "footprint_m": 222181.8267946909
   }
  }
 }

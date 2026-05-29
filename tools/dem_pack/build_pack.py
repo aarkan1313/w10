@@ -24,10 +24,22 @@ WG9_KERNELS = "D:/workflows/worldgen9/factory/kernels"
 MAP_PATH = os.path.join(HERE, "kernel_family_map.approved.json")
 OUT_DIR = os.path.join(REPO, "wg-10", "worldgen_terrain", "packs", "dem_v1")
 
+# Kernels are z-score normalized (mean 0, std 1). Real terrain stays within
+# ~+-8 sigma; a |value| beyond this cap is a corrupt spike pixel (e.g. the
+# Mekong delta kernel's z=44), not real terrain — drop it so the emitted pack
+# never injects fake height.
+MAX_ABS_ZSCORE = 12.0
+
 
 def load_meta(kernel_id):
     with open(f"{WG9_KERNELS}/{kernel_id}/kernel.json") as f:
         return json.load(f)
+
+
+def kernel_max_abs_zscore(kernel_id):
+    """Max absolute normalized value of a kernel's source .npy (z-score guard)."""
+    a = np.load(f"{WG9_KERNELS}/{kernel_id}/normalized_height.npy", mmap_mode="r")
+    return max(abs(float(a.min())), abs(float(a.max())))
 
 
 def validate_npy(path):
@@ -53,6 +65,21 @@ def main() -> int:
     fam_of_full = dict(approved["map"])
     if not fam_of_full:
         raise SystemExit("[build] approved map is empty — review/approve it first (Phase A)")
+
+    # z-score sanity guard: drop kernels whose normalized array has a |value|
+    # beyond MAX_ABS_ZSCORE (corrupt spike pixels, not real terrain). Applies to
+    # BOTH the full and gate-subset paths so the emitted pack is always clean.
+    dropped = 0
+    for kid in sorted(fam_of_full):
+        maxabs = kernel_max_abs_zscore(kid)
+        if maxabs > MAX_ABS_ZSCORE:
+            print(f"[build] dropped {kid}: z-score outlier (max_abs={maxabs:.2f})")
+            del fam_of_full[kid]
+            dropped += 1
+    if dropped:
+        print(f"[build] dropped {dropped} z-score-outlier kernel(s)")
+    if not fam_of_full:
+        raise SystemExit("[build] all kernels dropped by z-score guard — nothing to build")
 
     # subset: take up to ceil(N/num_families) per family, deterministic by sorted id
     if args.gate_subset > 0:
