@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute→Texture2DRD no-readback→ring displaced mesh→PNG, windowed gate distinct=18; 70 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+protected, zero-churn eviction; PagePolicy 11 headless tests; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 STARTED — slice 1 (first rendered page) DONE**.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) DONE**.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -96,9 +96,34 @@ Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute�
   quantized colors ≥ 8; flat/black frames fail). Passes: distinct=18,
   nonblack_frac=1.0. Non-vacuous — a flat plane yields 2 buckets → fail.
   PNG inspected by eye: clear mountain/ridge/valley relief visible.
+- **M3 slice 2 — `PagePolicy`** (`page_policy.rs`, pure Rust, no godot): the
+  eviction bookkeeping — fixed-capacity slots, (level,origin)→slot map, LRU order,
+  protected set. Returns DECISIONS (Reuse/Allocate/AllocateEvicting/Full); owns no
+  RIDs. The WG9-killer rules proven headless (11 cargo tests): protected pages
+  NEVER evicted, budget NEVER exceeded, cache hits reuse the slot,
+  all-protected→Full (no panic, no wrong evict), release makes a slot evictable,
+  re-acquire re-protects, deterministic, + `rollback(key)` (used on producer
+  failure to keep policy/texture state consistent — no phantom slot, no panic, no
+  stale content).
+- **M3 slice 2 — `Wg10PagePool`** (`page_pool.rs`, godot): THE single owner of
+  all page RIDs (the §5.2 anti-WG9 rule). Asks PagePolicy what to do. The ONLY
+  texture_create/free_rid for pages live here (3 internal free sites: free_all
+  teardown + two produce-failure cleanups). acquire_page/release_page/stats/
+  configure/free_all. Eviction REUSES the slot's texture (same dims → zero
+  mid-run RID churn).
+- **M3 slice 2 — `Wg10PageCompute` refactored to stateless producer:**
+  `compute_into_texture` writes height into a pool-provided RID — no longer creates
+  or owns textures. Dispatch byte-identical to slice 1 (parity-proven).
+  Slice-1 regression-guarded: m3_slice1_check acquires its page via Wg10PagePool;
+  still renders distinct=18 byte-identical PNG (rendering preserved).
+- **`m3_pool_check.gd`** (`m3` suite, WINDOWED): drives acquire/release on a
+  capacity-2 pool; asserts RIDs reuse on hit (created stays 2), budget never
+  exceeded (resident≤2), protected page survives over-budget acquire, Full returns
+  null (full_events≥1), eviction reuses slot (recomputed, not created), pooled page
+  renders distinct=18. Pool driven by explicit acquire/release — NOT a frame loop.
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
-  (windowed). `--suite m3` → `[gate] suite=m3 checks=1 fail=0` (windowed).
+  (windowed). `--suite m3` → `[gate] suite=m3 checks=2 fail=0` (windowed).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
@@ -126,26 +151,31 @@ Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute�
 - **M3 slice-1 gate** (`m3_slice1_check.gd`, `m3` suite, WINDOWED): distinct=18,
   nonblack_frac=1.0, fail=0. One static page, one ring, one frame — Texture2DRD→
   material→displaced-mesh path proven. PNG inspected: real DEM mountain/ridge/
-  valley relief visible.
-- **m3 suite: 1 check, fail=0** (windowed). fast=5, gpu=2 unchanged.
-- **70 Rust unit/property tests green** (67 prior + 2 page_compute push-constant
-  tests + 1 push-constant-vs-M2 drift guard). One exact-value anchor: all-flat
-  pack yields `height == 500.0` at any coord (roll-independent).
+  valley relief visible. (Regression-guarded through slice 2: still passes
+  distinct=18 after the pool refactor.)
+- **M3 pool gate** (`m3_pool_check.gd`, `m3` suite, WINDOWED): capacity-2 pool,
+  explicit acquire/release. created=2 (RID reuse on hit), resident≤2 (budget
+  enforced), full_events≥1 (Full path exercised), pooled page distinct=18.
+- **m3 suite: 2 checks, fail=0** (windowed). fast=5, gpu=2 unchanged.
+- **81 Rust unit/property tests green** (70 prior + 9 PagePolicy + 2 rollback).
+  One exact-value anchor: all-flat pack yields `height == 500.0` at any coord.
 - **Verification shape for M3:** windowed + visual. The m3 gate proves the render
   path only. Value-correctness leans on the M2 gpu_parity gate (same formula).
   Global RenderingDevice is null under --headless on this D3D12 box — same
   constraint as the gpu suite. SKIP code 2 returned on no-GPU/headless box.
-- ONE static page, ONE ring, ONE frame. No streaming, no movement, no
-  multi-ring, no perf number, no manual-fly acceptance. M3 milestone OPEN.
-  (Honest baseline — slice 1 only proves "a GPU height page renders as correct
-  visible terrain.")
+- Pool driven by explicit acquire/release. No scheduler, no rings, no streaming
+  loop, no movement, no perf number, no fly-test. M3 milestone OPEN.
+  (Honest baseline — slice 2 proves "a bounded pool owns all page RIDs, enforces
+  budget, never evicts protected pages, and reuses slot textures"; driving it under
+  motion with the scheduler is slice 3.)
 
 ## What's next
 
-1. **M3 slice 2 — page pool:** bounded GPU-resident height/normal page pool,
-   single RID owner, LRU + protected keys. Then: stream-ahead scheduler
-   (velocity-aware, bounded computes/frame, coarser-page fallback), multi-ring +
-   L↔L+1 morph + recenter, modular harness components (camera/movement,
+1. **M3 slice 3 — stream-ahead scheduler:** velocity-aware, bounded
+   computes/frame, coarser-page fallback (never black, never stall). This is the
+   first slice that USES the pool's acquire/Full under MOTION — the first live
+   frame loop. Then: clipmap rings (concentric, persistent meshes, recenter on
+   move, L↔L+1 morph), modular harness components (camera/movement,
    diagnostics/profiling, UI overlay), manual fly-test scene, and the real M3
    acceptance gate (p99 < 6 ms + no-black, manually confirmed at ~1000 m/s).
    M3 milestone remains OPEN.
@@ -188,8 +218,10 @@ Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute�
   `gpu`/`m3` gates require a windowed run; headless returns null RenderingDevice
   on this D3D12 setup. SKIP code 2 is returned on no-GPU/headless box — never
   miscounted as a pass.
-- **Texture RID not freed in slice-1 one-shot:** intentional for the static
-  capture; a page pool (M3 slice 2) will own and manage all RID lifetimes.
+- **Texture RID ownership — RESOLVED slice 2:** `Wg10PagePool` is now the single
+  owner of all page RIDs (DESIGN §5.2). free_all/teardown + two produce-failure
+  cleanup sites cover every allocation. The slice-1 one-shot is regression-gated
+  via the pool path.
 
 ## Build / run gotchas (learned 2026-05-28 wiring the toolchain)
 

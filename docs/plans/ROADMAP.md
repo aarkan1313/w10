@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute→Texture2DRD no-readback→ring displaced mesh→PNG, gated windowed; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 2 done — page pool: single RID owner, LRU+protected, zero-churn eviction; PagePolicy headless-tested (11); m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -77,10 +77,28 @@ gated by `m3_slice1_check.gd` (`m3` suite, WINDOWED): distinct quantized colors
 Texture2DRD → material → displaced-mesh path is proven. ONE static page, ONE
 ring, ONE frame — no streaming, no movement, no multi-ring. M3 milestone OPEN.
 
+**[~] Slice 2 DONE (2026-05-29):** `PagePolicy` (pure Rust, no godot) — the
+eviction bookkeeping: fixed-capacity slots, (level,origin)→slot map, LRU order,
+protected set. Returns DECISIONS (Reuse/Allocate/AllocateEvicting/Full); owns no
+RIDs. 11 headless cargo tests: protected pages NEVER evicted, budget NEVER
+exceeded, cache hits reuse the slot, all-protected→Full (no panic), release makes
+slot evictable, re-acquire re-protects, `rollback(key)` on producer failure (no
+phantom slot, no stale content). `Wg10PagePool` (godot) — THE single owner of all
+page RIDs; asks PagePolicy what to do; the ONLY texture_create/free_rid for pages
+(3 internal free sites). Eviction reuses the slot's texture (same dims → zero
+mid-run RID churn). `Wg10PageCompute` refactored to a stateless producer:
+`compute_into_texture` writes height into a pool-provided RID — no longer creates
+or owns textures. Slice-1 regression-guarded: m3_slice1_check acquires via the
+pool; distinct=18 byte-identical PNG (rendering preserved). New
+`m3_pool_check.gd` (`m3` suite, WINDOWED): drives acquire/release on a
+capacity-2 pool, asserts RIDs reuse on hit (created stays 2), budget never exceeded
+(resident≤2), protected page survives over-budget acquire, Full returns null
+(full_events≥1), eviction reuses slot, pooled page renders (distinct=18). m3 suite
+now 2 checks, fail=0. Cargo tests: was 70, now 81 (+9 PagePolicy +2 rollback).
+Pool driven by explicit acquire/release — NOT a live frame loop. M3 OPEN.
+
 Remaining slices (NOT done):
 
-- [ ] `page_pool`: bounded GPU-resident height/normal page pool, single RID
-      owner, LRU + protected keys.
 - [ ] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
       coarser-page fallback (never black, never stall).
 - [ ] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
