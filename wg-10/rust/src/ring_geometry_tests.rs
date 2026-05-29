@@ -84,3 +84,11 @@ fn outer_band_has_hollow_center() {
         i += 3;
     }
 }
+
+#[test]
+#[should_panic(expected = "divisible by 4")]
+fn band_mesh_rejects_non_divisible_grid_res() {
+    let l = layout();
+    // grid_res = 6 is not divisible by 4 -> would produce a gapped seam -> must panic.
+    let _ = band_mesh(&l, 1, 6);
+}

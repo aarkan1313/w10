@@ -50,6 +50,11 @@ pub struct RingMesh {
 /// emitted. Unused vertices are harmless (a few extra positions; the GPU ignores them).
 pub fn band_mesh(layout: &RingLayout, level: i32, grid_res: i32) -> RingMesh {
     assert!(grid_res >= 1, "grid_res must be >= 1");
+    assert!(
+        grid_res % 4 == 0,
+        "grid_res must be divisible by 4 so a hollow band's inner edge lands on a \
+         vertex row (gapless seam with the inner level); got {grid_res}"
+    );
     let span = layout.level_span(level);
     let half = span * 0.5;
     let cell = span / grid_res as f64;
