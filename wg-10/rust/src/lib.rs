@@ -11,6 +11,7 @@ mod gpu_compute;
 mod page_compute;
 mod page_policy;
 mod page_pool;
+mod schedule_policy;
 
 #[cfg(test)]
 mod hash_tests;
@@ -26,6 +27,8 @@ mod height_tests;
 mod parity_tests;
 #[cfg(test)]
 mod page_policy_tests;
+#[cfg(test)]
+mod schedule_policy_tests;
 
 struct Wg10Terrain;
 
