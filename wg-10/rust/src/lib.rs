@@ -12,6 +12,7 @@ mod page_compute;
 mod page_policy;
 mod page_pool;
 mod schedule_policy;
+mod streamer;
 
 #[cfg(test)]
 mod hash_tests;
