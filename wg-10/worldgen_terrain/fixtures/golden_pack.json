@@ -1,0 +1,32 @@
+{
+  "schema": "worldgen10.terrain_pack.v1",
+  "version": 1,
+  "grammar_constants": {
+    "region_size_m": 32768.0,
+    "province_size_regions": 4,
+    "palette_primary_pct": 72,
+    "palette_compatible_pct": 22
+  },
+  "palettes": [
+    { "id": "alpine",     "families": ["mountain", "glacial", "grassland"] },
+    { "id": "drylands",   "families": ["badlands", "desert", "karst"] },
+    { "id": "humid",      "families": ["rainforest", "mountain", "grassland"] },
+    { "id": "coastal",    "families": ["coast", "mountain", "glacial"] }
+  ],
+  "compatibility": {
+    "alpine":  ["coastal", "humid"],
+    "drylands": ["humid", "alpine"],
+    "humid":   ["alpine", "coastal"],
+    "coastal": ["alpine", "drylands"]
+  },
+  "families": {
+    "mountain":   {},
+    "glacial":    {},
+    "grassland":  {},
+    "badlands":   {},
+    "desert":     {},
+    "karst":      {},
+    "rainforest": {},
+    "coast":      {}
+  }
+}

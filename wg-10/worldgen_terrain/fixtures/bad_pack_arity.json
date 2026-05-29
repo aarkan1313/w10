@@ -1,0 +1,15 @@
+{
+  "schema": "worldgen10.terrain_pack.v1",
+  "version": 1,
+  "grammar_constants": {
+    "region_size_m": 32768.0,
+    "province_size_regions": 4,
+    "palette_primary_pct": 72,
+    "palette_compatible_pct": 22
+  },
+  "palettes": [
+    { "id": "alpine", "families": ["mountain", "glacial"] }
+  ],
+  "compatibility": { "alpine": [] },
+  "families": { "mountain": {}, "glacial": {} }
+}
