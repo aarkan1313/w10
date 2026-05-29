@@ -85,3 +85,31 @@ def test_build_pack_dict_rejects_bad_relief():
         assert False, "should reject relief<=0"
     except ValueError as e:
         assert "relief" in str(e) and "m1" in str(e)
+
+
+def test_build_pack_dict_rejects_bad_footprint_inputs():
+    fam_of = {"m1": "mountain", "m2": "mountain", "m3": "mountain"}
+    base = {"height_range_m": 1000.0, "approx_sample_spacing_m": 100.0, "sample_px": 512}
+    # zero spacing on m1 -> ValueError naming m1
+    meta = {"m1": {**base, "approx_sample_spacing_m": 0.0}, "m2": dict(base), "m3": dict(base)}
+    try:
+        lib.build_pack_dict(fam_of, meta, footprint_scale=1.0)
+        assert False, "should reject spacing<=0"
+    except ValueError as e:
+        assert "m1" in str(e) and "footprint" in str(e)
+    # footprint_scale<=0 -> ValueError mentioning footprint_scale
+    good = {"m1": dict(base), "m2": dict(base), "m3": dict(base)}
+    try:
+        lib.build_pack_dict(fam_of, good, footprint_scale=0.0)
+        assert False, "should reject footprint_scale<=0"
+    except ValueError as e:
+        assert "footprint_scale" in str(e)
+
+
+def test_seed_family_map_excludes_uncategorized_even_if_confident():
+    # a high-confidence retained inference whose inferred_family is "uncategorized"
+    # must still be excluded (it's not a real family).
+    inferences = [{"kernel_id": "u", "inferred_family": "uncategorized", "family_confidence": 0.95, "tag_status": "retained"}]
+    m = lib.seed_family_map(["u"], inferences, threshold=0.7)
+    assert m["map"] == {}
+    assert m["excluded"] == ["u"]

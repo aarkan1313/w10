@@ -90,6 +90,8 @@ def build_pack_dict(fam_of, meta, footprint_scale=1.0):
     {kernel_id->kernel.json metadata}. relief_m=height_range_m;
     footprint_m=approx_sample_spacing_m*sample_px*footprint_scale. Raises
     ValueError naming the offending kernel on bad metadata."""
+    if footprint_scale <= 0.0:
+        raise ValueError(f"footprint_scale must be > 0, got {footprint_scale}")
     families = {}
     for kid, fam in fam_of.items():
         m = meta.get(kid)
