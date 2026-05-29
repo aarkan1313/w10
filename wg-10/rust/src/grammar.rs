@@ -2,8 +2,16 @@
 //! imports (DESIGN §6.3). Turns a world coordinate into a bounded blend of
 //! terrain families. WG9 is reference/sanity-oracle only — this is W10's design.
 
-use crate::hash::{self, HashVal};
+use crate::hash;
 use crate::pack::{Pack, FAMILIES_PER_PALETTE};
+
+// Integer salts for the grammar rolls (replace the old string prefixes). Each is
+// an arbitrary distinct u32; they only need to differ to decorrelate the rolls.
+const SALT_PROVINCE_PALETTE: u32 = 0x5052_4f56;
+const SALT_PALETTE_LOCAL: u32 = 0x4c4f_4341;
+const SALT_PALETTE_COMPATIBLE: u32 = 0x434f_4d50;
+const SALT_PALETTE_RARE: u32 = 0x5241_5245;
+const SALT_FAMILY_ROLL: u32 = 0x46414d49;
 
 /// Region cell index for a world coordinate. Floor (not truncate) so the cell
 /// index is continuous across the x=0 / z=0 axes (DESIGN §4 seam rule).
@@ -19,12 +27,7 @@ pub fn province_of(region_axis: i64, pack: &Pack) -> i64 {
 
 /// Primary palette index for a province (province sets the regional bias).
 fn province_primary_palette(prx: i64, prz: i64, seed: i64, pack: &Pack) -> usize {
-    let h = hash::stable_hash(&[
-        HashVal::Str("province_palette"),
-        HashVal::Int(prx),
-        HashVal::Int(prz),
-        HashVal::Int(seed),
-    ]);
+    let h = hash::stable_hash_ints(SALT_PROVINCE_PALETTE, &[prx, prz, seed]);
     (h as usize) % pack.palettes.len()
 }
 
@@ -35,14 +38,7 @@ pub fn palette_for_region(rx: i64, rz: i64, seed: i64, pack: &Pack) -> usize {
     let prz = province_of(rz, pack);
     let primary = province_primary_palette(prx, prz, seed, pack);
 
-    let roll = hash::stable_hash(&[
-        HashVal::Str("palette_local"),
-        HashVal::Int(rx),
-        HashVal::Int(rz),
-        HashVal::Int(prx),
-        HashVal::Int(prz),
-        HashVal::Int(seed),
-    ]) % 100;
+    let roll = hash::stable_hash_ints(SALT_PALETTE_LOCAL, &[rx, rz, prx, prz, seed]) % 100;
 
     let c = &pack.grammar_constants;
     if roll < c.palette_primary_pct {
@@ -53,12 +49,7 @@ pub fn palette_for_region(rx: i64, rz: i64, seed: i64, pack: &Pack) -> usize {
         let primary_id = &pack.palettes[primary].id;
         if let Some(compat) = pack.compatibility.get(primary_id) {
             if !compat.is_empty() {
-                let pick = hash::stable_hash(&[
-                    HashVal::Str("palette_compatible"),
-                    HashVal::Int(rx),
-                    HashVal::Int(rz),
-                    HashVal::Int(seed),
-                ]) as usize
+                let pick = hash::stable_hash_ints(SALT_PALETTE_COMPATIBLE, &[rx, rz, seed]) as usize
                     % compat.len();
                 if let Some(idx) = pack.palette_index(&compat[pick]) {
                     return idx;
@@ -68,13 +59,7 @@ pub fn palette_for_region(rx: i64, rz: i64, seed: i64, pack: &Pack) -> usize {
         return primary; // no compatible defined -> fall back to primary
     }
     // rare: any palette
-    hash::stable_hash(&[
-        HashVal::Str("palette_rare"),
-        HashVal::Int(rx),
-        HashVal::Int(rz),
-        HashVal::Int(seed),
-    ]) as usize
-        % pack.palettes.len()
+    hash::stable_hash_ints(SALT_PALETTE_RARE, &[rx, rz, seed]) as usize % pack.palettes.len()
 }
 
 /// A family identified by its index into `Pack::family_ids`.
@@ -106,12 +91,8 @@ pub fn families_for_region(
     // Base bias split, rotated deterministically per region so adjacent regions
     // with the same palette don't all weight the same family first.
     let base = [0.55, 0.30, 0.15];
-    let roll = (hash::stable_hash(&[
-        HashVal::Str("family_roll"),
-        HashVal::Int(rx),
-        HashVal::Int(rz),
-        HashVal::Int(seed),
-    ]) % FAMILIES_PER_PALETTE as u32) as usize;
+    let roll = (hash::stable_hash_ints(SALT_FAMILY_ROLL, &[rx, rz, seed])
+        % FAMILIES_PER_PALETTE as u32) as usize;
     let mut bias = [0.0f64; FAMILIES_PER_PALETTE];
     for i in 0..FAMILIES_PER_PALETTE {
         bias[i] = base[(i + roll) % FAMILIES_PER_PALETTE];
