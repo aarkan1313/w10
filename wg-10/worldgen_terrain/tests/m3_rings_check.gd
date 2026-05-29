@@ -41,10 +41,14 @@ func _run() -> int:
 	if cfg_err != "":
 		push_error("pool configure failed: %s" % cfg_err); return 1
 
-	# One page per level at the camera origin. Level L span = BASE_SPAN*2^L; the page for
-	# level L at origin has origin (0,0) in that level's grid.
-	var tex0 = pool.call("acquire_page", 0, 0.0, 0.0)
-	var tex1 = pool.call("acquire_page", 1, 0.0, 0.0)
+	# Page key = lower corner of the camera-centered band. recenter() puts level L's mesh
+	# CENTER at center_L = floor(cam/cell_L)*cell_L; the band covers [center-span/2,
+	# center+span/2], so the page corner = center_L - span_L/2. At cam=origin, center_L=0
+	# -> corner_L = -span_L/2. (Per-level span Fix #1: page covers [corner, corner+span_L].)
+	var c0 := -BASE_SPAN * 0.5        # level 0 corner (span BASE_SPAN)
+	var c1 := -BASE_SPAN              # level 1 corner (span 2*BASE_SPAN -> -span_1/2 = -BASE_SPAN)
+	var tex0 = pool.call("acquire_page", 0, c0, c0)
+	var tex1 = pool.call("acquire_page", 1, c1, c1)
 	if tex0 == null or tex1 == null:
 		push_error("acquire_page returned null"); return 1
 
@@ -53,9 +57,10 @@ func _run() -> int:
 	if int(rings.call("level_count")) != NUM_LEVELS:
 		push_error("expected %d levels, got %s" % [NUM_LEVELS, str(rings.call("level_count"))]); return 1
 
-	# level 0 morphs toward level 1 (coarse); level 1 coarsest -> no morph (coarse=self, region 0).
-	rings.call("bind_page", 0, tex0, tex1, BASE_SPAN, BASE_SPAN * 2.0, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF)
-	rings.call("bind_page", 1, tex1, tex1, BASE_SPAN * 2.0, BASE_SPAN * 2.0, HEIGHT_SCALE, 0.0, RELIEF_REF)
+	# level 0 morphs toward level 1; coarse_origin = level-1's corner (c1,c1).
+	rings.call("bind_page", 0, tex0, tex1, BASE_SPAN, BASE_SPAN * 2.0, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, c1, c1)
+	# level 1 coarsest -> no morph; coarse = itself, coarse_origin = its own corner (c1,c1).
+	rings.call("bind_page", 1, tex1, tex1, BASE_SPAN * 2.0, BASE_SPAN * 2.0, HEIGHT_SCALE, 0.0, RELIEF_REF, c1, c1)
 
 	var verts_before := int(rings.call("total_vertex_count"))
 
