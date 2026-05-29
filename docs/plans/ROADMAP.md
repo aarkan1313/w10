@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (real DEM pack wired — WG9 shortlist + 12 OpenTopo fetches; fast=5/gpu=2 gates green, fail=0; M2 kernel-atlas validated at real 512×512 scale)
+Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute→Texture2DRD no-readback→ring displaced mesh→PNG, gated windowed; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -68,14 +68,27 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
 ## Milestone 3 — Render pipeline at speed (the hard part)
 
+**[~] Slice 1 DONE (2026-05-29):** `Wg10PageCompute` (native Rust class, global
+RenderingDevice) runs `height_page.glsl` to write one DEM height page into an
+R32F `Texture2DRD` (no readback). `ring_displace.gdshader` samples it in
+`vertex()` to displace a flat ring mesh. Result captured to `m3_slice1.png` and
+gated by `m3_slice1_check.gd` (`m3` suite, WINDOWED): distinct quantized colors
+= 18, nonblack_frac = 1.0. Clear mountain/ridge/valley relief visible. The
+Texture2DRD → material → displaced-mesh path is proven. ONE static page, ONE
+ring, ONE frame — no streaming, no movement, no multi-ring. M3 milestone OPEN.
+
+Remaining slices (NOT done):
+
 - [ ] `page_pool`: bounded GPU-resident height/normal page pool, single RID
       owner, LRU + protected keys.
 - [ ] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
       coarser-page fallback (never black, never stall).
 - [ ] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
       move, shader displace + L↔L+1 morph.
-- [ ] Manual review scene: WASD + Shift speed + mouse look + Space/C vertical,
-      live fps/stats overlay, free-fly (+ optional ground-follow).
+- [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
+      overlay (live fps/stats).
+- [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,
+      free-fly (+ optional ground-follow).
 - [ ] Renderer-backed acceptance gate: no large black/missing component AND
       **renderer frame p99 < 6 ms**, in motion at ~1000 m/s.
 - [ ] Tune finest-ring spacing + ring count against the review scene (config;

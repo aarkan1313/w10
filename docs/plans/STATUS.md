@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (first real DEM pack wired; fast=5/gpu=2 gates green, fail=0; M2 kernel-atlas validated at real 512×512 scale)
+Last updated: 2026-05-29 (M3 slice 1 done — first rendered DEM page; compute→Texture2DRD no-readback→ring displaced mesh→PNG, windowed gate distinct=18; 70 cargo tests green; M3 in progress)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green. No renderer yet.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 STARTED — slice 1 (first rendered page) DONE**.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -83,9 +83,22 @@ Last updated: 2026-05-29 (first real DEM pack wired; fast=5/gpu=2 gates green, f
   signatures EXACT; Tier-2 height maxd=0.040 m on ~6 km relief (within tolerance).
   **This validated the M2 kernel-atlas at real 512×512 scale — the named atlas-at-
   scale risk is closed.**
+- **M3 slice 1 — `Wg10PageCompute` native class** (`page_compute.rs`,
+  `height_page.glsl`): runs on the GLOBAL RenderingDevice (no readback); writes
+  one DEM height page into an R32F `Texture2DRD`. Scene consts drive page
+  origin/span/px, grid resolution, camera, height_scale — config-driven, no
+  scattered magic numbers.
+- **`ring_displace.gdshader`**: spatial shader sampling the `Texture2DRD` in
+  `vertex()` to displace a flat ring mesh. Combined with `Wg10PageCompute`, the
+  full compute → Texture2DRD → material → displaced-mesh path is proven.
+- **`m3_slice1_check.gd`** (`m3` suite, WINDOWED): renders one static page +
+  ring + frame, captures to `m3_slice1.png`, asserts real relief (distinct
+  quantized colors ≥ 8; flat/black frames fail). Passes: distinct=18,
+  nonblack_frac=1.0. Non-vacuous — a flat plane yields 2 buckets → fail.
+  PNG inspected by eye: clear mountain/ridge/valley relief visible.
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
-  (windowed; returns SKIP code 2 on no-GPU/headless box).
+  (windowed). `--suite m3` → `[gate] suite=m3 checks=1 fail=0` (windowed).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
@@ -110,19 +123,32 @@ Last updated: 2026-05-29 (first real DEM pack wired; fast=5/gpu=2 gates green, f
   Tier-2 maxd=0.040 m on ~6 km relief. Validates M2 atlas at real scale — atlas-
   at-scale risk closed.
 - **GPU suite: 2 checks, fail=0** (windowed).
-- **67 Rust unit/property tests green** (hash + npy + pack + grammar + height +
-  parity). One exact-value anchor: all-flat pack yields `height == 500.0` at any
-  coord (roll-independent).
-- Nothing rendered. GPU output validated by gate readback only — not streamed.
-  (Honest baseline — the renderer is M3.)
+- **M3 slice-1 gate** (`m3_slice1_check.gd`, `m3` suite, WINDOWED): distinct=18,
+  nonblack_frac=1.0, fail=0. One static page, one ring, one frame — Texture2DRD→
+  material→displaced-mesh path proven. PNG inspected: real DEM mountain/ridge/
+  valley relief visible.
+- **m3 suite: 1 check, fail=0** (windowed). fast=5, gpu=2 unchanged.
+- **70 Rust unit/property tests green** (67 prior + 2 page_compute push-constant
+  tests + 1 push-constant-vs-M2 drift guard). One exact-value anchor: all-flat
+  pack yields `height == 500.0` at any coord (roll-independent).
+- **Verification shape for M3:** windowed + visual. The m3 gate proves the render
+  path only. Value-correctness leans on the M2 gpu_parity gate (same formula).
+  Global RenderingDevice is null under --headless on this D3D12 box — same
+  constraint as the gpu suite. SKIP code 2 returned on no-GPU/headless box.
+- ONE static page, ONE ring, ONE frame. No streaming, no movement, no
+  multi-ring, no perf number, no manual-fly acceptance. M3 milestone OPEN.
+  (Honest baseline — slice 1 only proves "a GPU height page renders as correct
+  visible terrain.")
 
 ## What's next
 
-1. **M3 — Render pipeline (the hard part):** page pool + stream-ahead scheduler
-   + clipmap rings + manual review scene + diagnostics overlay. This is where
-   GPU height pages from the real DEM pack are consumed with NO readback in
-   production (DESIGN §2.4). Acceptance: fly ~1000 m/s, no stalls, no
-   black/holes, frame p99 < 6 ms, manually confirmed.
+1. **M3 slice 2 — page pool:** bounded GPU-resident height/normal page pool,
+   single RID owner, LRU + protected keys. Then: stream-ahead scheduler
+   (velocity-aware, bounded computes/frame, coarser-page fallback), multi-ring +
+   L↔L+1 morph + recenter, modular harness components (camera/movement,
+   diagnostics/profiling, UI overlay), manual fly-test scene, and the real M3
+   acceptance gate (p99 < 6 ms + no-black, manually confirmed at ~1000 m/s).
+   M3 milestone remains OPEN.
 2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.
@@ -158,9 +184,12 @@ Last updated: 2026-05-29 (first real DEM pack wired; fast=5/gpu=2 gates green, f
   behavior; deferred until the renderer can show it.
 - Finest-ring spacing affects near-detail radius and interacts with future
   asset/texture scale; tune against real assets in M3.
-- **GPU compute is windowed-only:** `Wg10GpuCompute` / `gpu` gate require a
-  windowed run; headless returns null local RenderingDevice on this D3D12 setup.
-  SKIP code 2 is returned on no-GPU/headless box — never miscounted as a pass.
+- **GPU compute is windowed-only:** `Wg10GpuCompute`, `Wg10PageCompute`, and all
+  `gpu`/`m3` gates require a windowed run; headless returns null RenderingDevice
+  on this D3D12 setup. SKIP code 2 is returned on no-GPU/headless box — never
+  miscounted as a pass.
+- **Texture RID not freed in slice-1 one-shot:** intentional for the static
+  capture; a page pool (M3 slice 2) will own and manage all RID lifetimes.
 
 ## Build / run gotchas (learned 2026-05-28 wiring the toolchain)
 
