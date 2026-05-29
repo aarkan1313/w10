@@ -99,16 +99,30 @@ fn family_weights_deterministic_across_calls() {
 #[test]
 fn family_weights_continuous_across_region_seam() {
     // Stepping across a region boundary (x = region_size_m) must not jump: the
-    // blend is continuous, so values just on either side are close.
+    // blend is continuous, so the weight of every family present on one side is
+    // nearly identical just across the boundary.
     let p = golden();
     let s = p.grammar_constants.region_size_m;
     let just_below = grammar::family_weights(s - 0.01, 100.0, 1337, &p);
     let exactly = grammar::family_weights(s, 100.0, 1337, &p);
-    // Same set of families present and weights nearly equal across the seam.
+    // Both normalized.
     let total_below: f64 = just_below.iter().map(|(_, w)| *w).sum();
     let total_at: f64 = exactly.iter().map(|(_, w)| *w).sum();
     assert!((total_below - 1.0).abs() < 1e-12 && (total_at - 1.0).abs() < 1e-12);
-    // No NaN/inf and both normalized — continuity guaranteed by smoothstep blend.
+    // Continuity: each family's weight just below the seam matches its weight at
+    // the seam within a small tolerance (a 0.01m step over a 32768m region is a
+    // ~3e-7 change in grid space; absent a discontinuity the weights barely move).
+    for (fam, w_below) in just_below.iter() {
+        let w_at = exactly.iter().find(|(f, _)| f == fam).map(|(_, w)| *w).unwrap_or(0.0);
+        assert!((w_below - w_at).abs() < 1e-3,
+            "family {fam} weight jumped across seam: below={w_below} at={w_at}");
+    }
+    // and symmetrically, no family appears at the seam that was absent just below
+    for (fam, w_at) in exactly.iter() {
+        let w_below = just_below.iter().find(|(f, _)| f == fam).map(|(_, w)| *w).unwrap_or(0.0);
+        assert!((w_at - w_below).abs() < 1e-3,
+            "family {fam} appeared discontinuously at seam: at={w_at} below={w_below}");
+    }
     assert!(just_below.iter().all(|(_, w)| w.is_finite()));
     assert!(exactly.iter().all(|(_, w)| w.is_finite()));
 }

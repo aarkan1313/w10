@@ -142,6 +142,7 @@ impl FamilyWeights {
                 return;
             }
         }
+        debug_assert!(self.len < MAX_FAMILY_WEIGHTS, "FamilyWeights buffer overflow");
         self.buf[self.len] = (fam, weight);
         self.len += 1;
     }
