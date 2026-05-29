@@ -106,3 +106,41 @@ fn value_noise_is_continuous_across_zero_axis() {
     // Explicit floor-vs-truncate guard: cell index just below 0 is -1, not 0.
     assert_eq!((-0.001_f64).floor() as i64, -1);
 }
+
+#[test]
+fn stable_hash_ints_is_deterministic() {
+    let a = hash::stable_hash_ints(0xABCD_1234, &[3, -7, 1337]);
+    let b = hash::stable_hash_ints(0xABCD_1234, &[3, -7, 1337]);
+    assert_eq!(a, b);
+}
+
+#[test]
+fn stable_hash_ints_salt_decorrelates() {
+    let a = hash::stable_hash_ints(1, &[10, 20]);
+    let b = hash::stable_hash_ints(2, &[10, 20]);
+    assert_ne!(a, b, "distinct salts must not collide on these args");
+}
+
+#[test]
+fn stable_hash_ints_args_matter() {
+    let a = hash::stable_hash_ints(7, &[10, 20]);
+    let b = hash::stable_hash_ints(7, &[10, 21]);
+    assert_ne!(a, b);
+}
+
+#[test]
+fn stable_hash_ints_handles_negatives_distinctly() {
+    let a = hash::stable_hash_ints(7, &[-1]);
+    let b = hash::stable_hash_ints(7, &[1]);
+    assert_ne!(a, b);
+}
+
+#[test]
+fn stable_hash_ints_distribution_sanity() {
+    let mut seen = [false; 4];
+    for i in 0..200i64 {
+        let h = hash::stable_hash_ints(42, &[i, i * 3 - 5]);
+        seen[(h % 4) as usize] = true;
+    }
+    assert!(seen.iter().all(|&s| s), "hash % 4 collapsed: {seen:?}");
+}

@@ -43,6 +43,37 @@ pub fn stable_hash(values: &[HashVal]) -> u32 {
     fnv1a_32(&joined)
 }
 
+/// GPU-portable integer hash. Pure u32 wrapping arithmetic (FNV-1a-32 fold) so
+/// it is bit-identical on CPU (`u32::wrapping_*`) and in GLSL (`uint`, which
+/// wraps mod 2^32 by spec). A `salt` replaces the old string prefix; each i64
+/// arg is folded as its low and high u32 halves so the full value participates.
+/// This is SEPARATE from `hash_grid` (which keeps its 64-bit-multiply bedrock
+/// scheme); `stable_hash_ints` is the grammar-roll hash that must run on the GPU.
+pub fn stable_hash_ints(salt: u32, args: &[i64]) -> u32 {
+    let mut h = FNV1A_INITIAL;
+    h = fold_u32(h, salt);
+    for &a in args {
+        let u = a as u64;
+        h = fold_u32(h, u as u32);
+        h = fold_u32(h, (u >> 32) as u32);
+    }
+    // final avalanche (xorshift-multiply), all u32 wrapping.
+    h ^= h >> 16;
+    h = h.wrapping_mul(0x7feb_352d);
+    h ^= h >> 15;
+    h
+}
+
+/// FNV-1a-32 mix of one u32 word (4 bytes, little-endian order).
+fn fold_u32(mut h: u32, word: u32) -> u32 {
+    for shift in [0u32, 8, 16, 24] {
+        let byte = (word >> shift) & 0xff;
+        h ^= byte;
+        h = h.wrapping_mul(FNV1A_MULTIPLY);
+    }
+    h
+}
+
 const U32_MASK: u64 = 0xffff_ffff;
 const U32_DENOM: f64 = 4294967295.0;
 
