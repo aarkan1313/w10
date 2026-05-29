@@ -114,3 +114,55 @@ fn coarser_fallback_non_zero_origin_quantizes_correctly() {
     let missing2 = PageKey { level: 0, origin_x: 2000, origin_z: 0 };
     assert_eq!(p.coarser_fallback(missing2, &resident2), Some(ancestor2));
 }
+
+#[test]
+fn plan_frame_caps_acquires_at_max_per_frame() {
+    let p = SchedulePolicy::new(cfg()); // max_per_frame = 2, coverage = 27 keys
+    let empty = HashSet::new();
+    let plan = p.plan_frame(0.0, 0.0, 0.0, 0.0, &empty);
+    assert!(plan.acquire.len() <= 2,
+        "acquire must be capped at max_per_frame, got {}", plan.acquire.len());
+    assert!(plan.release.is_empty(), "nothing resident -> nothing to release");
+}
+
+#[test]
+fn plan_frame_prioritizes_finest_level_first() {
+    let p = SchedulePolicy::new(cfg());
+    let empty = HashSet::new();
+    let plan = p.plan_frame(0.0, 0.0, 0.0, 0.0, &empty);
+    // With everything missing and max=2, the two acquires must be the finest
+    // (level 0) pages — coarser gaps are covered by even-coarser pages, fine ones
+    // are not.
+    assert!(plan.acquire.iter().all(|k| k.level == 0),
+        "finest level must win priority, got {:?}", plan.acquire);
+}
+
+#[test]
+fn plan_frame_releases_pages_no_longer_needed() {
+    let p = SchedulePolicy::new(cfg());
+    // A page far from coverage that is resident -> released.
+    let stale = PageKey { level: 0, origin_x: 1_000_000, origin_z: 0 };
+    let resident = keyset(&[stale]);
+    let plan = p.plan_frame(0.0, 0.0, 0.0, 0.0, &resident);
+    assert!(plan.release.contains(&stale), "stale resident page must be released");
+}
+
+#[test]
+fn plan_frame_empty_when_fully_resident() {
+    let p = SchedulePolicy::new(cfg());
+    let needed = p.coverage(0.0, 0.0, 0.0, 0.0);
+    let resident = keyset(&needed);
+    let plan = p.plan_frame(0.0, 0.0, 0.0, 0.0, &resident);
+    assert!(plan.acquire.is_empty(), "fully resident -> no acquires");
+    assert!(plan.release.is_empty(), "fully resident, all needed -> no releases");
+}
+
+#[test]
+fn plan_frame_is_deterministic() {
+    let p = SchedulePolicy::new(cfg());
+    let resident = HashSet::new();
+    let a = p.plan_frame(123.0, 456.0, 50.0, -20.0, &resident);
+    let b = p.plan_frame(123.0, 456.0, 50.0, -20.0, &resident);
+    assert_eq!(a.acquire, b.acquire);
+    assert_eq!(a.release, b.release);
+}

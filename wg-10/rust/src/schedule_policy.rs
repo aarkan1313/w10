@@ -25,6 +25,14 @@ pub struct ScheduleConfig {
     pub max_per_frame: u32,
 }
 
+/// A bounded per-frame plan: pages to acquire (capped at max_per_frame, finest +
+/// nearest-ahead first) and pages to release (resident but no longer covered).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FramePlan {
+    pub acquire: Vec<PageKey>,
+    pub release: Vec<PageKey>,
+}
+
 /// Pure scheduling policy. Constructed once from a config; methods are pure
 /// functions of (config, pos, vel, resident).
 pub struct SchedulePolicy {
@@ -112,5 +120,51 @@ impl SchedulePolicy {
             }
         }
         None
+    }
+
+    /// Diff coverage against the observed resident set and produce a bounded,
+    /// prioritized acquire/release plan. NEVER assumes acquired pages become
+    /// resident this frame — residency is observed next frame (async-ready seam).
+    pub fn plan_frame(
+        &self,
+        pos_x: f64,
+        pos_z: f64,
+        vel_x: f64,
+        vel_z: f64,
+        resident: &HashSet<PageKey>,
+    ) -> FramePlan {
+        let needed = self.coverage(pos_x, pos_z, vel_x, vel_z);
+        let needed_set: HashSet<PageKey> = needed.iter().cloned().collect();
+
+        // release = resident - needed (uncapped: releasing is cheap bookkeeping).
+        let release: Vec<PageKey> = resident
+            .iter()
+            .filter(|k| !needed_set.contains(k))
+            .cloned()
+            .collect();
+
+        // missing = needed - resident, prioritized then truncated.
+        let cx = pos_x + vel_x * self.cfg.lead_frames;
+        let cz = pos_z + vel_z * self.cfg.lead_frames;
+        let mut missing: Vec<PageKey> = needed
+            .into_iter()
+            .filter(|k| !resident.contains(k))
+            .collect();
+
+        // Priority: finest level first (lower level), then nearest the led centre.
+        // Distance is measured page-centre to led-centre, in metres, integerized
+        // to keep the ordering total and deterministic.
+        missing.sort_by_key(|k| {
+            let span = self.level_span(k.level);
+            let kcx = k.origin_x as f64 + span * 0.5;
+            let kcz = k.origin_z as f64 + span * 0.5;
+            let d2 = (kcx - cx) * (kcx - cx) + (kcz - cz) * (kcz - cz);
+            // (level, distance^2, origin) — origin breaks any remaining ties so the
+            // order is fully deterministic regardless of input vec order.
+            (k.level, d2 as i64, k.origin_x, k.origin_z)
+        });
+        missing.truncate(self.cfg.max_per_frame as usize);
+
+        FramePlan { acquire: missing, release }
     }
 }
