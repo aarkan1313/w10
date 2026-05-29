@@ -26,6 +26,7 @@ CHECKS = {
     ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
+        "worldgen_terrain/tests/m3_pool_check.gd",
     ],
 }
 
