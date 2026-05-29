@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (M3 slice 2 done; **slice 3 — stream-ahead scheduler — DESIGNED & spec'd** (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`), not yet built. Latest BUILT slice is still slice 2: page pool single RID owner, LRU+protected, zero-churn eviction; PagePolicy 11 headless tests; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (**M3 slice 3 — stream-ahead scheduler — DONE & gated**: SchedulePolicy (pure, coarsest-first never-black) + Wg10Streamer + resident_keys; m3_stream_check passes WINDOWED over a 60-frame 6000 m/s sweep (bounded, budget-safe, never-black, deterministic, fallback genuinely fires). m3 suite **3** checks fail=0; fast 5, gpu 2 unchanged; **96** cargo tests green. M3 in progress)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) DONE**.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) DONE**.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -121,9 +121,38 @@ Last updated: 2026-05-29 (M3 slice 2 done; **slice 3 — stream-ahead scheduler 
   exceeded (resident≤2), protected page survives over-budget acquire, Full returns
   null (full_events≥1), eviction reuses slot (recomputed, not created), pooled page
   renders distinct=18. Pool driven by explicit acquire/release — NOT a frame loop.
+- **M3 slice 3 — `SchedulePolicy`** (`schedule_policy.rs`, pure Rust, no godot): the
+  stream-ahead brain. `coverage(pos,vel)` = velocity-led multi-level page ring;
+  `coarser_fallback(missing,resident)` = walk up to the first resident coarser
+  ancestor (the never-black resolution); `plan_frame(pos,vel,resident)` = bounded,
+  **coarsest-first** prioritized acquire/release plan (release sorted, deterministic).
+  14 headless cargo tests incl. a 2000-sample LCG **never-black property test**.
+  Reuses `page_policy::PageKey` (world-metre origins) — ONE key vocabulary across
+  policy/pool/scheduler.
+- **M3 slice 3 — `Wg10Streamer`** (`streamer.rs`, godot): the §5.4 frame-loop driver.
+  Holds a SchedulePolicy + a Wg10PagePool handle; `update(cam_x,cam_z,vel_x,vel_z)`
+  reads pool residency → plan_frame → release departing → acquire ≤ N synchronously
+  (a Full/null acquire is served by coarser fallback, not an error). `stats()` +
+  `coverage_keys()` expose the loop. Owns NO RIDs, contains NO scheduling math
+  (delegates), holds NO meshes. **Async-ready seam:** reads only the *observed*
+  resident set, never assumes same-frame residency — a background producer drops in
+  behind `acquire_page` later with zero scheduler change.
+- **M3 slice 3 — `resident_keys()`** added to `PagePolicy` (Vec<PageKey>, pure,
+  tested) and `Wg10PagePool` (flat PackedInt64Array of (level,ox,oz) triples,
+  read-only — pool stays the single RID owner). The only pool change.
+- **`m3_stream_check.gd`** (`m3` suite, WINDOWED): drives the streamer over a
+  synthetic 60-frame straight-line sweep at 6000 m/s and asserts the stream-ahead
+  invariants: (1) acquired/frame ≤ max_per_frame, (2) resident ≤ capacity, (3)
+  **never-black** — every covered page is resident OR has a resident coarser fallback,
+  every frame (coarse blanket warmed via the streamer's OWN loop, not hand-primed),
+  (4) determinism — identical per-frame counts across two independent sweeps, (5)
+  non-vacuous — the fallback path genuinely fires (`fallback_fired=true`). Passes.
+  **This is the first slice driven under MOTION by a live frame loop.** Coarsest-first
+  priority + lead/budget tuning (LEAD_FRAMES=8 > one coarse span; MAX_PER_FRAME=3
+  absorbs a coarse column/crossing) make never-black STRUCTURAL at this speed.
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
-  (windowed). `--suite m3` → `[gate] suite=m3 checks=2 fail=0` (windowed).
+  (windowed). `--suite m3` → `[gate] suite=m3 checks=3 fail=0 skip=0` (windowed).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
@@ -156,38 +185,39 @@ Last updated: 2026-05-29 (M3 slice 2 done; **slice 3 — stream-ahead scheduler 
 - **M3 pool gate** (`m3_pool_check.gd`, `m3` suite, WINDOWED): capacity-2 pool,
   explicit acquire/release. created=2 (RID reuse on hit), resident≤2 (budget
   enforced), full_events≥1 (Full path exercised), pooled page distinct=18.
-- **m3 suite: 2 checks, fail=0** (windowed). fast=5, gpu=2 unchanged.
-- **81 Rust unit/property tests green** (70 prior + 9 PagePolicy + 2 rollback).
-  One exact-value anchor: all-flat pack yields `height == 500.0` at any coord.
-- **Verification shape for M3:** windowed + visual. The m3 gate proves the render
-  path only. Value-correctness leans on the M2 gpu_parity gate (same formula).
-  Global RenderingDevice is null under --headless on this D3D12 box — same
+- **M3 stream gate** (`m3_stream_check.gd`, `m3` suite, WINDOWED): Wg10Streamer over
+  a 60-frame 6000 m/s sweep — bounded work (≤max_per_frame), budget (≤capacity),
+  never-black (every covered page resident or coarser-fallback-resident, every
+  frame), determinism (two independent sweeps identical), non-vacuous
+  (`fallback_fired=true`). status=pass. First slice driven under MOTION.
+- **m3 suite: 3 checks, fail=0** (windowed). fast=5, gpu=2 unchanged.
+- **96 Rust unit/property tests green** (81 prior + 14 SchedulePolicy + 1
+  resident_keys). One exact-value anchor: all-flat pack yields `height == 500.0` at
+  any coord. The SchedulePolicy never-black property is a 2000-sample LCG sweep.
+- **Verification shape for M3:** windowed + visual + invariant. The render gates
+  (slice 1/2) prove the render path; the stream gate (slice 3) proves the
+  scheduling invariants under motion. Value-correctness leans on the M2 gpu_parity
+  gate. Global RenderingDevice is null under --headless on this D3D12 box — same
   constraint as the gpu suite. SKIP code 2 returned on no-GPU/headless box.
-- Pool driven by explicit acquire/release. No scheduler, no rings, no streaming
-  loop, no movement, no perf number, no fly-test. M3 milestone OPEN.
-  (Honest baseline — slice 2 proves "a bounded pool owns all page RIDs, enforces
-  budget, never evicts protected pages, and reuses slot textures"; driving it under
-  motion with the scheduler is slice 3.)
+- Slice 3 drives the pool under MOTION via a live frame loop, never-black proven
+  structural at 6000 m/s. NOT yet present: clipmap ring MESHES (slice 3 is abstract
+  page-key coverage, no real rings), camera/movement/UI harness, a perf number
+  (p99), or a manual fly-test. M3 milestone OPEN. (Honest baseline — slice 3 proves
+  "a velocity-aware scheduler keeps a bounded pool fed under motion and never goes
+  black"; wiring it to real ring meshes + a fly camera + the p99 acceptance gate is
+  the remaining M3 work.)
 
 ## What's next
 
-1. **M3 slice 3 — stream-ahead scheduler:** velocity-aware, bounded
-   computes/frame, coarser-page fallback (never black, never stall). This is the
-   first slice that USES the pool's acquire/Full under MOTION — the first live
-   frame loop. **DESIGNED & spec'd** (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`,
-   approved) — NOT yet built. Shape: `SchedulePolicy` (pure Rust, no godot —
-   `coverage`/`plan_frame`/`coarser_fallback`, multi-level, bounded acquires,
-   never-black property), `Wg10Streamer` (godot frame-loop driver, synchronous
-   produce this slice), `page_pool.rs` gains `resident_keys()` (only pool change),
-   `m3_stream_check.gd` (m3 suite → 3 checks). Page production is **synchronous**
-   this slice but the scheduler↔pool seam is **async-ready** (scheduler never
-   assumes same-frame residency) so background production drops in later with zero
-   scheduler change. Next: writing-plans → subagent-driven execution → audit.
-   Then: clipmap rings (concentric, persistent meshes, recenter on
-   move, L↔L+1 morph), modular harness components (camera/movement,
+1. **M3 next slice — clipmap rings:** fixed concentric rings, persistent meshes,
+   recenter on move, shader displace + L↔L+1 morph. This is where the scheduler's
+   abstract page coverage (slice 3) becomes real ring MESHES that sample the pooled
+   pages and morph between levels. Slice 3's `coverage`/`coarser_fallback` give the
+   rings exactly the keys to sample and the fallback page when a fine page isn't
+   resident. After rings: modular harness components (camera/movement,
    diagnostics/profiling, UI overlay), manual fly-test scene, and the real M3
-   acceptance gate (p99 < 6 ms + no-black, manually confirmed at ~1000 m/s).
-   M3 milestone remains OPEN.
+   acceptance gate (renderer p99 < 6 ms + no-black, manually confirmed at ~1000
+   m/s). M3 milestone remains OPEN.
 2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.

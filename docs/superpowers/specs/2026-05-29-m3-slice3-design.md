@@ -248,8 +248,18 @@ between the pool and the policy and dispatches the bounded acquires.
 configure(pool: Wg10PagePool, num_levels, base_span, radius_pages, lead_frames, max_per_frame)
 update(camera_x: float, camera_z: float, vel_x: float, vel_z: float) -> void
 stats() -> Dictionary   # { acquired_this_frame, released_this_frame, resident,
-                        #   coverage_size, fallback_used, full_events, frame }
+                        #   coverage_size, full_events, frame }
+coverage_keys(camera_x, camera_z, vel_x, vel_z) -> PackedInt64Array  # flat (level,ox,oz) triples
 ```
+
+> **Implementation note (2026-05-29):** `fallback_used` was dropped from the
+> streamer's `stats()`. Coarser-fallback is decided at *render time* by the ring
+> sampling the coarser page (or, in this slice, by the gate's own fallback check) —
+> the streamer never invokes `coarser_fallback`, so it cannot honestly count it.
+> Reporting a `fallback_used` the streamer doesn't compute would be misleading
+> (honest-baseline-docs rule). The gate measures fallback directly (§4.1.5). The
+> streamer exposes `coverage_keys(...)` so the gate can compute coverage-vs-residency
+> itself.
 
 ### 3.2 `update` — the §5.4 frame loop (this slice's synchronous form)
 
@@ -309,7 +319,8 @@ Asserts:
 Non-vacuous by construction: the speed guarantees `missing > max_per_frame`, so the
 bound and the fallback are both genuinely exercised (a too-slow sweep that never
 misses would make assertions 1/3 trivially true — the check picks speed to avoid
-that and asserts `full_events > 0` **or** `fallback_used > 0` at least once).
+that and asserts that the coarser-fallback branch actually fired at least once,
+i.e. a genuinely non-resident covered page was served by a resident coarser page).
 
 ### 4.2 `SchedulePolicy` cargo tests (headless, pure)
 

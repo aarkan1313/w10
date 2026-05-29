@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 2 done; slice 3 — stream-ahead scheduler — DESIGNED & spec'd (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`), not yet built; m3 suite 2 checks fail=0; 81 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 3 — stream-ahead scheduler — DONE & gated: SchedulePolicy (coarsest-first never-black) + Wg10Streamer + resident_keys; m3_stream_check passes WINDOWED over a 60-frame 6000 m/s sweep; m3 suite 3 checks fail=0; 96 cargo tests green; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -99,15 +99,20 @@ Pool driven by explicit acquire/release — NOT a live frame loop. M3 OPEN.
 
 Remaining slices (NOT done):
 
-- [~] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
-      coarser-page fallback (never black, never stall). **DESIGNED & spec'd**
-      (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`, approved) — NOT yet
-      built. `SchedulePolicy` (pure Rust: coverage/plan_frame/coarser_fallback,
-      multi-level, never-black property) + `Wg10Streamer` (godot frame-loop driver)
-      + `page_pool.resident_keys()` + `m3_stream_check.gd`. Synchronous produce this
-      slice; scheduler↔pool seam async-ready (zero scheduler change when background
-      production lands — trigger = heavy multi-pass pages, M5–M7). Next:
-      writing-plans → subagent-driven execution → audit.
+- [x] `page_scheduler`: velocity-aware stream-ahead, bounded computes/frame,
+      coarser-page fallback (never black, never stall). **DONE (2026-05-29, slice 3).**
+      `SchedulePolicy` (pure Rust, no godot: `coverage` velocity-led multi-level ring,
+      `coarser_fallback` never-black ancestor walk, `plan_frame` bounded
+      **coarsest-first** acquire/release — 14 cargo tests incl. a 2000-sample
+      never-black property test) + `Wg10Streamer` (godot §5.4 frame-loop driver,
+      delegates all math, owns no RIDs) + `Wg10PagePool::resident_keys()` (only pool
+      change) + `m3_stream_check.gd` (m3 suite → 3 checks, WINDOWED). Gate passes over
+      a 60-frame 6000 m/s sweep: bounded, budget-safe, never-black, deterministic,
+      non-vacuous (fallback genuinely fires). Coarsest-first priority + lead/budget
+      tuning make never-black STRUCTURAL — the windowed gate falsified the original
+      finest-first design (see spec §2.3). Synchronous produce this slice; the
+      scheduler↔pool seam is async-ready (zero scheduler change when background
+      production lands — trigger = heavy multi-pass pages, M5–M7).
 - [ ] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
       move, shader displace + L↔L+1 morph.
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
