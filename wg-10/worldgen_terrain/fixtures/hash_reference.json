@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "schema": "worldgen9.hash_reference.v1",
+  "stable_hash_contract": {
+    "algorithm": "fnv1a_32",
+    "initial_u32_hex": "0x811C9DC5",
+    "multiply_u32_hex": "0x01000193",
+    "join_values_with": "|",
+    "integer_format": "base10_with_minus_for_negative",
+    "string_encoding": "unicode_codepoint_ord_values",
+    "mask_after_multiply": "0xFFFFFFFF"
+  },
+  "hash_grid_contract": {
+    "integer_math": "signed int64 intermediates masked to u32",
+    "normalization": "u32 / 4294967295.0"
+  },
+  "stable_hash_cases": [
+    {
+      "values": [
+        "province_palette",
+        0,
+        0,
+        1337
+      ],
+      "joined_text": "province_palette|0|0|1337",
+      "hash_u32": 1924655373
+    },
+    {
+      "values": [
+        "province_palette",
+        -6,
+        12,
+        1337
+      ],
+      "joined_text": "province_palette|-6|12|1337",
+      "hash_u32": 4166305643
+    },
+    {
+      "values": [
+        "palette_local",
+        -24,
+        -24,
+        -6,
+        -6,
+        1337
+      ],
+      "joined_text": "palette_local|-24|-24|-6|-6|1337",
+      "hash_u32": 1435408736
+    },
+    {
+      "values": [
+        "palette_compatible",
+        17,
+        -9,
+        1337
+      ],
+      "joined_text": "palette_compatible|17|-9|1337",
+      "hash_u32": 2856444241
+    },
+    {
+      "values": [
+        "family_roll",
+        1,
+        0,
+        1337,
+        1
+      ],
+      "joined_text": "family_roll|1|0|1337|1",
+      "hash_u32": 1068646319
+    },
+    {
+      "values": [
+        "kernel",
+        "mountain",
+        -3,
+        7,
+        2049
+      ],
+      "joined_text": "kernel|mountain|-3|7|2049",
+      "hash_u32": 4050048585
+    },
+    {
+      "values": [
+        "scale",
+        "volcanic__cop30_bulk20260524_volcanic_fuji_138_7_35_4",
+        0,
+        0,
+        1337
+      ],
+      "joined_text": "scale|volcanic__cop30_bulk20260524_volcanic_fuji_138_7_35_4|0|0|1337",
+      "hash_u32": 175315369
+    },
+    {
+      "values": [
+        "rot",
+        "coast__cop30_fjord_coast_milford_sound_167_8_44_65",
+        1,
+        0,
+        1337
+      ],
+      "joined_text": "rot|coast__cop30_fjord_coast_milford_sound_167_8_44_65|1|0|1337",
+      "hash_u32": 384239436
+    },
+    {
+      "values": [
+        "offu",
+        "rainforest__cop30_bulk20260524_rainforest_congo_ituri_28_6_1_6",
+        0,
+        0,
+        1337
+      ],
+      "joined_text": "offu|rainforest__cop30_bulk20260524_rainforest_congo_ituri_28_6_1_6|0|0|1337",
+      "hash_u32": 1776128239
+    },
+    {
+      "values": [
+        "offv",
+        "badlands__cop30_bulk20260524_badlands_tibetan_gorge_95_0_29_8",
+        -5,
+        3,
+        8191
+      ],
+      "joined_text": "offv|badlands__cop30_bulk20260524_badlands_tibetan_gorge_95_0_29_8|-5|3|8191",
+      "hash_u32": 3847601640
+    }
+  ],
+  "hash_grid_cases": [
+    {
+      "ix": 0,
+      "iz": 0,
+      "seed": 1337,
+      "salt": 0,
+      "value_0_to_1": 0.3299432826065326
+    },
+    {
+      "ix": 1,
+      "iz": 0,
+      "seed": 1337,
+      "salt": 0,
+      "value_0_to_1": 0.6236977061777603
+    },
+    {
+      "ix": 0,
+      "iz": 1,
+      "seed": 1337,
+      "salt": 1,
+      "value_0_to_1": 0.9689791416677133
+    },
+    {
+      "ix": -1,
+      "iz": 2,
+      "seed": 2049,
+      "salt": 3,
+      "value_0_to_1": 0.14776273587433686
+    },
+    {
+      "ix": 12345,
+      "iz": -6789,
+      "seed": 8191,
+      "salt": 7,
+      "value_0_to_1": 0.6217125054965058
+    }
+  ],
+  "noise_cases": [
+    {
+      "x": 0.0,
+      "z": 0.0,
+      "scale_m": 32768.0,
+      "seed": 1337,
+      "salt": 0,
+      "value_noise": -0.3401134347869348,
+      "fbm_4": -0.20429246866554623
+    },
+    {
+      "x": 2048.0,
+      "z": 0.0,
+      "scale_m": 32768.0,
+      "seed": 1337,
+      "salt": 0,
+      "value_noise": -0.3388101953665653,
+      "fbm_4": -0.2219334909335803
+    },
+    {
+      "x": 12345.0,
+      "z": -6789.0,
+      "scale_m": 12000.0,
+      "seed": 1348,
+      "salt": 2,
+      "value_noise": 0.26346598436864155,
+      "fbm_4": -0.11290855275643222
+    },
+    {
+      "x": -32768.0,
+      "z": 65536.0,
+      "scale_m": 52000.0,
+      "seed": 4099,
+      "salt": 4,
+      "value_noise": 0.23198917690638643,
+      "fbm_4": 0.1005024653142447
+    }
+  ],
+  "status": "pass"
+}
