@@ -1,0 +1,55 @@
+{
+  "schema": "worldgen10.terrain_pack.v1",
+  "version": 1,
+  "grammar_constants": {
+    "region_size_m": 32768.0,
+    "province_size_regions": 4,
+    "palette_primary_pct": 72,
+    "palette_compatible_pct": 22,
+    "moderation_min": 0.4,
+    "moderation_strength": 0.5
+  },
+  "palettes": [
+    {
+      "id": "a",
+      "families": [
+        "fa",
+        "fb",
+        "fc"
+      ]
+    },
+    {
+      "id": "b",
+      "families": [
+        "fb",
+        "fc",
+        "fa"
+      ]
+    }
+  ],
+  "compatibility": {
+    "a": [
+      "b"
+    ],
+    "b": [
+      "a"
+    ]
+  },
+  "families": {
+    "fa": {
+      "kernel": "kernels/flat.npy",
+      "relief_m": 1000.0,
+      "footprint_m": 8192.0
+    },
+    "fb": {
+      "kernel": "kernels/flat.npy",
+      "relief_m": 1000.0,
+      "footprint_m": 8192.0
+    },
+    "fc": {
+      "kernel": "kernels/flat.npy",
+      "relief_m": 1000.0,
+      "footprint_m": 8192.0
+    }
+  }
+}
