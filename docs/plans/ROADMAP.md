@@ -14,8 +14,8 @@ Last updated: 2026-05-28
 - [x] Three living docs created (DESIGN / ROADMAP / STATUS).
 - [ ] Addon/folder layout decided (drop-in boundary): one terrain node + one
       config resource, narrow public API.
-- [ ] Native backend toolchain set up (Rust GDExtension carried forward from
-      WG9 unless decided otherwise) and loads in Godot 4.6.
+- [ ] Native backend toolchain set up (**Rust GDExtension**, carried forward
+      from WG9) and loads in Godot 4.6.
 - [ ] Test/gate runner skeleton (headless + renderer-backed), so gates exist
       before features.
 
@@ -45,9 +45,10 @@ Last updated: 2026-05-28
       move, shader displace + L↔L+1 morph.
 - [ ] Manual review scene: WASD + Shift speed + mouse look + Space/C vertical,
       live fps/stats overlay, free-fly (+ optional ground-follow).
-- [ ] Set concrete frame-time budget for the acceptance gate.
 - [ ] Renderer-backed acceptance gate: no large black/missing component AND
-      frame time under budget, in motion at ~1000 m/s.
+      **renderer frame p99 < 6 ms**, in motion at ~1000 m/s.
+- [ ] Tune finest-ring spacing + ring count against the review scene (config;
+      not a locked constant — revisit when real assets exist).
 - [ ] **MANUAL ACCEPTANCE:** owner flies it at full speed and confirms no
       stalls and no black/holes. (Gate green is necessary, not sufficient.)
 

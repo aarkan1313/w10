@@ -31,12 +31,20 @@ Last updated: 2026-05-28
    before M1 builds on it).
 3. Milestone 1: worldgen core + parity/seam gates.
 
+## Decisions locked
+
+- Native backend: **Rust GDExtension** (carried forward from WG9).
+- Renderer acceptance budget: **frame p99 < 6 ms at ~1000 m/s**.
+- Finest-ring spacing / ring count: **config-driven, value deliberately not
+  locked** — tune against real assets later.
+
 ## Known risks / watch-items
 
 - The OpenTopo processed kernel cache (~80 GB raw + processed, from WG9) is the
   intended first terrain pack but its extraction methodology has not yet been
   reviewed. Do not treat the DEM pack as trusted until that review passes.
-- Frame-time acceptance budget number is not yet set.
+- Finest-ring spacing affects near-detail radius and interacts with future
+  asset/texture scale; the owner flagged it needs review once assets exist.
 
 ## Reference
 

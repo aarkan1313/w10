@@ -133,6 +133,13 @@ These held in WG9 and must hold here.
   decisions, sample grids) as the lowest-level regression target, as WG9 did.
   These reference files are **tracked in git** (WG9's mistake was gitignoring
   its ground-truth fixtures under `factory/`).
+- **Rendered surface vs. collision parity:** the GPU-displaced surface you SEE
+  and the authoritative CPU height you COLLIDE against (Jolt `HeightMapShape3D`)
+  must agree closely enough that entities neither float above nor sink into the
+  visible ground. Because both derive from the same formula (§2.4) this should
+  follow from CPU/GPU parity, but it is called out as its own contract because a
+  violation is felt directly in gameplay. A gate samples visible-vs-collision
+  height deltas.
 
 ---
 
@@ -146,6 +153,13 @@ Three cooperating units, each its own file.
   Ring 0 = finest spacing, each outer ring doubles spacing and area; the
   outermost reaches the horizon. There is no separate "near" vs "far" system —
   one unified clipmap covers all distances.
+- **Finest-ring spacing and ring count are config values, NOT locked here.**
+  They set the high-detail radius around the camera and the detail falloff with
+  distance. The right values depend on the eventual asset/texture scale, which
+  does not exist yet — so they are deliberately left as a tuning decision (see
+  §9) and must be driven from config, never hardcoded. Doubling-per-ring is the
+  default falloff shape; that too can be revisited if review shows the near
+  detail zone is too small.
 - Each ring is a **persistent flat mesh** created once, never rebuilt.
 - Movement = rings **recenter** (translate, quantized to ring spacing), not
   rebuild. Recenter is a cheap position update plus a "these page slots
@@ -242,9 +256,11 @@ and trivially unit-testable.
    *into* these three. **No new standalone plan docs.** (WG9 drifted into ~20
    contradictory docs.)
 3. **Definition of "done" = perf gate + visual gate + manual confirmation.**
-   - A renderer-backed gate must prove, in motion at target speed, BOTH: no
-     large black/missing region in captured frames, AND frame time under budget
-     (target to be set, e.g. p99 < 16 ms).
+   - A renderer-backed gate must prove, in motion at target speed (~1000 m/s),
+     BOTH: no large black/missing region in captured frames, AND **renderer
+     frame time p99 < 6 ms** (aggressive on purpose — leaves ~10 ms of a 60 fps
+     frame for game logic/overhead on top). This is the renderer's own budget,
+     measured in the review scene before game systems are added.
    - The project owner's **manual live-fly confirmation** is the final
      acceptance authority (automated vision is a regression catcher, not the
      judge — scene/camera variability vs real interaction makes it untrusted as
@@ -287,6 +303,10 @@ Each step is not "done" until it meets §7.3.
   few sample kernel outputs, and confirm the processed cache contains
   everything the new generator needs — not a full 80 GB audit. Records its
   conclusion as a section update here, not a new doc.
-- Set the concrete frame-time budget number for the acceptance gate.
-- Decide the native backend language (WG9 used Rust GDExtension; carry forward
-  unless there's a reason not to).
+- ~~Set the concrete frame-time budget.~~ **Decided: renderer p99 < 6 ms at
+  ~1000 m/s** (§7.3).
+- ~~Decide native backend language.~~ **Decided: Rust GDExtension** (faster;
+  proven toolchain carried forward from WG9).
+- **Tune finest-ring spacing + ring count** (§5.1) once real assets/textures
+  exist to judge the near-detail radius against. Left as config; do not guess a
+  locked number now.
