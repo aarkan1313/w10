@@ -18,9 +18,11 @@ CHECKS = {
         "worldgen_terrain/tests/determinism_check.gd",
         "worldgen_terrain/tests/grammar_check.gd",
         "worldgen_terrain/tests/height_check.gd",
+        "worldgen_terrain/tests/dem_pack_check.gd",
     ],
     "gpu": [
         "worldgen_terrain/tests/gpu_parity_check.gd",
+        "worldgen_terrain/tests/gpu_parity_dem_check.gd",
     ],
 }
 
