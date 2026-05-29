@@ -99,3 +99,18 @@ fn coarser_fallback_none_when_no_coarser_resident() {
     let coarsest_miss = PageKey { level: 2, origin_x: 0, origin_z: 0 };
     assert_eq!(p.coarser_fallback(coarsest_miss, &empty), None);
 }
+
+#[test]
+fn coarser_fallback_non_zero_origin_quantizes_correctly() {
+    let p = SchedulePolicy::new(cfg()); // base_span=1000
+    // Level-0 page at (1000,0): centre=(1500,500), level-1 span=2000 -> ancestor at (0,0).
+    let ancestor = PageKey { level: 1, origin_x: 0, origin_z: 0 };
+    let resident = keyset(&[ancestor]);
+    let missing = PageKey { level: 0, origin_x: 1000, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(missing, &resident), Some(ancestor));
+    // Level-0 page at (2000,0): centre=(2500,500), level-1 span=2000 -> ancestor at (2000,0).
+    let ancestor2 = PageKey { level: 1, origin_x: 2000, origin_z: 0 };
+    let resident2 = keyset(&[ancestor2]);
+    let missing2 = PageKey { level: 0, origin_x: 2000, origin_z: 0 };
+    assert_eq!(p.coarser_fallback(missing2, &resident2), Some(ancestor2));
+}

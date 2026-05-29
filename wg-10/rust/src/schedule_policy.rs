@@ -66,6 +66,8 @@ impl SchedulePolicy {
         let cx = pos_x + vel_x * self.cfg.lead_frames;
         let cz = pos_z + vel_z * self.cfg.lead_frames;
         let r = self.cfg.radius_pages;
+        // `seen` dedups defensively: today levels never overlap in key-space
+        // (PageKey includes `level`), but this guards future multi-ring overlap.
         let mut seen: HashSet<PageKey> = HashSet::new();
         let mut out: Vec<PageKey> = Vec::new();
         for level in 0..self.cfg.num_levels {
