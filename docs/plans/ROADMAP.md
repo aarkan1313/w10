@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 3 — stream-ahead scheduler — DONE & gated: SchedulePolicy (coarsest-first never-black) + Wg10Streamer + resident_keys; m3_stream_check passes WINDOWED over a 60-frame 6000 m/s sweep; m3 suite 3 checks fail=0; 96 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 4 — clipmap rings — DONE & gated: ring_geometry (hollow ring bands) + Wg10ClipmapRings (Node3D, quantized recenter, page binding) + L↔L+1 geomorph; m3_rings_check passes WINDOWED (no holes, real relief, seam+morph continuity, recenter-no-rebuild); m3 suite 4 checks fail=0; 103 cargo tests green; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -113,8 +113,20 @@ Remaining slices (NOT done):
       finest-first design (see spec §2.3). Synchronous produce this slice; the
       scheduler↔pool seam is async-ready (zero scheduler change when background
       production lands — trigger = heavy multi-pass pages, M5–M7).
-- [ ] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
-      move, shader displace + L↔L+1 morph.
+- [x] `clipmap_rings`: fixed concentric rings, persistent meshes, recenter on
+      move, shader displace + L↔L+1 morph. **DONE (2026-05-29, slice 4).**
+      `ring_geometry` (pure Rust: `RingLayout` level spans + `band_mesh` filled grid /
+      hollow ring bands, gapless tiling, 7 cargo tests incl. consistent-winding +
+      grid_res%4 guard) + `Wg10ClipmapRings` (godot Node3D — first non-RefCounted class:
+      N persistent ArrayMesh children, quantized `recenter` that never rebuilds,
+      `bind_page` for per-level height + coarser-neighbor textures; owns no RIDs) +
+      L↔L+1 **geomorph** in `ring_displace.gdshader` (blend finer edge toward the coarser
+      surface at the same world point, `t=1` at the seam → crack-free; backward-compatible
+      no-morph default keeps slice-1/2 gates passing). `m3_rings_check.gd` (m3 suite →
+      4 checks, WINDOWED): top-down ortho asserts no holes, real relief, seam continuity,
+      morph continuity, recenter-no-rebuild; PNG eyeballed. One-band-one-page binding
+      (scheduler radius_pages=0); transient Texture2DRD-second-sampler startup warning is
+      benign (render correct, not per-frame).
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
       overlay (live fps/stats).
 - [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,

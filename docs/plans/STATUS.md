@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (**M3 slice 3 — stream-ahead scheduler — DONE & gated**: SchedulePolicy (pure, coarsest-first never-black) + Wg10Streamer + resident_keys; m3_stream_check passes WINDOWED over a 60-frame 6000 m/s sweep (bounded, budget-safe, never-black, deterministic, fallback genuinely fires). m3 suite **3** checks fail=0; fast 5, gpu 2 unchanged; **96** cargo tests green. M3 in progress)
+Last updated: 2026-05-29 (**M3 slice 4 — clipmap rings — DONE & gated**: ring_geometry (pure: hollow ring-band layout) + Wg10ClipmapRings (Node3D: N persistent meshes, quantized recenter, page binding) + L↔L+1 geomorph in ring_displace; m3_rings_check passes WINDOWED (top-down ortho: no holes nonblack=1.0, real relief distinct=17, seam continuity, morph continuity, recenter-no-rebuild verts=8450 unchanged); PNG eyeballed = nested level-0/level-1 rings, continuous seam. m3 suite **4** checks fail=0; fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) DONE**.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) + slice 4 (clipmap rings) DONE**.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -150,9 +150,39 @@ Last updated: 2026-05-29 (**M3 slice 3 — stream-ahead scheduler — DONE & gat
   **This is the first slice driven under MOTION by a live frame loop.** Coarsest-first
   priority + lead/budget tuning (LEAD_FRAMES=8 > one coarse span; MAX_PER_FRAME=3
   absorbs a coarse column/crossing) make never-black STRUCTURAL at this speed.
+- **M3 slice 4 — `ring_geometry`** (`ring_geometry.rs`, pure Rust, no godot):
+  `RingLayout` (level L span = base_span·2^L; hole = inner level's span → gapless tiling)
+  + `band_mesh` (centered XZ lattice + 2 CCW triangles per kept cell; level 0 filled,
+  level L>0 a hollow square annulus). 7 cargo tests incl. consistent-winding + hollow-
+  center + a `grid_res % 4 == 0` divisibility guard (asserts gapless seam alignment).
+- **M3 slice 4 — `Wg10ClipmapRings`** (`clipmap_rings.rs`, godot **Node3D** — the
+  crate's first non-RefCounted class): builds N persistent `MeshInstance3D` children
+  (one ArrayMesh/level from `band_mesh`) with a `ShaderMaterial` per level;
+  `configure` (build-once + grid_res guards), `recenter` (per-level quantized translate
+  — vertices stay locked to the world grid, NEVER a rebuild), `bind_page` (sets a level's
+  height + coarser-neighbor textures + morph params), `level_count`/`total_vertex_count`.
+  Owns NO page RIDs — a pure presenter that samples pool textures; scheduling/fallback
+  selection stays in the caller.
+- **M3 slice 4 — geomorph in `ring_displace.gdshader`**: in each level's outer
+  transition region (square Chebyshev band of width `morph_region`), `mix(h_fine,
+  h_coarse, t)` blends this level's height toward the next-coarser page's height at the
+  same WORLD position (via MODEL_MATRIX), `t=1` at the outer edge → adjacent levels agree
+  on the seam, no crack/pop. Backward-compatible: `morph_region=0` + coarse_tex==height_tex
+  reproduces the slice-1 displacement (slice-1/2 gates still pass byte-identical).
+- **`m3_rings_check.gd`** (`m3` suite, WINDOWED): assembles 2-level rings fed by real DEM
+  pages, renders **top-down orthographic** on a black bg, asserts: no holes
+  (nonblack=1.000), real relief (distinct=17), seam continuity (no black gap at the
+  level-0/1 boundary), morph continuity (no hard color jump across the seam),
+  recenter-no-rebuild (verts=8450 unchanged after a camera move). Saves `m3_rings.png`;
+  **inspected by eye — nested level-0/level-1 rings with a continuous seam, real DEM
+  relief.** NOTE: a transient `Texture2DRD`-as-second-sampler startup warning is logged
+  (1 binding + 2 set-3 over ~9 frames) while the RD page RID becomes valid on the first
+  uniform-set build; it is NOT per-frame and does NOT affect the rendered result (gate
+  passes, PNG correct) — a known benign Godot quirk, to revisit if the fly-cam slice
+  shows it's more than cosmetic.
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
-  (windowed). `--suite m3` → `[gate] suite=m3 checks=3 fail=0 skip=0` (windowed).
+  (windowed). `--suite m3` → `[gate] suite=m3 checks=4 fail=0 skip=0` (windowed).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
@@ -190,34 +220,41 @@ Last updated: 2026-05-29 (**M3 slice 3 — stream-ahead scheduler — DONE & gat
   never-black (every covered page resident or coarser-fallback-resident, every
   frame), determinism (two independent sweeps identical), non-vacuous
   (`fallback_fired=true`). status=pass. First slice driven under MOTION.
-- **m3 suite: 3 checks, fail=0** (windowed). fast=5, gpu=2 unchanged.
-- **96 Rust unit/property tests green** (81 prior + 14 SchedulePolicy + 1
-  resident_keys). One exact-value anchor: all-flat pack yields `height == 500.0` at
-  any coord. The SchedulePolicy never-black property is a 2000-sample LCG sweep.
+- **M3 rings gate** (`m3_rings_check.gd`, `m3` suite, WINDOWED): 2-level rings + real DEM
+  pages, top-down ortho. nonblack=1.000 (no holes), distinct=17 (real relief), seam
+  continuity + morph continuity (crack-free level-0/1 boundary), verts=8450 unchanged
+  after recenter (translate, not rebuild). PNG eyeballed: nested rings, continuous seam.
+- **m3 suite: 4 checks, fail=0** (windowed). fast=5, gpu=2 unchanged.
+- **103 Rust unit/property tests green** (96 prior + 7 ring_geometry). One exact-value
+  anchor: all-flat pack yields `height == 500.0` at any coord. The SchedulePolicy
+  never-black property is a 2000-sample LCG sweep; ring_geometry asserts consistent
+  winding + gapless hollow bands + grid_res%4 divisibility.
 - **Verification shape for M3:** windowed + visual + invariant. The render gates
-  (slice 1/2) prove the render path; the stream gate (slice 3) proves the
-  scheduling invariants under motion. Value-correctness leans on the M2 gpu_parity
-  gate. Global RenderingDevice is null under --headless on this D3D12 box — same
-  constraint as the gpu suite. SKIP code 2 returned on no-GPU/headless box.
-- Slice 3 drives the pool under MOTION via a live frame loop, never-black proven
-  structural at 6000 m/s. NOT yet present: clipmap ring MESHES (slice 3 is abstract
-  page-key coverage, no real rings), camera/movement/UI harness, a perf number
-  (p99), or a manual fly-test. M3 milestone OPEN. (Honest baseline — slice 3 proves
-  "a velocity-aware scheduler keeps a bounded pool fed under motion and never goes
-  black"; wiring it to real ring meshes + a fly camera + the p99 acceptance gate is
-  the remaining M3 work.)
+  (slice 1/2) prove the render path; the stream gate (slice 3) proves the scheduling
+  invariants under motion; the rings gate (slice 4) proves seamless multi-level geometry
+  + cheap recenter. Value-correctness leans on the M2 gpu_parity gate. Global
+  RenderingDevice is null under --headless on this D3D12 box — same constraint as the gpu
+  suite. SKIP code 2 returned on no-GPU/headless box.
+- Slices 3+4 give a velocity-aware scheduler driving seamless clipmap ring geometry that
+  recenters cheaply and never goes black. NOT yet present: a fly CAMERA (WASD/mouse) +
+  movement controller, diagnostics/UI overlay, a perf number (p99), or a manual fly-test —
+  the rings gate uses a SCRIPTED camera + recenter, not interactive flight. The scheduler
+  (slice 3) and the rings (slice 4) are not yet wired together in a live loop (the rings
+  gate binds pages directly for a static capture). M3 milestone OPEN. (Honest baseline —
+  slice 4 proves "the rings render seamless terrain and recenter without rebuilding under a
+  scripted move"; wiring rings↔scheduler under a real fly camera + the p99 acceptance gate
+  is the remaining M3 work.)
 
 ## What's next
 
-1. **M3 next slice — clipmap rings:** fixed concentric rings, persistent meshes,
-   recenter on move, shader displace + L↔L+1 morph. This is where the scheduler's
-   abstract page coverage (slice 3) becomes real ring MESHES that sample the pooled
-   pages and morph between levels. Slice 3's `coverage`/`coarser_fallback` give the
-   rings exactly the keys to sample and the fallback page when a fine page isn't
-   resident. After rings: modular harness components (camera/movement,
-   diagnostics/profiling, UI overlay), manual fly-test scene, and the real M3
-   acceptance gate (renderer p99 < 6 ms + no-black, manually confirmed at ~1000
-   m/s). M3 milestone remains OPEN.
+1. **M3 next slice — fly-test harness + rings↔scheduler wiring:** wire the
+   `Wg10ClipmapRings` (slice 4) to the `Wg10Streamer` (slice 3) in a live frame loop —
+   each frame the streamer updates coverage and the rings rebind their per-level resident
+   (or coarser-fallback) pages and recenter — then add the modular harness components:
+   a free-fly WASD/mouse camera + movement controller, a diagnostics/profiling overlay
+   (live fps + p99 + stats), and a manual fly-test scene. Closes with the real M3
+   acceptance gate (renderer **p99 < 6 ms** + no-black, manually confirmed at ~1000 m/s).
+   M3 milestone remains OPEN until that gate + a manual fly pass.
 2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.
