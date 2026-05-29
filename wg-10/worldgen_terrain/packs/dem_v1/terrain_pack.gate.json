@@ -1,0 +1,260 @@
+{
+ "schema": "worldgen10.terrain_pack.v1",
+ "version": 1,
+ "grammar_constants": {
+  "region_size_m": 32768.0,
+  "province_size_regions": 4,
+  "palette_primary_pct": 72,
+  "palette_compatible_pct": 22,
+  "moderation_min": 0.4,
+  "moderation_strength": 0.5
+ },
+ "palettes": [
+  {
+   "id": "badlands_0",
+   "families": [
+    "badlands__cop30_badlands_grand_canyon_112_1_36_1",
+    "badlands__cop30_badlands_utah_canyonlands_109_7_38_25",
+    "badlands__cop30_badlands_grand_canyon_112_1_36_1"
+   ]
+  },
+  {
+   "id": "coast_0",
+   "families": [
+    "coast__cop30_bulk20260524_coast_amalfi_14_5_40_6",
+    "coast__cop30_bulk20260524_coast_dalmatian_16_2_43_5",
+    "coast__cop30_bulk20260524_coast_amalfi_14_5_40_6"
+   ]
+  },
+  {
+   "id": "desert_0",
+   "families": [
+    "desert__cop30_bulk20260524_desert_atacama_pampa_69_2_24_2",
+    "desert__cop30_bulk20260524_desert_danakil_depression_40_6_13_6",
+    "desert__cop30_bulk20260524_desert_atacama_pampa_69_2_24_2"
+   ]
+  },
+  {
+   "id": "glacial_0",
+   "families": [
+    "glacial__cop30_bulk20260524_glacial_alaska_glacier_bay_136_8_58_8",
+    "glacial__cop30_bulk20260524_glacial_baffin_island_64_6_67_2",
+    "glacial__cop30_bulk20260524_glacial_alaska_glacier_bay_136_8_58_8"
+   ]
+  },
+  {
+   "id": "grassland_0",
+   "families": [
+    "grassland__cop30_bulk20260524_grassland_cerrado_chapada_47_8_15_4",
+    "grassland__cop30_bulk20260524_grassland_deccan_plateau_76_2_17_4",
+    "grassland__cop30_bulk20260524_grassland_cerrado_chapada_47_8_15_4"
+   ]
+  },
+  {
+   "id": "karst_0",
+   "families": [
+    "karst__cop30_bulk20260524_karst_appalachian_valley_80_3_37_3",
+    "karst__cop30_bulk20260524_karst_bohol_chocolate_hills_124_2_9_8",
+    "karst__cop30_bulk20260524_karst_appalachian_valley_80_3_37_3"
+   ]
+  },
+  {
+   "id": "mountain_0",
+   "families": [
+    "mountain__cop30_bulk20260524_mountain_alps_mont_blanc_6_8_45_8",
+    "mountain__cop30_bulk20260524_mountain_caucasus_svaneti_42_8_43_0",
+    "mountain__cop30_bulk20260524_mountain_alps_mont_blanc_6_8_45_8"
+   ]
+  },
+  {
+   "id": "rainforest_0",
+   "families": [
+    "rainforest__cop30_bulk20260524_rainforest_borneo_kalimantan_114_0_0_4",
+    "rainforest__cop30_bulk20260524_rainforest_borneo_sabah_117_2_5_2",
+    "rainforest__cop30_bulk20260524_rainforest_borneo_kalimantan_114_0_0_4"
+   ]
+  },
+  {
+   "id": "temperate_0",
+   "families": [
+    "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6",
+    "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6",
+    "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6"
+   ]
+  },
+  {
+   "id": "tundra_0",
+   "families": [
+    "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3",
+    "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3",
+    "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3"
+   ]
+  },
+  {
+   "id": "volcanic_0",
+   "families": [
+    "volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7",
+    "volcanic__cop30_bulk20260524_volcanic_fuji_138_7_35_4",
+    "volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7"
+   ]
+  },
+  {
+   "id": "wetland_0",
+   "families": [
+    "wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2",
+    "wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2",
+    "wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2"
+   ]
+  }
+ ],
+ "compatibility": {
+  "badlands_0": [
+   "coast_0"
+  ],
+  "coast_0": [
+   "desert_0"
+  ],
+  "desert_0": [
+   "glacial_0"
+  ],
+  "glacial_0": [
+   "grassland_0"
+  ],
+  "grassland_0": [
+   "karst_0"
+  ],
+  "karst_0": [
+   "mountain_0"
+  ],
+  "mountain_0": [
+   "rainforest_0"
+  ],
+  "rainforest_0": [
+   "temperate_0"
+  ],
+  "temperate_0": [
+   "tundra_0"
+  ],
+  "tundra_0": [
+   "volcanic_0"
+  ],
+  "volcanic_0": [
+   "wetland_0"
+  ],
+  "wetland_0": [
+   "badlands_0"
+  ]
+ },
+ "families": {
+  "badlands__cop30_badlands_grand_canyon_112_1_36_1": {
+   "kernel": "kernels/badlands__cop30_badlands_grand_canyon_112_1_36_1.npy",
+   "relief_m": 2128.827392578125,
+   "footprint_m": 50316.31871737545
+  },
+  "badlands__cop30_badlands_utah_canyonlands_109_7_38_25": {
+   "kernel": "kernels/badlands__cop30_badlands_utah_canyonlands_109_7_38_25.npy",
+   "relief_m": 992.014892578125,
+   "footprint_m": 49685.32841779882
+  },
+  "coast__cop30_bulk20260524_coast_amalfi_14_5_40_6": {
+   "kernel": "kernels/coast__cop30_bulk20260524_coast_amalfi_14_5_40_6.npy",
+   "relief_m": 1968.560302734375,
+   "footprint_m": 195841.90630855967
+  },
+  "coast__cop30_bulk20260524_coast_dalmatian_16_2_43_5": {
+   "kernel": "kernels/coast__cop30_bulk20260524_coast_dalmatian_16_2_43_5.npy",
+   "relief_m": 1900.5340576171875,
+   "footprint_m": 192068.48921537035
+  },
+  "desert__cop30_bulk20260524_desert_atacama_pampa_69_2_24_2": {
+   "kernel": "kernels/desert__cop30_bulk20260524_desert_atacama_pampa_69_2_24_2.npy",
+   "relief_m": 5987.20751953125,
+   "footprint_m": 212857.32195747018
+  },
+  "desert__cop30_bulk20260524_desert_danakil_depression_40_6_13_6": {
+   "kernel": "kernels/desert__cop30_bulk20260524_desert_danakil_depression_40_6_13_6.npy",
+   "relief_m": 3499.153076171875,
+   "footprint_m": 219518.6351265465
+  },
+  "glacial__cop30_bulk20260524_glacial_alaska_glacier_bay_136_8_58_8": {
+   "kernel": "kernels/glacial__cop30_bulk20260524_glacial_alaska_glacier_bay_136_8_58_8.npy",
+   "relief_m": 4547.951171875,
+   "footprint_m": 168986.53584705023
+  },
+  "glacial__cop30_bulk20260524_glacial_baffin_island_64_6_67_2": {
+   "kernel": "kernels/glacial__cop30_bulk20260524_glacial_baffin_island_64_6_67_2.npy",
+   "relief_m": 2162.598388671875,
+   "footprint_m": 154457.9863015426
+  },
+  "grassland__cop30_bulk20260524_grassland_cerrado_chapada_47_8_15_4": {
+   "kernel": "kernels/grassland__cop30_bulk20260524_grassland_cerrado_chapada_47_8_15_4.npy",
+   "relief_m": 924.9649658203125,
+   "footprint_m": 218643.17206435846
+  },
+  "grassland__cop30_bulk20260524_grassland_deccan_plateau_76_2_17_4": {
+   "kernel": "kernels/grassland__cop30_bulk20260524_grassland_deccan_plateau_76_2_17_4.npy",
+   "relief_m": 416.5275573730469,
+   "footprint_m": 217545.9526683153
+  },
+  "karst__cop30_bulk20260524_karst_appalachian_valley_80_3_37_3": {
+   "kernel": "kernels/karst__cop30_bulk20260524_karst_appalachian_valley_80_3_37_3.npy",
+   "relief_m": 1267.3929443359375,
+   "footprint_m": 199871.9443510943
+  },
+  "karst__cop30_bulk20260524_karst_bohol_chocolate_hills_124_2_9_8": {
+   "kernel": "kernels/karst__cop30_bulk20260524_karst_bohol_chocolate_hills_124_2_9_8.npy",
+   "relief_m": 1934.3828125,
+   "footprint_m": 221015.5613246124
+  },
+  "mountain__cop30_bulk20260524_mountain_alps_mont_blanc_6_8_45_8": {
+   "kernel": "kernels/mountain__cop30_bulk20260524_mountain_alps_mont_blanc_6_8_45_8.npy",
+   "relief_m": 4499.23486328125,
+   "footprint_m": 188928.2257776774
+  },
+  "mountain__cop30_bulk20260524_mountain_caucasus_svaneti_42_8_43_0": {
+   "kernel": "kernels/mountain__cop30_bulk20260524_mountain_caucasus_svaneti_42_8_43_0.npy",
+   "relief_m": 5543.7587890625,
+   "footprint_m": 192734.1100138714
+  },
+  "rainforest__cop30_bulk20260524_rainforest_borneo_kalimantan_114_0_0_4": {
+   "kernel": "kernels/rainforest__cop30_bulk20260524_rainforest_borneo_kalimantan_114_0_0_4.npy",
+   "relief_m": 2073.793701171875,
+   "footprint_m": 222637.28532577254
+  },
+  "rainforest__cop30_bulk20260524_rainforest_borneo_sabah_117_2_5_2": {
+   "kernel": "kernels/rainforest__cop30_bulk20260524_rainforest_borneo_sabah_117_2_5_2.npy",
+   "relief_m": 3970.489013671875,
+   "footprint_m": 222181.8267946909
+  },
+  "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6": {
+   "kernel": "kernels/temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6.npy",
+   "relief_m": 1804.2099609375,
+   "footprint_m": 50458.5549056534
+  },
+  "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3": {
+   "kernel": "kernels/tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3.npy",
+   "relief_m": 1650.402587890625,
+   "footprint_m": 38119.9895689082
+  },
+  "volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7": {
+   "kernel": "kernels/volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7.npy",
+   "relief_m": 3251.284423828125,
+   "footprint_m": 199398.8386575631
+  },
+  "volcanic__cop30_bulk20260524_volcanic_fuji_138_7_35_4": {
+   "kernel": "kernels/volcanic__cop30_bulk20260524_volcanic_fuji_138_7_35_4.npy",
+   "relief_m": 3656.830810546875,
+   "footprint_m": 202059.86989027326
+  },
+  "wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2": {
+   "kernel": "kernels/wetland__cop30_bulk20260524_wetland_danube_delta_29_4_45_2.npy",
+   "relief_m": 390.07269287109375,
+   "footprint_m": 189759.688761855
+  },
+  "wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2": {
+   "kernel": "kernels/wetland__cop30_bulk20260524_wetland_mekong_delta_105_6_10_2.npy",
+   "relief_m": 623.5032958984375,
+   "footprint_m": 220880.60728915306
+  }
+ }
+}
