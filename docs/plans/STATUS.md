@@ -40,9 +40,10 @@ Last updated: 2026-05-28
 
 ## Known risks / watch-items
 
-- The OpenTopo processed kernel cache (~80 GB raw + processed, from WG9) is the
-  intended first terrain pack but its extraction methodology has not yet been
-  reviewed. Do not treat the DEM pack as trusted until that review passes.
+- OpenTopo kernel methodology REVIEWED 2026-05-28 (see DESIGN §9): sound, cache
+  is sufficient, no blocking issues. Two follow-ups for the pack build: mask
+  NoData holes properly (only 2/703 accepted kernels affected), and improve
+  family tagging (591/703 are `uncategorized`; some biomes thin).
 - Finest-ring spacing affects near-detail radius and interacts with future
   asset/texture scale; the owner flagged it needs review once assets exist.
 

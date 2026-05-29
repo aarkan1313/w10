@@ -77,7 +77,7 @@ Last updated: 2026-05-28
 
 ## Pre-work follow-up (not blocking M0/M1 doc work)
 
-- [ ] **Review OpenTopo kernel-extraction methodology** (see DESIGN §9): read
-      WG9 `factory/`+`tools/` pipeline, eyeball sample kernel outputs, confirm
-      the processed cache has everything the new generator needs. Conclusion
-      recorded as a DESIGN.md update, not a new doc.
+- [x] **Review OpenTopo kernel-extraction methodology** (done 2026-05-28,
+      conclusion in DESIGN §9): methodology sound, cache sufficient. Pack-build
+      follow-ups: mask NoData holes; improve family tagging (591/703
+      uncategorized).

@@ -298,11 +298,32 @@ Each step is not "done" until it meets §7.3.
 
 ## 9. Open items / follow-ups
 
-- **OpenTopo kernel methodology review** (before relying on the DEM pack):
-  read WG9's extraction/processing pipeline (`factory/`, `tools/`), eyeball a
-  few sample kernel outputs, and confirm the processed cache contains
-  everything the new generator needs — not a full 80 GB audit. Records its
-  conclusion as a section update here, not a new doc.
+- **OpenTopo kernel methodology review — DONE 2026-05-28.** Verdict: the
+  methodology is sound and the processed cache is **sufficient to build the new
+  pack without re-touching the 80 GB raw DEMs.** Pipeline (`tools/dem_factory/
+  dem_factory.py`) reads GeoTIFFs at reduced resolution (bilinear), separates
+  macro (low-pass) from residual (detail) height, normalizes per-kernel, and
+  writes per-kernel artifacts: `height_m.npy` (raw), `normalized_height.npy`,
+  `residual_m.npy`, previews, and a rich stats block (slope percentiles,
+  curvature, ridge/valley density, orientation, anisotropy, roughness, quality).
+  Findings (none blocking):
+  1. NoData pixels are mean-filled then treated as real terrain (flat plate);
+     `coverage_fraction` flags it. Checked: of 703 accepted kernels only 2 are
+     <0.99 coverage, both `uncategorized`. Non-issue for curated families. New
+     pipeline should still mask holes properly / require coverage >= ~0.99.
+  2. `approx_sample_spacing_m` uses the coarser axis for non-square tiles, so
+     slope/curvature are slightly off there. Normalize spacing properly next
+     time.
+  3. Curvature is a raw pixel-unit Laplacian (comparative, not metric). Fine for
+     ranking; don't treat as physical curvature.
+  4. `normalized_height` is per-kernel mean/std (correct for a reusable kernel;
+     the generator must re-impose its own amplitude. Raw height is retained, so
+     nothing is lost).
+  - **Curation gap (matters for the pack):** 591 of 703 accepted kernels are
+    `uncategorized`; only ~112 are family-tagged (coast 14, volcanic/badlands 12
+    each, karst 11, grassland/rainforest/glacial/mountain ~10, tundra/temperate
+    1 each). The data is good but family tagging is incomplete and a few biomes
+    are thin. Improve tagging / fill thin families when building the pack.
 - ~~Set the concrete frame-time budget.~~ **Decided: renderer p99 < 6 ms at
   ~1000 m/s** (§7.3).
 - ~~Decide native backend language.~~ **Decided: Rust GDExtension** (faster;
