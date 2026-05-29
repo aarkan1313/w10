@@ -78,7 +78,7 @@
    "id": "temperate_0",
    "families": [
     "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6",
-    "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6",
+    "temperate__cop30_temperate_black_forest_8_0_48_0",
     "temperate__cop30_temperate_appalachian_blue_ridge_83_5_35_6"
    ]
   },
@@ -86,7 +86,7 @@
    "id": "tundra_0",
    "families": [
     "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3",
-    "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3",
+    "tundra__cop30_tundra_alaska_north_slope_150_0_69_0",
     "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3"
    ]
   },
@@ -231,10 +231,20 @@
    "relief_m": 1804.2099609375,
    "footprint_m": 50458.5549056534
   },
+  "temperate__cop30_temperate_black_forest_8_0_48_0": {
+   "kernel": "kernels/temperate__cop30_temperate_black_forest_8_0_48_0.npy",
+   "relief_m": 1069.4189453125,
+   "footprint_m": 46361.43643033121
+  },
   "tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3": {
    "kernel": "kernels/tundra__cop30_tundra_alaska_brooks_foothills_149_0_68_3.npy",
    "relief_m": 1650.402587890625,
    "footprint_m": 38119.9895689082
+  },
+  "tundra__cop30_tundra_alaska_north_slope_150_0_69_0": {
+   "kernel": "kernels/tundra__cop30_tundra_alaska_north_slope_150_0_69_0.npy",
+   "relief_m": 374.9767761230469,
+   "footprint_m": 37689.85649647391
   },
   "volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7": {
    "kernel": "kernels/volcanic__cop30_bulk20260524_volcanic_amilya_etna_15_0_37_7.npy",

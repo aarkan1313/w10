@@ -1,0 +1,5 @@
+
+# dem_pack: python cache + regenerable review artifacts (products, not source)
+tools/dem_pack/__pycache__/
+tools/dem_pack/dem_tag_review.html
+tools/dem_pack/dem_tag_review.csv

@@ -106,7 +106,19 @@
   "wetland__cop30_bulk20260524_wetland_niger_delta_6_2_5_2": "wetland",
   "wetland__cop30_bulk20260524_wetland_okavango_delta_22_8_19_4": "wetland",
   "wetland__cop30_bulk20260524_wetland_orinoco_delta_61_4_8_6": "wetland",
-  "wetland__cop30_bulk20260524_wetland_salween_delta_97_8_16_2": "wetland"
+  "wetland__cop30_bulk20260524_wetland_salween_delta_97_8_16_2": "wetland",
+  "temperate__cop30_temperate_black_forest_8_0_48_0": "temperate",
+  "temperate__cop30_temperate_cantabria_spain_4_5_43_0": "temperate",
+  "temperate__cop30_temperate_carpathians_romania_25_0_45_4": "temperate",
+  "temperate__cop30_temperate_nz_southern_alps_foot_170_5_43_6": "temperate",
+  "temperate__cop30_temperate_tasmania_highlands_146_0_42_2": "temperate",
+  "temperate__cop30_temperate_vermont_greens_72_95_43_9": "temperate",
+  "tundra__cop30_tundra_alaska_north_slope_150_0_69_0": "tundra",
+  "tundra__cop30_tundra_canadian_arctic_baffin_73_0_66_5": "tundra",
+  "tundra__cop30_tundra_greenland_fringe_50_5_67_0": "tundra",
+  "tundra__cop30_tundra_iceland_interior_18_5_64_8": "tundra",
+  "tundra__cop30_tundra_siberia_taymyr_98_0_73_0": "tundra",
+  "tundra__cop30_tundra_svalbard_spitsbergen_15_0_78_0": "tundra"
  },
  "excluded": [
   "uncategorized__aw3d30_137_5000_36_4000_138_0000_36_9000",
