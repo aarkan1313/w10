@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 4 — clipmap rings — DONE & gated: ring_geometry (hollow ring bands) + Wg10ClipmapRings (Node3D, quantized recenter, page binding) + L↔L+1 geomorph; m3_rings_check passes WINDOWED (no holes, real relief, seam+morph continuity, recenter-no-rebuild); m3 suite 4 checks fail=0; 103 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 5a PARTIAL — the two slice-4 carry-forward fixes (per-level page span + geomorph coarse_origin) + read-only get_resident_page LANDED & proven (slice-4 gate distinct=41); rings↔view wiring re-scoped to a 3×3-tiling slice after the moving gate showed one-page-per-level doesn't surround the camera. m3 suite 4 checks fail=0; 103 cargo tests green; M3 in progress)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -127,20 +127,26 @@ Remaining slices (NOT done):
       morph continuity, recenter-no-rebuild; PNG eyeballed. One-band-one-page binding
       (scheduler radius_pages=0); transient Texture2DRD-second-sampler startup warning is
       benign (render correct, not per-frame).
-- [ ] **Rings↔scheduler wiring + fly camera (next slice) — two HARD PREREQUISITES**
-      surfaced by the slice-4 audit (both correct-at-origin in slice 4, both break once a
-      moving camera drives recenter; the slice-4 gate only renders at `recenter(0,0)`):
-      (1) **geomorph coarse-UV origin:** `ring_displace.gdshader` computes
-      `uv_coarse = world.xz/coarse_span + 0.5`, which assumes the coarse page is centered
-      at world origin. After a non-zero recenter the coarse level is centered on the
-      (quantized) camera, so the seam reopens ∝ displacement. Fix: add a `coarse_origin`
-      vec2 uniform, use `(world.xz - coarse_origin)/coarse_span + 0.5`, set it in
-      `bind_page`/`recenter`. (2) **per-level page span:** `Wg10PagePool::acquire_page`
-      ignores `level` for coverage — every page covers `world_span` (=BASE_SPAN), so a
-      level-L ring stretches a BASE_SPAN page over BASE_SPAN·2^L. Fix: dispatch level-L
-      pages at `world_span·2^L` (pass per-level span to acquire_page, or add
-      `acquire_page_at_span`). Also (minor): callers must always bind `coarse_height_tex`
-      (= height_tex when no morph) or the outermost vertex ring zeroes.
+- [x] **Slice-4 carry-forward fixes — DONE (slice 5a):** (1) geomorph **coarse_origin**
+      uniform — `ring_displace` samples the coarse page corner-relative
+      `(world.xz − coarse_origin)/coarse_span` (was origin-centered, reopened the seam off
+      origin); `bind_page` + the view pass the coarser page's corner. (2) **per-level page
+      span** — `Wg10PagePool::acquire_page` dispatches a level-L page over `world_span·2^level`
+      (was flat). Both proven by the slice-4 rings gate (distinct=41) under the new
+      convention. ALSO landed: read-only `Wg10PagePool::get_resident_page` (+ `PagePolicy::
+      slot_of`) — a consumer fetches a resident page WITHOUT triggering compute (the anti-WG9
+      render-path rule; the streamer remains the sole producer).
+- [ ] **3×3 ring tiling + rings↔streamer live wiring (next slice).** The slice-5a moving
+      gate proved "one band = one page" does NOT surround the camera (a single
+      `[origin, origin+span]` page contains it asymmetrically → ~75% of the view off-page
+      under motion). FIX: each clipmap level renders a **3×3 page neighborhood** centered on
+      the camera's page (radius_pages=1 — the scheduler already emits this coverage), so the
+      level surrounds the camera. Chosen approach: 9 sub-meshes/level, each sampling its own
+      page (reuse the one-page path 9×) over an atlas. THEN the rings↔streamer live-loop view
+      (rebuilt for 3×3), using the read-only `get_resident_page` + coarser fallback. Shared
+      page-key convention `origin = floor(cam/span)*span`. Proven by a moving-sweep gate at
+      non-zero positions. (The one-page `Wg10TerrainView` + its gate were removed; the 3
+      fixes above stay.)
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
       overlay (live fps/stats).
 - [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,

@@ -5,7 +5,7 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (**M3 slice 4 — clipmap rings — DONE & gated**: ring_geometry (pure: hollow ring-band layout) + Wg10ClipmapRings (Node3D: N persistent meshes, quantized recenter, page binding) + L↔L+1 geomorph in ring_displace; m3_rings_check passes WINDOWED (top-down ortho: no holes nonblack=1.0, real relief distinct=17, seam continuity, morph continuity, recenter-no-rebuild verts=8450 unchanged); PNG eyeballed = nested level-0/level-1 rings, continuous seam. m3 suite **4** checks fail=0; fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress)
+Last updated: 2026-05-29 (**M3 slice 5a PARTIAL — the two carry-forward fixes landed; rings↔view wiring re-scoped to a 3×3 slice**. LANDED & proven: per-level page span (pool computes level-L over world_span·2^L), geomorph `coarse_origin` (seam stays closed off-origin), read-only `Wg10PagePool::get_resident_page` (a consumer fetches a resident page WITHOUT triggering compute — the anti-WG9 render-path rule). slice-4 rings gate now distinct=41 (richer relief from the corrected per-level span). DEFERRED: the moving gate exposed that "one band = one page" doesn't tile AROUND the camera (a single page contains but doesn't surround it → ~75% of view off-page under motion); the real shape is a 3×3 page neighborhood per level (scheduler already produces it at radius_pages=1) — its own slice. m3 suite **4** checks fail=0; fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress)
 
 ---
 
@@ -247,20 +247,29 @@ Last updated: 2026-05-29 (**M3 slice 4 — clipmap rings — DONE & gated**: rin
 
 ## What's next
 
-1. **M3 next slice — fly-test harness + rings↔scheduler wiring:** wire the
-   `Wg10ClipmapRings` (slice 4) to the `Wg10Streamer` (slice 3) in a live frame loop —
-   each frame the streamer updates coverage and the rings rebind their per-level resident
-   (or coarser-fallback) pages and recenter — then add the modular harness components:
-   a free-fly WASD/mouse camera + movement controller, a diagnostics/profiling overlay
-   (live fps + p99 + stats), and a manual fly-test scene. Closes with the real M3
-   acceptance gate (renderer **p99 < 6 ms** + no-black, manually confirmed at ~1000 m/s).
-   M3 milestone remains OPEN until that gate + a manual fly pass.
-2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
+1. **M3 next slice — 3×3 ring tiling + rings↔view live wiring:** the slice-5a moving gate
+   proved "one band = one page" (slice-4) does NOT surround the camera — a single page
+   `[origin, origin+span]` contains the camera asymmetrically, so under motion ~75% of the
+   view falls off-page (nonblack→0.25). FIX: each clipmap level must render a **3×3 page
+   neighborhood** centered on the camera's page (radius_pages=1 — the scheduler already
+   emits this coverage), so the level surrounds the camera at any position. The rings need
+   to render 9 pages/level (9 sub-meshes each sampling its own page, reusing the one-page
+   sample path 9×, is the chosen approach over an atlas). THEN wire `Wg10ClipmapRings` ↔
+   `Wg10Streamer` via a live-loop coordinator (the view, rebuilt for 3×3) that uses the
+   **read-only `get_resident_page`** (never triggers compute on the render path — the
+   anti-WG9 rule, already landed) and falls back to coarser pages the streamer keeps
+   resident. The shared page-key convention is `origin = floor(cam/span)*span` (= the
+   scheduler's `page_origin`). Proven by a moving-sweep gate at non-zero positions.
+2. **M3 close-out (after the wiring slice) — fly-test harness:** free-fly WASD/mouse camera +
+   movement controller, a diagnostics/profiling overlay (live fps + p99 + stats), a manual
+   fly-test scene, and the real M3 acceptance gate (renderer **p99 < 6 ms** + no-black,
+   manually confirmed at ~1000 m/s). M3 milestone remains OPEN until that gate + a manual fly.
+3. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.
-3. **Full-pack streaming** (deferred to M3): gate-committed subset loads now;
+4. **Full-pack streaming** (deferred to M3): gate-committed subset loads now;
    full ~115-kernel set is generated on demand but not yet streamed.
-4. **Anti-repetition / kernel variety tuning**: naive single-kernel tiling
+5. **Anti-repetition / kernel variety tuning**: naive single-kernel tiling
    visibly creases at footprint seam boundaries (C0 not C1); deferred until the
    renderer can show it.
 
@@ -298,6 +307,23 @@ Last updated: 2026-05-29 (**M3 slice 4 — clipmap rings — DONE & gated**: rin
   owner of all page RIDs (DESIGN §5.2). free_all/teardown + two produce-failure
   cleanup sites cover every allocation. The slice-1 one-shot is regression-gated
   via the pool path.
+- **Slice-4 carry-forwards — CLOSED (slice 5a):** (1) per-level page span — `acquire_page`
+  now computes a level-L page over `world_span·2^level` (was flat, only correct at L0).
+  (2) geomorph `coarse_origin` — the coarse sample is corner-relative
+  `(world.xz − coarse_origin)/coarse_span`, so the seam stays closed off-origin. Both
+  proven by the slice-4 rings gate (distinct=41) under the new convention.
+- **Render-path compute — GUARDED (slice 5a):** a CONSUMER (e.g. the future view) must
+  fetch pages via the read-only `Wg10PagePool::get_resident_page` (returns a resident page's
+  texture or null, NEVER computes), not `acquire_page` (which synchronously dispatches GPU
+  compute on a miss). Only the streamer's `acquire_page` may produce pages, bounded per
+  frame. A view that called `acquire_page` would reintroduce WG9's synchronous-compute-under-
+  motion disease — the moving gate caught exactly this; the read-only accessor is the fix.
+- **Clipmap level must SURROUND the camera (open — next slice):** "one band = one page"
+  (slice 4) does not tile around the camera; under motion ~75% of the view falls off the
+  single page. The fix is a 3×3 page neighborhood per level (radius_pages=1, scheduler
+  already emits it) — the rings + the rings↔streamer view are rebuilt for 3×3 in the next
+  slice. The two fixes + the read-only accessor above are kept and proven; only the
+  one-page view/gate were removed.
 - **Async page production — DEFERRED (tracked, not a gap):** M3 slice 3 produces
   pages SYNCHRONOUSLY inside the streamer's `update` (≤ N/frame, so still bounded).
   The scheduler↔pool seam is deliberately **async-ready** — the scheduler reads only
