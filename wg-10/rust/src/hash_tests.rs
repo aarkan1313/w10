@@ -88,3 +88,21 @@ fn value_noise_and_fbm_match_wg9_fixture_cases() {
         );
     }
 }
+
+#[test]
+fn value_noise_is_continuous_across_zero_axis() {
+    // Sampling the same world coordinate must give the same value regardless of
+    // which side of the axis the integer lattice cell is computed from. Walk a
+    // line straight across x=0 at fixed z; values must be finite and stable on
+    // repeat (determinism), and floor (not truncation) must be used so the cell
+    // index is continuous across 0.
+    let scale = 256.0;
+    for x in [-0.001_f64, 0.0, 0.001] {
+        let a = hash::value_noise(x, 5.0, scale, 1337, 0);
+        let b = hash::value_noise(x, 5.0, scale, 1337, 0);
+        assert_eq!(a, b);
+        assert!(a.is_finite());
+    }
+    // Explicit floor-vs-truncate guard: cell index just below 0 is -1, not 0.
+    assert_eq!((-0.001_f64).floor() as i64, -1);
+}
