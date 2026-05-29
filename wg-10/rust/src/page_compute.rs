@@ -228,11 +228,9 @@ impl Wg10PageCompute {
         fmt.set_width(px);
         fmt.set_height(px);
         fmt.set_format(DataFormat::R32_SFLOAT);
-        fmt.set_usage_bits(
-            TextureUsageBits::SAMPLING_BIT
-                | TextureUsageBits::STORAGE_BIT
-                | TextureUsageBits::CAN_UPDATE_BIT,
-        );
+        // STORAGE for compute imageStore; SAMPLING for the vertex shader to read it.
+        // No CAN_UPDATE: the texture is GPU-written only, never CPU-uploaded.
+        fmt.set_usage_bits(TextureUsageBits::STORAGE_BIT | TextureUsageBits::SAMPLING_BIT);
         let view = RdTextureView::new_gd();
 
         // texture_create(format, view) — data array defaults to empty in the _ex builder
@@ -372,5 +370,21 @@ mod tests {
         // field 12: page_px = 512 i32 (offset 48)
         let ppx = i32::from_le_bytes(buf[48..52].try_into().unwrap());
         assert_eq!(ppx, 512, "page_px mismatch");
+    }
+
+    #[test]
+    fn page_push_first_9_fields_match_m2() {
+        // The page Params first 9 fields ARE the M2 Params (same shader formula needs
+        // the same grammar constants in the same layout). Guard against drift.
+        let gc = GrammarConstants {
+            region_size_m: 32768.0, province_size_regions: 4,
+            palette_primary_pct: 72, palette_compatible_pct: 22,
+            moderation_min: 0.4, moderation_strength: 0.5,
+        };
+        let m2 = crate::gpu_compute::build_push_constant(&gc, 1337, 5, 0); // seed, num_palettes, num_coords
+        let page = build_page_push_constant(&gc, 1337, 5, 0.0, 0.0, 0.0, 0); // + origin_x,z, span, page_px
+        // M2 push is 48 bytes (9 fields*4 + 12 pad); page is 64. The first 36 bytes
+        // (the 9 real fields) must match byte-for-byte.
+        assert_eq!(&m2[..36], &page[..36], "page push first-9 fields diverged from M2 build_push_constant");
     }
 }
