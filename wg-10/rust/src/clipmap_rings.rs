@@ -51,6 +51,18 @@ impl Wg10ClipmapRings {
     /// ring_displace.gdshader. Call once after instancing.
     #[func]
     pub fn configure(&mut self, num_levels: i64, base_span: f64, grid_res: i64, shader_path: GString) {
+        // Guard: configure is build-once. A second call would accumulate duplicate
+        // level meshes (level_count would double). Enforce the documented contract.
+        if !self.levels.is_empty() {
+            godot_error!("Wg10ClipmapRings::configure called more than once — ignoring");
+            return;
+        }
+        // Guard: band_mesh requires grid_res divisible by 4 (gapless seam) and would
+        // otherwise PANIC (a hard Godot crash). Fail gracefully like the shader-load path.
+        if grid_res < 1 || grid_res % 4 != 0 {
+            godot_error!("Wg10ClipmapRings: grid_res must be >= 1 and divisible by 4, got {grid_res}");
+            return;
+        }
         self.num_levels = num_levels as i32;
         self.base_span = base_span;
         self.grid_res = grid_res as i32;
