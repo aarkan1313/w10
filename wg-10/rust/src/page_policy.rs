@@ -57,6 +57,12 @@ impl PagePolicy {
 
     pub fn resident_count(&self) -> usize { self.map.len() }
 
+    /// All currently resident keys (read-only snapshot; no RIDs, no slots). The
+    /// pool exposes this to the scheduler so it can diff coverage against reality.
+    pub fn resident_keys(&self) -> Vec<PageKey> {
+        self.map.keys().cloned().collect()
+    }
+
     pub fn is_protected(&self, key: &PageKey) -> bool {
         self.map.get(key).map_or(false, |s| self.protected.contains(s))
     }

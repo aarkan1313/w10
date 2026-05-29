@@ -363,6 +363,25 @@ impl Wg10PagePool {
     }
 
     // -----------------------------------------------------------------------
+    // resident_keys
+    // -----------------------------------------------------------------------
+
+    /// Resident page keys as a flat array of (level, origin_x, origin_z) triples.
+    /// Read-only — the pool stays the sole RID owner; this only reports residency.
+    #[func]
+    pub fn resident_keys(&self) -> PackedInt64Array {
+        let mut out = PackedInt64Array::new();
+        if let Some(policy) = self.policy.as_ref() {
+            for key in policy.resident_keys() {
+                out.push(key.level as i64);
+                out.push(key.origin_x);
+                out.push(key.origin_z);
+            }
+        }
+        out
+    }
+
+    // -----------------------------------------------------------------------
     // free_all  (the ONLY place that frees page texture RIDs)
     // -----------------------------------------------------------------------
 

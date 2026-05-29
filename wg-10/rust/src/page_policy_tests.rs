@@ -131,3 +131,17 @@ fn rollback_unknown_key_is_noop() {
     p.rollback(k(0,1,1));  // never acquired -> no panic, no change
     assert_eq!(p.resident_count(), 0);
 }
+
+#[test]
+fn resident_keys_lists_all_resident_pages() {
+    let mut p = PagePolicy::new(3);
+    p.acquire(k(0, 0, 0));
+    p.acquire(k(0, 1000, 0));
+    p.acquire(k(1, 0, 0));
+    let mut got = p.resident_keys();
+    got.sort(); // PageKey is Ord
+    let mut want = vec![k(0,0,0), k(0,1000,0), k(1,0,0)];
+    want.sort();
+    assert_eq!(got, want);
+    assert_eq!(got.len(), p.resident_count());
+}
