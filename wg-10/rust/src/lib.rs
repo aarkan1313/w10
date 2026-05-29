@@ -10,6 +10,7 @@ mod bind_worldgen;
 mod gpu_compute;
 mod page_compute;
 mod page_policy;
+mod page_pool;
 
 #[cfg(test)]
 mod hash_tests;
