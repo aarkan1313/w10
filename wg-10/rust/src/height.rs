@@ -3,7 +3,9 @@
 //! tiled-sampling per-family kernels, slope-moderating amplitude, and composing.
 //! Consumes `grammar::family_weights`; the grammar never reads kernel data.
 
+use crate::grammar;
 use crate::pack::FamilyKernel;
+use crate::pack::Pack;
 
 /// Wrap an integer grid index into `[0, n)` (tile). `n` is always >= 1.
 fn wrap(i: i64, n: usize) -> usize {
@@ -41,4 +43,41 @@ pub fn sample_kernel(fk: &FamilyKernel, x: f64, z: f64) -> f64 {
 /// Row-major texel access (already wrapped indices).
 fn texel(fk: &FamilyKernel, row: usize, col: usize) -> f64 {
     fk.kernel.data[row * fk.kernel.cols + col] as f64
+}
+
+/// Amplitude moderation from local kernel slope. Steeper -> smaller factor,
+/// clamped to `[moderation_min, 1.0]`. AMPLITUDE ONLY — never changes which
+/// families appear (design §2 constraint #3).
+pub fn moderation(slope: f64, moderation_min: f64, strength: f64) -> f64 {
+    (1.0 - strength * slope).clamp(moderation_min, 1.0)
+}
+
+/// Local slope magnitude of a kernel at a world coord: central difference of the
+/// (relief-scaled) sample over one kernel texel in each axis, normalised by the
+/// texel's world size so slope is dimensionless-ish (rise per texel / relief).
+fn local_slope(fk: &FamilyKernel, x: f64, z: f64) -> f64 {
+    let dx = fk.footprint_m / fk.kernel.cols as f64;
+    let dz = fk.footprint_m / fk.kernel.rows as f64;
+    let sx = (sample_kernel(fk, x + dx, z) - sample_kernel(fk, x - dx, z)) / (2.0 * fk.relief_m);
+    let sz = (sample_kernel(fk, x, z + dz) - sample_kernel(fk, x, z - dz)) / (2.0 * fk.relief_m);
+    (sx * sx + sz * sz).sqrt()
+}
+
+/// Elevation at a world coordinate: blend each present family's moderated kernel
+/// contribution by its grammar weight. The grammar (which never sees kernel
+/// data) decides the families; this layer only sets amplitude.
+pub fn height(x: f64, z: f64, seed: i64, pack: &Pack) -> f64 {
+    let c = &pack.grammar_constants;
+    let weights = grammar::family_weights(x, z, seed, pack);
+    let mut h = 0.0;
+    for (fam, weight) in weights.entries() {
+        let name = &pack.family_ids[*fam as usize];
+        let fk = pack
+            .family_kernel(name)
+            .unwrap_or_else(|| panic!("height layer: family {name:?} has no kernel data"));
+        let slope = local_slope(fk, x, z);
+        let m = moderation(slope, c.moderation_min, c.moderation_strength);
+        h += weight * m * sample_kernel(fk, x, z);
+    }
+    h
 }
