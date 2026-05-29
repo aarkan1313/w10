@@ -35,6 +35,10 @@ impl SchedulePolicy {
     pub fn new(cfg: ScheduleConfig) -> Self {
         assert!(cfg.num_levels >= 1, "num_levels must be >= 1");
         assert!(cfg.base_span > 0.0, "base_span must be > 0");
+        assert!(
+            cfg.base_span.fract() == 0.0,
+            "base_span must be an exact integer (got {})", cfg.base_span
+        );
         assert!(cfg.radius_pages >= 0, "radius_pages must be >= 0");
         Self { cfg }
     }
@@ -43,7 +47,7 @@ impl SchedulePolicy {
 
     /// World-space span of one page at `level`.
     pub fn level_span(&self, level: i32) -> f64 {
-        self.cfg.base_span * (1i64 << level) as f64
+        self.cfg.base_span * 2f64.powi(level)
     }
 
     /// Floor-quantize a world-space centre to the page corner (origin) at `level`,
