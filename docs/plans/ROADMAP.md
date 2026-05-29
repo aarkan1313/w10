@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M2 GPU formula + parity gate green; 67 Rust tests green)
+Last updated: 2026-05-29 (real DEM pack wired — WG9 shortlist + 12 OpenTopo fetches; fast=5/gpu=2 gates green, fail=0; M2 kernel-atlas validated at real 512×512 scale)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -24,19 +24,23 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
 ## Milestone 1 — Worldgen core (CPU) + parity foundation
 
-- [~] Port the deterministic formula: hash → noise → region/province → kernel →
+- [x] Port the deterministic formula: hash → noise → region/province → kernel →
       landform, as pure engine-agnostic math. **DONE: hash → value-noise → fbm →
       region/province + family grammar → kernel + landform** (`hash.rs`,
-      `grammar.rs`, `npy.rs`, `height.rs`): synthetic-kernel `height(x,z,seed,
-      pack)` pipeline green; bit-exact vs WG9 hash fixture + grammar + height
-      gates green. First **real DEM pack** (OpenTopo kernels) is the next step.
-      Not `[x]` — real DEM pack pending.
-- [~] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
+      `grammar.rs`, `npy.rs`, `height.rs`): `height(x,z,seed,pack)` pipeline
+      green; bit-exact vs WG9 hash fixture + grammar + height gates green. First
+      **real DEM pack** (`packs/dem_v1`) now wired (2026-05-29) — property gate
+      + GPU-parity gate green on real 512×512 kernels.
+- [x] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
       kernels). **DONE: format v1 + loader + validation** (`pack.rs`) + **kernel
       loading + `.npy` reader** (`npy.rs`, `pack.rs` loaders `load_pack_with_base`
       / `load_pack_dir`); rejects malformed packs; grammar reads in-memory `Pack`;
-      `Pack` carries `FamilyKernel`. First *real* DEM pack (OpenTopo kernels) still
-      pending. Not `[x]`.
+      `Pack` carries `FamilyKernel`. **First real DEM pack (`packs/dem_v1`) now
+      wired and gated** (2026-05-29): 115-kernel approved map across 12 families,
+      built by `tools/dem_pack/` from WG9 shortlist + metric inferences; loads
+      through unchanged M1/M2 pipeline; property gate + GPU-parity gate green on
+      real 512×512 kernels. Full-set streaming and visual relief/footprint tuning
+      are M3 work.
 - [~] Parity fixtures (hash, noise, provider decisions, sample grids) committed
       **to git**. **DONE: hash/noise fixture** (`hash_reference.json` vendored);
       provider-decision + sample-grid fixtures come with later layers.
@@ -56,10 +60,11 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
       Done: Tier-1 family selection EXACT (bit-exact `family_signature` over 576
       coords); Tier-2 height within f32 epsilon (ABS_EPS=1e-2 m, observed max
       delta 7.67e-5 m — 130× headroom). Verified on D3D12/RTX 5090 Laptop GPU.
-      `gpu` gate suite runs windowed; `fast` stays headless (4 checks, fail=0).
-      67 Rust unit/property tests green. M2 is a CPU-math + parity milestone —
-      its definition of done is the parity gate, not a visual/fly-test gate
-      (that applies to the render pipeline, M3).
+      `gpu` gate suite runs windowed; `fast` stays headless (now 5 checks,
+      fail=0); `gpu` suite now 2 checks, fail=0 (synthetic parity + DEM
+      parity). 67 Rust unit/property tests green. M2 is a CPU-math + parity
+      milestone — its definition of done is the parity gate, not a visual/fly-test
+      gate (that applies to the render pipeline, M3).
 
 ## Milestone 3 — Render pipeline at speed (the hard part)
 

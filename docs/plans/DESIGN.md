@@ -5,7 +5,7 @@ conflicts with code, either the code is wrong or this doc is — reconcile
 immediately, do not let them drift. (That drift is why WorldGen9 is being
 restarted.)
 
-Last updated: 2026-05-29 (M2: GPU formula + CPU/GPU parity gate green; integer hash; §2.4 and §9 updated)
+Last updated: 2026-05-29 (M2: GPU formula + CPU/GPU parity gate green; integer hash; §2.4 and §9 updated; §3 first real DEM pack wired; §9 M2 atlas risk closed)
 
 ---
 
@@ -159,6 +159,37 @@ and validate ABSOLUTE or `..`-traversing paths as errors; `load_pack_str` stays
 kernel-free (grammar path only). Kernel loading is **opt-in per family** — a
 `{}` grammar-only family still loads. When loading WITH kernels, the pack rejects
 any palette referencing a kernel-less family.
+
+**First REAL DEM terrain pack built and wired (2026-05-29).** Pack at
+`wg-10/worldgen_terrain/packs/dem_v1/` (`terrain_pack.gate.json` + `kernels/*.npy`).
+Built by `tools/dem_pack/` (Python) from WG9's 602-kernel user shortlist and WG9's
+metric-driven family inferences (`kernel_inferred_tags.json`); the Rust crate is
+**unchanged** — the real pack flows through the existing M1/M2 loader/grammar/height
+interfaces. Key design points:
+
+- **Approved family map:** `tools/dem_pack/kernel_family_map.approved.json` — 115
+  kernels across 12 families (coast, badlands, grassland, karst, glacial, mountain,
+  rainforest, desert, volcanic, wetland, temperate, tundra), 6–13 each. One kernel
+  per family in the grammar; grammar groups families into 3-family palettes by
+  terrain type (unchanged `FAMILIES_PER_PALETTE = 3`).
+- **`relief_m`** = `height_range_m` from the kernel's own stats (real elevation span
+  of that DEM, ~990–2765 m). **`footprint_m`** = `approx_sample_spacing_m × sample_px`
+  (real ground footprint, ~50 km). A `footprint_scale` knob exists for visual tuning
+  at M3 — not yet tuned; the renderer does not exist yet.
+- **Kernel normalization:** kernels are **Z-SCORE normalized** (mean 0, std 1) per
+  WG9 dem_factory. Height output legitimately goes negative and can exceed `relief_m`
+  — this is NOT a bug; the generator uses `relief_m` as amplitude and the Z-score
+  distribution spans roughly ±3σ. Do not assume height is in [0,1].
+- **Build-time spike filter:** `build_pack.py` drops any kernel whose normalized
+  Z-score exceeds `MAX_ABS_ZSCORE=12` (corrupt spike pixels, not real terrain — e.g.
+  Mekong delta z=44, Sahel Chad z=14, South Georgia z=12 were dropped; those would
+  have injected ~kilometer height artifacts). Dropped at build; the gate subset does
+  not contain them.
+- **Committed subset vs. full pack:** the gate-committed subset (`terrain_pack.gate.json`)
+  covers the kernels needed by the property + GPU-parity gates. The full ~115-kernel
+  set is generated on demand via `build_pack.py`; it is NOT committed (large .npy
+  files). Manual thumbnail review of the tagging was DEFERRED — tooling (`review_tags.py`
+  HTML/CSV artifact, `--reseed` knob) remains available.
 
 ---
 
@@ -431,21 +462,41 @@ Each step is not "done" until it meets §7.3.
   contribution weight after the grammar produces its blend; it does not feed back
   into family selection. The grammar still never reads kernel data. The
   weights/height seam holds.
-  - *Deferred follow-up — real DEM pack wiring:* only synthetic `.npy` kernels
-    exist (flat/ramp toy fixtures). The real OpenTopo kernels are not yet loaded;
-    that is the first height-layer follow-up.
+  - *Real DEM pack wiring — DONE 2026-05-29* (see §3): `packs/dem_v1` loaded
+    through the unchanged M1/M2 pipeline; property gate + GPU-parity gate green.
   - *Deferred follow-up — anti-repetition / kernel variety tuning:* naive
     single-kernel tiling produces visible creases at footprint seam boundaries
     (C0 continuity, not C1). This is expected and deferred until the renderer can
     show it.
-- **GPU kernel-atlas for varied sizes — named risk (2026-05-29):** the M2 GPU
-  compute shader packs kernels into a flat atlas assuming uniform 4×4 synthetic
-  kernels. Real OpenTopo DEMs have varied sizes; non-uniform kernel sizes may
-  require an atlas layout redesign. Revisit when the real DEM pack is wired.
+- **GPU kernel-atlas for varied sizes — CLOSED 2026-05-29.** The named risk was:
+  real OpenTopo DEMs have varied sizes; non-uniform kernel sizes may require an
+  atlas layout redesign. **Validated closed:** `gpu_parity_dem_check.gd` dispatched
+  a real 512×512 kernel atlas (~25 MB GPU buffer) on D3D12/RTX 5090 and read back
+  successfully. Tier-1 family signatures EXACT; Tier-2 height maxd=0.040 m on
+  ~6 km relief (within gate tolerance). The M2-flagged atlas-at-scale risk is
+  resolved; no layout redesign needed for 512×512.
+- **DEM kernel Z-score normalization (noted 2026-05-29):** all WG9/dem_v1 kernels
+  are Z-SCORE normalized (mean 0, std 1). Height legitimately goes negative and can
+  exceed `relief_m`. Do NOT assume [0,1]. The generator uses `relief_m` as amplitude;
+  the Z-score distribution spans roughly ±3σ. Build-time spike filter in `build_pack.py`
+  drops kernels with |Z|>12 to catch corrupt artifact pixels (3 dropped; non-issue
+  for the accepted pack).
+- **Visual tuning of `footprint_m` / `relief_m` — deferred to M3.** Physical values
+  derived from DEM stats are in place (correct ground truth). Visual feel — whether
+  the footprint scale looks right from a flying camera — requires the renderer (M3).
+  A `footprint_scale` knob exists in the pack for then.
+- **Full-pack kernel commit — deferred.** The gate-committed subset covers gates.
+  Full ~115-kernel .npy set is generated on demand; committing all kernels deferred
+  (large binary files, not needed until M3 streaming is wired).
+- **Tagging manual review — deferred.** The approved family map was seeded from
+  confidence≥0.7 metric inferences. Manual thumbnail review of all 115 kernels was
+  deferred by the owner. `review_tags.py` HTML/CSV artifact and `--reseed` knob
+  remain available for when it is done.
 - **CPU/GPU parity epsilon (2026-05-29):** ABS_EPS=1e-2 m, REL_EPS=1e-5,
   justified by f32 mantissa limits. Observed max delta on D3D12/RTX 5090:
-  7.67e-5 m (130× inside tolerance). Widen only if future hardware profile
-  requires it — do not widen speculatively.
+  7.67e-5 m synthetic (130× headroom); 0.040 m on real 512×512 DEM kernels (within
+  gate tolerance). Widen only if future hardware profile requires it — do not widen
+  speculatively.
 - **GPU compute is windowed-only:** `Wg10GpuCompute` uses a local
   RenderingDevice which returns null under `--headless` on this D3D12 setup.
   The `gpu` gate suite therefore runs windowed; the `fast` suite stays headless.

@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (M2 GPU formula + CPU/GPU parity gate green; integer hash; 67 Rust tests green)
+Last updated: 2026-05-29 (first real DEM pack wired; fast=5/gpu=2 gates green, fail=0; M2 kernel-atlas validated at real 512×512 scale)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock ported + grammar + height + M2 GPU formula + parity gate green. No renderer yet.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green. No renderer yet.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -49,8 +49,20 @@ Last updated: 2026-05-29 (M2 GPU formula + CPU/GPU parity gate green; integer ha
   creases at footprint repeats are EXPECTED for naive tiling);
   `moderation` amplitude-only; `height(x,z,seed,&Pack)` = blend each
   grammar-selected family's moderated kernel sample by its weight.
-  **SYNTHETIC KERNELS ONLY** (flat/ramp toy fixtures). NO real DEM pack, NO
-  visual tuning, nothing rendered.
+- **First real DEM terrain pack** (`wg-10/worldgen_terrain/packs/dem_v1/`):
+  115-kernel approved map across 12 families (coast, badlands, grassland, karst,
+  glacial, mountain, rainforest, desert, volcanic, wetland, temperate, tundra),
+  6–13 kernels each. Built by `tools/dem_pack/` (Python) from WG9's 602-kernel
+  user shortlist + metric-driven family inferences. Rust crate **unchanged** — real
+  pack loads through the existing M1/M2 loader/grammar/height interfaces.
+  Temperate and tundra rebalanced from 1 kernel each (WG9) to 7 each via 12 new
+  DEMs fetched from OpenTopo COP30 (0.5° bbox). Build-time spike filter dropped 3
+  corrupt kernels (|Z|>12: Mekong delta z=44, Sahel Chad z=14, South Georgia z=12).
+  Kernels are **Z-SCORE normalized** (mean 0, std 1) — height legitimately goes
+  negative and can exceed `relief_m`; this is correct. `relief_m`=height_range_m
+  (real elevation span ~990–2765 m); `footprint_m`=approx_sample_spacing_m×sample_px
+  (~50 km); `footprint_scale` knob exists for M3 visual tuning. Committed gate
+  subset only; full set generated on demand. Manual tag review deferred.
 - **GPU compute shader** `height_field.glsl` (`wg-10/worldgen_terrain/shaders/`):
   hand-ported GLSL compute shader implementing hash→grammar→height end-to-end.
   Dispatched by `Wg10GpuCompute` (`gpu_compute.rs`), the only new
@@ -58,12 +70,21 @@ Last updated: 2026-05-29 (M2 GPU formula + CPU/GPU parity gate green; integer ha
   back height + family-signature buffers. **Runs WINDOWED** (headless
   RenderingDevice returns null on this D3D12 setup).
 - **CPU/GPU parity gate** (`gpu_parity_check.gd`, `gpu` suite): verified on
-  D3D12/RTX 5090 Laptop GPU over 576 coords. Tier 1: family-selection signatures
-  EXACT (bit-exact). Tier 2: height within f32 epsilon (ABS_EPS=1e-2 m, observed
-  max delta 7.67e-5 m — 130× headroom). `parity::family_signature` on CPU mirrors
-  the GPU's signature; `Wg10Height::family_signature` exposes it.
-- Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=4
-  fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=1 fail=0 skip=0`
+  D3D12/RTX 5090 Laptop GPU over 576 coords with synthetic kernels. Tier 1:
+  family-selection signatures EXACT (bit-exact). Tier 2: height within f32 epsilon
+  (ABS_EPS=1e-2 m, observed max delta 7.67e-5 m — 130× headroom).
+  `parity::family_signature` on CPU mirrors the GPU's signature;
+  `Wg10Height::family_signature` exposes it.
+- **DEM property gate** (`dem_pack_check.gd`, `fast` suite, HEADLESS): asserts
+  finite output, bounded by `max_relief×12`, determinism, and height variety across
+  a real DEM pack grid.
+- **DEM GPU-parity gate** (`gpu_parity_dem_check.gd`, `gpu` suite, WINDOWED):
+  dispatches real 512×512 kernels (~25 MB atlas) on D3D12/RTX 5090. Tier-1 family
+  signatures EXACT; Tier-2 height maxd=0.040 m on ~6 km relief (within tolerance).
+  **This validated the M2 kernel-atlas at real 512×512 scale — the named atlas-at-
+  scale risk is closed.**
+- Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
+  fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
   (windowed; returns SKIP code 2 on no-GPU/headless box).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
@@ -78,26 +99,36 @@ Last updated: 2026-05-29 (M2 GPU formula + CPU/GPU parity gate green; integer ha
 - **Height property gate** (`height_check.gd`, fast suite): asserts finite output,
   determinism across two independent calls, bounded output within pack relief
   range, and variety across a grid (no flat-collapse).
-- **Fast suite: 4 checks, fail=0** (headless).
+- **DEM property gate** (`dem_pack_check.gd`, fast suite): finite, bounded
+  (max_relief×12), deterministic, varied — on real DEM pack kernels. HEADLESS.
+- **Fast suite: 5 checks, fail=0** (headless).
 - **GPU parity gate** (`gpu_parity_check.gd`, `gpu` suite): family selection EXACT
-  + height within f32 epsilon on D3D12/RTX 5090; 1 check, fail=0. Runs windowed
-  (not headless). Returns SKIP code 2 on no-GPU/headless box.
+  + height within f32 epsilon on D3D12/RTX 5090; runs windowed. Returns SKIP code 2
+  on no-GPU/headless box.
+- **DEM GPU-parity gate** (`gpu_parity_dem_check.gd`, `gpu` suite): real 512×512
+  kernels (~25 MB atlas) dispatched + read back on D3D12/RTX 5090. Tier-1 EXACT,
+  Tier-2 maxd=0.040 m on ~6 km relief. Validates M2 atlas at real scale — atlas-
+  at-scale risk closed.
+- **GPU suite: 2 checks, fail=0** (windowed).
 - **67 Rust unit/property tests green** (hash + npy + pack + grammar + height +
   parity). One exact-value anchor: all-flat pack yields `height == 500.0` at any
   coord (roll-independent).
-- Nothing rendered yet. GPU output is validated by gate readback only — not yet
-  streamed. (Honest baseline — the renderer is M3.)
+- Nothing rendered. GPU output validated by gate readback only — not streamed.
+  (Honest baseline — the renderer is M3.)
 
 ## What's next
 
 1. **M3 — Render pipeline (the hard part):** page pool + stream-ahead scheduler
    + clipmap rings + manual review scene + diagnostics overlay. This is where
-   GPU height pages are consumed with NO readback in production (DESIGN §2.4).
-   Acceptance: fly ~1000 m/s, no stalls, no black/holes, frame p99 < 6 ms,
-   manually confirmed.
-2. **Real DEM pack wiring** (OpenTopo kernels): only synthetic flat/ramp toy
-   fixtures exist; still deferred.
-3. **Anti-repetition / kernel variety tuning**: naive single-kernel tiling
+   GPU height pages from the real DEM pack are consumed with NO readback in
+   production (DESIGN §2.4). Acceptance: fly ~1000 m/s, no stalls, no
+   black/holes, frame p99 < 6 ms, manually confirmed.
+2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
+   ground-truth values in place; visual feel needs the renderer. `footprint_scale`
+   knob exists for then.
+3. **Full-pack streaming** (deferred to M3): gate-committed subset loads now;
+   full ~115-kernel set is generated on demand but not yet streamed.
+4. **Anti-repetition / kernel variety tuning**: naive single-kernel tiling
    visibly creases at footprint seam boundaries (C0 not C1); deferred until the
    renderer can show it.
 
@@ -111,18 +142,22 @@ Last updated: 2026-05-29 (M2 GPU formula + CPU/GPU parity gate green; integer ha
 ## Known risks / watch-items
 
 - OpenTopo kernel methodology REVIEWED 2026-05-28 (see DESIGN §9): sound, cache
-  is sufficient, no blocking issues. Two follow-ups for the pack build: mask
-  NoData holes properly (only 2/703 accepted kernels affected), and improve
-  family tagging (591/703 are `uncategorized`; some biomes thin).
+  is sufficient, no blocking issues. Two follow-ups for future packs: mask NoData
+  holes properly; improve family tagging (591/703 WG9 kernels were `uncategorized`;
+  dem_v1 approved map covers 115 across 12 families, tag accuracy unreviewed).
 - Grammar↔kernel coupling RESOLVED 2026-05-29 (see DESIGN §9): moderation is
   amplitude-only in the height layer; grammar never reads kernel data.
+- **GPU kernel-atlas for varied sizes — CLOSED 2026-05-29** (see DESIGN §9):
+  validated on real 512×512 kernels at ~25 MB atlas; no redesign needed.
+- **DEM kernel Z-score normalization:** height is NOT [0,1]; goes negative; can
+  exceed `relief_m`. Build-time filter drops |Z|>12 spikes. Normal behavior —
+  document clearly for any M3 shader work that consumes the pages.
+- **Manual tag review deferred:** dem_v1 approved map seeded from confidence≥0.7
+  metric inferences; no human thumbnail review done. Tooling ready for when it is.
 - Naive kernel tiling creases at footprint seam boundaries (C0, not C1) — expected
   behavior; deferred until the renderer can show it.
 - Finest-ring spacing affects near-detail radius and interacts with future
-  asset/texture scale; the owner flagged it needs review once assets exist.
-- **GPU kernel-atlas for varied sizes (DESIGN §9):** current atlas packs uniform
-  4×4 synthetic kernels trivially; real OpenTopo DEM varied sizes may need an
-  atlas redesign. Revisit with the real DEM pack.
+  asset/texture scale; tune against real assets in M3.
 - **GPU compute is windowed-only:** `Wg10GpuCompute` / `gpu` gate require a
   windowed run; headless returns null local RenderingDevice on this D3D12 setup.
   SKIP code 2 is returned on no-GPU/headless box — never miscounted as a pass.
