@@ -295,10 +295,10 @@ impl Wg10PageCompute {
         rd.compute_list_set_push_constant(cl, &push_pba, push_pba.len() as u32);
         rd.compute_list_dispatch(cl, groups, groups, 1);
         rd.compute_list_end();
-
-        // --- Step 8: Submit + sync; NO readback ---
-        rd.submit();
-        rd.sync();
+        // NOTE: global RenderingDevice — do NOT submit()/sync() (those are local-
+        // device only; the engine auto-submits recorded compute work at the next
+        // frame draw). The caller renders frames (which flushes this dispatch)
+        // before sampling the texture.
 
         // --- Cleanup: free transient GPU resources; do NOT free tex_rid ---
         // Uniform set is freed transitively when the shader RID is freed.
