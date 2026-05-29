@@ -12,7 +12,9 @@ fn wrap(i: i64, n: usize) -> usize {
 
 /// Tiled bilinear sample of one kernel at a world coordinate, scaled to
 /// `relief_m`. The kernel repeats every `footprint_m`; neighbours past the last
-/// texel wrap to texel 0, so the stamp tiles seamlessly (C0 across footprints).
+/// texel wrap to texel 0, so the stamp tiles seamlessly (C0 across footprints;
+/// not C1 — visible creases at footprint seams are expected for naive tiling,
+/// anti-repetition is deferred per design §1).
 pub fn sample_kernel(fk: &FamilyKernel, x: f64, z: f64) -> f64 {
     let cols = fk.kernel.cols;
     let rows = fk.kernel.rows;

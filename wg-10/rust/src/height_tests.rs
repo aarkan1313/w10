@@ -41,6 +41,12 @@ fn sample_ramp_is_finite_and_within_relief() {
 
 #[test]
 fn sample_is_continuous_no_jump_over_tiny_step() {
+    // Tests INTERIOR continuity (x=1000 is mid-tile for footprint 4096). The
+    // footprint-wrap seam itself is C0 by construction (the wrap makes the last
+    // texel's right-neighbour be texel 0) but NOT C1 — a ramp kernel creases at
+    // every footprint repeat. That crease is expected: anti-repetition / kernel
+    // variety is explicitly deferred (design §1). This test does not assert
+    // seam-crossing smoothness because none is claimed there.
     let p = height_pack();
     let ra = p.family_kernel("ra").unwrap();
     let a = height::sample_kernel(ra, 1000.0, 50.0);
