@@ -3,7 +3,7 @@
 //! terrain families. WG9 is reference/sanity-oracle only — this is W10's design.
 
 use crate::hash::{self, HashVal};
-use crate::pack::Pack;
+use crate::pack::{Pack, FAMILIES_PER_PALETTE};
 
 /// Region cell index for a world coordinate. Floor (not truncate) so the cell
 /// index is continuous across the x=0 / z=0 axes (DESIGN §4 seam rule).
@@ -75,4 +75,46 @@ pub fn palette_for_region(rx: i64, rz: i64, seed: i64, pack: &Pack) -> usize {
         HashVal::Int(seed),
     ]) as usize
         % pack.palettes.len()
+}
+
+/// A family identified by its index into `Pack::family_ids`.
+pub type FamilyId = u32;
+
+/// The narrow family-source seam (design §2 constraint #2). Given a region,
+/// return its FAMILIES_PER_PALETTE family ids and a normalized bias split.
+/// Palette-based implementation; M6's climate-field source replaces ONLY this
+/// function — the blend math (Task 4) must not change.
+pub fn families_for_region(
+    rx: i64,
+    rz: i64,
+    seed: i64,
+    pack: &Pack,
+) -> ([FamilyId; FAMILIES_PER_PALETTE], [f64; FAMILIES_PER_PALETTE]) {
+    let palette = &pack.palettes[palette_for_region(rx, rz, seed, pack)];
+
+    // Map the palette's family names to global family-table indices.
+    let mut fams = [0u32; FAMILIES_PER_PALETTE];
+    for (i, name) in palette.families.iter().enumerate() {
+        let idx = pack
+            .family_ids
+            .iter()
+            .position(|f| f == name)
+            .expect("validated pack: palette family exists in family_ids");
+        fams[i] = idx as u32;
+    }
+
+    // Base bias split, rotated deterministically per region so adjacent regions
+    // with the same palette don't all weight the same family first.
+    let base = [0.55, 0.30, 0.15];
+    let roll = (hash::stable_hash(&[
+        HashVal::Str("family_roll"),
+        HashVal::Int(rx),
+        HashVal::Int(rz),
+        HashVal::Int(seed),
+    ]) % FAMILIES_PER_PALETTE as u32) as usize;
+    let mut bias = [0.0f64; FAMILIES_PER_PALETTE];
+    for i in 0..FAMILIES_PER_PALETTE {
+        bias[i] = base[(i + roll) % FAMILIES_PER_PALETTE];
+    }
+    (fams, bias)
 }

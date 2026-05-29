@@ -50,3 +50,27 @@ fn palette_for_region_varies_across_grid() {
     }
     assert!(seen.len() >= 2, "palette selection collapsed to one palette");
 }
+
+#[test]
+fn families_for_region_returns_three_with_normalized_bias() {
+    let p = golden();
+    let (fams, bias) = grammar::families_for_region(2, 9, 1337, &p);
+    assert_eq!(fams.len(), pack::FAMILIES_PER_PALETTE);
+    assert_eq!(bias.len(), pack::FAMILIES_PER_PALETTE);
+    // bias is a probability split: non-negative and sums to 1.
+    let sum: f64 = bias.iter().sum();
+    assert!((sum - 1.0).abs() < 1e-12, "bias must sum to 1, got {sum}");
+    assert!(bias.iter().all(|b| *b >= 0.0));
+    // family ids are real indices into the pack family table.
+    for f in fams {
+        assert!((f as usize) < p.family_ids.len());
+    }
+}
+
+#[test]
+fn families_for_region_is_deterministic() {
+    let p = golden();
+    let a = grammar::families_for_region(-5, 11, 1337, &p);
+    let b = grammar::families_for_region(-5, 11, 1337, &p);
+    assert_eq!(a, b);
+}
