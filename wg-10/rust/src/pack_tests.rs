@@ -95,7 +95,15 @@ fn load_pack_dir_rejects_missing_kernel_file() {
     let dir = fixtures_dir();
     let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/missing.npy","relief_m":1.0,"footprint_m":1.0},"y":{},"z":{}}}"#;
     let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject missing kernel file");
-    assert!(err.contains("missing.npy") || err.contains("kernel"), "error should name the missing kernel: {err}");
+    assert!(err.contains("missing.npy"), "error should name the missing kernel file: {err}");
+}
+
+#[test]
+fn load_pack_dir_rejects_path_traversal() {
+    let dir = fixtures_dir();
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"../../escape.npy","relief_m":1.0,"footprint_m":1.0},"y":{},"z":{}}}"#;
+    let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject path traversal");
+    assert!(err.contains("..") || err.contains("relative"), "error should mention the traversal: {err}");
 }
 
 #[test]

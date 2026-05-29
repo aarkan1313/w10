@@ -179,6 +179,11 @@ fn load_pack_impl(json: &str, base: Option<&Path>) -> Result<Pack, String> {
         let base = base.ok_or_else(|| format!(
             "family {id:?} declares a kernel but pack loaded without a base dir (use load_pack_dir)"
         ))?;
+        if Path::new(kernel_path).is_absolute() || kernel_path.split(['/', '\\']).any(|c| c == "..") {
+            return Err(format!(
+                "family {id:?} kernel path {kernel_path:?} must be relative and within the pack dir (no absolute paths or '..')"
+            ));
+        }
         let full = base.join(kernel_path);
         let bytes = std::fs::read(&full)
             .map_err(|e| format!("family {id:?} kernel {kernel_path:?} unreadable: {e}"))?;
