@@ -115,10 +115,24 @@ fn stable_hash_ints_is_deterministic() {
 }
 
 #[test]
+fn stable_hash_ints_golden_values() {
+    // Locks the exact algorithm (byte order, FNV constants, avalanche). These
+    // values are the CPU anchor the GLSL port (M2 parity gate) must reproduce
+    // bit-for-bit. If this test breaks, the hash algorithm changed — that breaks
+    // GPU parity; do not "fix" by updating values unless the change is intentional.
+    assert_eq!(hash::stable_hash_ints(0xABCD_1234, &[3, -7, 1337]), 1822236745);
+    assert_eq!(hash::stable_hash_ints(0, &[0]), 1073837334);
+    assert_eq!(hash::stable_hash_ints(0x5052_4f56, &[0, 0, 1337]), 2845851785); // SALT_PROVINCE_PALETTE-ish
+}
+
+#[test]
 fn stable_hash_ints_salt_decorrelates() {
-    let a = hash::stable_hash_ints(1, &[10, 20]);
-    let b = hash::stable_hash_ints(2, &[10, 20]);
-    assert_ne!(a, b, "distinct salts must not collide on these args");
+    // The 5 grammar roll sites use distinct salts; on shared args they must not
+    // collide (else two roll sites would correlate).
+    let salts: [u32; 5] = [0x5052_4f56, 0x4c4f_4341, 0x434f_4d50, 0x5241_5245, 0x46414d49];
+    let mut seen = std::collections::BTreeSet::new();
+    for s in salts { seen.insert(hash::stable_hash_ints(s, &[10, 20, 1337])); }
+    assert_eq!(seen.len(), salts.len(), "grammar salts collided on shared args");
 }
 
 #[test]
