@@ -311,10 +311,11 @@ Asserts:
    coarser resident fallback — checked every frame, including frame 0 (cold start).
 4. **Determinism:** running the same sweep twice yields identical per-frame
    `(acquire, release)` sequences.
-5. **Liveness / progress:** finest-level coverage strictly improves over the warm-up
-   (the sweep doesn't get stuck perpetually coarse — stream-ahead actually catches
-   up when the camera holds steady), guarding against a vacuous "always fall back"
-   pass.
+5. **Liveness / progress:** after the sweep, hold the camera steady (zero velocity)
+   for a bounded number of frames; at least one **finest-level** page must become
+   resident — stream-ahead actually catches up and doesn't get stuck perpetually
+   coarse. (Implemented as a post-sweep steady-hold loop asserting a level-0 page
+   enters the resident set within HOLD frames.)
 
 Non-vacuous by construction: the speed guarantees `missing > max_per_frame`, so the
 bound and the fallback are both genuinely exercised (a too-slow sweep that never

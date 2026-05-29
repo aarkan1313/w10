@@ -97,6 +97,26 @@ func _run() -> int:
 	if not any_missing_served_by_fallback:
 		errs.append("vacuous pass: no missing page was ever served by fallback (speed too low?)")
 
+	# (6) liveness / progress (spec §4.1.5): stream-ahead must actually CATCH UP when
+	# the camera holds steady — not get stuck perpetually coarse. Hold the end-of-sweep
+	# pose at zero velocity and update; within a bounded number of frames at least one
+	# finest-level (level 0) page must become resident. (Coverage is ~27 concentric
+	# keys when still; max_per_frame=3 fills the fine ring in well under HOLD frames.)
+	var hold_x := VEL_X * float(FRAMES - 1)
+	var fine_resident := false
+	var HOLD := 40
+	for _h in range(HOLD):
+		streamer.call("update", hold_x, 0.0, 0.0, 0.0)
+		var rk := _key_list(pool.call("resident_keys"))
+		for k in rk:
+			if k.x == 0:   # level 0 == finest
+				fine_resident = true
+				break
+		if fine_resident:
+			break
+	if not fine_resident:
+		errs.append("liveness: no finest-level page resident after %d steady frames (stream-ahead did not catch up)" % HOLD)
+
 	# (4) determinism: same sweep -> identical per-frame acquire/release counts.
 	var seq_a := _run_sweep_counts(os_dir, os_glsl)
 	var seq_b := _run_sweep_counts(os_dir, os_glsl)

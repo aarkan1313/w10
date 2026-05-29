@@ -25,8 +25,9 @@ pub struct ScheduleConfig {
     pub max_per_frame: u32,
 }
 
-/// A bounded per-frame plan: pages to acquire (capped at max_per_frame, finest +
-/// nearest-ahead first) and pages to release (resident but no longer covered).
+/// A bounded per-frame plan: pages to acquire (capped at max_per_frame, coarsest +
+/// nearest-ahead first — the coarse never-black blanket leads) and pages to release
+/// (resident but no longer covered).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FramePlan {
     pub acquire: Vec<PageKey>,
