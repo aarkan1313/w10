@@ -1,2 +1,6 @@
 # Normalize EOL for all files that Git considers text files.
 * text=auto eol=lf
+
+# Binary test fixtures: never apply EOL conversion (would corrupt the bytes the
+# .npy reader parses). Pin explicitly rather than rely on git's NUL heuristic.
+*.npy binary
