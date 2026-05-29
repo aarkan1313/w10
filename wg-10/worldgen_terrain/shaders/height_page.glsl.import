@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://y5fnfjyllo1y"
+path="res://.godot/imported/height_page.glsl-0c693519bc3c17eb912584a1463ef0c8.res"
+
+[deps]
+
+source_file="res://worldgen_terrain/shaders/height_page.glsl"
+dest_files=["res://.godot/imported/height_page.glsl-0c693519bc3c17eb912584a1463ef0c8.res"]
+
+[params]
+
