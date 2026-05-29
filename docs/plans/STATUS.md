@@ -337,6 +337,21 @@ Last updated: 2026-05-29 (**M3 slice 5b DONE — 3×3 ring tiling + rings↔stre
   (not free) — recorded as an explicit input to the M3-closing p99<6ms acceptance gate, where
   it's measured under the real fly camera. If p99 is tight, the toroidal-rebind + hollow-coarse
   optimizations are the known levers (deferred until measured).
+- **View vs streamer key alignment under MOTION (honest correction, slice-5b audit):** the
+  view queries the camera-position 3×3 (`floor(cam/span)·span + (dx,dz)·span`); the streamer's
+  `coverage` uses a VELOCITY-BIASED centre (`cam + vel·lead_frames`). They coincide exactly at
+  vel=0. Under motion the streamer prefetches AHEAD, so the camera-position fine pages are in
+  the streamer's coverage only while `vel·lead_frames < ~1.5·span` — beyond that the view
+  correctly falls back to coarser at the camera position (never-black, by design; NOT a bug).
+  At the M3 target **~1000 m/s** with `lead_frames=8`, bias = 8000 m < 1.5·8192 → fine pages at
+  the camera ARE covered, so the p99 gate runs in the safe range. The fly-cam slice must
+  CONFIRM this empirically and, if fine detail lags at speed, tune `lead_frames` down or widen
+  the streamer `radius_pages`. (The 5b gate's 6000 m/s warm-up has a 48 km bias — fine detail
+  lags there, but coverage is still ~1.0 via the coarse blanket, which the gate verifies.)
+- **Tile-bind minor follow-ups (slice-5b audit, non-blocking):** (a) both-null fallback leaves
+  a tile at its previous transform (stale-but-bounded; the coarse blanket makes it transient) —
+  add a clarifying comment. (b) `bound_page_key` returns `Vector2i` (i32) truncating the i64
+  page origin — fine for M3 scale, revisit at M4 planetary scale.
 - **Async page production — DEFERRED (tracked, not a gap):** M3 slice 3 produces
   pages SYNCHRONOUSLY inside the streamer's `update` (≤ N/frame, so still bounded).
   The scheduler↔pool seam is deliberately **async-ready** — the scheduler reads only
