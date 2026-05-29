@@ -21,24 +21,21 @@ func _init() -> void:
 	quit(await _run())
 
 func _run() -> int:
-	if not ClassDB.class_exists("Wg10PageCompute"):
-		push_error("Wg10PageCompute not registered"); return 1
+	if not ClassDB.class_exists("Wg10PagePool"):
+		push_error("Wg10PagePool not registered"); return 1
 	if RenderingServer.get_rendering_device() == null:
 		print("[wg10-m3-slice1] status=skip reason=no-render-device"); return 2
 
-	# --- compute the height page ---
-	var pc: Object = ClassDB.instantiate("Wg10PageCompute")
+	# --- acquire the height page from the pool ---
+	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	var pack_os: String = ProjectSettings.globalize_path(PACK_RES_DIR)
-	var glsl_os: String  = ProjectSettings.globalize_path(GLSL)
-
-	var load_err: String = str(pc.call("load_pack_dir", pack_os, PACK_FILE))
-	if load_err != "":
-		push_error("[wg10-m3-slice1] load_pack_dir failed: %s" % load_err); return 1
-
-	var tex = pc.call("compute_page", glsl_os, 0.0, 0.0, WORLD_SPAN, PAGE_PX, SEED)
+	var glsl_os: String = ProjectSettings.globalize_path(GLSL)
+	var cfg_err: String = str(pool.call("configure", pack_os, PACK_FILE, glsl_os, 4, PAGE_PX, WORLD_SPAN, SEED))
+	if cfg_err != "":
+		push_error("[wg10-m3-slice1] pool configure failed: %s" % cfg_err); return 1
+	var tex = pool.call("acquire_page", 0, 0.0, 0.0)
 	if tex == null:
-		push_error("[wg10-m3-slice1] compute_page returned null"); return 1
-	print("[wg10-m3-slice1] compute_page OK tex=%s" % str(tex))
+		push_error("[wg10-m3-slice1] acquire_page returned null"); return 1
 
 	# --- build SubViewport (UPDATE_ALWAYS + own_world_3d) ---
 	var vp := SubViewport.new()
