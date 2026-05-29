@@ -5,40 +5,56 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-28 (M0 toolchain + M1 hash/noise/fbm foundation green)
+Last updated: 2026-05-29 (M1 grammar + terrain-pack v1 loader/validation + grammar gate green)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock ported. No renderer yet.
+**Phase:** M0 toolchain green + M1 deterministic bedrock ported + grammar layer in. No renderer yet.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
-  `Wg10Hash` (RefCounted) is registered and callable headlessly, exposing
-  `stable_hash_ints`, `hash_grid`, `value_noise`, `fbm`.
+  `Wg10Hash` (RefCounted) exposes `stable_hash_ints`, `hash_grid`, `value_noise`,
+  `fbm`. `Wg10Grammar` (RefCounted) exposes `load_pack_json` + `family_ids` /
+  `weight_values` (parallel packed arrays) for headless checks.
 - Deterministic core ported from WG9 into `wg-10/rust/src/hash.rs` (pure, no
   `godot` imports): FNV-1a `stable_hash`, `hash_grid`, `value_noise`, `fbm`,
   `fade`, `smoothstep_unit`. **Bit-exact vs WG9 `hash_reference.json`** (the
   fixture is vendored at `wg-10/worldgen_terrain/fixtures/`).
-- Headless gate runner: `python tools/gate.py --suite fast` → `fail=0`
-  (hash parity + determinism through the loaded native lib).
+- **Terrain-pack v1 loader/validation** (`wg-10/rust/src/pack.rs`): schema
+  `worldgen10.terrain_pack.v1`, validated on load, rejects malformed packs with
+  descriptive errors, never silent defaults. `FAMILIES_PER_PALETTE = 3` fixed.
+- **Grammar core** (`wg-10/rust/src/grammar.rs`): region/province locate (floor
+  semantics), palette decision (primary/compatible/rare roll), `family_weights`
+  corner blend — bounded (MAX 12 inputs: 4 corners × 3 families), no heap
+  allocation, normalized (sum exactly 1.0), deterministic, seam-continuous.
+  **Produces WEIGHTS ONLY — no height.**
+- Headless gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast
+  checks=3 fail=0` (hash_parity + determinism + grammar).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
 
 - **Deterministic hash/noise bedrock, proven bit-exact** against WG9 — at both
-  the Rust unit level (7 tests: stable_hash/hash_grid/value_noise/fbm exact
-  cases + determinism + bounds + negative-axis floor continuity) and through
-  the Godot native boundary (hash parity + determinism gates).
+  the Rust unit level and through the Godot native boundary (hash parity +
+  determinism gates).
+- **Grammar property gate** (`grammar_check.gd`, fast suite): asserts sum=1,
+  determinism, id/weight array parallelism, and family variety across a region
+  grid (no single-palette collapse). Fast suite: **3 checks, fail=0**.
+- **24 Rust unit/property tests green** (7 hash + 7 pack + 10 grammar).
 - Nothing rendered yet. (Honest baseline — the renderer is M3.)
 
 ## What's next
 
-1. OpenTopo kernel methodology review is already done (DESIGN §9); next plan is
-   **M1 continued**: region/province decisions + kernels + landform +
-   terrain-pack format. Write it via the writing-plans skill before executing.
-2. Then M2 (GPU formula + CPU/GPU parity), then M3 (render pipeline — the hard
+1. **Kernel sampling + landform composition → `height(x,z)`** (next plan).
+   Grammar outputs weights-only; the height layer applies them. Keep the
+   grammar↔kernel coupling decision in mind: the grammar must not read kernel
+   data — if it ever needs to, the weights/height seam has moved (stop and
+   re-cut before continuing).
+2. First real DEM pack (OpenTopo kernels) loads with the height plan (only a
+   synthetic golden pack exists now).
+3. Then M2 (GPU formula + CPU/GPU parity), then M3 (render pipeline — the hard
    part).
 
 ## Decisions locked

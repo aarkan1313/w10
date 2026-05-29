@@ -111,6 +111,19 @@ A pack defines (at minimum): the kernel/source data, landform rules, region
 grammar, height ranges, and the parameters the formula consumes. Swapping the
 pack changes the world; the renderer and core code are unchanged.
 
+**Terrain-pack v1 is now defined and loadable (2026-05-28).** Schema string
+`worldgen10.terrain_pack.v1`, version field 1. The loader validates on load and
+**rejects malformed packs** with descriptive errors — bad schema string,
+unsupported version, `region_size_m <= 0`, `province_size_regions <= 0`, palette
+pct sum > 100, empty palettes, palette with != 3 families, palette referencing an
+unknown family. No silent defaults. The grammar reads an in-memory `Pack` struct;
+it **never parses JSON** (the loader owns deserialization). `FAMILIES_PER_PALETTE
+= 3` is fixed — a palette with a different count is a load error. This expresses
+interface constraint #1 (bounded, GPU-shaped output) in data: the grammar always
+produces weights across exactly 3 families, which is what the GPU kernel side
+expects. Height-relevant family fields (height ranges etc.) are present in the
+pack schema but are **not loaded yet** — the height plan loads them.
+
 ---
 
 ## 4. Determinism & parity contracts (ported from WG9, non-negotiable)
@@ -372,3 +385,14 @@ Each step is not "done" until it meets §7.3.
 - **Tune finest-ring spacing + ring count** (§5.1) once real assets/textures
   exist to judge the near-detail radius against. Left as config; do not guess a
   locked number now.
+- **Family-source seam (M6 inheritance constraint):** `families_for_region` in
+  `grammar.rs` is the **single narrow function** that M6's continuous
+  climate-field source replaces. The blend math (`family_weights` corner blend,
+  normalization, seam-continuity) must not change when that replacement happens —
+  only the source of family ids fed into it changes. Design constraint #2.
+- **Grammar↔kernel coupling — named risk, carried forward:** the grammar must
+  **not read kernel data**. If it ever needs to, the weights/height seam has
+  moved — stop and re-cut the seam before continuing. (WG9 fed kernel slope into
+  a "moderation" factor that belonged in the height layer because it modulates
+  contribution amplitude, not family identity. Resolve purpose when building the
+  height layer.)

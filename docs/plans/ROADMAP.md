@@ -4,8 +4,8 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-28 (M0 toolchain + gate runner green; M1 hash/noise/fbm
-ported with fixture parity, determinism + seam gates green)
+Last updated: 2026-05-29 (grammar + terrain-pack v1 loader/validation + grammar
+property gate green; 24 Rust tests green)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -26,11 +26,14 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 ## Milestone 1 — Worldgen core (CPU) + parity foundation
 
 - [~] Port the deterministic formula: hash → noise → region/province → kernel →
-      landform, as pure engine-agnostic math. **DONE: hash → value-noise → fbm**
-      (`wg-10/rust/src/hash.rs`), bit-exact vs WG9 fixture. region/province →
-      kernel → landform are the next plan.
-- [ ] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
-      kernels). Core consumes the pack; no source assumptions baked in.
+      landform, as pure engine-agnostic math. **DONE: hash → value-noise → fbm →
+      region/province + family grammar** (`hash.rs`, `grammar.rs`), bit-exact vs
+      WG9 fixture + grammar gates green. kernel → landform are next.
+- [~] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
+      kernels). **DONE: format v1 + loader + validation** (`pack.rs`); rejects
+      malformed packs; grammar reads in-memory `Pack`. First *real* DEM pack
+      (OpenTopo kernels) still comes with the height plan — only a synthetic
+      golden pack exists now (kernels not loaded yet). Not `[x]`.
 - [~] Parity fixtures (hash, noise, provider decisions, sample grids) committed
       **to git**. **DONE: hash/noise fixture** (`hash_reference.json` vendored);
       provider-decision + sample-grid fixtures come with later layers.
