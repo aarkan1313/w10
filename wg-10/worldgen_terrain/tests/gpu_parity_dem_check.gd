@@ -20,7 +20,7 @@ func _run() -> int:
 	var probe := RenderingServer.create_local_rendering_device()
 	if probe == null:
 		print("[wg10-gpu-parity-dem] status=skip reason=no-gpu")
-		return 2
+		return 2  # distinct skip code — runner must NOT treat as pass
 	probe.free()
 	var os_dir: String = ProjectSettings.globalize_path(PACK_RES_DIR)
 	var os_glsl: String = ProjectSettings.globalize_path(SHADER_RES)

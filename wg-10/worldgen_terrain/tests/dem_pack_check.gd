@@ -31,9 +31,9 @@ func _run() -> int:
 		max_relief = maxf(max_relief, float(pack["families"][fid]["relief_m"]))
 
 	# Kernels are z-score normalized (mean 0, std 1); height = sum(weight *
-	# moderation * zscore * relief). Clean terrain stays within ~+-8 sigma, so the
-	# physically-sane bound is a symmetric multiple of max_relief (not [0,relief]).
-	var bound := max_relief * 8.0 + 1.0
+	# moderation * zscore * relief). build_pack.py caps kernels at
+	# MAX_ABS_ZSCORE=12, so the physical bound is max_relief*12 (matches the filter).
+	var bound := max_relief * 12.0 + 1.0
 	var errors: Array[String] = []
 	var coords := [Vector2(0, 0), Vector2(-1024.5, 2048.25), Vector2(1e6, -1e6), Vector2(40000.0, 9000.0)]
 	for c in coords:
