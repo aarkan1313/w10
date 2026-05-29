@@ -19,6 +19,9 @@ CHECKS = {
         "worldgen_terrain/tests/grammar_check.gd",
         "worldgen_terrain/tests/height_check.gd",
     ],
+    "gpu": [
+        "worldgen_terrain/tests/gpu_parity_check.gd",
+    ],
 }
 
 
@@ -48,22 +51,35 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suite", choices=sorted(CHECKS), default="fast")
     args = ap.parse_args()
+    headless = args.suite != "gpu"   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
-    ensure_extension_imported(godot)
+    ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0
+    skips = 0
     for script in CHECKS[args.suite]:
-        res = subprocess.run(
-            [godot, "--headless", "--path", str(PROJECT), "--script", f"res://{script}"],
-            capture_output=True, text=True,
-        )
-        tag = "pass" if res.returncode == 0 else "fail"
-        if res.returncode != 0:
+        cmd = [godot]
+        if headless:
+            cmd.append("--headless")
+        cmd += ["--path", str(PROJECT), "--script", f"res://{script}"]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        rc = res.returncode
+        if rc == 0:
+            tag = "pass"
+        elif rc == 2:
+            tag = "skip"
+            skips += 1
+        else:
+            tag = "fail"
             failures += 1
-        print(f"[gate] check={script} status={tag} rc={res.returncode}")
-        if res.returncode != 0:
+        print(f"[gate] check={script} status={tag} rc={rc}")
+        # For the gpu suite, always surface the check's own status line (it prints
+        # the [wg10-gpu-parity] line to stdout) so pass/skip detail is visible.
+        if not headless or rc != 0:
+            # print the check's stdout tail (status line + any push_error)
             sys.stdout.write(res.stdout[-2000:])
+        if rc != 0:
             sys.stderr.write(res.stderr[-2000:])
-    print(f"[gate] suite={args.suite} checks={len(CHECKS[args.suite])} fail={failures}")
+    print(f"[gate] suite={args.suite} checks={len(CHECKS[args.suite])} fail={failures} skip={skips}")
     return 1 if failures else 0
 
 
