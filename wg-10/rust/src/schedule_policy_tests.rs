@@ -160,9 +160,21 @@ fn plan_frame_empty_when_fully_resident() {
 #[test]
 fn plan_frame_is_deterministic() {
     let p = SchedulePolicy::new(cfg());
-    let resident = HashSet::new();
+    // A resident set mixing covered and far-away (to-be-released) pages, so both
+    // acquire AND release are non-empty and their ORDER is actually exercised.
+    let resident = keyset(&[
+        PageKey { level: 0, origin_x: 5_000_000, origin_z: 0 },
+        PageKey { level: 1, origin_x: 5_000_000, origin_z: 0 },
+        PageKey { level: 2, origin_x: 5_000_000, origin_z: 7_000_000 },
+    ]);
     let a = p.plan_frame(123.0, 456.0, 50.0, -20.0, &resident);
     let b = p.plan_frame(123.0, 456.0, 50.0, -20.0, &resident);
     assert_eq!(a.acquire, b.acquire);
     assert_eq!(a.release, b.release);
+    // all three far pages are out of coverage near the origin -> all released
+    assert_eq!(a.release.len(), 3, "all far resident pages should be released");
+    // release is sorted (deterministic) — verify ascending PageKey order
+    let mut sorted = a.release.clone();
+    sorted.sort();
+    assert_eq!(a.release, sorted, "release must be sorted for determinism");
 }

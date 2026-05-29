@@ -137,11 +137,14 @@ impl SchedulePolicy {
         let needed_set: HashSet<PageKey> = needed.iter().cloned().collect();
 
         // release = resident - needed (uncapped: releasing is cheap bookkeeping).
-        let release: Vec<PageKey> = resident
+        // Sorted so the whole FramePlan is deterministic — HashSet iteration order
+        // is process-randomized, and the spec (§2.5) requires deterministic plans.
+        let mut release: Vec<PageKey> = resident
             .iter()
             .filter(|k| !needed_set.contains(k))
             .cloned()
             .collect();
+        release.sort();
 
         // missing = needed - resident, prioritized then truncated.
         let cx = pos_x + vel_x * self.cfg.lead_frames;
@@ -160,7 +163,10 @@ impl SchedulePolicy {
             let kcz = k.origin_z as f64 + span * 0.5;
             let d2 = (kcx - cx) * (kcx - cx) + (kcz - cz) * (kcz - cz);
             // (level, distance^2, origin) — origin breaks any remaining ties so the
-            // order is fully deterministic regardless of input vec order.
+            // order is fully deterministic regardless of input vec order. `d2 as i64`
+            // is a saturating cast (Rust 1.45+); for any realistic world coordinate
+            // d2 stays well under i64::MAX, and the origin tiebreak keeps the order
+            // total even if two far pages were to saturate to the same value.
             (k.level, d2 as i64, k.origin_x, k.origin_z)
         });
         missing.truncate(self.cfg.max_per_frame as usize);
