@@ -4,8 +4,8 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (grammar + terrain-pack v1 loader/validation + grammar
-property gate green; 24 Rust tests green)
+Last updated: 2026-05-29 (height layer + .npy reader + height property gate green;
+46 Rust tests green)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -27,13 +27,17 @@ Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
 - [~] Port the deterministic formula: hash → noise → region/province → kernel →
       landform, as pure engine-agnostic math. **DONE: hash → value-noise → fbm →
-      region/province + family grammar** (`hash.rs`, `grammar.rs`), bit-exact vs
-      WG9 fixture + grammar gates green. kernel → landform are next.
+      region/province + family grammar → kernel + landform** (`hash.rs`,
+      `grammar.rs`, `npy.rs`, `height.rs`): synthetic-kernel `height(x,z,seed,
+      pack)` pipeline green; bit-exact vs WG9 hash fixture + grammar + height
+      gates green. First **real DEM pack** (OpenTopo kernels) is the next step.
+      Not `[x]` — real DEM pack pending.
 - [~] Terrain-pack format defined and loadable (first pack = DEM/OpenTopo
-      kernels). **DONE: format v1 + loader + validation** (`pack.rs`); rejects
-      malformed packs; grammar reads in-memory `Pack`. First *real* DEM pack
-      (OpenTopo kernels) still comes with the height plan — only a synthetic
-      golden pack exists now (kernels not loaded yet). Not `[x]`.
+      kernels). **DONE: format v1 + loader + validation** (`pack.rs`) + **kernel
+      loading + `.npy` reader** (`npy.rs`, `pack.rs` loaders `load_pack_with_base`
+      / `load_pack_dir`); rejects malformed packs; grammar reads in-memory `Pack`;
+      `Pack` carries `FamilyKernel`. First *real* DEM pack (OpenTopo kernels) still
+      pending. Not `[x]`.
 - [~] Parity fixtures (hash, noise, provider decisions, sample grids) committed
       **to git**. **DONE: hash/noise fixture** (`hash_reference.json` vendored);
       provider-decision + sample-grid fixtures come with later layers.

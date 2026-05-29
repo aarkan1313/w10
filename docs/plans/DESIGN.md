@@ -124,6 +124,21 @@ produces weights across exactly 3 families, which is what the GPU kernel side
 expects. Height-relevant family fields (height ranges etc.) are present in the
 pack schema but are **not loaded yet** — the height plan loads them.
 
+**Kernel loading added (2026-05-29, still schema v1, additive).** Each family MAY
+carry `kernel` (relative path), `relief_m`, and `footprint_m`; `grammar_constants`
+gains `moderation_min`/`moderation_strength` (serde-defaulted 0.4/0.5, validated
+in range). Kernel data is loaded by a pure-Rust NumPy-v1.0 `.npy` reader
+(`npy.rs`): parses C-order `<f4`/`<f8` 2-D arrays into a `Kernel{rows,cols,data:
+Vec<f32>}`; rejects bad magic, version≠1, non-float dtype, Fortran order, non-2D
+shape, zero dims, and overflowing shape — descriptive errors, no silent defaults.
+`Pack` carries `family_kernels: BTreeMap<String, FamilyKernel>` (loaded
+array + relief + footprint) accessible via `family_kernel(id)`. New loaders
+`load_pack_with_base`/`load_pack_dir` resolve kernel paths relative to a base dir
+and validate ABSOLUTE or `..`-traversing paths as errors; `load_pack_str` stays
+kernel-free (grammar path only). Kernel loading is **opt-in per family** — a
+`{}` grammar-only family still loads. When loading WITH kernels, the pack rejects
+any palette referencing a kernel-less family.
+
 ---
 
 ## 4. Determinism & parity contracts (ported from WG9, non-negotiable)
@@ -390,9 +405,15 @@ Each step is not "done" until it meets §7.3.
   climate-field source replaces. The blend math (`family_weights` corner blend,
   normalization, seam-continuity) must not change when that replacement happens —
   only the source of family ids fed into it changes. Design constraint #2.
-- **Grammar↔kernel coupling — named risk, carried forward:** the grammar must
-  **not read kernel data**. If it ever needs to, the weights/height seam has
-  moved — stop and re-cut the seam before continuing. (WG9 fed kernel slope into
-  a "moderation" factor that belonged in the height layer because it modulates
-  contribution amplitude, not family identity. Resolve purpose when building the
-  height layer.)
+- **Grammar↔kernel coupling — RESOLVED 2026-05-29.** Moderation lives in the
+  height layer, amplitude-only: `clamp(1 - strength × slope, min, 1)` scales
+  contribution weight after the grammar produces its blend; it does not feed back
+  into family selection. The grammar still never reads kernel data. The
+  weights/height seam holds.
+  - *Deferred follow-up — real DEM pack wiring:* only synthetic `.npy` kernels
+    exist (flat/ramp toy fixtures). The real OpenTopo kernels are not yet loaded;
+    that is the first height-layer follow-up.
+  - *Deferred follow-up — anti-repetition / kernel variety tuning:* naive
+    single-kernel tiling produces visible creases at footprint seam boundaries
+    (C0 continuity, not C1). This is expected and deferred until the renderer can
+    show it.
