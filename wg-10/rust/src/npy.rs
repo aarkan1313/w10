@@ -46,8 +46,12 @@ pub fn read_npy_f32(bytes: &[u8]) -> Result<Kernel, String> {
     }
 
     let (rows, cols) = parse_shape(header)?;
-    let count = rows * cols;
-    let need = count * elem_size;
+    let count = rows
+        .checked_mul(cols)
+        .ok_or_else(|| "npy: shape too large (rows*cols overflow)".to_string())?;
+    let need = count
+        .checked_mul(elem_size)
+        .ok_or_else(|| "npy: shape too large (byte count overflow)".to_string())?;
     if bytes.len() < data_start + need {
         return Err(format!(
             "npy: data too short: need {} bytes for {}x{} {}, have {}",

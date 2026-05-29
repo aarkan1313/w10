@@ -47,3 +47,20 @@ fn rejects_unsupported_dtype() {
     let err = npy::read_npy_f32(&buf).expect_err("must reject non-float dtype");
     assert!(err.contains("dtype") || err.contains("descr"), "error should mention dtype: {err}");
 }
+
+#[test]
+fn rejects_overflowing_shape() {
+    // A crafted header claiming a gigantic shape must return Err, never panic
+    // (overflow in rows*cols*elem_size must be caught, not wrap into an OOB slice).
+    let mut buf = Vec::new();
+    buf.extend_from_slice(b"\x93NUMPY\x01\x00");
+    let header = b"{'descr': '<f4', 'fortran_order': False, 'shape': (4611686018427387904, 4), }";
+    let mut hdr = header.to_vec();
+    while (10 + hdr.len() + 1) % 64 != 0 { hdr.push(b' '); }
+    hdr.push(b'\n');
+    buf.extend_from_slice(&(hdr.len() as u16).to_le_bytes());
+    buf.extend_from_slice(&hdr);
+    // no data payload — the point is the size guard fires first.
+    let err = npy::read_npy_f32(&buf).expect_err("must reject overflowing shape");
+    assert!(err.contains("overflow") || err.contains("too short"), "expected overflow/short error: {err}");
+}
