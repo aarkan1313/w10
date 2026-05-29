@@ -127,6 +127,20 @@ Remaining slices (NOT done):
       morph continuity, recenter-no-rebuild; PNG eyeballed. One-band-one-page binding
       (scheduler radius_pages=0); transient Texture2DRD-second-sampler startup warning is
       benign (render correct, not per-frame).
+- [ ] **Rings↔scheduler wiring + fly camera (next slice) — two HARD PREREQUISITES**
+      surfaced by the slice-4 audit (both correct-at-origin in slice 4, both break once a
+      moving camera drives recenter; the slice-4 gate only renders at `recenter(0,0)`):
+      (1) **geomorph coarse-UV origin:** `ring_displace.gdshader` computes
+      `uv_coarse = world.xz/coarse_span + 0.5`, which assumes the coarse page is centered
+      at world origin. After a non-zero recenter the coarse level is centered on the
+      (quantized) camera, so the seam reopens ∝ displacement. Fix: add a `coarse_origin`
+      vec2 uniform, use `(world.xz - coarse_origin)/coarse_span + 0.5`, set it in
+      `bind_page`/`recenter`. (2) **per-level page span:** `Wg10PagePool::acquire_page`
+      ignores `level` for coverage — every page covers `world_span` (=BASE_SPAN), so a
+      level-L ring stretches a BASE_SPAN page over BASE_SPAN·2^L. Fix: dispatch level-L
+      pages at `world_span·2^L` (pass per-level span to acquire_page, or add
+      `acquire_page_at_span`). Also (minor): callers must always bind `coarse_height_tex`
+      (= height_tex when no morph) or the outermost vertex ring zeroes.
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
       overlay (live fps/stats).
 - [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,
