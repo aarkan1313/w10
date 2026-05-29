@@ -126,15 +126,16 @@ fn plan_frame_caps_acquires_at_max_per_frame() {
 }
 
 #[test]
-fn plan_frame_prioritizes_finest_level_first() {
-    let p = SchedulePolicy::new(cfg());
+fn plan_frame_prioritizes_coarsest_level_first() {
+    let p = SchedulePolicy::new(cfg()); // 3 levels, coarsest == 2
     let empty = HashSet::new();
     let plan = p.plan_frame(0.0, 0.0, 0.0, 0.0, &empty);
-    // With everything missing and max=2, the two acquires must be the finest
-    // (level 0) pages — coarser gaps are covered by even-coarser pages, fine ones
-    // are not.
-    assert!(plan.acquire.iter().all(|k| k.level == 0),
-        "finest level must win priority, got {:?}", plan.acquire);
+    // With everything missing and max=2, the two acquires must be the COARSEST
+    // (level 2) pages — the coarse ring is the never-black blanket and must be
+    // acquired before fine detail (else a fast camera outruns it -> black).
+    let coarsest = p.config().num_levels - 1;
+    assert!(plan.acquire.iter().all(|k| k.level == coarsest),
+        "coarsest level must win priority, got {:?}", plan.acquire);
 }
 
 #[test]

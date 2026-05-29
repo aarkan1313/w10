@@ -156,20 +156,22 @@ impl SchedulePolicy {
             .filter(|k| !resident.contains(k))
             .collect();
 
-        // Priority: finest level first (lower level), then nearest the led centre.
-        // Distance is measured page-centre to led-centre, in metres, integerized
-        // to keep the ordering total and deterministic.
+        // Priority: COARSEST level first (the coarse pages ARE the never-black
+        // blanket — they must be acquired before fine detail or a fast camera
+        // outruns the blanket and coverage goes black). Then nearest the led centre.
+        // Distance is page-centre to led-centre, integerized for a total order.
+        // (A windowed gate falsified the original finest-first priority: it starved
+        // the coarse ring under motion. Coarsest-first makes never-black structural.)
         missing.sort_by_key(|k| {
             let span = self.level_span(k.level);
             let kcx = k.origin_x as f64 + span * 0.5;
             let kcz = k.origin_z as f64 + span * 0.5;
             let d2 = (kcx - cx) * (kcx - cx) + (kcz - cz) * (kcz - cz);
-            // (level, distance^2, origin) — origin breaks any remaining ties so the
-            // order is fully deterministic regardless of input vec order. `d2 as i64`
-            // is a saturating cast (Rust 1.45+); for any realistic world coordinate
-            // d2 stays well under i64::MAX, and the origin tiebreak keeps the order
-            // total even if two far pages were to saturate to the same value.
-            (k.level, d2 as i64, k.origin_x, k.origin_z)
+            // (-level, distance^2, origin) — `-(k.level as i64)` so coarser (higher
+            // level) sorts first; origin breaks remaining ties for a deterministic
+            // total order. `d2 as i64` is a saturating cast (Rust 1.45+); for any
+            // realistic world coordinate d2 stays well under i64::MAX.
+            (-(k.level as i64), d2 as i64, k.origin_x, k.origin_z)
         });
         missing.truncate(self.cfg.max_per_frame as usize);
 
