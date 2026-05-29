@@ -9,6 +9,7 @@ mod parity;
 mod bind_worldgen;
 mod gpu_compute;
 mod page_compute;
+mod page_policy;
 
 #[cfg(test)]
 mod hash_tests;
@@ -22,6 +23,8 @@ mod grammar_tests;
 mod height_tests;
 #[cfg(test)]
 mod parity_tests;
+#[cfg(test)]
+mod page_policy_tests;
 
 struct Wg10Terrain;
 
