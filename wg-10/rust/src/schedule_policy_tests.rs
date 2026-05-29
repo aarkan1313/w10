@@ -178,3 +178,43 @@ fn plan_frame_is_deterministic() {
     sorted.sort();
     assert_eq!(a.release, sorted, "release must be sorted for determinism");
 }
+
+#[test]
+fn never_black_every_missing_covered_page_has_coarser_fallback() {
+    let p = SchedulePolicy::new(cfg()); // 3 levels
+    let coarsest = p.config().num_levels - 1;
+
+    // Deterministic LCG sweep (no rand crate, no clock): visit many positions.
+    let mut state: u64 = 0x1234_5678_9abc_def0;
+    let mut next = || {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        (state >> 33) as f64 / (1u64 << 31) as f64 // in [0,1)
+    };
+
+    for _ in 0..2000 {
+        let pos_x = (next() - 0.5) * 100_000.0;
+        let pos_z = (next() - 0.5) * 100_000.0;
+        let vel_x = (next() - 0.5) * 2000.0;
+        let vel_z = (next() - 0.5) * 2000.0;
+
+        // Resident set = the full coarsest-level ring for this frame (the warm
+        // coarse blanket the streamer keeps resident first). Finer levels absent.
+        let coverage = p.coverage(pos_x, pos_z, vel_x, vel_z);
+        let resident: HashSet<PageKey> = coverage
+            .iter()
+            .filter(|k| k.level == coarsest)
+            .cloned()
+            .collect();
+
+        // Every covered page that is not resident must have a coarser fallback.
+        for k in &coverage {
+            if resident.contains(k) { continue; }
+            assert!(
+                p.coarser_fallback(*k, &resident).is_some(),
+                "never-black violated: missing page {:?} at pos ({pos_x},{pos_z}) \
+                 vel ({vel_x},{vel_z}) had no coarser resident fallback",
+                k
+            );
+        }
+    }
+}
