@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 5a PARTIAL — the two slice-4 carry-forward fixes (per-level page span + geomorph coarse_origin) + read-only get_resident_page LANDED & proven (slice-4 gate distinct=41); rings↔view wiring re-scoped to a 3×3-tiling slice after the moving gate showed one-page-per-level doesn't surround the camera. m3 suite 4 checks fail=0; 103 cargo tests green; M3 in progress)
+Last updated: 2026-05-29 (M3 slice 5b DONE — 3×3 ring tiling (Wg10ClipmapRings N×9 tiles, finer-on-top overlap) + Wg10TerrainView 3×3 read-only live loop; m3_view_check passes WINDOWED over a 5-position moving sweep: full coverage (surrounds the camera), no z-fight, never-black, zero view-compute, tile↔page mapping. m3 suite 4 checks fail=0 (m3_rings retired, m3_view added); 103 cargo tests green; M3 in progress — remaining: fly camera + overlay + p99<6ms gate + manual fly)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -136,17 +136,17 @@ Remaining slices (NOT done):
       convention. ALSO landed: read-only `Wg10PagePool::get_resident_page` (+ `PagePolicy::
       slot_of`) — a consumer fetches a resident page WITHOUT triggering compute (the anti-WG9
       render-path rule; the streamer remains the sole producer).
-- [ ] **3×3 ring tiling + rings↔streamer live wiring (next slice).** The slice-5a moving
-      gate proved "one band = one page" does NOT surround the camera (a single
-      `[origin, origin+span]` page contains it asymmetrically → ~75% of the view off-page
-      under motion). FIX: each clipmap level renders a **3×3 page neighborhood** centered on
-      the camera's page (radius_pages=1 — the scheduler already emits this coverage), so the
-      level surrounds the camera. Chosen approach: 9 sub-meshes/level, each sampling its own
-      page (reuse the one-page path 9×) over an atlas. THEN the rings↔streamer live-loop view
-      (rebuilt for 3×3), using the read-only `get_resident_page` + coarser fallback. Shared
-      page-key convention `origin = floor(cam/span)*span`. Proven by a moving-sweep gate at
-      non-zero positions. (The one-page `Wg10TerrainView` + its gate were removed; the 3
-      fixes above stay.)
+- [x] **3×3 ring tiling + rings↔streamer live wiring — DONE (slice 5b).** Each clipmap level
+      is a **3×3 page neighborhood** that surrounds the camera: `Wg10ClipmapRings` rebuilt to
+      N levels × 9 one-page tiles (finer-on-top overlap via `render_priority`; gapless by
+      construction; per-tile `bind_tile`). `Wg10TerrainView` drives the live loop — per level
+      per tile fetch the page via the read-only `get_resident_page` (never computes) + coarser
+      fallback, place + bind. Shared page-key `floor(cam/span)·span + (dx,dz)·span` (= the
+      scheduler's `coverage(radius_pages=1)`). `m3_view_check` proves it WINDOWED over a
+      5-position moving sweep: full coverage (nonblack≥0.98 — surrounds the camera, fixing 5a's
+      0.25), no z-fight, never-black, zero view-compute, tile↔page mapping. PNG eyeballed.
+      Retired the one-page `m3_rings_check`. Faint tile-edge lines = visual polish (not a gap);
+      the overlap overdraw is an explicit input to the p99 acceptance gate.
 - [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
       overlay (live fps/stats).
 - [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,

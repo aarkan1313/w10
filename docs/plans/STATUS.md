@@ -5,13 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (**M3 slice 5a PARTIAL — the two carry-forward fixes landed; rings↔view wiring re-scoped to a 3×3 slice**. LANDED & proven: per-level page span (pool computes level-L over world_span·2^L), geomorph `coarse_origin` (seam stays closed off-origin), read-only `Wg10PagePool::get_resident_page` (a consumer fetches a resident page WITHOUT triggering compute — the anti-WG9 render-path rule). slice-4 rings gate now distinct=41 (richer relief from the corrected per-level span). DEFERRED: the moving gate exposed that "one band = one page" doesn't tile AROUND the camera (a single page contains but doesn't surround it → ~75% of view off-page under motion); the real shape is a 3×3 page neighborhood per level (scheduler already produces it at radius_pages=1) — its own slice. m3 suite **4** checks fail=0; fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress)
+Last updated: 2026-05-29 (**M3 slice 5b DONE — 3×3 ring tiling + rings↔streamer live wiring, proven under motion**. `Wg10ClipmapRings` rebuilt to N levels × 9 page tiles (each level a 3×3 neighborhood that SURROUNDS the camera; finer-on-top overlap via render_priority); `Wg10TerrainView` drives the live loop via the read-only `get_resident_page` (never computes on the render path) + coarser fallback. `m3_view_check` passes WINDOWED over a 5-position +x sweep across page boundaries: **full coverage** (nonblack≥0.98 — the 3×3 surrounds the camera, fixing 5a's 0.25), real relief, no z-fight (two settled captures pixel-stable), never-black, **view triggers zero compute** after steady state, tile↔page mapping. PNG eyeballed (terrain fills the frame + follows the camera; faint tile-edge lines but no gaps). m3 suite **4** checks fail=0 (m3_rings retired, m3_view added); fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress — remaining: fly camera + diagnostics overlay + p99<6ms acceptance gate + manual fly)
 
 ---
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) + slice 4 (clipmap rings) DONE**.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) + slice 4 (clipmap rings) + slice 5a (carry-forward fixes) + slice 5b (3×3 tiling + live wiring) DONE**. Remaining M3: fly camera + diagnostics overlay + the p99<6ms acceptance gate + manual fly.
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -155,31 +155,38 @@ Last updated: 2026-05-29 (**M3 slice 5a PARTIAL — the two carry-forward fixes 
   + `band_mesh` (centered XZ lattice + 2 CCW triangles per kept cell; level 0 filled,
   level L>0 a hollow square annulus). 7 cargo tests incl. consistent-winding + hollow-
   center + a `grid_res % 4 == 0` divisibility guard (asserts gapless seam alignment).
-- **M3 slice 4 — `Wg10ClipmapRings`** (`clipmap_rings.rs`, godot **Node3D** — the
-  crate's first non-RefCounted class): builds N persistent `MeshInstance3D` children
-  (one ArrayMesh/level from `band_mesh`) with a `ShaderMaterial` per level;
-  `configure` (build-once + grid_res guards), `recenter` (per-level quantized translate
-  — vertices stay locked to the world grid, NEVER a rebuild), `bind_page` (sets a level's
-  height + coarser-neighbor textures + morph params), `level_count`/`total_vertex_count`.
-  Owns NO page RIDs — a pure presenter that samples pool textures; scheduling/fallback
-  selection stays in the caller.
+- **M3 slice 5b — `Wg10ClipmapRings`** (`clipmap_rings.rs`, godot **Node3D**): rebuilt to
+  **N levels × 9 page tiles** — each level a 3×3 neighborhood of one-page full-grid meshes
+  (27 `MeshInstance3D` at 3 levels), so the level SURROUNDS the camera. Levels overlap (coarse
+  keeps its full 3×3; the finer level draws on top via `ShaderMaterial.render_priority` =
+  `num_levels-1-level`); the geomorph blends at the finer's outer edge → gapless by
+  construction. `configure` (build-once + grid_res%4 guards), `bind_tile(level,dx,dz,…)`
+  (places a tile at its page corner + span/2 and sets its uniforms incl. `coarse_origin` —
+  never rebuilds geometry), `level_count`/`tile_count`/`total_vertex_count`/`bound_page_key`.
+  Owns NO page RIDs — a pure presenter; the view owns the tile↔page math.
 - **M3 slice 4 — geomorph in `ring_displace.gdshader`**: in each level's outer
   transition region (square Chebyshev band of width `morph_region`), `mix(h_fine,
   h_coarse, t)` blends this level's height toward the next-coarser page's height at the
   same WORLD position (via MODEL_MATRIX), `t=1` at the outer edge → adjacent levels agree
   on the seam, no crack/pop. Backward-compatible: `morph_region=0` + coarse_tex==height_tex
   reproduces the slice-1 displacement (slice-1/2 gates still pass byte-identical).
-- **`m3_rings_check.gd`** (`m3` suite, WINDOWED): assembles 2-level rings fed by real DEM
-  pages, renders **top-down orthographic** on a black bg, asserts: no holes
-  (nonblack=1.000), real relief (distinct=17), seam continuity (no black gap at the
-  level-0/1 boundary), morph continuity (no hard color jump across the seam),
-  recenter-no-rebuild (verts=8450 unchanged after a camera move). Saves `m3_rings.png`;
-  **inspected by eye — nested level-0/level-1 rings with a continuous seam, real DEM
-  relief.** NOTE: a transient `Texture2DRD`-as-second-sampler startup warning is logged
-  (1 binding + 2 set-3 over ~9 frames) while the RD page RID becomes valid on the first
-  uniform-set build; it is NOT per-frame and does NOT affect the rendered result (gate
-  passes, PNG correct) — a known benign Godot quirk, to revisit if the fly-cam slice
-  shows it's more than cosmetic.
+- **M3 slice 5b — `Wg10TerrainView`** (`terrain_view.rs`, godot Node3D): the drop-in terrain
+  node + live-loop coordinator. Holds Gd handles to pool/streamer/rings; `update(cam,vel)`
+  runs `streamer.update` then, per level per tile (3×3), fetches the page via the **read-only
+  `get_resident_page`** (NEVER computes — the anti-WG9 render-path rule) with coarser fallback
+  on a miss, and calls `rings.bind_tile`. Page key = `floor(cam/span)·span + (dx,dz)·span` =
+  the scheduler's `coverage(radius_pages=1)`, so the view's lookups hit exactly what the
+  streamer made resident. Owns NO RIDs/meshes/scheduling math.
+- **`m3_view_check.gd`** (`m3` suite, WINDOWED): drives `Wg10TerrainView` over a 5-position +x
+  sweep across page boundaries; at each NON-ZERO position renders top-down ortho centered on
+  the camera and asserts: **full coverage** (nonblack≥0.98 — the 3×3 surrounds the camera,
+  fixing 5a's 0.25), real relief, **no z-fight** (two settled captures pixel-stable in the
+  overlap), never-black + budget, **view-zero-compute** (after the streamer reaches steady
+  state, created+recomputed stays flat — the view is read-only), **tile↔page mapping** (CPU:
+  level-0 tile (1,0) → page origin (BASE_SPAN,0)). status=pass positions=5 tiles=27. PNG
+  eyeballed: terrain fills the frame + follows the camera across boundary crossings; faint
+  tile-edge lines (visual polish, see watch-items) but no gaps. (The slice-4 `m3_rings_check`
+  one-page gate was retired — its geometry is gone; this supersedes it.)
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
   (windowed). `--suite m3` → `[gate] suite=m3 checks=4 fail=0 skip=0` (windowed).
@@ -247,26 +254,21 @@ Last updated: 2026-05-29 (**M3 slice 5a PARTIAL — the two carry-forward fixes 
 
 ## What's next
 
-1. **M3 next slice — 3×3 ring tiling + rings↔view live wiring:** the slice-5a moving gate
-   proved "one band = one page" (slice-4) does NOT surround the camera — a single page
-   `[origin, origin+span]` contains the camera asymmetrically, so under motion ~75% of the
-   view falls off-page (nonblack→0.25). FIX: each clipmap level must render a **3×3 page
-   neighborhood** centered on the camera's page (radius_pages=1 — the scheduler already
-   emits this coverage), so the level surrounds the camera at any position. The rings need
-   to render 9 pages/level (9 sub-meshes each sampling its own page, reusing the one-page
-   sample path 9×, is the chosen approach over an atlas). THEN wire `Wg10ClipmapRings` ↔
-   `Wg10Streamer` via a live-loop coordinator (the view, rebuilt for 3×3) that uses the
-   **read-only `get_resident_page`** (never triggers compute on the render path — the
-   anti-WG9 rule, already landed) and falls back to coarser pages the streamer keeps
-   resident. The shared page-key convention is `origin = floor(cam/span)*span` (= the
-   scheduler's `page_origin`). Proven by a moving-sweep gate at non-zero positions.
-2. **M3 close-out (after the wiring slice) — fly-test harness:** free-fly WASD/mouse camera +
-   movement controller, a diagnostics/profiling overlay (live fps + p99 + stats), a manual
-   fly-test scene, and the real M3 acceptance gate (renderer **p99 < 6 ms** + no-black,
-   manually confirmed at ~1000 m/s). M3 milestone remains OPEN until that gate + a manual fly.
-3. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
+1. **M3 close-out slice — fly-test harness + acceptance gate (the LAST M3 slice):** the
+   render pipeline is now complete and proven under scripted motion (pages → pool → scheduler
+   → 3×3 rings → live view, seamless + never-black + surrounds the camera). What remains to
+   close M3: a free-fly **WASD/mouse camera** + movement controller, a **diagnostics/profiling
+   overlay** (live fps + p99 + stats), a **manual fly-test scene** (assemble the above + the
+   `Wg10TerrainView`), and the real **M3 acceptance gate** — renderer **p99 < 6 ms** + no
+   black/holes, **in motion at ~1000 m/s**, manually confirmed by the owner. The overlap
+   overdraw (3×3 levels, watch-items) is an explicit input to this p99 measurement. M3 stays
+   OPEN until the p99 gate passes AND a manual fly confirms no stalls/black.
+2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.
+3. **Tile-edge lines** (visual polish, surfaced slice 5b): faint lines at page-tile
+   boundaries (per-page bilinear edge / no cross-page filter). Not gaps — coverage=1.0.
+   Fix later with a 1-texel page overlap or edge clamp.
 4. **Full-pack streaming** (deferred to M3): gate-committed subset loads now;
    full ~115-kernel set is generated on demand but not yet streamed.
 5. **Anti-repetition / kernel variety tuning**: naive single-kernel tiling
@@ -318,12 +320,23 @@ Last updated: 2026-05-29 (**M3 slice 5a PARTIAL — the two carry-forward fixes 
   compute on a miss). Only the streamer's `acquire_page` may produce pages, bounded per
   frame. A view that called `acquire_page` would reintroduce WG9's synchronous-compute-under-
   motion disease — the moving gate caught exactly this; the read-only accessor is the fix.
-- **Clipmap level must SURROUND the camera (open — next slice):** "one band = one page"
-  (slice 4) does not tile around the camera; under motion ~75% of the view falls off the
-  single page. The fix is a 3×3 page neighborhood per level (radius_pages=1, scheduler
-  already emits it) — the rings + the rings↔streamer view are rebuilt for 3×3 in the next
-  slice. The two fixes + the read-only accessor above are kept and proven; only the
-  one-page view/gate were removed.
+- **Clipmap level surrounds the camera — RESOLVED (slice 5b):** each level is now a 3×3
+  page neighborhood (N levels × 9 one-page tiles in `Wg10ClipmapRings`; finer-on-top overlap
+  via render_priority). `m3_view_check` proves nonblack≥0.98 (full coverage) at non-zero
+  camera positions under motion — 5a's 0.25 is fixed. `Wg10TerrainView` drives the 3×3 live
+  loop read-only (zero view compute, asserted). The scheduler/pool/rings/view all share the
+  `floor(cam/span)·span` page-key convention.
+- **Tile-edge lines — visual polish, DEFERRED (not a gap):** the 3×3 render shows faint lines
+  at page-tile boundaries (each tile samples its own page texture; no cross-page filtering /
+  edge clamp). NOT holes/cracks — coverage=1.0 and the gate confirms continuity; relief is
+  continuous across them. Cause: bilinear at each page's texture edge. Fix (later visual
+  tuning, not a correctness slice): sample with a 1-texel page overlap or clamp/extend page
+  edges. Recorded so it isn't mistaken for a seam failure.
+- **Overlap overdraw — a p99 input (slice 5b → acceptance gate):** the 3×3 levels OVERLAP
+  (the finer 3×3 over the coarse center, finer drawn on top). This is FIXED, bounded overdraw
+  (not free) — recorded as an explicit input to the M3-closing p99<6ms acceptance gate, where
+  it's measured under the real fly camera. If p99 is tight, the toroidal-rebind + hollow-coarse
+  optimizations are the known levers (deferred until measured).
 - **Async page production — DEFERRED (tracked, not a gap):** M3 slice 3 produces
   pages SYNCHRONOUSLY inside the streamer's `update` (≤ N/frame, so still bounded).
   The scheduler↔pool seam is deliberately **async-ready** — the scheduler reads only
