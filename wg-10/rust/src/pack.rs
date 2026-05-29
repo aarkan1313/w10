@@ -192,20 +192,18 @@ fn load_pack_impl(json: &str, base: Option<&Path>) -> Result<Pack, String> {
         family_kernels.insert(id.clone(), FamilyKernel { kernel, relief_m, footprint_m });
     }
 
-    // Height-layer contract: if this pack is being loaded with kernels resolved
-    // (base is Some), every family a palette can select MUST have kernel data —
-    // otherwise height() would later panic on a grammar-selected kernel-less
-    // family. Reject at load time with a clear message. (Grammar-only loads with
-    // base=None skip this; the grammar never needs kernels.)
+    // When loading WITH kernels resolved (height/GPU layers), EVERY family must
+    // have kernel data — not just palette-referenced ones. family_ids is built
+    // from all families, and the GPU buffer builder indexes kernels by family_ids
+    // position, so a kernel-less family would break that 1:1 mapping. Reject at
+    // load with a clear error rather than panic later.
     if base.is_some() {
-        for pal in &raw.palettes {
-            for fam in &pal.families {
-                if !family_kernels.contains_key(fam) {
-                    return Err(format!(
-                        "palette {:?} references family {:?} which has no kernel data (required when loading a pack with kernels)",
-                        pal.id, fam
-                    ));
-                }
+        for fam_id in raw.families.keys() {
+            if !family_kernels.contains_key(fam_id) {
+                return Err(format!(
+                    "family {:?} has no kernel data (required when loading a pack with kernels)",
+                    fam_id
+                ));
             }
         }
     }

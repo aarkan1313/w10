@@ -341,8 +341,12 @@ impl Wg10GpuCompute {
         }
 
         // --- Create storage buffers ---
-        let out_h_size   = (n * 4) as u32;
-        let out_sig_size = (n * 4) as u32;
+        // Buffer SIZE args use try_from so an impossible-in-practice >u32 size is a
+        // loud panic rather than a silent truncation.
+        let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
+
+        let out_h_size   = bsize(n * 4);
+        let out_sig_size = bsize(n * 4);
 
         let coords_pba     = bytes_to_pba(&coords_bytes);
         let palettes_pba   = bytes_to_pba(&pb.palettes_bytes);
@@ -352,15 +356,15 @@ impl Wg10GpuCompute {
         let kparam_pba     = bytes_to_pba(&pb.kparam_bytes);
         let kdata_pba      = bytes_to_pba(&pb.kdata_bytes);
 
-        let coords_rid     = rd.storage_buffer_create_ex(coords_bytes.len() as u32).data(&coords_pba).done();
+        let coords_rid     = rd.storage_buffer_create_ex(bsize(coords_bytes.len())).data(&coords_pba).done();
         let out_h_rid      = rd.storage_buffer_create(out_h_size);
         let out_sig_rid    = rd.storage_buffer_create(out_sig_size);
-        let palettes_rid   = rd.storage_buffer_create_ex(pb.palettes_bytes.len() as u32).data(&palettes_pba).done();
-        let compat_off_rid = rd.storage_buffer_create_ex(pb.compat_off_bytes.len() as u32).data(&compat_off_pba).done();
-        let compat_flat_rid= rd.storage_buffer_create_ex(pb.compat_flat_bytes.len() as u32).data(&compat_flat_pba).done();
-        let krec_rid       = rd.storage_buffer_create_ex(pb.krec_bytes.len() as u32).data(&krec_pba).done();
-        let kparam_rid     = rd.storage_buffer_create_ex(pb.kparam_bytes.len() as u32).data(&kparam_pba).done();
-        let kdata_rid      = rd.storage_buffer_create_ex(pb.kdata_bytes.len() as u32).data(&kdata_pba).done();
+        let palettes_rid   = rd.storage_buffer_create_ex(bsize(pb.palettes_bytes.len())).data(&palettes_pba).done();
+        let compat_off_rid = rd.storage_buffer_create_ex(bsize(pb.compat_off_bytes.len())).data(&compat_off_pba).done();
+        let compat_flat_rid= rd.storage_buffer_create_ex(bsize(pb.compat_flat_bytes.len())).data(&compat_flat_pba).done();
+        let krec_rid       = rd.storage_buffer_create_ex(bsize(pb.krec_bytes.len())).data(&krec_pba).done();
+        let kparam_rid     = rd.storage_buffer_create_ex(bsize(pb.kparam_bytes.len())).data(&kparam_pba).done();
+        let kdata_rid      = rd.storage_buffer_create_ex(bsize(pb.kdata_bytes.len())).data(&kdata_pba).done();
 
         // --- Build uniform set ---
         let mut uniforms: Array<Gd<RdUniform>> = Array::new();

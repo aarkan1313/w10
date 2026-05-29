@@ -124,3 +124,13 @@ fn load_pack_dir_rejects_palette_family_without_kernel_when_resolving() {
     let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject kernel-less family in a palette");
     assert!(err.contains("no kernel data") || err.contains("\"y\""), "error should name the kernel-less family: {err}");
 }
+
+#[test]
+fn load_pack_dir_rejects_unreferenced_kernel_less_family() {
+    // "ghost" is a family with no kernel that NO palette references. Loading with
+    // a base must still reject it (family_ids<->family_kernels must be 1:1).
+    let dir = fixtures_dir();
+    let bad = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":1.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/flat.npy","relief_m":1.0,"footprint_m":1.0},"y":{"kernel":"kernels/flat.npy","relief_m":1.0,"footprint_m":1.0},"z":{"kernel":"kernels/flat.npy","relief_m":1.0,"footprint_m":1.0},"ghost":{}}}"#;
+    let err = pack::load_pack_with_base(bad, &dir).expect_err("must reject unreferenced kernel-less family");
+    assert!(err.contains("no kernel data"), "error should mention the missing kernel: {err}");
+}
