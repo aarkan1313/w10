@@ -24,6 +24,9 @@ CHECKS = {
         "worldgen_terrain/tests/gpu_parity_check.gd",
         "worldgen_terrain/tests/gpu_parity_dem_check.gd",
     ],
+    "m3": [
+        "worldgen_terrain/tests/m3_slice1_check.gd",
+    ],
 }
 
 
@@ -53,7 +56,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--suite", choices=sorted(CHECKS), default="fast")
     args = ap.parse_args()
-    headless = args.suite != "gpu"   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in ("gpu", "m3")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0
