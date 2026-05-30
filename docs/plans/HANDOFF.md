@@ -140,7 +140,7 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 - `python tools/gate.py --suite m3` — **WINDOWED**, **8 checks** (slice1 render, pool,
   stream, view, accept, continuity, m5_detail, m5_perf_hardened).
 - `cargo test` (from `wg-10/rust`, `CARGO_TARGET_DIR` unset — see §7): **115 tests** green.
-- `python -m pytest` (from `tools/dem_pack/`): **15 tests** — the offline pack + worldgen-
+- `python -m pytest` (from `tools/dem_pack/`): **22 tests** — the offline pack + worldgen-
   prototype tools (`worldgen_proto.py`, `spectral.py` [a kept negative result], `dem_pack_lib`).
 - **Exit codes:** 0 pass / 1 fail / 2 skip. A no-GPU/headless box returns SKIP (2) on
   gpu/m3 — never miscounted as a pass. (A single windowed run can exit non-zero on teardown;
@@ -148,7 +148,7 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 
 ## 6. Where things stand (2026-05-30) — M0–M4 DONE
 
-**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15.** (STATUS.md has the blow-by-blow; this
+**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 22.** (STATUS.md has the blow-by-blow; this
 is the one-line-per-milestone map.)
 
 - **M0** toolchain · **M1** deterministic bedrock (hash/noise/fbm bit-exact vs WG9) + grammar +
@@ -191,7 +191,7 @@ The fix is NOT detail/materials/erosion on top — it's rebuilding the height co
 contiguous structured landmass (param-driven warped-noise; §9). The render pipeline + parity + facts
 foundation is solid and KEPT; the *height content* is what's being rebuilt.
 
-**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15. **`main` is in sync with `origin/main`**
+**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 22. **`main` is in sync with `origin/main`**
 (the assistant CAN push — see §8). (`COMPONENT_INVENTORY.md` was the M3-reset driver doc, RETIRED into
 STATUS — don't look for it.)
 

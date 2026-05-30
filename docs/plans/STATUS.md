@@ -38,7 +38,19 @@ the LOOSE_ENDS_LEDGER for what's KEEP / FOLD-IN / TABLED.]
 
 ---
 
-## MILESTONE: Shaded terrain at the right scale (the WG9 looks-alright baseline) — IN PROGRESS
+# ⏷ EVERYTHING BELOW IS SUPERSEDED HISTORY (pre-worldgen-pivot)
+
+The current state is the "Worldgen Core rebuild" section ABOVE. The sections below
+(shaded-terrain-at-scale, M5 detail, the synthesis attempt, M3/M4 detail) describe earlier work,
+kept for the record + the bug-lessons. **Do NOT treat their "IN PROGRESS / NEXT" items as live** —
+they are re-sequenced or tabled per `LOOSE_ENDS_LEDGER.md` (KEEP / FOLD-IN / TABLED) and the
+ROADMAP forward plan. What's still KEPT + true from here: the render pipeline, grammar, facts,
+`relief_scale` (RELIEF_SCALE=0.25 shipped — any older "× 0.35" arithmetic below is dead), the
+hardened perf gate, and the gate counts (fast 6 · gpu 4 · m3 8 · cargo 115 · dem_pack pytest 22).
+
+---
+
+## [SUPERSEDED — history] Shaded terrain at the right scale (the WG9 looks-alright baseline)
 
 Spec: `docs/superpowers/specs/2026-05-30-shaded-terrain-at-scale-design.md`. Closing the owner's "still a
 heightmap, not real terrain" gap to WG9's proven baseline (finer mesh + sane relief + normals/lighting),
@@ -62,7 +74,7 @@ on render (shader `VERTEX.y * relief_scale`) AND all 3 facts consume points (`ge
 - **NEXT:** owner A/B fly (`m3_review.tscn` — relief is now ~4× shorter; confirm "sane height, not 2.7 km
   spikes"), then S2 (normals + basic lighting — the big "looks like terrain" lever).
 
-## M5 — Detail & masks (IN PROGRESS — Slice 1 detail seam CONFIRMED visible at fly scale)
+## [SUPERSEDED — history] M5 — Detail & masks (Slice 1 detail seam, pre-pivot)
 
 **✅ OWNER RE-FLY (2026-05-30, after the fix): "I can see a small difference with the detail now."**
 The toggle/visibility fixes WORKED — detail is now perceptible at fly scale (was invisible before).
@@ -121,7 +133,7 @@ concern: gates must verify at a REPRESENTATIVE scale or they pass while the huma
   re-fly.** This is itself the strongest case for the S4 hardened gate to measure at a representative
   multi-level fly scale, not a close single-tile capture.
 
-## M5 — Detail & masks (Slice 1 detail RENDERS but needs visibility tuning + toggle fix)
+## [SUPERSEDED — history] M5 — Detail & masks (older detail-visibility notes)
 
 **Slice 1 — fBm + uniform detail: GATE-GREEN, owner fly not yet done (so NOT "accepted").**
 Spec: `docs/superpowers/specs/2026-05-30-m5-detail-masks-design.md`. Plan:
@@ -279,7 +291,7 @@ Last updated: 2026-05-30 (**M3 RENDER LAYER STRUCTURALLY DONE — rebuilt prove-
 
 ---
 
-## Current state
+## [SUPERSEDED — history] M0–M4 state snapshot (pre-pivot; the "NEXT: M5" / "m3 6/6" / "look is downstream" lines below are the OLD, now-disproven framing)
 
 **Phase:** M0 + M1 + first DEM pack + M2 parity + **M3 render (structurally done)** + **M4 Facts API (DONE)** — all green. M4 = the drop-in `Wg10Facts` (RefCounted): `get_height` = `clamp(base + edit-provider.delta, bedrock_floor, ceiling)` (parity-gated base, untouched); `get_collision_field` (sparse CPU, no readback, Jolt-ready — caller owns the body); the adaptable edit seam (circular `StampEdits` + `apply_edit`/`clear_edits`/`set_bedrock`, pluggable provider for future caves); and `bake_collision_region` (GPU bulk, OFF-FRAME readback only). Gates: `facts_check` (fast — no-edit base parity + dig/clamp/clear + collision==point), `facts_collision_parity_check` (gpu — visible==collision on base, maxd 0.0009 m, the §4 don't-float/sink contract), `facts_bake_check` (gpu — GPU bake == CPU collision, maxd 0.0070 m). **cargo 115, fast 6/6, gpu 4/4, m3 6/6.** Deferred (tracked as **Milestone 8** in ROADMAP, not built): VISIBLE edits (composing the edit delta into the GPU render — the meteor crater you SEE; M4 ships collidable-but-not-visible) + edit persistence. **NEXT: M5 (detail/masks)** → M6 biomes/materials → M7 erosion — these (plus content) are where the "squareness/LOD-pop/blobby" look gets fixed; the foundation (gen + perf + parity + facts) is AAA-capable, the look is downstream. Owner's `m3_review.tscn` acceptance fly still welcome as the §7.3 sign-off. Proving-ground + debug scaffolding stay (harmless, off by default).
 
