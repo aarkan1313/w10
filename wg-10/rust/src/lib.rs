@@ -16,6 +16,9 @@ mod streamer;
 mod ring_geometry;
 mod clipmap_rings;
 mod terrain_view;
+mod edit_layer;
+mod facts;
+mod facts_api;
 
 #[cfg(test)]
 mod hash_tests;
@@ -35,6 +38,10 @@ mod page_policy_tests;
 mod schedule_policy_tests;
 #[cfg(test)]
 mod ring_geometry_tests;
+#[cfg(test)]
+mod edit_layer_tests;
+#[cfg(test)]
+mod facts_tests;
 
 struct Wg10Terrain;
 
