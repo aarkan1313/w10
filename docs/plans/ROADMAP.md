@@ -180,21 +180,24 @@ Remaining slices (NOT done):
       intact. New `m3_continuity_check` (windowed) reads back real production pages
       (`seam=0.0`) + a perspective morph-banding ceiling (`jump_frac=0.0`); CAN_COPY_FROM on
       page textures enables readback at no render-path cost. m3 suite 6/6, p99=1.88 ms.
-- [~] **RENDER-LAYER RESET (prove-one-at-a-time, owner-flown)** — the slices above stacked
-      without proving live continuity; a real fly exposed a broken multi-level assembly, so the
-      presentation (`Wg10TerrainView` + `Wg10ClipmapRings` + `ring_displace.gdshader`) is being
-      rebuilt step-by-step in `proving_ground.tscn` (STEP const), keeping the proven leaves. Bugs
-      found+fixed this way: REPEAT sampler → seams (clamp-to-edge); lead unit/clamp (lead_seconds
-      + camera-in-ring clamp); morph-off LOD line (wire fine→real coarse parent). Steps DONE
-      (owner-confirmed): [x] 1 page · [x] 2-page seam · [x] static 3×3 · [x] streamer-driven 3×3 ·
-      [x] coarse never-black blanket · [x] geomorph. [ ] **Step 7: 3rd level + p99<6 ms at
-      ~1000 m/s** (= the acceptance gate, re-proven on the rebuilt path). Then fold the proven
-      presentation back into the real classes + reconcile the m3 gates.
+- [x] **RENDER-LAYER RESET (prove-one-at-a-time, owner-flown) — DONE + FOLDED BACK.** The slices
+      above stacked without proving live continuity; a real fly exposed a broken multi-level
+      assembly, so the presentation was rebuilt step-by-step in `proving_ground.tscn`, keeping the
+      proven leaves. Bugs found+fixed: REPEAT sampler → seams (clamp-to-edge); lead unit/clamp
+      (lead_seconds + camera-in-ring clamp); morph-off LOD line (wire fine→real coarse parent).
+      Steps 1–7 owner-confirmed/probed (1 page · 2-page seam · static 3×3 · streamed 3×3 · coarse
+      never-black blanket · geomorph · 3 levels+full speed, probe p99=1.63 ms). **The proven model
+      is now FOLDED into the real `Wg10TerrainView` + `Wg10ClipmapRings`** (every level full 3×3,
+      hide-on-miss so coarse shows through, morph to real parent, clamp sampler/lead). All gates
+      green on the rebuilt path: m3 6/6 (accept p99=3.94 ms), gpu 2/2, fast 5/5, cargo 103.
 - [ ] Tune finest-ring spacing + ring count + GRID_RES against real assets (config; no magic
       numbers). The faint mesh-facet creases at grazing angles are a tessellation-density knob,
       hidden for real by M6 normal mapping — NOT a seam.
-- [ ] **MANUAL ACCEPTANCE:** owner flies the rebuilt path at full speed and confirms no stalls,
-      no black/holes, no inter-tile seam, no switching. (§7.3 — the final authority.)
+- [ ] **MANUAL ACCEPTANCE (the ONE box left to close M3):** owner flies `m3_review.tscn` (now the
+      REAL rebuilt `Wg10TerrainView`) at full speed and confirms no stalls, no black/holes, no
+      inter-tile seam, no switching. (§7.3 — the final authority.) Then retire the proving ground.
+      Known-latent (reported, not reproducible): tiles may frustum-cull on rotation (flat meshes
+      lack a tall custom AABB — fix = set_custom_aabb when it can be triggered).
 
 > **Diagnosed, fixed ELSEWHERE (not M3):** the "blue squares / hard lines" the owner sees are
 > EXTREME DEM DATA — the `dem_v1` pack height field has ~450 m cliffs over 500 m; deep blue is

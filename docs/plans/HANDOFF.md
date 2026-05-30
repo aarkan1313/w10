@@ -222,29 +222,27 @@ commits ahead of `origin/main` (unpushed — the OWNER pushes).**
 
 ## 9. What to do next
 
-**Immediate — continue the RENDER-LAYER RESET. Read `docs/plans/COMPONENT_INVENTORY.md` first.**
-The presentation is being rebuilt prove-one-thing-at-a-time in `proving_ground.tscn` (a `STEP`
-const flips on one component at a time), owner-flown + approved before each next step. Steps 1–6
-are owner-confirmed. **NEXT = Step 7: add the 3rd level back + prove p99 < 6 ms at ~1000 m/s** —
-the actual M3 acceptance, re-proven on the rebuilt path (the old `m3_accept_check` measured the
-pre-reset view).
-
-How the loop runs each step: bump `STEP` in `proving_ground.gd`, build the new `_build_stepN` +
-`_drive_stepN`, render-probe it (throwaway `_probe_*.gd` SceneTree scripts — capture a PNG /
-measure, then DELETE the probe), then HAND THE SCENE TO THE OWNER to fly windowed and confirm
-before moving on. Launch:
+**Immediate — the ONE box left to close M3: the owner's ACCEPTANCE FLY of `m3_review.tscn`.**
+The render-layer RESET is DONE and FOLDED BACK: the proven prove-one-at-a-time model (steps 1–7,
+in `proving_ground.tscn`) now lives in the REAL `Wg10TerrainView` + `Wg10ClipmapRings`, so
+`m3_review.tscn` flies the shippable components. All gates green on the rebuilt path (m3 6/6 —
+accept p99=3.94 ms<6; gpu 2/2; fast 5/5; cargo 103). Launch:
 ```
-$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/proving_ground.tscn
+$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn
 ```
-Fly: WASD + Shift sprint + mouse-look + Space/C, ESC frees the mouse. The HUD shows the step +
-pos + (step 4+) pool stats + tile-flip counter.
+Fly: WASD + Shift sprint (~1000 m/s) + mouse-look + Space/C, ESC frees the mouse. Confirm no
+stalls, no black/holes, no inter-tile seam, no switching. On sign-off, **M3 closes.**
 
-**After Step 7:** fold the proven presentation back into the real `Wg10TerrainView` /
-`Wg10ClipmapRings` (the reset's logic lives in the proving ground right now), reconcile the m3
-gates to the rebuilt path, then the owner's final acceptance fly closes M3. THEN M4 — Facts API
-(`get_height` + Jolt collision), via the brainstorm→spec→plan→execute→audit cycle. After M4: M5
-detail/masks → M6 biomes/textures → M7 erosion. (M5–M7 are also where the "squareness/lines"
-get fixed — see ROADMAP; they are content/material, not render.)
+**Then:** retire `proving_ground.{gd,tscn}` (its job is done — the logic is in the real classes
+now) and fold `COMPONENT_INVENTORY.md` into STATUS/ROADMAP + delete it (3-living-docs rule). THEN
+M4 — Facts API (`get_height` + Jolt collision) via brainstorm→spec→plan→execute→audit. After M4:
+M5 detail → M6 biomes/textures → M7 erosion.
+
+**Known-latent (reported, NOT reproducible — don't fix blind):** tiles may frustum-cull on
+rotation because the flat tile meshes lack a tall custom AABB (Godot culls on the flat y=0 box
+while the shader displaces the geometry up). Fix when reproducible: `set_custom_aabb` tall enough
+for the displacement. **Squareness/lines = content (extreme DEM), fixed in M6 normals + M7 erosion
++ saner pack relief — NOT render.** Both tracked in COMPONENT_INVENTORY.
 
 **Squareness/lines = content, NOT render** (don't re-chase): diagnosed as extreme dem_v1 data
 (~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff). Fixed by
