@@ -93,6 +93,30 @@ This hybrid is strictly better for the pillars: it neither re-derives the vetted
 inherits WG9's dead ridge/valley detector (no biome-collapse). Computed metrics are fixture-monotonicity
 gated; trusted-metadata metrics are range/finite asserted.
 
+**MAPPING REVISION (2026-05-30, after the v1 prove-on-3 distill — an offline finding, before any render).**
+The first mapping drove `ridge_strength` from a structure-tensor `ridge_linearity` and `base_freq` from an
+argmax `dominant_wavelength_m`. A diagnostic distill across all 12 families showed **both are DEAD on real
+512px DEMs**: `ridge_linearity` ≈ 0.30 for every family; the amp profile is monotone toward the coarsest
+band so `argmax` always returns band 5 → `dominant_wavelength_m` ≈ 25 km for every family. Result: v1 params
+separated biomes ONLY by height (ridge_strength ~0.33, base_wl ~25 km everywhere). Probed spectral
+alternatives (amp-slope ratio, wavelength centroid) were also weak.
+**What DOES separate** (verified): `incision_depth` (mtn 338 m / badlands 110 / grassland 28 / wetland 25),
+`slope` (10.5°/5.5°/1.8°/0.5°), `relief`. BUT raw incision/slope/relief are mutually correlated (slope↔incision
+0.91, incision↔relief 0.78) — using them raw would just **re-encode height** (a tall-smooth volcanic shield
+would wrongly read as ridgy). The fix is **HEIGHT-NORMALIZED shape**: `incision/relief` genuinely separates by
+FORM independent of height (desert 0.096 / mountain 0.078 / karst 0.065 dissected; volcanic 0.034 / tundra
+0.029 smooth). **Revised knob mapping (owner-confirmed):**
+- `valley_depth` ← `incision_depth / relief` (height-independent carving), normalized real-range [~0.02, ~0.12] → [0,1].
+- `ridge_strength` ← `slope` character (steepness), clamped sane-degree-range → [0,1] (NOT raw incision — avoids
+  double-counting height).
+- `relief_m` ← `relief` (height is legitimately its own axis, unchanged).
+- `base_freq`/freqs ← a fixed characteristic scale config (the argmax wavelength is dead; use a sane refinable
+  per-biome scale, NOT a dead metric).
+- `ridge_linearity` (structure-tensor) + `dominant_wavelength_m` (argmax) are KEPT computed for DIAGNOSTICS but
+  **no longer drive any knob** (dead metrics must not drive the look — pillar 4). `anisotropy` still drives warp.
+Fixture gates updated: prove the new mapping makes a steep-carved fixture score higher ridge/valley than a
+flat one, AND that a tall-smooth fixture does NOT score high ridge (the height-disguise trap is gated out).
+
 | Metric (real units) | Source / Method | → Knob | Transform (v1) |
 |---|---|---|---|
 | **relief_real_m** | **metadata** `height_range_m` (vetted, clean separation) | `relief_m` | direct |
