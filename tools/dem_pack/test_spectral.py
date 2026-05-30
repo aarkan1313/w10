@@ -71,11 +71,17 @@ REAL_KERNEL = os.path.join(
 
 @pytest.mark.skipif(not os.path.exists(REAL_KERNEL), reason="real kernel .npy not present")
 def test_fidelity_on_real_kernel():
+    # The synthesis grid MUST span the signature's largest occupied scale, or band-0 energy
+    # folds up an octave (a 23km grid can't host a 46km feature). Slice-1 finding: synthesizing
+    # at the kernel's native extent round-trips faithfully (cos~0.99); under-sizing the grid is
+    # an EXTENT artifact, not a DNA failure. So we synthesize at the kernel's own size. This
+    # constraint (runtime synth grid >= largest signature scale) carries into the runtime design.
     dem = np.load(REAL_KERNEL).astype(np.float64)
     src = spectral.analyze_signature(dem, spacing_m=90.0)
-    field = spectral.synthesize_field(src, size=256, spacing_m=90.0, seed=5)
+    native = min(dem.shape)
+    field = spectral.synthesize_field(src, size=native, spacing_m=90.0, seed=5)
     syn = spectral.analyze_signature(field, spacing_m=90.0)
     u = np.array(src["amp_octaves"]); v = np.array(syn["amp_octaves"])
     cos = float(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-12))
-    print(f"\n[real-kernel fidelity] grand_canyon cos={cos:.3f}\n  src={np.round(u,3)}\n  syn={np.round(v,3)}")
+    print(f"\n[real-kernel fidelity] grand_canyon size={native} cos={cos:.3f}\n  src={np.round(u,3)}\n  syn={np.round(v,3)}")
     assert cos > 0.85, f"real-kernel spectral fidelity cos={cos:.3f} (src={u} syn={v})"
