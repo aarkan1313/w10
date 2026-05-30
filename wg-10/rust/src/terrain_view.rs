@@ -20,7 +20,6 @@ pub struct Wg10TerrainView {
     height_scale: f64,
     morph_region: f64,
     relief_ref: f64,
-    lead_frames: f64,
     base: Base<Node3D>,
 }
 
@@ -36,7 +35,6 @@ impl INode3D for Wg10TerrainView {
             height_scale: 1.0,
             morph_region: 0.0,
             relief_ref: 2000.0,
-            lead_frames: 0.0,
             base,
         }
     }
@@ -55,7 +53,8 @@ impl Wg10TerrainView {
         height_scale: f64,
         morph_region: f64,
         relief_ref: f64,
-        lead_frames: f64,
+        _lead_seconds: f64,  // kept for call-signature stability; the view now reads the clamped
+                             // led centre from the streamer (coverage_center) instead of leading itself.
     ) {
         self.pool = Some(pool);
         self.streamer = Some(streamer);
@@ -65,7 +64,6 @@ impl Wg10TerrainView {
         self.height_scale = height_scale;
         self.morph_region = morph_region;
         self.relief_ref = relief_ref;
-        self.lead_frames = lead_frames;
     }
 
     #[func]
@@ -79,12 +77,14 @@ impl Wg10TerrainView {
             streamer.bind_mut().update(camera_x, camera_z, vel_x, vel_z);
         }
 
-        // Centre the displayed rings on the SAME velocity-led point the scheduler covers
-        // (coverage_center = pos + vel*lead_frames). The slice-8 flicker bug was the view
-        // centring on the raw camera position while the scheduler maintained the led ring, so
-        // the view kept asking for pages the scheduler had released → churn + fallback flicker.
-        let led_x = camera_x + vel_x * self.lead_frames;
-        let led_z = camera_z + vel_z * self.lead_frames;
+        // Centre the displayed rings on the SAME clamped velocity-led point the scheduler covers
+        // — ask the streamer for it rather than recomputing, so the view can NEVER desync from
+        // coverage and always inherits the lead clamp (camera stays inside its ring). Recomputing
+        // it here with a raw lead was the bug that flew the ring off into empty ground.
+        let streamer = self.streamer.as_ref().unwrap().clone();
+        let led = streamer.bind().coverage_center(camera_x, camera_z, vel_x, vel_z);
+        let led_x = led.x as f64;       // Vector2 packs world (x, z) as (.x, .y)
+        let led_z = led.y as f64;
 
         let num = self.num_levels;
         for level in 0..num {

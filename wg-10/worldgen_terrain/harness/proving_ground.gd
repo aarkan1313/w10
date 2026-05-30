@@ -29,7 +29,7 @@ const RELIEF_REF := 2000.0
 # Step 4 streamer tunables (single level for now).
 const NUM_LEVELS := 1
 const RADIUS_PAGES := 1
-const LEAD_FRAMES := 8.0
+const LEAD_SECONDS := 0.5    # velocity lead in SECONDS (clamped by the policy to stay in-ring)
 const MAX_PER_FRAME := 4
 
 var _pool: Object
@@ -128,7 +128,7 @@ func _build_step3() -> void:
 # HUD `recomputed` counter does NOT climb every frame (no churn), no flicker.
 func _build_step4() -> void:
 	_streamer = ClassDB.instantiate("Wg10Streamer")
-	_streamer.call("configure", _pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	_streamer.call("configure", _pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	# 9 persistent tiles, each a full level-0 grid mesh, re-placed + re-bound each frame.
 	for _t in range(9):
 		var mi := MeshInstance3D.new()
@@ -150,12 +150,12 @@ func _build_step4() -> void:
 func _drive_step4(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> void:
 	# 1) let the proven streamer maintain residency (acquire/release via the pool).
 	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
-	# 2) place the 3x3 around the velocity-led centre (same point the streamer covers) and bind
-	#    each slot to its resident page; hide a slot whose page isn't resident yet.
-	var led_x: float = cam_x + vel_x * LEAD_FRAMES
-	var led_z: float = cam_z + vel_z * LEAD_FRAMES
-	var cox: float = floor(led_x / BASE_SPAN) * BASE_SPAN
-	var coz: float = floor(led_z / BASE_SPAN) * BASE_SPAN
+	# 2) place the 3x3 around the SAME clamped led centre the streamer covers (ask it — never
+	#    recompute the lead here, or the view desyncs / flies off; the clamp keeps the camera
+	#    inside the ring). Then bind each slot to its resident page; hide a not-yet-resident slot.
+	var led: Vector2 = _streamer.call("coverage_center", cam_x, cam_z, vel_x, vel_z)
+	var cox: float = floor(led.x / BASE_SPAN) * BASE_SPAN
+	var coz: float = floor(led.y / BASE_SPAN) * BASE_SPAN
 	var slot := 0
 	for dz in range(-1, 2):
 		for dx in range(-1, 2):

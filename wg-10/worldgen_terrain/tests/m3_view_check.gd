@@ -16,7 +16,7 @@ const NUM_LEVELS   := 3
 const BASE_SPAN    := 8192.0
 const GRID_RES     := 64
 const RADIUS_PAGES := 1
-const LEAD_FRAMES  := 8.0
+const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY     := 48        # >= per-level coverage (3 levels x 9 = 27) + stream-ahead headroom
 const MORPH_REGION := 0.15
@@ -48,7 +48,7 @@ func _run() -> int:
 		push_error("pool configure failed: %s" % cfg_err); return 1
 
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
@@ -56,7 +56,7 @@ func _run() -> int:
 		push_error("expected %d tiles, got %s" % [NUM_LEVELS*9, str(rings.call("tile_count"))]); return 1
 
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_FRAMES)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	var errs: Array[String] = []
 

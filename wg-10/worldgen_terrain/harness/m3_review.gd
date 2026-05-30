@@ -22,7 +22,7 @@ const NUM_LEVELS := 3
 const BASE_SPAN := 8192.0
 const GRID_RES := 64
 const RADIUS_PAGES := 1
-const LEAD_FRAMES := 8.0
+const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY := 48
 const MORPH_REGION := 0.15
@@ -43,12 +43,12 @@ func _ready() -> void:
 	if err != "":
 		push_error("m3_review: pool configure failed: %s" % err); return
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	add_child(rings)
 	_view = ClassDB.instantiate("Wg10TerrainView")
-	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_FRAMES)
+	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR

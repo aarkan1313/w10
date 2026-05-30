@@ -53,14 +53,14 @@ impl Wg10Streamer {
         num_levels: i64,
         base_span: f64,
         radius_pages: i64,
-        lead_frames: f64,
+        lead_seconds: f64,
         max_per_frame: i64,
     ) {
         self.policy = Some(SchedulePolicy::new(ScheduleConfig {
             num_levels: num_levels as i32,
             base_span,
             radius_pages: radius_pages as i32,
-            lead_frames,
+            lead_seconds,
             max_per_frame: max_per_frame as u32,
         }));
         self.pool = Some(pool);
@@ -168,6 +168,21 @@ impl Wg10Streamer {
             }
         }
         out
+    }
+
+    /// The clamped velocity-led world centre the scheduler covers this frame, as a Vector2(x,z).
+    /// Consumers (Wg10TerrainView, the proving ground) MUST centre their displayed ring on this
+    /// exact point so the view and the maintained coverage never desync — and so the view inherits
+    /// the lead CLAMP (camera always inside its ring). Returns (camera_x, camera_z) if unconfigured.
+    #[func]
+    pub fn coverage_center(&self, camera_x: f64, camera_z: f64, vel_x: f64, vel_z: f64) -> Vector2 {
+        match self.policy.as_ref() {
+            Some(p) => {
+                let (cx, cz) = p.coverage_center(camera_x, camera_z, vel_x, vel_z);
+                Vector2::new(cx as f32, cz as f32)
+            }
+            None => Vector2::new(camera_x as f32, camera_z as f32),
+        }
     }
 }
 

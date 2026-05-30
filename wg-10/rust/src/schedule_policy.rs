@@ -19,8 +19,13 @@ pub struct ScheduleConfig {
     pub base_span: f64,
     /// Ring half-extent in pages, per level (radius 1 -> 3x3 ring).
     pub radius_pages: i32,
-    /// Velocity lead: bias coverage centre this many frames ahead of position.
-    pub lead_frames: f64,
+    /// Velocity lead in SECONDS: bias the coverage centre `vel * lead_seconds` metres ahead of
+    /// position, so pages are resident before the camera arrives (never-black under motion). The
+    /// offset is CLAMPED (see `coverage_center`) so the camera always stays inside its own ring
+    /// regardless of speed — pre-fetch can never pull coverage off the camera. (Was misnamed
+    /// `lead_frames` and multiplied raw against m/s velocity -> up to 64 km of lead at sprint,
+    /// flying the ring off into empty ground; that was the step-4 break.)
+    pub lead_seconds: f64,
     /// Hard cap on acquires dispatched per update.
     pub max_per_frame: u32,
 }
@@ -104,8 +109,18 @@ impl SchedulePolicy {
     /// flicker bug was the view centring on the raw camera position while the scheduler centred
     /// on the led point, so the view referenced pages the scheduler had released (churn + miss).
     /// One centre, one ring: never-black budget math (coarsest column <= max_per_frame) is intact.
+    ///
+    /// The lead offset `vel * lead_seconds` is CLAMPED per-axis to `±(radius_pages - 0.5) *
+    /// base_span`. With radius 1 that is ±0.5 page: the led centre can move at most half a page
+    /// from the camera, so the camera's own page is ALWAYS one of the (2r+1)^2 ring pages — there
+    /// is structurally never bare ground under the camera, at any velocity. Pre-fetch still biases
+    /// the ring toward travel (the far edge leads), it just can't pull the ring off the camera.
     pub fn coverage_center(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> (f64, f64) {
-        (pos_x + vel_x * self.cfg.lead_frames, pos_z + vel_z * self.cfg.lead_frames)
+        // radius 0 would give a 0 clamp (no lead possible with a single page); guard to >= 0.
+        let max_lead = ((self.cfg.radius_pages as f64) - 0.5).max(0.0) * self.cfg.base_span;
+        let lx = (vel_x * self.cfg.lead_seconds).clamp(-max_lead, max_lead);
+        let lz = (vel_z * self.cfg.lead_seconds).clamp(-max_lead, max_lead);
+        (pos_x + lx, pos_z + lz)
     }
 
     /// For a needed-but-not-resident page, walk UP the levels (coarser) and return
@@ -157,9 +172,9 @@ impl SchedulePolicy {
             .collect();
         release.sort();
 
-        // missing = needed - resident, prioritized then truncated.
-        let cx = pos_x + vel_x * self.cfg.lead_frames;
-        let cz = pos_z + vel_z * self.cfg.lead_frames;
+        // missing = needed - resident, prioritized then truncated. Use the SAME clamped led
+        // centre as coverage so acquire-priority distance matches the ring the view displays.
+        let (cx, cz) = self.coverage_center(pos_x, pos_z, vel_x, vel_z);
         let mut missing: Vec<PageKey> = needed
             .into_iter()
             .filter(|k| !resident.contains(k))

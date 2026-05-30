@@ -16,10 +16,10 @@ const SEED := 1337
 const NUM_LEVELS := 3
 const BASE_SPAN := 8192.0
 const RADIUS_PAGES := 1          # 3x3 ring per level -> 27 covered keys/frame
-# LEAD_FRAMES * VEL_X must exceed one COARSEST span (BASE_SPAN*2^(NUM_LEVELS-1) =
+# LEAD_SECONDS * VEL_X must exceed one COARSEST span (BASE_SPAN*2^(NUM_LEVELS-1) =
 # 32768) so the coarse never-black blanket is requested a full page AHEAD of the
 # boundary crossing — stream-ahead's whole point. 8 * 6000 = 48000 > 32768.
-const LEAD_FRAMES := 8.0
+const LEAD_SECONDS := 0.5
 # When the camera crosses a coarsest-page boundary a whole new coarse COLUMN (up to
 # 2*RADIUS+1 = 3 pages) enters coverage at once. MAX_PER_FRAME must absorb that
 # column in the crossing frame or a coarsest page (no coarser fallback) goes black.
@@ -55,7 +55,7 @@ func _run() -> int:
 		push_error("pool configure failed: %s" % err); return 1
 
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 
 	var errs: Array[String] = []
 	var any_missing_served_by_fallback := false
@@ -187,7 +187,7 @@ func _run_sweep_counts(os_dir: String, os_glsl: String) -> Array:
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	pool.call("configure", os_dir, PACK_FILE, os_glsl, CAPACITY, PAGE_PX, BASE_SPAN, SEED)
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	_warm_up(streamer, pool, 0.0, 0.0, VEL_X, VEL_Z)
 	var seq := []
 	for f in range(FRAMES):

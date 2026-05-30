@@ -6,7 +6,7 @@ fn cfg() -> ScheduleConfig {
         num_levels: 3,
         base_span: 1000.0,
         radius_pages: 1,
-        lead_frames: 0.0,
+        lead_seconds: 0.0,
         max_per_frame: 2,
     }
 }
@@ -45,24 +45,26 @@ fn coverage_keys_are_unique() {
 }
 
 #[test]
-fn velocity_lead_shifts_centre_in_travel_direction() {
-    let mut c = cfg();
-    c.lead_frames = 10.0; // lead = vel * 10
+fn velocity_lead_biases_centre_but_clamps_to_keep_camera_covered() {
+    let mut c = cfg(); // base_span 1000, radius 1 -> max_lead = (1-0.5)*1000 = 500 m
+    c.lead_seconds = 0.5;
     let p = SchedulePolicy::new(c);
-    // Stationary: level-0 ring centred on origin page (0,0) -> contains (0,0).
+    // Stationary: led centre == camera; camera's page (0,0) covered.
+    assert_eq!(p.coverage_center(0.0, 0.0, 0.0, 0.0), (0.0, 0.0));
     let still = p.coverage(0.0, 0.0, 0.0, 0.0);
     assert!(still.iter().any(|k| k.level == 0 && k.origin_x == 0 && k.origin_z == 0));
-    // Moving +x fast: led centre = 0 + 200*10 = 2000 -> the single led ring shifts to page
-    // origin 2000. The renderer centres on the SAME led point (coverage_center), so it displays
-    // exactly this ring — no churn, no miss — while never-black budget math stays single-ring.
-    let moving = p.coverage(0.0, 0.0, 200.0, 0.0);
-    assert!(moving.iter().any(|k| k.level == 0 && k.origin_x == 2000),
-        "fast +x travel should pull level-0 coverage ahead to x=2000");
-    assert!(!moving.iter().any(|k| k.level == 0 && k.origin_x == 0),
-        "origin-0 level-0 page should fall outside the single led ring");
-    // The renderer must use the same led centre the scheduler covers.
-    let (cx, _cz) = p.coverage_center(0.0, 0.0, 200.0, 0.0);
-    assert_eq!(cx, 2000.0, "coverage_center must expose the led point the rings display");
+    // Moving +x at 300 m/s: raw lead = 300*0.5 = 150 m (< 500 clamp) -> centre 150, biases the
+    // ring toward +x but the camera's own page (origin 0) is STILL covered.
+    let (cx, _) = p.coverage_center(0.0, 0.0, 300.0, 0.0);
+    assert_eq!(cx, 150.0, "sub-clamp lead applies directly");
+    // Moving +x FAST (sprint, e.g. 8000 m/s): raw lead 4000 m would be 4 pages ahead, but it is
+    // CLAMPED to +500 m so the camera can never fall out of its ring. The camera's page (0,0)
+    // MUST remain covered at any speed — this is the never-bare-ground-under-you guarantee.
+    let (cxf, _) = p.coverage_center(0.0, 0.0, 8000.0, 0.0);
+    assert_eq!(cxf, 500.0, "lead clamps to (radius-0.5)*span = 500 m, not 4000 m");
+    let sprint = p.coverage(0.0, 0.0, 8000.0, 0.0);
+    assert!(sprint.iter().any(|k| k.level == 0 && k.origin_x == 0 && k.origin_z == 0),
+        "camera's own level-0 page must stay covered even at sprint speed (clamped lead)");
 }
 
 use std::collections::HashSet;
