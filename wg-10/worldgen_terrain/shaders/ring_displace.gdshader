@@ -23,6 +23,11 @@ varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 
 // the review scene flips it with no per-tile material access / no Rust rebuild):
 // 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
 global uniform float wg_dbg_mode;
+// M5 detail: GLOBAL amplitude knob (one RenderingServer.global_shader_parameter for the
+// whole scene, set by the harness / gate). 0.0 = no detail (byte-identical to pre-M5).
+// Detail is added to VERTEX.y AFTER h_base is formed, so the base/collision height is
+// untouched (facts read h_base). See spec §4 invariant 1.
+global uniform float wg_detail_amp;
 
 // World XZ of this vertex = mesh-local XZ + the instance origin (rings recenter by
 // translating the instance). MODEL_MATRIX maps local -> world.
