@@ -4,7 +4,9 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 8 — visual stability DONE; **seam + geomorph fixed, a windowed continuity gate locks it, p99 still green** (p99=1.88 ms at ~1000 m/s). The owner's first fly found "crazy switching" — 3 render-time sampling defects (tile-local geomorph fired at every tile edge; fine UV hit texture borders; texel-center page gen left abutting pages a texel apart → seam). Fixed: neighborhood-center geomorph + world-UV fine sampling + texel-corner page gen (abutting pages share boundary samples, seam zero by construction). `height_at` unchanged → gpu parity still 2/2. New `m3_continuity_check` reads back real production pages (seam=0.0) + a morph-banding ceiling (0.0). m3 suite **6 checks fail=0**; fast 5, gpu 2; 103 cargo tests green. **M3 has ONE box left: the owner's RE-fly of m3_review.tscn** — all automated gates green; §7.3 makes the live fly the final authority)
+Last updated: 2026-05-29 (**M3 RENDER-LAYER RESET in progress** — the stacked slices 4→8 looked "a mess" under a real fly, so the presentation layer is being rebuilt prove-one-thing-at-a-time in `proving_ground.tscn`, owner-flown, keeping the proven leaves untouched. Found + fixed 3 real bugs by this process: page sampler defaulted to REPEAT → seams everywhere (→ clamp-to-edge); velocity lead unit-wrong + unclamped → 3×3 flew off the camera (→ `lead_seconds` + clamp keeping camera in-ring); step-5 LOD line was morph-off (→ wire fine tiles to the real coarse parent + blend). Steps 1–6 owner-confirmed (page → seam → 3×3 → streamed 3×3 → never-black coarse blanket → geomorph). The residual "blue squares/lines" diagnosed as EXTREME DEM DATA (~450 m cliffs over 500 m), a content/material fix (M6/M7), NOT a render bug. NEXT: Step 7 = 3rd level + p99<6 ms at ~1000 m/s = M3 acceptance. cargo 103 green. See `docs/plans/COMPONENT_INVENTORY.md`.
+
+[history] M3 slice 8 (pre-reset) — seam + geomorph + continuity gate; superseded by the reset above when a real fly exposed the multi-level assembly was still broken.
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -178,13 +180,27 @@ Remaining slices (NOT done):
       intact. New `m3_continuity_check` (windowed) reads back real production pages
       (`seam=0.0`) + a perspective morph-banding ceiling (`jump_frac=0.0`); CAN_COPY_FROM on
       page textures enables readback at no render-path cost. m3 suite 6/6, p99=1.88 ms.
-- [ ] Tune finest-ring spacing + ring count against the review scene (config;
-      not a locked constant — revisit when real assets exist). NOTE: slice-8 PNG shows faint
-      mesh-facet creases at grazing angles (GRID_RES=64 → 128 m cells, unshaded) — a
-      tessellation-density tuning knob, NOT a seam (the gate proves boundary height diff = 0).
-- [ ] **MANUAL ACCEPTANCE:** owner RE-flies `m3_review.tscn` at full speed and confirms no
-      stalls, no black/holes, no inter-tile seam, and no interior morph switching. (Gate green
-      is necessary, not sufficient — the final authority, §7.3. All automated gates now green.)
+- [~] **RENDER-LAYER RESET (prove-one-at-a-time, owner-flown)** — the slices above stacked
+      without proving live continuity; a real fly exposed a broken multi-level assembly, so the
+      presentation (`Wg10TerrainView` + `Wg10ClipmapRings` + `ring_displace.gdshader`) is being
+      rebuilt step-by-step in `proving_ground.tscn` (STEP const), keeping the proven leaves. Bugs
+      found+fixed this way: REPEAT sampler → seams (clamp-to-edge); lead unit/clamp (lead_seconds
+      + camera-in-ring clamp); morph-off LOD line (wire fine→real coarse parent). Steps DONE
+      (owner-confirmed): [x] 1 page · [x] 2-page seam · [x] static 3×3 · [x] streamer-driven 3×3 ·
+      [x] coarse never-black blanket · [x] geomorph. [ ] **Step 7: 3rd level + p99<6 ms at
+      ~1000 m/s** (= the acceptance gate, re-proven on the rebuilt path). Then fold the proven
+      presentation back into the real classes + reconcile the m3 gates.
+- [ ] Tune finest-ring spacing + ring count + GRID_RES against real assets (config; no magic
+      numbers). The faint mesh-facet creases at grazing angles are a tessellation-density knob,
+      hidden for real by M6 normal mapping — NOT a seam.
+- [ ] **MANUAL ACCEPTANCE:** owner flies the rebuilt path at full speed and confirms no stalls,
+      no black/holes, no inter-tile seam, no switching. (§7.3 — the final authority.)
+
+> **Diagnosed, fixed ELSEWHERE (not M3):** the "blue squares / hard lines" the owner sees are
+> EXTREME DEM DATA — the `dem_v1` pack height field has ~450 m cliffs over 500 m; deep blue is
+> real low elevation in the debug color map; the coarse mesh renders a cliff as a flat facet +
+> hard edge. The render layer is correct. Fixes belong to the data/material/erosion layers below
+> (saner pack relief, M6 materials+normals, M7 erosion), tracked there — do NOT chase in M3.
 
 ## Milestone 4 — Facts API (authoritative, sparse)
 
@@ -192,20 +208,33 @@ Remaining slices (NOT done):
 - [ ] `get_collision_field(area)` + Jolt `HeightMapShape3D` integration.
 - [ ] Save/edit layer hook (composition over base height).
 
+> **The big picture (owner-confirmed intent, 2026-05-29):** the DEM kernels are NOT "the terrain"
+> — they are a LIBRARY of real-world landform stamps (extracted from real elevation data). The
+> procedural generator arranges them: the GRAMMAR (M1, provinces/palettes) decides WHICH kernel
+> families belong WHERE; the HEIGHT FIELD samples + weights them by world position. So WorldGen is
+> a procedural generator that speaks in real landforms (infinite, deterministic, geology-grounded
+> rather than pure noise). M5–M7 below are the systems that MODULATE/REFINE how the kernels
+> combine — and are where the current "squareness / spiky / extreme" look gets fixed.
+
 ## Milestone 5 — Detail & masks (GPU, render-only)
 
-- [ ] Detail/displacement layer (bounded, shader-only, edge-safe).
+- [ ] Detail/displacement layer (bounded, shader-only, edge-safe). [Fixes the "bare/blobby"
+      look — adds the high-frequency detail the raw kernels lack.]
 - [ ] Slope/curvature/debug + world-space masks.
 
 ## Milestone 6 — Biomes & textures (data-driven)
 
 - [ ] Stable world-space biome/material masks driven by terrain-family rules.
-- [ ] Texture/material packs (swappable, like terrain packs).
+- [ ] Texture/material packs (swappable, like terrain packs). [**Fixes the coarse-mesh FACETS /
+      "diamonds" / hard cliff edges** — normal-mapped materials make coarse geometry read smooth,
+      the way every terrain renderer does it; also replaces the debug blue/yellow height coloring.]
 
 ## Milestone 7 — Erosion & hydrology
 
 - [ ] River/pass routing facts.
-- [ ] Erosion/hydrology, integrated without breaking determinism/parity.
+- [ ] Erosion/hydrology, integrated without breaking determinism/parity. [**Carves the extreme
+      DEM cliffs into believable slopes/drainage** — the data-level fix for the spiky height
+      field, complementing a saner pack relief scale.]
 
 ---
 

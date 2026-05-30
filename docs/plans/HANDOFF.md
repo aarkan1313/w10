@@ -14,7 +14,7 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-29 (M3 slices 1–8 built; slice 8 visual stability done — seam + geomorph fixed, continuity gate green; ALL automated M3 gates green; only the owner's RE-fly remains to close M3).
+Updated: 2026-05-29 (**M3 RENDER-LAYER RESET in progress.** Slices 1–8 built but the multi-level render looked "a mess" under a real fly, so the PRESENTATION layer is being rebuilt prove-one-thing-at-a-time in `proving_ground.tscn`, owner-flown, keeping the proven leaves. Steps 1–6 owner-confirmed; Step 7 (3rd level + p99 = M3 acceptance) next. Read `docs/plans/COMPONENT_INVENTORY.md` FIRST for the inventory + step plan + the bugs found. The "squareness/lines" are extreme DEM data (M6/M7 fix), not a render bug.)
 
 ---
 
@@ -145,8 +145,48 @@ apart → a seam. `height_at()` is UNCHANGED (parity-critical; the M2 gpu suite 
 the page pixel→world mapping). Page textures carry CAN_COPY_FROM so the gate can read them
 back (no render-path cost; p99 unaffected).
 
-**Counts:** cargo 103 green · fast 5 / gpu 2 / m3 6, all `fail=0`. m3_accept p99=1.88 ms at
-~1000 m/s. **`main` is ~140 commits ahead of `origin/main` (unpushed — the OWNER pushes).**
+**THEN the slices-4→8 multi-level render turned out to be "a mess" under a REAL fly** (overlapping
+sheets, seams, switching). Why the gates missed it: they proved *properties* (p99, never-black,
+data-seam=0) but never *perceptual continuity in a flown perspective POV*. **So we are RESETTING
+the presentation layer prove-one-thing-at-a-time** — keep the proven leaves (pool, page_policy,
+schedule_policy, streamer, ring_geometry, page_compute — verified clean, one-directional deps),
+rebuild ONLY `Wg10TerrainView` + `Wg10ClipmapRings` + `ring_displace.gdshader` step by step in
+`proving_ground.tscn` (a STEP const flips on one component at a time), each owner-flown + approved
+before the next. **`docs/plans/COMPONENT_INVENTORY.md` is the driving doc for this** (inventory of
+every part + what proves it + the 7-step sequence). Steps owner-confirmed: 1 one page · 2 two-page
+seam · 3 static 3×3 · 4 streamer-driven 3×3 · 5 coarse never-black blanket · 6 geomorph. Next:
+Step 7 (3rd level + p99<6 ms at ~1000 m/s = the M3 acceptance), then fold the proven presentation
+back into the real classes + reconcile the old m3 gates (they still exercise the OLD view path).
+
+**Real bugs the reset found + fixed (each owner-confirmed; don't reintroduce):**
+- **Page sampler defaulted to REPEAT wrap** → tile-edge vertices (uv=1) wrapped to the page's
+  opposite edge → seams at EVERY tile boundary (the dominant "overlapping sheets"). Fix:
+  `uniform sampler2D height_tex : filter_linear, repeat_disable;` (clamp-to-edge) in the shader.
+- **Velocity lead was unit-wrong + unclamped.** `lead_frames` × velocity-in-m/s gave up to 64 km
+  of lead at sprint → the 3×3 flew off the camera (pop-in, terrain-lag-under-you, churn). Fix:
+  renamed `lead_seconds`; `SchedulePolicy::coverage_center` CLAMPS the offset to
+  ±(radius_pages−0.5)·base_span so the camera is ALWAYS inside its ring at any speed; the view +
+  proving ground READ that clamped centre from the streamer (no view/scheduler desync).
+- **Step-5 "LOD line"** was the morph being OFF (each fine tile bound its OWN page as the morph
+  target = nothing to blend). Step 6 wires each fine tile to the REAL coarse parent page
+  (coarse_height_tex/coarse_origin/coarse_span) + the fine-neighborhood centre, then blends.
+
+**The slice-8 3 sampling fixes (still valid, carried into the reset):** geomorph from the 3×3
+NEIGHBORHOOD center (not tile-local); fine page by TRUE WORLD UV (`page_origin`); texel-CORNER
+page gen (`u=px/(N-1)`) so abutting pages SHARE boundary samples. `height_at()` UNCHANGED
+(parity-critical). Page textures carry CAN_COPY_FROM for gate readback (no render-path cost).
+
+**The "blue squares / hard lines" the owner still sees are EXTREME DEM DATA, not a render bug**
+(diagnosed: dem_v1 height field has ~450 m cliffs over 500 m; deep blue = real low elevation;
+coarse mesh draws a cliff as a flat facet + hard edge). Fixes live in data/material/erosion
+(M6 normals, M7 erosion, saner pack relief) — see COMPONENT_INVENTORY. Do NOT chase in the render
+layer. Also recorded the big-picture intent there: DEM kernels are a LIBRARY of real-world
+landform stamps; the grammar (where) + height field (blend) arrange them into a procedural
+generator that speaks in real landforms.
+
+**Counts:** cargo 103 green · fast 5 / gpu 2 (the m3 suite predates the reset — it exercises the
+OLD view path + now uses LEAD_SECONDS; reconcile when the rebuilt view lands). **`main` is ~150
+commits ahead of `origin/main` (unpushed — the OWNER pushes).**
 
 ## 7. Build / run gotchas (these bit prior sessions — read before touching the toolchain)
 
@@ -174,7 +214,7 @@ back (no render-path cost; p99 unaffected).
 
 - **You (the assistant) cannot `git push`** — the harness blocks pushing to the
   external remote and the shell has no credentials. Commit locally always; **the
-  OWNER runs `git push origin main`**. `main` is currently ~68 commits ahead.
+  OWNER runs `git push origin main`**. `main` is currently ~150 commits ahead.
 - **WG9 (`d:/workflows/worldgen9`) is READ-ONLY** — read for knowledge, never write.
 - **OpenTopo API key** is in the `OPENTOPOGRAPHY_API_KEY` env var (docs at
   `D:/assets/docs/reference/`); used by `tools/dem_pack/` to fetch DEMs.
@@ -182,27 +222,33 @@ back (no render-path cost; p99 unaffected).
 
 ## 9. What to do next
 
-**Immediate — the ONE thing left to close M3: the owner RE-flies `m3_review.tscn`.**
-All automated M3 gates are green (m3 6/6, p99=1.88 ms, seam=0, no morph banding), but
-§7.3 makes the live fly the final authority — and the owner's *first* fly is exactly what
-caught the slice-8 "switching" defects the gates couldn't see. Launch it WINDOWED:
+**Immediate — continue the RENDER-LAYER RESET. Read `docs/plans/COMPONENT_INVENTORY.md` first.**
+The presentation is being rebuilt prove-one-thing-at-a-time in `proving_ground.tscn` (a `STEP`
+const flips on one component at a time), owner-flown + approved before each next step. Steps 1–6
+are owner-confirmed. **NEXT = Step 7: add the 3rd level back + prove p99 < 6 ms at ~1000 m/s** —
+the actual M3 acceptance, re-proven on the rebuilt path (the old `m3_accept_check` measured the
+pre-reset view).
 
+How the loop runs each step: bump `STEP` in `proving_ground.gd`, build the new `_build_stepN` +
+`_drive_stepN`, render-probe it (throwaway `_probe_*.gd` SceneTree scripts — capture a PNG /
+measure, then DELETE the probe), then HAND THE SCENE TO THE OWNER to fly windowed and confirm
+before moving on. Launch:
 ```
-$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn
+$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/proving_ground.tscn
 ```
-(or open the project in the editor and run that scene). Fly with WASD + Shift (sprint to
-~1000 m/s) + mouse-look + Space/C up/down, ESC to release the mouse. Confirm: no stalls, no
-black/holes, **no hard inter-tile vertical seam, and no interior morph lattice/switching** —
-smooth LOD blend only at the level boundaries. On the owner's sign-off, **M3 closes.**
+Fly: WASD + Shift sprint + mouse-look + Space/C, ESC frees the mouse. The HUD shows the step +
+pos + (step 4+) pool stats + tile-flip counter.
 
-Then run the slice-8 brainstorm→spec→plan→execute→audit cycle for **M4 — Facts API**
-(`get_height(x,z)` authoritative sparse query + Jolt collision field). After M4: M5 detail/
-masks → M6 biomes/textures → M7 erosion/hydrology. Each gets its own full cycle.
+**After Step 7:** fold the proven presentation back into the real `Wg10TerrainView` /
+`Wg10ClipmapRings` (the reset's logic lives in the proving ground right now), reconcile the m3
+gates to the rebuilt path, then the owner's final acceptance fly closes M3. THEN M4 — Facts API
+(`get_height` + Jolt collision), via the brainstorm→spec→plan→execute→audit cycle. After M4: M5
+detail/masks → M6 biomes/textures → M7 erosion. (M5–M7 are also where the "squareness/lines"
+get fixed — see ROADMAP; they are content/material, not render.)
 
-NOTE (tuning, not a bug): the slice-8 PNG shows faint mesh-facet creases at grazing angles —
-GRID_RES=64 over an 8192 m page = 128 m cells, unshaded. That's a tessellation-density knob
-(ROADMAP "tune finest-ring spacing"), NOT a seam — the continuity gate proves the page
-boundary height diff is exactly 0.
+**Squareness/lines = content, NOT render** (don't re-chase): diagnosed as extreme dem_v1 data
+(~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff). Fixed by
+M6 normals + M7 erosion + a saner pack relief, tracked in ROADMAP/COMPONENT_INVENTORY.
 
 **Deferred but tracked** (don't forget, don't build early): async/background page
 production — build it behind `Wg10PagePool::acquire_page` when heavy multi-pass

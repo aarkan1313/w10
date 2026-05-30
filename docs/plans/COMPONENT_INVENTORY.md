@@ -106,22 +106,35 @@ Legend: ✅ proven & trusted · 🟡 has a gate but NOT proven on-screen · ❓ 
 A single growable scene (`proving_ground.tscn`) with a fly camera + HUD; each step flips on one
 more component and the owner confirms before the next.
 
-1. **One page, flat.** Pool.acquire_page ONE level-0 page → one MeshInstance (full grid, span_l)
-   with ring_displace, morph OFF, no streamer. Fly over it. PROVE: single continuous tile, real
-   relief, stable, no internal cracks. (Proves page_compute + pool + shader fine-sample alone.)
-2. **Two adjacent pages.** Add the +X neighbor page+tile. PROVE: the shared edge is continuous in
-   the rendered surface under a moving camera (this is the seam that the data-gate said =0; prove
-   it LIVE). If it cracks here, the bug is tile placement/UV, isolated to 2 tiles.
-3. **A 3×3 of one level.** PROVE: 9 tiles, one surface, no internal grid. (Isolates G2.)
-4. **Streamer drives the 3×3.** Add streamer + get_resident + fallback. Fly. PROVE: no churn (HUD
-   recomputed stable), no flicker, fallback (if any) is not a wrong-height tile.
-5. **Second level as a HOLLOW ring.** Add level 1 as an annulus that fills ONLY outside level 0
-   (fix G1 — use band_mesh hollow path). PROVE: no overdraw, no double-surface, seam at the L0/L1
-   boundary continuous.
-6. **Geomorph at the L0/L1 boundary.** Turn morph ON only at that real boundary. PROVE: smooth
-   LOD transition, no lattice.
-7. **Third level + full speed.** PROVE: p99 < 6ms AND visually clean at ~1000 m/s (the real M3
-   acceptance — owner-flown).
+1. **[DONE ✅ owner-confirmed] One page, flat.** Single continuous tile, real relief, no cracks.
+2. **[DONE ✅ owner-confirmed] Two adjacent pages.** FOUND the root bug: page sampler defaulted to
+   REPEAT → edge vertices wrapped to the opposite page edge → seam. Fixed with `filter_linear,
+   repeat_disable` (clamp-to-edge). This was corrupting EVERY tile boundary.
+3. **[DONE ✅ owner-confirmed] Static 3×3 of one level.** One continuous surface, no internal grid.
+4. **[DONE ✅ owner-confirmed] Streamer drives the 3×3.** FOUND the lead bug: `lead_frames` × m/s
+   velocity, unclamped → up to 64 km lead at sprint → ring flew off the camera. Fixed: `lead_seconds`
+   + clamp in `coverage_center` (camera always in-ring); view reads the clamped centre from the
+   streamer. Probed: 0 churn, camera-in-ring 99.9%.
+5. **[DONE ✅ owner-confirmed] Second level = never-black coarse blanket.** Built as a FULL coarse
+   3×3 drawn UNDER the fine 3×3 (NOT hollow — see note), always resident; an unready fine tile shows
+   coarse through. Probed: 0 holes, edge winks all masked by coarse. (Owner: "better".)
+6. **[DONE — probe-clean, owner saw residual = DEM data] Geomorph the L0/L1 boundary.** The step-5
+   "LOD line" was the morph being OFF (each tile bound its own page as the morph target = nothing to
+   blend). Fixed: each fine tile binds the REAL coarse parent page + the fine-neighborhood centre,
+   blends fine→coarse over the outer band. The remaining "blue squares/lines" the owner sees were
+   traced to EXTREME DEM DATA, not the render (see the diagnosis box up top).
+7. **[NEXT] Third level + full speed.** PROVE: p99 < 6 ms AND visually clean at ~1000 m/s — the real
+   M3 acceptance, owner-flown.
 
-Each step that reveals a gap gets fixed and re-proven before moving on. Steps 5–6 will likely
-require real changes to clipmap_rings (hollow rings) — that's the expected G1 fix surfacing.
+**HOLLOW-RING decision (re G1):** I did NOT make the coarse level hollow. The proving-ground draws
+a FULL coarse 3×3 under the fine 3×3 (finer on top via render_priority). This is correct and
+never-black (coarse always covers); the overdraw cost is bounded (a few extra full-3×3 draws) and
+measured against the p99 budget at step 7. Hollow rings are a perf optimization, not a correctness
+requirement — defer until step 7 shows p99 needs it. (`ring_geometry::band_mesh` hollow path stays
+available, currently unused.) G1 "overdraw" was thus a non-issue once the REPEAT-seam (the real
+cause of the "overlapping sheets") was fixed; G2 "grid cracks" was the same REPEAT-seam bug.
+
+**FOLD-BACK (after step 7):** the rebuilt logic currently lives in `proving_ground.gd` (per-step
+`_build_stepN`/`_drive_stepN`). Once step 7 is proven, port the final drive into the real
+`Wg10TerrainView` + `Wg10ClipmapRings`, update the shader sampler hints there, and reconcile the
+m3 gates (m3_accept/continuity/view/stream) to the rebuilt path before M3 acceptance.
