@@ -37,6 +37,12 @@ var _streamer: Object          # step 4+: drives page residency from camera pos/
 var _step4_tiles: Array = []   # step 4: 9 single-level tiles
 # step 5+: per level, 9 persistent MeshInstance3D (level 0 = fine on top, level 1 = coarse under).
 var _level_tiles: Array = []   # Array of Array[MeshInstance3D], indexed [level][slot]
+# live artifact instrumentation (step 5): per [level][slot] remember last bound page + visibility,
+# count flips so a transient pop shows up on the HUD with which level/slot/frame caused it.
+var _last_key: Array = []      # [level][slot] -> Vector2 page origin (or (NAN,NAN) when hidden)
+var _flip_count := 0
+var _last_flip := ""
+var _frame := 0
 var _hud: Label
 var _camera: Camera3D
 
@@ -213,12 +219,18 @@ func _build_step5() -> void:
 			add_child(mi)
 			tiles.append(mi)
 		_level_tiles.append(tiles)
+		# instrumentation: start every slot "hidden" (NAN sentinel)
+		var keys: Array = []
+		for _k in range(9):
+			keys.append(Vector2(NAN, NAN))
+		_last_key.append(keys)
 
 # Per-frame Step 5 drive: stream both levels, then place each level's 3x3 on its own clamped led
 # centre. Coarse (level 1) ALWAYS shows where resident (the blanket); fine (level 0) shows on top
 # where resident, else the coarse beneath shows through. No fine tile is ever left visible at a
 # stale position.
 func _drive_step5(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> void:
+	_frame += 1
 	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
 	var led: Vector2 = _streamer.call("coverage_center", cam_x, cam_z, vel_x, vel_z)
 	for level in range(_num_levels):
@@ -233,6 +245,20 @@ func _drive_step5(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> voi
 				var oz: float = coz + dz * span_l
 				var mi: MeshInstance3D = tiles[slot]
 				var tex: Object = _pool.call("get_resident_page", level, ox, oz)
+				# instrumentation: a "flip" = this slot changing what it shows vs last frame
+				# (hidden<->visible, or bound to a DIFFERENT page). That's the transient that can
+				# read as a small square popping. We log level/slot/kind so the HUD names it.
+				var new_key: Vector2 = Vector2(NAN, NAN) if tex == null else Vector2(ox, oz)
+				var old_key: Vector2 = _last_key[level][slot]
+				var was_hidden := is_nan(old_key.x)
+				var now_hidden := tex == null
+				if was_hidden != now_hidden:
+					_flip_count += 1
+					_last_flip = "f%d L%d slot%d %s" % [_frame, level, slot, "SHOW" if not now_hidden else "HIDE"]
+				elif not now_hidden and (old_key.x != ox or old_key.y != oz):
+					_flip_count += 1
+					_last_flip = "f%d L%d slot%d REPAGE" % [_frame, level, slot]
+				_last_key[level][slot] = new_key
 				if tex == null:
 					mi.visible = false
 				else:
@@ -316,8 +342,12 @@ func _process(_delta: float) -> void:
 		elif STEP == 5:
 			_drive_step5(p.x, p.z, v.x, v.z)
 		var st: Dictionary = _pool.call("stats")
-		pool_line = "\nresident %d   created %d   recomputed %d   (recomputed should NOT climb while flying steadily)" % [
+		pool_line = "\nresident %d   created %d   recomputed %d" % [
 			int(st.get("resident", 0)), int(st.get("created", 0)), int(st.get("recomputed", 0))]
+		if STEP == 5:
+			# flips = tiles that changed shown-page or visibility this run. A pop you SEE should
+			# coincide with the flip count ticking + the last-flip tag below naming the culprit.
+			pool_line += "\ntile flips %d   last: %s" % [_flip_count, _last_flip]
 
 	var desc := ""
 	match STEP:
