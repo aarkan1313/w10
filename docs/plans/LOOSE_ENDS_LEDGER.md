@@ -20,18 +20,19 @@ independent reviews, every claim re-verified against source + re-run gates).
 | **B2** | Never-black "hold-last-good" can show stale terrain (page-A geometry + page-B pixels) under pool eviction; guarantee is capacity-dependent, not structural | HIGH | **FIX-NOW** | The render pipeline is the KEPT foundation; a non-structural never-black is a latent corruption the rebuild sits on. Fix = protect held coarse pages + re-validate held RID + capacity-pressure gate. |
 | **B3** | Hardened perf gate hole: 100%-sky frame scores `nonblack=1.0` (sky is bright); detail not on/off-tested | MEDIUM | **FIX-NOW** | This is MY gate, built to honor "is profiling real?" — and it has the exact hole that rule forbids. The rebuild will lean on this gate to measure worldgen perf; it must be trustworthy first. Fix = terrain-vs-sky nonblack + detail on/off assert. |
 
-## DOC DRIFT (from FINDINGS — no code change, reconcile to the north-star)
+## DOC DRIFT (from FINDINGS) — ✅ MOSTLY DONE in the 2026-05-30 doc-reconciliation pass
 
-| ID | Item | Decision |
-|----|------|----------|
-| A-distinct | docs say `distinct=18`, gate reports `15` (relief 0.25 → fewer buckets) | **FIX-NOW** (doc pass) |
-| A-relief-arith | STATUS uses dead `0.35` multiplier; shipped is `RELIEF_SCALE 0.25` | **FIX-NOW** (doc pass) |
-| A-m3-count | headlines say `m3 6/6`; actual `8/8` | **FIX-NOW** (doc pass) |
-| A-DESIGN-stale | `DESIGN.md` predates M4/M5/synthesis/vision; carries a source-of-truth clause | **FIX-NOW** — point DESIGN at the north-star vision (or mark superseded-pending). Critical: it's the "locked architecture" doc and it's stale. |
-| A-STATUS-M5-2-states | STATUS holds M5 S1 as both "ACCEPTED" and "GATED not accepted"; 2 `## M5` headers | **FIX-NOW** (doc pass) — collapse to one current state |
-| A-spec-ownership | shaded-scale + kernel-dna specs fight over M5 S2-S4 / mesh-density ownership | **FIX-NOW** (doc pass) — reconcile to north-star; mark superseded |
-| A-memory-branch | `worldgen10-build-gotchas` memory says branch `master`; actual `main` | **FIX-NOW** (one-line memory edit) |
-| A-C1 | spectral gate was circular (tested iFFT path, not shipping basis) | **TABLED/CLOSED** — spectral dead; recorded as negative result, lesson kept |
+| ID | Item | Status |
+|----|------|--------|
+| A-distinct | docs said `distinct=18`, gate reports `15` | **✅ DONE** — headline docs now say 15 (any remaining 18 is in superseded-history sections). |
+| A-relief-arith | STATUS used dead `0.35`; shipped `RELIEF_SCALE 0.25` | **✅ DONE** — STATUS superseded-divider note states 0.25 shipped + "× 0.35 below is dead"; the 0.35 lines are in [SUPERSEDED] M5 history. |
+| A-m3-count | headlines said `m3 6/6`; actual `8/8` | **✅ DONE** — HANDOFF/ROADMAP/STATUS all say m3 8/8. |
+| A-DESIGN-stale | `DESIGN.md` predates the pivot | **✅ DONE (interim)** — DESIGN top now carries a superseded-notice (§2.1/§3 historical; the kept sections marked; points at the two 2026-05-30 specs). Full rewrite deferred until the worldgen core lands (DESIGN will be re-folded then). |
+| A-STATUS-M5-2-states | STATUS held M5 in 2 contradictory states | **✅ DONE** — one current section + "EVERYTHING BELOW IS SUPERSEDED HISTORY" divider; all old sections demoted to [SUPERSEDED — history]. |
+| A-spec-ownership | shaded-scale + kernel-dna specs fought over M5 S2-S4 | **✅ DONE** — both superseded by the worldgen-core spec; STATUS/ROADMAP reconciled. (Folder-level: the specs themselves have no at-a-glance "superseded" banner — minor, a reader learns which 2 are live from STATUS/this ledger.) |
+| A-memory-branch | memory said branch `master`; actual `main` | **✅ DONE** — `worldgen10-build-gotchas` now says `main`. |
+| A-C1 | spectral gate was circular (iFFT path, not shipping basis) | **CLOSED** — spectral dead; recorded as negative result, lesson kept. |
+| A-pytest-count | HANDOFF said "15 dem_pack tests"; actual **22** | **✅ DONE** — fixed to 22 (caught by the 2nd cold-read test; suite grew with worldgen_proto). |
 
 ## IN-FLIGHT MILESTONE WORK (this session)
 
@@ -63,10 +64,16 @@ adaptable down to 1-10m near-field detail.** Recipe = the WG9 blueprint (macro f
 ranges + carved valleys + DEMOTED kernel overlay), built adaptable (every layer a knob), fitting the
 KEPT clipmap/parity architecture. See memory `worldgen10-wg9-height-recipe` + `worldgen10-north-star-vision`.
 
-## Suggested close-out order before the rebuild
-1. **B1** (pool Drop + fix 2 sites + delete wrong comments) — small, removes leak + footgun.
-2. **B3** (perf-gate terrain-vs-sky + detail on/off) — make the rebuild's measuring stick trustworthy.
-3. **B2** (structural never-black + capacity-pressure gate) — the KEPT render foundation must be sound.
-4. **Doc pass** (the A-* drift) — reconcile to north-star so "what's true" is unambiguous before building.
-5. **THEN** brainstorm the worldgen core.
+## Close-out status (updated 2026-05-30)
+- **Doc-drift (the A-* items): ✅ DONE** (the doc-reconciliation pass — HANDOFF/DESIGN/ROADMAP/STATUS/
+  memory + 2 cold-read validations). The docs now tell one consistent story; a fresh session lands on
+  Slice 2.
+- **Worldgen brainstorm/spec/Slice-1: ✅ DONE** (S1 owner-accepted).
+- **STILL OPEN — the CODE bugs B1/B2/B3 (above):** these are the real remaining FIX-NOW, and the
+  PRECONDITION before Slice 3 (the first runtime build), in this order:
+  1. **B1** (pool `Drop` impl + fix 2 sites + delete wrong comments) — small, removes leak + footgun.
+  2. **B3** (perf-gate terrain-vs-sky + detail on/off) — make the rebuild's measuring stick trustworthy.
+  3. **B2** (structural never-black + capacity-pressure gate) — the KEPT render foundation must be sound.
+- **Slice 2** (offline biome distillation) is OFFLINE — it can proceed before/parallel to B1/B2/B3; only
+  Slice 3 (Rust runtime) requires them closed first.
 (Owner may choose to fold some of these INTO the rebuild instead of before — triage decision pending.)
