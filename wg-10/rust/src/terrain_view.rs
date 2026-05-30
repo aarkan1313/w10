@@ -123,8 +123,20 @@ impl Wg10TerrainView {
                         .bind()
                         .get_resident_page(level as i64, po_x, po_z);
                     let Some(ht) = tex else {
-                        // not resident yet -> hide; the coarser level underneath covers this area.
-                        rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                        // Target page not resident yet. Finer levels HIDE (the coarser full 3x3
+                        // underneath covers the gap). The COARSEST level has nothing underneath, so
+                        // hiding it would leave a HOLE — instead HOLD LAST-GOOD: leave the tile
+                        // showing its current (still-resident, still-correct-for-its-world-spot)
+                        // page until the new one streams in. The coarse blanket lags the camera by
+                        // up to a page on a coarse-boundary cross but NEVER blinks to sky. (This was
+                        // the bug: crossing a coarsest boundary repages all 9 coarse tiles at once,
+                        // the 4/frame acquire budget can't fill them, and hiding them blanked the
+                        // screen. Pillars: structural never-black, zero added compute, no magic
+                        // numbers — vs. budget-spiking or lead-tuning fixes that only reduce it.)
+                        if !is_coarsest {
+                            rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                        }
+                        // coarsest: do nothing -> the tile keeps its last valid page + position.
                         continue;
                     };
 
