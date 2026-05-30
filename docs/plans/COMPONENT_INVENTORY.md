@@ -19,6 +19,22 @@ confirmed two pages now join as one continuous landmass. This is why the slice-8
 gate missed it — it compared texel DATA (correct), not the wrapped GPU SAMPLE (wrong). This bug
 was corrupting EVERY tile boundary in the full clipmap.
 
+## The "lines / blue squares" are EXTREME DEM DATA, not a render bug (diagnosed 2026-05-29)
+The owner's step-6 fly showed hard-edged blue flat patches / lines. Traced rigorously:
+- NOT the morph (identical with morph off), NOT a flat/failed page (pages have real relief), NOT
+  a coarse seam (abutting coarse pages' shared edge matches to 0.0013 m).
+- ROOT: the `dem_v1` gate pack's height field is pathologically spiky — sampling it across the
+  view showed deep-low (`#`) directly adjacent to high (`^`) everywhere, with ~450 m height jumps
+  over 500 m (near-vertical cliffs). The deep BLUE is just real LOW elevation in the height->color
+  debug map. The hard "square" edge is a real near-vertical DEM feature, amplified because the
+  COARSE mesh (64 m/texel) can't represent a cliff smoothly -> renders it as a flat facet + hard
+  edge. (Cf. memory `worldgen-dem-kernel-normalization`: DEM kernels are z-score normalized;
+  height legitimately goes very negative/positive.)
+- CONCLUSION: the render pipeline is CORRECT here; the artifact is CONTENT (the placeholder DEM
+  pack is extreme). Fixes live in the data/material layers, NOT the clipmap: a saner height pack
+  / clamping relief, real materials+normals (M6) that hide facet-scale steps, and erosion (M7)
+  that smooths cliffs. Do NOT "fix" this in the render layer.
+
 ## Mechanism vs policy (owner clarified, 2026-05-29) — what's fixed vs what's tunable
 The owner asked: "long term we'll have adjustable size/detail/chunk-count — what's best?" The
 answer is a clean split:
