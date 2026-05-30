@@ -18,13 +18,17 @@ const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 const OVERLAY := "res://worldgen_terrain/harness/diagnostics_overlay.gd"
 const PAGE_PX := 256
 const SEED := 1337
-const NUM_LEVELS := 3
+# 5 levels: the clipmap reaches 1.5 * BASE_SPAN * 2^(NUM_LEVELS-1) from the camera. At 3 levels
+# that was only ~49 km while the camera saw ~524 km -> ground loaded as you approached then
+# unloaded behind ("loads then unloads"). 5 levels reaches ~197 km; the far plane is matched to it
+# below so you never SEE the loaded edge. (Coarse distant rings are cheap: big pages, 9 each.)
+const NUM_LEVELS := 5
 const BASE_SPAN := 8192.0
 const GRID_RES := 64
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
-const CAPACITY := 48
+const CAPACITY := 96       # 5 levels x 9 = 45 + stream-ahead + parent-fetch headroom
 const MORPH_REGION := 0.15
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
@@ -57,16 +61,31 @@ func _ready() -> void:
 	_view = ClassDB.instantiate("Wg10TerrainView")
 	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
+	# Loaded extent = the coarsest 3x3's half-width from the camera. Match the far plane + fog to it
+	# so the horizon fades to sky BEFORE the loaded edge — you never see ground load/unload at a
+	# visible boundary. (RADIUS_PAGES + 0.5) * coarsest_span.
+	var coarsest_span := BASE_SPAN * pow(2.0, NUM_LEVELS - 1)
+	var loaded_edge := (RADIUS_PAGES + 0.5) * coarsest_span    # metres from camera to the outer edge
+
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color(0.45, 0.62, 0.85)
+	# Distance fog fading to the sky color, ending just inside the loaded edge so the horizon is
+	# sky, not a hard terrain cliff. depth_end ~ 85% of the loaded edge.
+	env.fog_enabled = true
+	env.fog_mode = Environment.FOG_MODE_DEPTH
+	env.fog_depth_begin = loaded_edge * 0.45
+	env.fog_depth_end = loaded_edge * 0.85
+	env.fog_light_color = Color(0.45, 0.62, 0.85)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
 	add_child(light)
 
 	_camera = load(FLY_CAMERA).new()
 	_camera.environment = env
-	_camera.far = BASE_SPAN * 32.0
+	# Far plane at the loaded edge: nothing renders past where terrain exists, and fog has already
+	# faded the horizon to sky before that, so the edge is never visible.
+	_camera.far = float(loaded_edge)
 	add_child(_camera)
 	# Set position AFTER the node is in the tree (global_position pre-tree warns + no-ops).
 	_camera.global_position = Vector3(0.0, 1200.0, 0.0)
