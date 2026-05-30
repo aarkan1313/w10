@@ -9,6 +9,21 @@ defect the live fly caught).
 > This is a temporary working doc to drive the reset. When the render layer is proven end to
 > end, fold the outcome into STATUS/ROADMAP and delete this (the 3-living-docs rule).
 
+## SOLVED — "loads then unloads" was VIEW DISTANCE > loaded extent (not a bug)
+The owner's persistent symptom ("go over the border it loads, move back/forth, appears/disappears";
+"if it's loaded it should stay loaded") finally pinned: the page is ALWAYS resident when the view
+wants it (probe: 252/252 want+have, 0 missing — nothing unloads). The real cause: a 3-level clipmap
+loads only ~49 km from the camera (coarsest 3×3 outer edge = 1.5·BASE_SPAN·2^(NLEV-1) = 1.5·32768),
+but the camera far plane saw ~524 km. So ground popped IN as it entered the 49 km radius and OUT as
+it left behind — "loads then unloads" is the loaded-region edge sweeping past a too-far view. Not a
+logic bug — coverage extent < view distance. (This is the SAME thing as the owner's "want a much
+larger area".) FIX (config, pillar-correct — coarse rings are cheap, big pages × 9): m3_review
+NUM_LEVELS 3→5 (reach → 197 km) + far plane matched to the loaded edge + distance fog fading to sky
+BEFORE the edge so the boundary is never visible. Probe: 5 levels @ ~1000 m/s → p99=2.82 ms, 0
+holes, reach 197 km; horizon fades into haze, no edge. NUM_LEVELS / RADIUS_PAGES / far / fog are all
+config (pillar 1) — tune per game/hardware. LESSON: a residency probe says "covered near the
+camera"; it does NOT say "covered as far as you can SEE" — match loaded extent to view distance.
+
 ## FIXED — frustum-cull of GPU-displaced tiles (was the rotation-vanish AND creep-blink)
 Owner reported tiles vanishing on rotation, and (later, reproducible) a chunk blinking in/out when
 creeping slowly toward a boundary and stopping. SAME root cause: flat (y=0) tile meshes + GPU
