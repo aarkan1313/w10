@@ -5,6 +5,55 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+---
+
+## M5 — Detail & masks (IN PROGRESS — Slice 1 GATED, owner look-acceptance PENDING)
+
+**Slice 1 — fBm + uniform detail: GATE-GREEN, owner fly not yet done (so NOT "accepted").**
+Spec: `docs/superpowers/specs/2026-05-30-m5-detail-masks-design.md`. Plan:
+`docs/superpowers/plans/2026-05-30-m5-slice1-fbm-uniform-detail.md`. Commits `bf159e7..5db3817`
+(pushed to origin; backed up at `C:\Backups\worldgen10\worldgen10_2026-05-30_M5s1-checkpoint`).
+
+What landed (render-only; Rust core UNTOUCHED — cargo still 115):
+- **`ring_displace.gdshader`** now adds bounded procedural **fBm detail** to `VERTEX.y` *after* the
+  base height `h = mix(h_fine,h_coarse,t)` is formed. Detail = `wg_fbm_detail(world.xz) * wg_detail_amp`
+  — a pure function of WORLD XZ (edge-safe by construction), normalized so `|detail| ≤ wg_detail_amp`
+  (closed-form bound). New funcs `wg_hash2` / `wg_value_noise` (cubic-smoothstep weights + a contrast
+  curve) / `wg_fbm_detail` (5 octaves, gain 0.5, base freq 0.0009 ≈ 1/1111 m). `wg_detail_amp` is a
+  GLOBAL shader param (default 0 = byte-identical to pre-M5; the harness/gate sets it). The base
+  `h`/`h_fine`/`h_coarse` math is byte-identical — detail rides ON TOP, so facts/collision (which read
+  the base via the pure-Rust `facts_api` path) are untouched. The display varying was renamed
+  `v_height → v_render_height` (it now carries base+detail for the height-color; NOT the facts height).
+  Slice 1 is FLAT amplitude — no slope modulation (S3) and no LOD fade (S2) yet.
+- **`m5_detail_check.gd`** (new, `m3` suite → now **7 checks**, WINDOWED): asserts (1) BOUNDED
+  (saturated-pixel frac < 0.20), (2) **EDGE-SAFE WITH DETAIL ON** — renders the two abutting tiles
+  SEPARATELY and compares tile A's right-edge column vs tile B's left-edge column (same shared world
+  edge), `seam_max_luma_delta = 0.00392 < 0.01` → abutting tiles AGREE on the shared edge (the M3 seam
+  contract SURVIVES M5 — the scariest risk, retired first), (3) NON-VACUOUS (`diff 0.0026 > 0.001`,
+  threshold derived from realized amplitude, not a guess). The seam test was strengthened in review
+  from an across-the-seam compare (which mixed terrain gradient with seam error) to the separate-tile
+  compare (isolates seam agreement).
+- **Parity contract proven intact:** `gpu` suite still **4/4**, `facts_collision_parity_check`
+  **maxd = 0.000932 m** (identical to the M4 baseline) WITH detail on — detail did not move the base.
+- **`m3_review.gd`**: press **N** to toggle detail on/off live (the owner A/B). Default detail ON at
+  60 m peak.
+
+**Gates: cargo 115 · fast 6/6 · gpu 4/4 · m3 7/7 · all fail=0.** Built subagent-driven (impl + spec
+review + code-quality review per task); both reviews passed (spec verified base-parity against the
+real Rust path; quality strengthened the seam test + cleanups).
+
+**NOT YET DONE (the honest baseline — DESIGN §7.3):** the OWNER ACCEPTANCE FLY. Gate-green proves
+bounded/edge-safe/base-untouched/perf — it does NOT prove "looks good / less blobby." The owner has
+not yet flown `m3_review.tscn` to judge the LOOK (does detail read as real shape? any shimmer/crawl at
+speed? any perceived seam the gate's epsilon missed?). **Until that fly, Slice 1 is GATED, not
+ACCEPTED.** Owner deferred the fly; resuming Slices 2–4 should keep this provisional (S2 LOD fade
+modifies this same detail — if the owner's fly finds a look problem, fix before/with S2).
+
+**Next M5 slices:** S2 LOD fade (detail → 0 into coarse/morph band) · S3 surface descriptor +
+slope modulation (the M6/M7 reusable seam) · S4 config + p99 sign-off + docs audit.
+
+---
+
 Last updated: 2026-05-30 (**M3 RENDER LAYER STRUCTURALLY DONE — rebuilt prove-one-thing-at-a-time, folded into the real classes, all gates green.** The post-slice-8 multi-level render was "a mess" under a real fly (sheets/seams/switching) because slices 4→8 stacked without proving live continuity — gates proved properties (p99, never-black, data-seam=0) but never *perceptual continuity in a flown POV*. Fix: kept the proven CPU/GPU leaves (pool, page_policy, schedule_policy, streamer, ring_geometry, page_compute — clean one-directional deps), rebuilt ONLY the presentation (`Wg10TerrainView` + `Wg10ClipmapRings` + `ring_displace.gdshader`) one step at a time in `proving_ground.tscn`, owner-flown each step, then FOLDED the proven model into the real classes.
 
 **Real bugs found + fixed (each owner-confirmed) — do NOT reintroduce:**
