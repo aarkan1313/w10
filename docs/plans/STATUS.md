@@ -49,6 +49,14 @@ speed? any perceived seam the gate's epsilon missed?). **Until that fly, Slice 1
 ACCEPTED.** Owner deferred the fly; resuming Slices 2–4 should keep this provisional (S2 LOD fade
 modifies this same detail — if the owner's fly finds a look problem, fix before/with S2).
 
+**Perf de-risked early (throwaway probe, 2026-05-30):** ran the m3_accept ~1000 m/s scripted flight
+with detail OFF vs ON (the probe was uncommitted, cleaned up). **detail OFF p99 = 1.90 ms · detail ON
+p99 = 1.82 ms · delta ≈ 0** — the S1 fBm vertex math costs no measurable frame time (≈40 ALU ops over a
+64² mesh, no extra memory traffic), ~3× under the 6 ms budget. So S1 detail is perf-free; the only M5
+slice with real per-vertex cost will be S3's descriptor (+4 page taps), which the S4 p99 gate measures
+against this clean baseline. (The formal detail-on p99 sign-off is still S4; this is early data, not the
+gate.)
+
 **Next M5 slices:** S2 LOD fade (detail → 0 into coarse/morph band) · S3 surface descriptor +
 slope modulation (the M6/M7 reusable seam) · S4 config + p99 sign-off + docs audit.
 
