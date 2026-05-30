@@ -248,7 +248,27 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 > rather than pure noise). M5–M7 below are the systems that MODULATE/REFINE how the kernels
 > combine — and are where the current "squareness / spiky / extreme" look gets fixed.
 
-## ⚖️ SCALE GAP vs WG9 — the "get to AAA scale" analysis (2026-05-30)
+## 🧬 FOUNDATIONAL PIVOT — Kernel-DNA synthesis (2026-05-30, supersedes the kernel-tiling model)
+
+Owner flew the relief-scaled terrain → "blobby, placed, not a contiguous landmass; kernels just placed,
+not informing." ROOT CAUSE: `height::height`→`sample_kernel` reads kernel pixels as a TILING texture
+(`rem_euclid` every `footprint_m` ~50–220 km), cross-faded by grammar weight → no continuous shape, just
+repeating stamps. **Vision (owner): kernels are the SOURCE that INFORMS an infinite procedural generator
+(height/topology), then erosion + biomes/materials layer on top — kernels inform the whole stack, not get
+stamped.** Concrete approach (owner-chosen): **STATISTICAL DNA drives SYNTHESIS** — analyze each kernel into
+a spectral SIGNATURE (amp-per-octave), runtime SYNTHESIZES infinite continuous non-repeating noise from
+grammar-blended signatures (kernel pixels never sampled). **Spec:**
+`docs/superpowers/specs/2026-05-30-kernel-dna-synthesis-design.md`. This is a FOUNDATIONAL rebuild of the
+height core (replaces `sample_kernel`); M5–M7 (detail/biomes/erosion) sit ON it. 4 slices: offline spectral
+analysis+fidelity gate → Rust synth core → GPU parity + kill the 25 MB atlas → integrate+facts+perf+fly.
+
+**Reconciliation:** relief_scale (the "shaded terrain at scale" Slice 1, DONE) STAYS (multiplies the synth
+field). Normals/lighting STILL APPLIES, sequenced AFTER the synth core (shade the real synthesized field).
+Mesh-density is ABSORBED (synth_scale + Slice 4 perf tuning set landform/mesh scale together). The
+scale-gap-vs-WG9 analysis below remains valid CONTEXT, but the tiling/footprint half is SUPERSEDED (no
+tiling exists after synthesis); the mesh-density + relief half lives on inside the synthesis milestone.
+
+## ⚖️ SCALE GAP vs WG9 — the "get to AAA scale" analysis (2026-05-30) [tiling half SUPERSEDED by the pivot above]
 
 The owner: "W9 had the scale we want down." Read WG9's ACTUAL scale config (READ-ONLY ref) and
 compared to WG10. The blobby/spiky look is mostly a **scale-config gap**, and it reframes M5–M7.
