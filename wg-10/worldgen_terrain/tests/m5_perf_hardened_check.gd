@@ -33,6 +33,7 @@ const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
 const DETAIL_AMP := 350.0        # detail ON (the real shipped render path includes M5 detail cost)
 const VIEW_SIZE := Vector2i(960, 540)
+const SKY := Color(0.45, 0.62, 0.85)   # the env background — a pixel near this is SKY, not terrain (B3)
 
 const SPEED := 1000.0            # ~1000 m/s acceptance speed
 const WARM_FRAMES := 80          # settle streaming + let measured-render-time results fill (lag = frame_queue_size)
@@ -45,11 +46,20 @@ const GPU_STALL_CEIL_MS := 33.0  # no single frame's GPU time worse than this
 # distant fogged terrain in a narrow color band, so a fly-frame color-bucket count is the wrong
 # instrument (it fails on a perfectly good render). Relief variety is proven by m3_view_check (top-down
 # ortho) where it belongs. THIS gate proves the perf number is measuring the REAL render via: non-zero
-# real GPU time + terrain non-black + pages streamed under motion + the clipmap actually drew geometry.
-const MIN_NONBLACK := 0.85       # terrain fills the lower frame (not an empty/black scene)
+# real GPU time + TERRAIN (not sky) filling the lower frame + pages streamed + the clipmap drew geometry
+# + DETAIL actually contributes (on-vs-off frame delta).
+# B3 fix: the old nonblack test counted ANY pixel with c.r/g/b > 0.03 as "real" — but the sky is bright
+# (0.45,0.62,0.85), so a 100%-EMPTY-SKY frame scored nonblack=1.0 and the proof couldn't tell terrain from
+# sky. Now we count a pixel as TERRAIN only if it differs from the SKY color by > SKY_DELTA, and we add a
+# detail-on-vs-off assertion so a fly-scale detail regression also fails the PERF gate (not only the
+# separate static-page detail gate).
+const MIN_TERRAIN_FRAC := 0.85   # TERRAIN (differs from sky) fills the lower frame (not an empty/sky scene)
+const SKY_DELTA := 0.06          # a pixel is terrain (not sky) if max channel-diff from SKY exceeds this
 const MIN_STREAM_EVENTS := 1     # pages were streamed under motion (created+recomputed grew) -> not static
 const MIN_PRIMITIVES := 100000   # the clipmap actually drew geometry (45 tiles x ~64^2 -> millions; 100k floor)
 const MIN_GPU_MS := 0.001        # measured GPU time is non-zero (the timer is actually working, not Metal-0)
+const DETAIL_DELTA_MIN := 0.0008 # detail ON vs OFF must change the rendered frame by at least this (mean abs
+                                 # luma delta); proves detail genuinely contributes at fly scale, not a no-op.
 
 func _init() -> void:
 	quit(await _run())
@@ -116,7 +126,7 @@ func _run() -> int:
 	var gpu_max := 0.0
 	var cpu_update_sum := 0.0
 	var prim_max := 0
-	var nonblack_min := 1.0
+	var terrain_min := 1.0
 	var resident_max := 0
 
 	var total := WARM_FRAMES + MEASURE_FRAMES
@@ -146,23 +156,21 @@ func _run() -> int:
 			prim_max = maxi(prim_max, prims)
 			var st: Dictionary = pool.call("stats")
 			resident_max = maxi(resident_max, int(st.get("resident", 0)))
-			# periodic nonblack check (did it render terrain, not an empty/black frame?)
+			# periodic TERRAIN check (did it render terrain, not an empty SKY frame? — B3).
+			# Counts a lower-frame pixel as terrain only if it differs from the SKY color, so a
+			# 100%-sky frame scores ~0 (the old "any bright pixel" test scored sky as 1.0).
 			if (f - WARM_FRAMES) % 24 == 0:
 				var img: Image = vp.get_texture().get_image()
 				if img != null:
-					var nb := 0; var samp := 0
-					var y0 := int(img.get_height() / 3)
-					for y in range(y0, img.get_height(), 4):
-						for x in range(0, img.get_width(), 4):
-							samp += 1
-							var c := img.get_pixel(x, y)
-							if c.r > 0.03 or c.g > 0.03 or c.b > 0.03:
-								nb += 1
-					var frac := float(nb) / float(max(samp, 1))
-					nonblack_min = minf(nonblack_min, frac)
+					terrain_min = minf(terrain_min, _terrain_frac(img))
 
 	var stN: Dictionary = pool.call("stats")
 	var stream_events := int(stN.get("created", 0)) + int(stN.get("recomputed", 0)) - stream0
+
+	# --- DETAIL on-vs-off (B3): capture the same framed view with detail ON then OFF; they must differ.
+	# Proves M5 detail genuinely contributes at fly scale — a detail regression (detail silently doing
+	# nothing) now fails the PERF gate too, not only the separate static-page detail gate.
+	var detail_delta := _detail_on_off_delta(vp, cam, view, pos, headings)
 
 	# --- GPU p99 ---
 	gpu_samples.sort()
@@ -183,22 +191,77 @@ func _run() -> int:
 	# --- DID-REAL-WORK assertions (a green perf number must be measuring the REAL render) ---
 	if gpu_max < MIN_GPU_MS:
 		errs.append("GPU timer read ~0 (max %.5f ms) -> measurement not working; perf number is meaningless" % gpu_max)
-	if nonblack_min < MIN_NONBLACK:
-		errs.append("not-real-work: terrain nonblack=%.3f < %.2f (empty/black frames?)" % [nonblack_min, MIN_NONBLACK])
+	if terrain_min < MIN_TERRAIN_FRAC:
+		errs.append("not-real-work: terrain (non-sky) frac=%.3f < %.2f (empty/sky frames? — B3)" % [terrain_min, MIN_TERRAIN_FRAC])
 	if stream_events < MIN_STREAM_EVENTS:
 		errs.append("not-real-work: %d stream events < %d (nothing streamed under motion -> static scene?)" % [stream_events, MIN_STREAM_EVENTS])
 	if prim_max < MIN_PRIMITIVES:
 		errs.append("not-real-work: max primitives %d < %d (clipmap didn't draw geometry?)" % [prim_max, MIN_PRIMITIVES])
+	if detail_delta < DETAIL_DELTA_MIN:
+		errs.append("not-real-work: detail on-vs-off delta=%.5f < %.5f (detail not contributing at fly scale? — B3)" % [detail_delta, DETAIL_DELTA_MIN])
 
 	pool.call("free_all")
 
 	print("[wg10-m5-perf] GPU p99=%.3fms mean=%.3fms max=%.3fms (budget %.1f) speed=%dm/s frames=%d" % [
 		gpu_p99, gpu_mean, gpu_max, GPU_P99_BUDGET_MS, int(SPEED), MEASURE_FRAMES])
-	print("[wg10-m5-perf] DID-REAL-WORK: nonblack_min=%.3f stream_events=%d prim_max=%d resident_max=%d cpu_update_mean=%.3fms" % [
-		nonblack_min, stream_events, prim_max, resident_max, cpu_update_sum / float(MEASURE_FRAMES)])
+	print("[wg10-m5-perf] DID-REAL-WORK: terrain_frac_min=%.3f detail_delta=%.5f stream_events=%d prim_max=%d resident_max=%d cpu_update_mean=%.3fms" % [
+		terrain_min, detail_delta, stream_events, prim_max, resident_max, cpu_update_sum / float(MEASURE_FRAMES)])
 	if not errs.is_empty():
 		for e in errs: push_error(e)
 		print("[wg10-m5-perf] status=fail errors=%d" % errs.size())
 		return 1
-	print("[wg10-m5-perf] status=pass GPU p99=%.3fms — REAL GPU time, proven doing real work" % gpu_p99)
+	print("[wg10-m5-perf] status=pass GPU p99=%.3fms — REAL GPU time, proven doing real work (terrain-not-sky + detail-contributes)" % gpu_p99)
 	return 0
+
+
+# Fraction of LOWER-frame pixels that are TERRAIN (differ from the SKY color by > SKY_DELTA). The lower
+# third-to-bottom is where ground lives in a fly POV; a sky-only frame scores ~0 (the B3 fix — the old
+# "any bright pixel" test scored the bright sky as nonblack=1.0).
+func _terrain_frac(img: Image) -> float:
+	var hit := 0; var samp := 0
+	var y0 := int(img.get_height() / 3)
+	for y in range(y0, img.get_height(), 4):
+		for x in range(0, img.get_width(), 4):
+			samp += 1
+			var c := img.get_pixel(x, y)
+			var d := maxf(maxf(absf(c.r - SKY.r), absf(c.g - SKY.g)), absf(c.b - SKY.b))
+			if d > SKY_DELTA:
+				hit += 1
+	return float(hit) / float(max(samp, 1))
+
+
+# Mean absolute luma delta between the current framed view rendered with detail ON vs OFF. Renders the
+# SAME camera/position twice (only wg_detail_amp changes) so any difference is the detail contribution.
+func _detail_on_off_delta(vp: SubViewport, cam: Camera3D, view: Object, pos: Vector2, headings: Array) -> float:
+	var heading: Vector2 = headings[0]
+	var eye := Vector3(pos.x - heading.x * 600.0, 900.0, pos.y - heading.y * 600.0)
+	var look := Vector3(pos.x + heading.x * 1200.0, 0.0, pos.y + heading.y * 1200.0)
+	cam.look_at_from_position(eye, look, Vector3.UP)
+	view.call("update", pos.x, pos.y, heading.x * SPEED, heading.y * SPEED)
+	var on_img := await _frame(vp)
+	RenderingServer.global_shader_parameter_set("wg_detail_amp", 0.0)
+	var off_img := await _frame(vp)
+	RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP)   # restore for any later use
+	if on_img == null or off_img == null:
+		return 0.0
+	return _mean_abs_luma_delta(on_img, off_img)
+
+
+func _frame(vp: SubViewport) -> Image:
+	await process_frame
+	RenderingServer.force_draw()
+	await process_frame
+	return vp.get_texture().get_image()
+
+
+func _mean_abs_luma_delta(a: Image, b: Image) -> float:
+	var n := 0; var s := 0.0
+	var w := mini(a.get_width(), b.get_width())
+	var h := mini(a.get_height(), b.get_height())
+	for y in range(0, h, 4):
+		for x in range(0, w, 4):
+			var ca := a.get_pixel(x, y); var cb := b.get_pixel(x, y)
+			var la := 0.299 * ca.r + 0.587 * ca.g + 0.114 * ca.b
+			var lb := 0.299 * cb.r + 0.587 * cb.g + 0.114 * cb.b
+			s += absf(la - lb); n += 1
+	return s / float(max(n, 1))
