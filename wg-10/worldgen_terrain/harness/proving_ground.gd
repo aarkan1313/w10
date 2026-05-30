@@ -18,12 +18,12 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 6
+const STEP := 7
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
 const GRID_RES := 64          # mesh cells across the page (vertices = 65x65)
-const CAPACITY := 48    # step 5: 2 levels x 9 + stream-ahead headroom
+const CAPACITY := 96    # step 7: 3 levels x 9 = 27 + stream-ahead + parent-fetch headroom
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
 # Streamer tunables. NUM_LEVELS grows with the step (4 = 1 level; 5+ = 2 levels for never-black).
@@ -44,6 +44,9 @@ var _last_key: Array = []      # [level][slot] -> Vector2 page origin (or (NAN,N
 var _flip_count := 0
 var _last_flip := ""
 var _frame := 0
+# step 7 perf: rolling frame-time window for a live p99 readout (the acceptance metric).
+var _ft_window: Array[float] = []
+const FT_WINDOW := 240
 var _hud: Label
 var _camera: Camera3D
 
@@ -60,7 +63,7 @@ func _ready() -> void:
 	add_child(light)
 
 	# levels per step: steps 1-4 are single-level; step 5+ add a coarser level for never-black.
-	_num_levels = 2 if STEP >= 5 else 1
+	_num_levels = 3 if STEP >= 7 else (2 if STEP >= 5 else 1)
 	# morph region (fraction of the fine neighborhood half-extent over which fine fades to coarse).
 	# 0 until step 6; step 6 turns it on to blend the LOD boundary.
 	_morph_region = 0.35 if STEP >= 6 else 0.0
@@ -81,8 +84,8 @@ func _ready() -> void:
 		_build_step3()
 	elif STEP == 4:
 		_build_step4()
-	elif STEP == 5 or STEP == 6:
-		_build_step5()   # same 2-level tile setup; the per-frame drive differs (step 6 morphs)
+	elif STEP == 5 or STEP == 6 or STEP == 7:
+		_build_step5()   # builds _num_levels x 9 tiles; the per-frame drive differs by step
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
@@ -98,7 +101,7 @@ func _ready() -> void:
 		3:
 			# 3x3 spans [0, 3*BASE_SPAN]; centre over the middle page, higher to see all 9.
 			_camera.global_position = Vector3(BASE_SPAN * 1.5, 6000.0, BASE_SPAN * 1.5)
-		4, 5:
+		4, 5, 6, 7:
 			# moving 3x3 follows the camera — start at the origin, a bit up, looking ahead.
 			_camera.global_position = Vector3(0.0, 1800.0, 0.0)
 		_:
@@ -290,10 +293,6 @@ func _drive_step6(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> voi
 	_frame += 1
 	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
 	var led: Vector2 = _streamer.call("coverage_center", cam_x, cam_z, vel_x, vel_z)
-	# fine neighborhood centre + half-extent (level 0), reused by the fine tiles' morph.
-	var fcx: float = floor(led.x / BASE_SPAN) * BASE_SPAN + BASE_SPAN * 0.5
-	var fcz: float = floor(led.y / BASE_SPAN) * BASE_SPAN + BASE_SPAN * 0.5
-	var fine_half_extent: float = 1.5 * BASE_SPAN   # 3 fine pages wide -> half is 1.5*span
 	for level in range(_num_levels):
 		var span_l: float = BASE_SPAN * pow(2.0, level)
 		var cox: float = floor(led.x / span_l) * span_l
@@ -317,29 +316,32 @@ func _drive_step6(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> voi
 				mat.set_shader_parameter("world_span", span_l)
 				mat.set_shader_parameter("height_tex", tex)
 				mat.set_shader_parameter("page_origin", Vector2(ox, oz))
-				if level == 0 and _num_levels > 1:
-					# bind the REAL coarse page under this fine tile + the fine neighborhood frame.
-					var cspan: float = BASE_SPAN * 2.0
+				if level < _num_levels - 1:
+					# any non-coarsest level morphs toward its PARENT (level+1) over its own 3x3
+					# outer band: bind the real parent page covering this tile + this level's frame.
+					var pspan: float = span_l * 2.0
 					var tc_x: float = ox + span_l * 0.5
 					var tc_z: float = oz + span_l * 0.5
-					var c_ox: float = floor(tc_x / cspan) * cspan
-					var c_oz: float = floor(tc_z / cspan) * cspan
-					var ctex: Object = _pool.call("get_resident_page", 1, c_ox, c_oz)
-					if ctex == null:
-						# coarse parent not resident -> can't blend; fall back to no morph this frame.
+					var p_ox: float = floor(tc_x / pspan) * pspan
+					var p_oz: float = floor(tc_z / pspan) * pspan
+					var ptex: Object = _pool.call("get_resident_page", level + 1, p_ox, p_oz)
+					if ptex == null:
+						# parent not resident -> no morph this frame (still covered: this level's
+						# own page is resident here).
 						mat.set_shader_parameter("coarse_height_tex", tex)
 						mat.set_shader_parameter("coarse_span", span_l)
 						mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
 						mat.set_shader_parameter("morph_region", 0.0)
 					else:
-						mat.set_shader_parameter("coarse_height_tex", ctex)
-						mat.set_shader_parameter("coarse_span", cspan)
-						mat.set_shader_parameter("coarse_origin", Vector2(c_ox, c_oz))
+						mat.set_shader_parameter("coarse_height_tex", ptex)
+						mat.set_shader_parameter("coarse_span", pspan)
+						mat.set_shader_parameter("coarse_origin", Vector2(p_ox, p_oz))
 						mat.set_shader_parameter("morph_region", _morph_region)
-					mat.set_shader_parameter("level_center", Vector2(fcx, fcz))
-					mat.set_shader_parameter("level_half_extent", fine_half_extent)
+					# this level's 3x3 neighborhood centre (middle tile centre) + half-extent.
+					mat.set_shader_parameter("level_center", Vector2(cox + span_l * 0.5, coz + span_l * 0.5))
+					mat.set_shader_parameter("level_half_extent", 1.5 * span_l)
 				else:
-					# coarse level: no morph; its own page for both samplers.
+					# coarsest level: nothing coarser to blend to; its own page for both samplers.
 					mat.set_shader_parameter("coarse_height_tex", tex)
 					mat.set_shader_parameter("coarse_span", span_l)
 					mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
@@ -403,7 +405,7 @@ func _make_grid_mesh(span: float, res: int) -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return mesh
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _hud == null or _camera == null:
 		return
 	var p: Vector3 = _camera.global_position
@@ -416,15 +418,27 @@ func _process(_delta: float) -> void:
 			_drive_step4(p.x, p.z, v.x, v.z)
 		elif STEP == 5:
 			_drive_step5(p.x, p.z, v.x, v.z)
-		elif STEP == 6:
-			_drive_step6(p.x, p.z, v.x, v.z)
+		elif STEP == 6 or STEP == 7:
+			_drive_step6(p.x, p.z, v.x, v.z)   # generic N-level morph drive
 		var st: Dictionary = _pool.call("stats")
 		pool_line = "\nresident %d   created %d   recomputed %d" % [
 			int(st.get("resident", 0)), int(st.get("created", 0)), int(st.get("recomputed", 0))]
 		if STEP == 5 or STEP == 6:
-			# flips = tiles that changed shown-page or visibility this run. A pop you SEE should
-			# coincide with the flip count ticking + the last-flip tag below naming the culprit.
 			pool_line += "\ntile flips %d   last: %s" % [_flip_count, _last_flip]
+
+	# Step 7 = the perf acceptance: live frame-time p99 (target < 6 ms at ~1000 m/s).
+	var perf_line := ""
+	if STEP == 7:
+		_ft_window.append(delta * 1000.0)
+		if _ft_window.size() > FT_WINDOW:
+			_ft_window.remove_at(0)
+		if _ft_window.size() >= 30:
+			var sorted := _ft_window.duplicate()
+			sorted.sort()
+			var p99: float = sorted[int(sorted.size() * 0.99) - 1]
+			var mx: float = sorted[sorted.size() - 1]
+			var ok := "OK" if p99 < 6.0 else "OVER"
+			perf_line = "\nframe p99 %.2f ms  max %.2f ms  [%s, target <6ms @ ~1000 m/s]" % [p99, mx, ok]
 
 	var desc := ""
 	match STEP:
@@ -434,6 +448,7 @@ func _process(_delta: float) -> void:
 		4: desc = "STEP 4: STREAMER drives a moving 3x3 — fly fast; watch for churn/flicker"
 		5: desc = "STEP 5: 2 levels — coarse blanket UNDER fine. Fly fast: edge should NOT wink (coarse shows through)"
 		6: desc = "STEP 6: geomorph ON — fine fades to coarse at the LOD boundary. The step-5 line should be GONE"
+		7: desc = "STEP 7: 3 levels, full pipeline — SPRINT (Shift) to ~1000 m/s; p99 must stay <6ms, surface continuous"
 		_: desc = "STEP %d" % STEP
-	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s%s" % [
-		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc, pool_line]
+	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s%s%s" % [
+		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc, pool_line, perf_line]
