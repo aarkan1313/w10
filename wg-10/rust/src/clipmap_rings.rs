@@ -17,6 +17,12 @@ use crate::ring_geometry::{RingLayout, band_mesh, RingMesh};
 /// Tiles per level: a 3x3 neighborhood (radius 1).
 const TILES_PER_LEVEL: usize = 9;
 
+/// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
+/// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
+/// their flat (y=0) box leaves the frustum. Generous enough for worst-case z-score DEM heights
+/// times any reasonable height_scale; over-sizing only slightly loosens culling (negligible).
+const DISPLACE_AABB_HALF_M: f32 = 8000.0;
+
 /// Flat tile index from (level, dx, dz) with dx,dz in {-1,0,+1}.
 fn tile_index(level: i32, dx: i32, dz: i32) -> usize {
     (level as usize) * TILES_PER_LEVEL + ((dz + 1) as usize) * 3 + (dx + 1) as usize
@@ -90,6 +96,18 @@ impl Wg10ClipmapRings {
                     mat.set_shader(&shader);
                     mat.set_render_priority(priority);
                     mi.set_material_override(&mat);
+                    // The shader displaces VERTEX.y on the GPU, so the mesh's real bounds are
+                    // taller than its flat (y=0) geometry. Godot frustum-culls on the AABB — without
+                    // a TALL custom AABB a tile whose displaced terrain is on-screen gets culled when
+                    // its flat box leaves the frustum (tiles vanish on rotation / slow creep near the
+                    // view edge). Set a custom AABB spanning the tile's full XZ footprint + a generous
+                    // Y range covering worst-case displacement (z-score DEM heights * height_scale).
+                    let half = (span_l * 0.5) as f32;
+                    let y_half = DISPLACE_AABB_HALF_M;
+                    mi.set_custom_aabb(Aabb::new(
+                        Vector3::new(-half, -y_half, -half),
+                        Vector3::new(span_l as f32, y_half * 2.0, span_l as f32),
+                    ));
                     self.base_mut().add_child(&mi);
                     self.tiles.push(mi);
                     let _ = (dx, dz);
