@@ -18,7 +18,7 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 1
+const STEP := 2
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
@@ -53,14 +53,17 @@ func _ready() -> void:
 
 	if STEP == 1:
 		_build_step1()
+	elif STEP == 2:
+		_build_step2()
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
 	_camera.environment = env
 	_camera.far = BASE_SPAN * 16.0
 	add_child(_camera)
-	# Start above the centre of the page, looking down the +x/-y direction.
-	_camera.global_position = Vector3(BASE_SPAN * 0.5, 2500.0, BASE_SPAN * 0.5)
+	# Start above the area, looking down. For step 2+ bias toward the seam at x=BASE_SPAN.
+	var start_x := BASE_SPAN * 0.5 if STEP == 1 else BASE_SPAN
+	_camera.global_position = Vector3(start_x, 2500.0, BASE_SPAN * 0.5)
 	_camera.rotation_degrees = Vector3(-45.0, 0.0, 0.0)
 
 	# --- HUD ---
@@ -71,13 +74,27 @@ func _ready() -> void:
 	_hud.add_theme_color_override("font_color", Color.WHITE)
 	layer.add_child(_hud)
 
-# STEP 1: acquire the single level-0 page at world origin (0,0) and build one full-grid tile
-# placed over world [0, BASE_SPAN], sampling that page by world UV, morph OFF.
+# STEP 1: acquire the single level-0 page at world origin (0,0), one full-grid tile over world
+# [0, BASE_SPAN], sampled by world UV, morph OFF.
 func _build_step1() -> void:
-	var tex: Object = _pool.call("acquire_page", 0, 0.0, 0.0)
-	if tex == null:
-		push_error("proving_ground STEP1: acquire_page returned null"); return
+	if _build_tile(0.0, 0.0) == null:
+		push_error("proving_ground STEP1: acquire_page returned null")
 
+# STEP 2: TWO adjacent level-0 pages — origin page (0,0) and its +X neighbor (BASE_SPAN,0). Each
+# is its own page+tile sampled in its own world frame. The shared world edge at x=BASE_SPAN is
+# the FIRST place a real seam can show: if texel-corner generation + world-UV sampling are right,
+# the surface is continuous across it under a moving camera; if it cracks, the bug is isolated to
+# two tiles. Morph OFF (no levels yet) so this is purely the fine seam.
+func _build_step2() -> void:
+	if _build_tile(0.0, 0.0) == null or _build_tile(BASE_SPAN, 0.0) == null:
+		push_error("proving_ground STEP2: a page acquire returned null")
+
+# Acquire one level-0 page at world (ox,oz) and build its full-grid tile over world
+# [ox, ox+BASE_SPAN], sampling that page by world UV, morph OFF. Returns the MeshInstance or null.
+func _build_tile(ox: float, oz: float) -> MeshInstance3D:
+	var tex: Object = _pool.call("acquire_page", 0, ox, oz)
+	if tex == null:
+		return null
 	var mesh := _make_grid_mesh(BASE_SPAN, GRID_RES)
 	var mi := MeshInstance3D.new()
 	mi.set_mesh(mesh)
@@ -87,18 +104,19 @@ func _build_step1() -> void:
 	mat.set_shader_parameter("coarse_height_tex", tex)        # unused (morph off) but must be set
 	mat.set_shader_parameter("world_span", BASE_SPAN)
 	mat.set_shader_parameter("coarse_span", BASE_SPAN)
-	mat.set_shader_parameter("page_origin", Vector2(0.0, 0.0))
-	mat.set_shader_parameter("coarse_origin", Vector2(0.0, 0.0))
-	mat.set_shader_parameter("level_center", Vector2(BASE_SPAN * 0.5, BASE_SPAN * 0.5))
+	mat.set_shader_parameter("page_origin", Vector2(ox, oz))
+	mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
+	mat.set_shader_parameter("level_center", Vector2(ox + BASE_SPAN * 0.5, oz + BASE_SPAN * 0.5))
 	mat.set_shader_parameter("level_half_extent", BASE_SPAN)   # morph off, value irrelevant
 	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
 	mat.set_shader_parameter("morph_region", 0.0)              # MORPH OFF — pure fine sample
 	mat.set_shader_parameter("relief_ref", RELIEF_REF)
 	mi.set_material_override(mat)
 	# Mesh is centred at local origin spanning [-span/2, span/2]; place its centre at the page
-	# centre so it covers world [0, BASE_SPAN].
-	mi.position = Vector3(BASE_SPAN * 0.5, 0.0, BASE_SPAN * 0.5)
+	# centre so it covers world [ox, ox+BASE_SPAN] x [oz, oz+BASE_SPAN].
+	mi.position = Vector3(ox + BASE_SPAN * 0.5, 0.0, oz + BASE_SPAN * 0.5)
 	add_child(mi)
+	return mi
 
 # A flat XZ grid centred at local origin, side `span`, `res` cells per side. y filled by shader.
 func _make_grid_mesh(span: float, res: int) -> ArrayMesh:
@@ -130,5 +148,10 @@ func _process(_delta: float) -> void:
 	if _hud == null or _camera == null:
 		return
 	var p: Vector3 = _camera.global_position
-	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\nSTEP 1: ONE level-0 page, ONE flat tile, morph OFF, no streamer" % [
-		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z]
+	var desc := ""
+	match STEP:
+		1: desc = "STEP 1: ONE level-0 page, ONE flat tile, morph OFF, no streamer"
+		2: desc = "STEP 2: TWO adjacent pages — fly the seam at x=%.0f (look for a crack)" % BASE_SPAN
+		_: desc = "STEP %d" % STEP
+	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s" % [
+		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc]
