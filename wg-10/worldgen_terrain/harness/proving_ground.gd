@@ -18,7 +18,7 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 5
+const STEP := 6
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
@@ -32,6 +32,7 @@ const LEAD_SECONDS := 0.5    # velocity lead in SECONDS (clamped by the policy t
 const MAX_PER_FRAME := 4
 
 var _num_levels: int = 1       # set per step in _ready
+var _morph_region: float = 0.0 # step 6: fine->coarse blend band width (0 = off)
 var _pool: Object
 var _streamer: Object          # step 4+: drives page residency from camera pos/vel
 var _step4_tiles: Array = []   # step 4: 9 single-level tiles
@@ -60,6 +61,9 @@ func _ready() -> void:
 
 	# levels per step: steps 1-4 are single-level; step 5+ add a coarser level for never-black.
 	_num_levels = 2 if STEP >= 5 else 1
+	# morph region (fraction of the fine neighborhood half-extent over which fine fades to coarse).
+	# 0 until step 6; step 6 turns it on to blend the LOD boundary.
+	_morph_region = 0.35 if STEP >= 6 else 0.0
 
 	# --- proven leaves: configure the pool, acquire ONE page ---
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
@@ -77,8 +81,8 @@ func _ready() -> void:
 		_build_step3()
 	elif STEP == 4:
 		_build_step4()
-	elif STEP == 5:
-		_build_step5()
+	elif STEP == 5 or STEP == 6:
+		_build_step5()   # same 2-level tile setup; the per-frame drive differs (step 6 morphs)
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
@@ -211,7 +215,10 @@ func _build_step5() -> void:
 			mat.set_shader_parameter("coarse_span", span_l)
 			mat.set_shader_parameter("level_half_extent", span_l)
 			mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
-			mat.set_shader_parameter("morph_region", 0.0)   # morph off until step 6
+			# only the FINE level (0) morphs toward its coarse parent; the coarsest level has
+			# nothing coarser to blend to, so it stays morph-off.
+			var morph: float = _morph_region if level == 0 else 0.0
+			mat.set_shader_parameter("morph_region", morph)
 			mat.set_shader_parameter("relief_ref", RELIEF_REF)
 			mat.set_render_priority(prio)
 			mi.set_material_override(mat)
@@ -271,6 +278,74 @@ func _drive_step5(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> voi
 					mat.set_shader_parameter("page_origin", Vector2(ox, oz))
 					mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
 					mat.set_shader_parameter("level_center", Vector2(cox + span_l * 0.5, coz + span_l * 0.5))
+				slot += 1
+
+# STEP 6: like step 5, but the FINE level (0) GEOMORPHS toward the real coarse page beneath it,
+# blending fine->coarse over the outer band of the fine 3x3 -> the hard LOD line (step-5 finding)
+# becomes a smooth transition. Each fine tile binds: its fine page (height_tex) + the ACTUAL coarse
+# page covering its footprint (coarse_height_tex/coarse_origin/coarse_span) + the FINE neighborhood
+# centre/half-extent (so the blend rises to 1 exactly at the fine 3x3 outer edge, where coarse
+# takes over). The coarse level (1) draws underneath unmorphed, as in step 5.
+func _drive_step6(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> void:
+	_frame += 1
+	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
+	var led: Vector2 = _streamer.call("coverage_center", cam_x, cam_z, vel_x, vel_z)
+	# fine neighborhood centre + half-extent (level 0), reused by the fine tiles' morph.
+	var fcx: float = floor(led.x / BASE_SPAN) * BASE_SPAN + BASE_SPAN * 0.5
+	var fcz: float = floor(led.y / BASE_SPAN) * BASE_SPAN + BASE_SPAN * 0.5
+	var fine_half_extent: float = 1.5 * BASE_SPAN   # 3 fine pages wide -> half is 1.5*span
+	for level in range(_num_levels):
+		var span_l: float = BASE_SPAN * pow(2.0, level)
+		var cox: float = floor(led.x / span_l) * span_l
+		var coz: float = floor(led.y / span_l) * span_l
+		var tiles: Array = _level_tiles[level]
+		var slot := 0
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var ox: float = cox + dx * span_l
+				var oz: float = coz + dz * span_l
+				var mi: MeshInstance3D = tiles[slot]
+				var tex: Object = _pool.call("get_resident_page", level, ox, oz)
+				if tex == null:
+					mi.visible = false
+					_last_key[level][slot] = Vector2(NAN, NAN)
+					slot += 1
+					continue
+				mi.visible = true
+				mi.position = Vector3(ox + span_l * 0.5, 0.0, oz + span_l * 0.5)
+				var mat: ShaderMaterial = mi.get_material_override()
+				mat.set_shader_parameter("world_span", span_l)
+				mat.set_shader_parameter("height_tex", tex)
+				mat.set_shader_parameter("page_origin", Vector2(ox, oz))
+				if level == 0 and _num_levels > 1:
+					# bind the REAL coarse page under this fine tile + the fine neighborhood frame.
+					var cspan: float = BASE_SPAN * 2.0
+					var tc_x: float = ox + span_l * 0.5
+					var tc_z: float = oz + span_l * 0.5
+					var c_ox: float = floor(tc_x / cspan) * cspan
+					var c_oz: float = floor(tc_z / cspan) * cspan
+					var ctex: Object = _pool.call("get_resident_page", 1, c_ox, c_oz)
+					if ctex == null:
+						# coarse parent not resident -> can't blend; fall back to no morph this frame.
+						mat.set_shader_parameter("coarse_height_tex", tex)
+						mat.set_shader_parameter("coarse_span", span_l)
+						mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
+						mat.set_shader_parameter("morph_region", 0.0)
+					else:
+						mat.set_shader_parameter("coarse_height_tex", ctex)
+						mat.set_shader_parameter("coarse_span", cspan)
+						mat.set_shader_parameter("coarse_origin", Vector2(c_ox, c_oz))
+						mat.set_shader_parameter("morph_region", _morph_region)
+					mat.set_shader_parameter("level_center", Vector2(fcx, fcz))
+					mat.set_shader_parameter("level_half_extent", fine_half_extent)
+				else:
+					# coarse level: no morph; its own page for both samplers.
+					mat.set_shader_parameter("coarse_height_tex", tex)
+					mat.set_shader_parameter("coarse_span", span_l)
+					mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
+					mat.set_shader_parameter("morph_region", 0.0)
+					mat.set_shader_parameter("level_center", Vector2(cox + span_l * 0.5, coz + span_l * 0.5))
+					mat.set_shader_parameter("level_half_extent", span_l)
 				slot += 1
 
 # Acquire one level-0 page at world (ox,oz) and build its full-grid tile over world
@@ -341,10 +416,12 @@ func _process(_delta: float) -> void:
 			_drive_step4(p.x, p.z, v.x, v.z)
 		elif STEP == 5:
 			_drive_step5(p.x, p.z, v.x, v.z)
+		elif STEP == 6:
+			_drive_step6(p.x, p.z, v.x, v.z)
 		var st: Dictionary = _pool.call("stats")
 		pool_line = "\nresident %d   created %d   recomputed %d" % [
 			int(st.get("resident", 0)), int(st.get("created", 0)), int(st.get("recomputed", 0))]
-		if STEP == 5:
+		if STEP == 5 or STEP == 6:
 			# flips = tiles that changed shown-page or visibility this run. A pop you SEE should
 			# coincide with the flip count ticking + the last-flip tag below naming the culprit.
 			pool_line += "\ntile flips %d   last: %s" % [_flip_count, _last_flip]
@@ -356,6 +433,7 @@ func _process(_delta: float) -> void:
 		3: desc = "STEP 3: 3x3 of level-0 pages — one surface? any internal grid lines?"
 		4: desc = "STEP 4: STREAMER drives a moving 3x3 — fly fast; watch for churn/flicker"
 		5: desc = "STEP 5: 2 levels — coarse blanket UNDER fine. Fly fast: edge should NOT wink (coarse shows through)"
+		6: desc = "STEP 6: geomorph ON — fine fades to coarse at the LOD boundary. The step-5 line should be GONE"
 		_: desc = "STEP %d" % STEP
 	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s%s" % [
 		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc, pool_line]
