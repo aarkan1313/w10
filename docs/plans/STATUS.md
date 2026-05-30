@@ -108,7 +108,27 @@ modifies this same detail — if the owner's fly finds a look problem, fix befor
   for confirming S1's already-cheap detail, but TOO SOFT as a regression gate (a real GPU regression in
   M6/M7 could hide under the CPU-submit floor). **This makes the owner's concern concrete and CORRECT.**
 
-**OWNER-MANDATED S4 REQUIREMENT (evidence-backed):** the S4 hardened perf gate MUST measure TRUE GPU time
+**HARDENED-GATE DE-RISK (2026-05-30, 2 more throwaway probes) — the "true GPU time" plan HIT A WALL,
+found a working alternative:**
+- **RD timestamp READ is NOT exposed** on this Godot 4.6 build: `rd.capture_timestamp` exists but
+  `get_captured_timestamp_gpu_result` returns method-not-present. So "measure GPU time via RenderingDevice
+  timestamps" is **unavailable here.**
+- **Wall-time-per-draw is fully async-hidden:** a 256-iter vertex loop × 4 big tiles gave ratio **1.00×**
+  (pinned at 8.33 ms = the vsync/present cadence). The SubViewport GPU work hides entirely behind the
+  present interval — wall time is useless for GPU cost (worse than the earlier 1.28×).
+- **WORKING SIGNAL FOUND — `RenderingServer.get_rendering_info(RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)`:**
+  real, exposed, strongly load-responsive (heavy scene = 242,406 primitives / 3 draw calls vs ~0 light).
+  A monotonic GEOMETRY-LOAD metric that a regression moves directly + deterministically, no async issue.
+
+**⇒ REVISED hardened-gate design (honest, given what THIS box exposes):** a COMPOSITE of REAL signals, not
+a single fake GPU-time number — (1) **primitive count** at representative fly scale (real geometry load:
+asserts the scene drew the expected millions of tris = did-real-work, AND bounds it = a density regression
+fails), (2) **CPU `view.update` time** (already real — streaming/scheduling cost), (3) **did-real-work
+asserts** (pages streamed, nonblack, relief variety, detail present — can't pass on an empty scene), (4)
+honest DOC that true GPU-*time* isn't measurable here so the gate uses load+CPU-time+work-proof instead of
+a hollow ms. This DIRECTLY answers the owner's "is profiling real?" — the metrics now MOVE with real work.
+
+[superseded plan] The S4 hardened perf gate was to measure TRUE GPU time
 via `RenderingDevice` timestamp queries (NOT wall-time-per-draw), AND co-assert the scene did REAL WORK
 (relief variety present + detail non-vacuous + tiles visible + pages streamed/counter-moved + nonblack),
 so a green p99 provably corresponds to the real streaming-clipmap-with-detail render under motion. A
