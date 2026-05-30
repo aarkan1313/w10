@@ -32,7 +32,9 @@ const CAPACITY := 96       # 5 levels x 9 = 45 + stream-ahead + parent-fetch hea
 const MORPH_REGION := 0.15
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
-const DETAIL_AMP := 60.0     # M5 detail peak (metres); press N to toggle on/off live
+const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×HEIGHT_SCALE 0.35 = ~122 m effective — chosen
+							 # to be clearly VISIBLE at fly scale (60 m → ~21 m was invisible; see STATUS
+							 # M5 fly finding). STARTING value for live owner tuning, not a final look.
 
 var _view: Object
 var _camera: Camera3D
@@ -42,7 +44,9 @@ var _prev_states: PackedInt64Array = PackedInt64Array()
 var _flip_log: Array[String] = []
 var _cull_disabled := false
 var _morph_view := false
-var _detail_on := true
+var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matches the m5 gate's 0.0
+						  # baseline + the operator's "N enables detail" expectation; the scene used to
+						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
 var _frame := 0
 
 func _ready() -> void:
@@ -103,8 +107,9 @@ func _ready() -> void:
 	# Press M to toggle the MORPH-BAND HEATMAP: blue=fine, green=blend, red=coarse. A hard LOD pop
 	# shows as a blue->red edge with NO green; a proper geomorph shows a wide green gradient.
 	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	# M5: global detail amplitude (read by ring_displace's wg_detail_amp). N toggles it.
-	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, DETAIL_AMP)
+	# M5: global detail amplitude (read by ring_displace's wg_detail_amp). Register at 0.0 (detail OFF
+	# at load, matching _detail_on=false + the m5 gate convention); N toggles to DETAIL_AMP and back.
+	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 
 	# DEBUG flip-log HUD (bottom-left). Press K to toggle cull-disable (A/B test the AABB-cull
 	# theory): if a vanishing chunk STOPS with culling off, it's frustum culling; if it persists,

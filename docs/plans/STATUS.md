@@ -7,7 +7,54 @@ point — see DESIGN §7.3.)
 
 ---
 
-## M5 — Detail & masks (IN PROGRESS — Slice 1 GATED, owner look-acceptance PENDING)
+## M5 — Detail & masks (IN PROGRESS — Slice 1 GATED; owner fly found detail INVISIBLE — root-caused)
+
+**⚠️ OWNER FLY FINDING (2026-05-30): pressing N showed NO visible detail change. Root-caused
+systematically (3 offscreen probes + independent code audit) — TWO real defects, NOT a wiring failure:**
+
+1. **Toggle starts ON, so first N turns it OFF (phase-inverted).** `m3_review.gd` registers
+   `wg_detail_amp` at `DETAIL_AMP`(=60) on load AND `_detail_on := true`, so the scene starts detail-ON.
+   The owner, expecting "N enables detail," presses once → amp 60→0 (OFF). (The audit corrected an earlier
+   wrong guess that the shader auto-registers at 0 — in Godot 4.x a `global uniform` does NOT auto-register
+   with no `shader_globals` in project.godot, so the `add(60)` is authoritative → starts ON.) Also
+   INCONSISTENT with the m5 gate, which registers at 0.0. **Fix:** start OFF (`_detail_on:=false`, register
+   `0.0`) so N-on matches expectation + the gate convention.
+2. **Effective amplitude is near-invisible at fly scale (CONFIRMED by audit).** Detail peak = `DETAIL_AMP 60
+   × HEIGHT_SCALE 0.35 = ±21 m`. On the m3_review `GRID_RES=64` finest mesh, vertex spacing = 8192/64 =
+   128 m → Nyquist wavelength 256 m. The fBm's 5 octaves are ~1111/556/278/139/69 m; **only octaves 0–1
+   (1111, 556 m) survive — octaves 2–4 are below the mesh and aliased away.** So the rendered detail is
+   ~±16 m of gentle km-scale swell, invisible from 1200 m+ altitude over km-scale relief. The **m5 gate
+   "passed"** because it captures a SINGLE tile at close ortho range with `GRID_RES=128` (carries one more
+   octave) — exactly the gate-vs-human SCALE MISMATCH the owner has been warning about. **Fix:** raise amp
+   and/or lower base frequency (so octaves live above the shipped mesh Nyquist) and/or raise shipped
+   GRID_RES — tuned at the REAL fly scale, owner-judged.
+
+**Wiring CONFIRMED SOUND by the audit (not the problem):** global→all-45-tile-materials applies
+automatically; no per-frame clobber (Rust `bind_tile` only sets per-tile uniforms, never the global);
+`KEY_N` reaches `m3_review._input` (fly_camera doesn't consume keys); the global-set propagates (a probe
+moved the render 0.58 when amp 0→60 in close capture). The getter returning null is a known editor-only
+quirk, not proof of failure. **This finding is itself the strongest evidence for the owner's standing
+concern: gates must verify at a REPRESENTATIVE scale or they pass while the human sees nothing.**
+
+**FIXES APPLIED (2026-05-30, awaiting owner re-fly to confirm visibility):**
+- **Toggle phase (definitely correct):** `m3_review.gd` now starts detail OFF (`_detail_on:=false`,
+  register `wg_detail_amp` at 0.0) so the FIRST N press turns detail ON, matching the m5 gate's 0.0
+  baseline + the operator's expectation. (Was: started ON, so first N turned it off.)
+- **Visibility tuning (reasoned + gate-safe, but NOT probe-validated at fly scale):** `DETAIL_AMP`
+  60→**350** (×0.35 = ~122 m effective, up from ~21 m) in `m3_review.gd`; `WG_DETAIL_FREQ` 0.0009→
+  **0.00025** in the shader (octaves now ~4000/2000/1000/500/250 m, all at/above the GRID_RES=64 Nyquist
+  256 m, vs 3 octaves aliased away before). m3 suite still 7/7 (m5 non_vacuous diff 0.0026→0.0035 — broader
+  detail shows MORE), m3_accept p99=4.97 ms (<6).
+- **HONEST LIMITATION (the owner's exact point):** I could NOT validate the *visibility at fly scale* with
+  an offscreen probe — every probe I built fills the frame with ONE tile at close range, where even amp=60
+  reads as a 0.33 pixel delta (looks "very visible"), yet the owner saw nothing on the real fly (1200 m
+  altitude, 5 levels, 197 km horizon). **The probe over-reports visibility → it is NOT a trustworthy
+  proxy for the fly.** So the amp/freq values are reasoned improvements that the gate confirms don't break
+  correctness, but **whether they're actually perceptible at fly scale can ONLY be confirmed by the owner's
+  re-fly.** This is itself the strongest case for the S4 hardened gate to measure at a representative
+  multi-level fly scale, not a close single-tile capture.
+
+## M5 — Detail & masks (Slice 1 detail RENDERS but needs visibility tuning + toggle fix)
 
 **Slice 1 — fBm + uniform detail: GATE-GREEN, owner fly not yet done (so NOT "accepted").**
 Spec: `docs/superpowers/specs/2026-05-30-m5-detail-masks-design.md`. Plan:
