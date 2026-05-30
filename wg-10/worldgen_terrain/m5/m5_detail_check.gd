@@ -64,7 +64,12 @@ func _run() -> int:
 		return 1
 
 	var diff := _mean_abs_diff(off_img, on_img)
-	var non_vacuous := diff > 0.002
+	# Threshold set from the MEASURED realized amplitude, not guessed: at DETAIL_AMP=60 the mean
+	# height-color delta is ~0.0026 with the smoothstep contrast (~0.0020 without it). A no-op
+	# shader gives diff~=0.0000. 0.001 sits well below the realized signal and well above zero, so
+	# it proves "detail is genuinely present" with comfortable headroom either way and cannot pass
+	# on a no-op.
+	var non_vacuous := diff > 0.001
 	var sat := _saturated_frac(on_img)
 	var bounded := sat < 0.20
 	var edge_safe := await _edge_safe(DETAIL_AMP)

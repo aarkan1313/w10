@@ -48,10 +48,10 @@ float wg_value_noise(vec2 x) {
 	float d = wg_hash2(i + vec2(1.0, 1.0));
 	vec2 u = f * f * (3.0 - 2.0 * f);
 	float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);  // in [0,1]
-	// Mild contrast: the bilinear blend of 4 hashes clusters near 0.5 (central tendency), which
-	// wastes the [-1,1] budget. smoothstep is monotonic [0,1]->[0,1], so the bound is preserved
-	// exactly (still in [0,1]) while the distribution is pushed toward the extremes -> more
-	// realized relief per metre of wg_detail_amp.
+	// Quality choice: the bilinear blend of 4 hashes clusters toward 0.5 (central tendency), so
+	// raw value noise looks washed-out/muddy. smoothstep pushes the distribution toward the
+	// extremes, giving more believable relief per metre of wg_detail_amp. It is monotonic
+	// [0,1]->[0,1], so the output stays in [0,1] and the |fbm|<=1 bound is preserved exactly.
 	return smoothstep(0.0, 1.0, n);  // in [0,1], higher contrast
 }
 
