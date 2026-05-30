@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 5b DONE — 3×3 ring tiling (Wg10ClipmapRings N×9 tiles, finer-on-top overlap) + Wg10TerrainView 3×3 read-only live loop; m3_view_check passes WINDOWED over a 5-position moving sweep: full coverage (surrounds the camera), no z-fight, never-black, zero view-compute, tile↔page mapping. m3 suite 4 checks fail=0 (m3_rings retired, m3_view added); 103 cargo tests green; M3 in progress — remaining: fly camera + overlay + p99<6ms gate + manual fly)
+Last updated: 2026-05-29 (M3 slice 6 — fly harness (Wg10FlyCamera/Profiler/DiagnosticsOverlay + m3_review scene) DONE; p99 acceptance gate BUILT & RED with a clean diagnosis: 3×3 render-only frames ≤2 ms (under the 6 ms budget) but synchronous page compute spikes to 90 ms on boundary crossings → p99=16.7 ms. Fires the deferred slice-3 async trigger. NEXT M3 slice: async/background page production (zero scheduler/view change — the seam is async-ready), which turns the p99 gate green; then the owner's manual fly. m3 suite 5 checks (4 pass + accept RED); 103 cargo tests green)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -147,16 +147,33 @@ Remaining slices (NOT done):
       0.25), no z-fight, never-black, zero view-compute, tile↔page mapping. PNG eyeballed.
       Retired the one-page `m3_rings_check`. Faint tile-edge lines = visual polish (not a gap);
       the overlap overdraw is an explicit input to the p99 acceptance gate.
-- [ ] Modular harness components: camera/movement, diagnostics/profiling, UI
-      overlay (live fps/stats).
-- [ ] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,
-      free-fly (+ optional ground-follow).
-- [ ] Renderer-backed acceptance gate: no large black/missing component AND
-      **renderer frame p99 < 6 ms**, in motion at ~1000 m/s.
+- [x] Modular harness components: camera/movement, diagnostics/profiling, UI
+      overlay (live fps/stats). **DONE (slice 6):** Wg10FlyCamera (free-fly rig),
+      Wg10Profiler (frame p99/mean/max ring buffer), Wg10DiagnosticsOverlay (HUD) —
+      §6.4 self-contained/narrow/config/composable.
+- [x] Manual fly-test scene: WASD + Shift speed + mouse look + Space/C vertical,
+      free-fly. **DONE (slice 6):** `harness/m3_review.tscn` — thin assembly of
+      {Wg10TerrainView + fly camera + profiler + overlay}; the owner launches + flies it.
+      (Ground-follow rig deferred — YAGNI.)
+- [~] Renderer-backed acceptance gate: no large black/missing component AND
+      **renderer frame p99 < 6 ms**, in motion at ~1000 m/s. **GATE BUILT, currently RED
+      (slice 6):** `m3_accept_check` scripted ~1000 m/s flight, vsync off. Clean diagnosis:
+      render-only frames ≤ 2 ms (3×3 render UNDER budget), but synchronous page compute
+      spikes to 90 ms on boundary-crossing frames → p99=16.7 ms FAILS. **Blocked on the
+      async page-production slice (below)**; goes green once compute is off the render frame.
+      (Not relaxed — §7.3 forbids green-over-a-real-stall.)
+- [ ] **Async / background page production (NEXT M3 slice — unblocks the p99 gate).**
+      The slice-6 p99 gate fired the deferred slice-3 trigger: a single page compute (90 ms)
+      ≫ the 6 ms budget, so it can't be amortized synchronously. Move `compute_into_texture`
+      off the render-path frame (WorkerThreadPool / RD async submit / amortized off-frame
+      queue) behind `Wg10PagePool::acquire_page`. The scheduler↔pool seam is async-ready
+      (view reads observed residency + coarser fallback) → ZERO scheduler/view/rings change.
+      Re-run `m3_accept_check`: p99 < 6 ms with no boundary-crossing spike.
 - [ ] Tune finest-ring spacing + ring count against the review scene (config;
       not a locked constant — revisit when real assets exist).
-- [ ] **MANUAL ACCEPTANCE:** owner flies it at full speed and confirms no
-      stalls and no black/holes. (Gate green is necessary, not sufficient.)
+- [ ] **MANUAL ACCEPTANCE:** owner flies `m3_review.tscn` at full speed and confirms no
+      stalls and no black/holes. (Gate green is necessary, not sufficient — the final
+      authority. Pending the async slice + p99 green.)
 
 ## Milestone 4 — Facts API (authoritative, sparse)
 
