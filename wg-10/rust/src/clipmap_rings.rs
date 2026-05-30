@@ -141,28 +141,39 @@ impl Wg10ClipmapRings {
         dz: i64,
         height_tex: Gd<godot::classes::Texture2D>,
         coarse_tex: Gd<godot::classes::Texture2D>,
-        span_l: f64,
-        coarse_span: f64,
+        tile_origin: Vector2,
+        // spans packs (sample_span, coarse_span); placement packs (tile_span, level_half_extent)
+        // — folded into Vector2 to stay under gdext's #[func] param-arity cap (max 15 args).
+        spans: Vector2,
+        placement: Vector2,
         height_scale: f64,
         morph_region: f64,
         relief_ref: f64,
-        page_origin: Vector2,
+        sample_origin: Vector2,
         coarse_origin: Vector2,
         level_center: Vector2,
-        level_half_extent: f64,
     ) {
+        let sample_span = spans.x as f64;
+        let coarse_span = spans.y as f64;
+        let tile_span = placement.x as f64;
+        let level_half_extent = placement.y as f64;
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
             godot_error!("Wg10ClipmapRings::bind_tile: ({level},{dx},{dz}) out of range");
             return;
         }
+        // Placement is INVARIANT — tile (level,dx,dz) always sits in its fine grid slot,
+        // covering world [tile_origin, tile_origin+tile_span], whatever it samples. Sampling
+        // (sample_origin/sample_span = the fine page, OR the coarse page on fallback) is set
+        // separately on the material so a fallback tile reads the coarse page in the coarse
+        // page's OWN uv frame (the slice-8 flicker was placement & sampling sharing one origin).
         {
             let mi = &mut self.tiles[idx];
             let mut t = mi.get_transform();
             t.origin = Vector3::new(
-                page_origin.x + (span_l * 0.5) as f32,
+                tile_origin.x + (tile_span * 0.5) as f32,
                 0.0,
-                page_origin.y + (span_l * 0.5) as f32,
+                tile_origin.y + (tile_span * 0.5) as f32,
             );
             mi.set_transform(t);
         }
@@ -175,18 +186,18 @@ impl Wg10ClipmapRings {
         };
         mat.set_shader_parameter("height_tex", &height_tex.to_variant());
         mat.set_shader_parameter("coarse_height_tex", &coarse_tex.to_variant());
-        mat.set_shader_parameter("world_span", &span_l.to_variant());
+        mat.set_shader_parameter("world_span", &sample_span.to_variant());
         mat.set_shader_parameter("coarse_span", &coarse_span.to_variant());
         mat.set_shader_parameter("height_scale", &height_scale.to_variant());
         mat.set_shader_parameter("morph_region", &morph_region.to_variant());
         mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
         mat.set_shader_parameter("coarse_origin", &coarse_origin.to_variant());
-        // slice 8: fine page's world corner (world-UV fine sampling, seam-free) + the level's
-        // 3x3 neighborhood center & half-extent (geomorph engages at the true outer ring only).
-        mat.set_shader_parameter("page_origin", &page_origin.to_variant());
+        // fine SAMPLE frame (world-UV: the fine page, or the coarse page on fallback) + the
+        // level's 3x3 neighborhood center & half-extent (geomorph engages at the outer ring only).
+        mat.set_shader_parameter("page_origin", &sample_origin.to_variant());
         mat.set_shader_parameter("level_center", &level_center.to_variant());
         mat.set_shader_parameter("level_half_extent", &level_half_extent.to_variant());
-        self.bound_keys[idx] = (page_origin.x as i64, page_origin.y as i64);
+        self.bound_keys[idx] = (sample_origin.x as i64, sample_origin.y as i64);
     }
 }
 

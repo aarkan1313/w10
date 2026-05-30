@@ -48,7 +48,7 @@ func _ready() -> void:
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	add_child(rings)
 	_view = ClassDB.instantiate("Wg10TerrainView")
-	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF)
+	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_FRAMES)
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR

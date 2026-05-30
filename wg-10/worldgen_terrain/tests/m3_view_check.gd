@@ -56,7 +56,7 @@ func _run() -> int:
 		push_error("expected %d tiles, got %s" % [NUM_LEVELS*9, str(rings.call("tile_count"))]); return 1
 
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_FRAMES)
 
 	var errs: Array[String] = []
 

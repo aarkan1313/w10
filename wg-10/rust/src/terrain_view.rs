@@ -20,6 +20,7 @@ pub struct Wg10TerrainView {
     height_scale: f64,
     morph_region: f64,
     relief_ref: f64,
+    lead_frames: f64,
     base: Base<Node3D>,
 }
 
@@ -35,6 +36,7 @@ impl INode3D for Wg10TerrainView {
             height_scale: 1.0,
             morph_region: 0.0,
             relief_ref: 2000.0,
+            lead_frames: 0.0,
             base,
         }
     }
@@ -53,6 +55,7 @@ impl Wg10TerrainView {
         height_scale: f64,
         morph_region: f64,
         relief_ref: f64,
+        lead_frames: f64,
     ) {
         self.pool = Some(pool);
         self.streamer = Some(streamer);
@@ -62,6 +65,7 @@ impl Wg10TerrainView {
         self.height_scale = height_scale;
         self.morph_region = morph_region;
         self.relief_ref = relief_ref;
+        self.lead_frames = lead_frames;
     }
 
     #[func]
@@ -75,11 +79,18 @@ impl Wg10TerrainView {
             streamer.bind_mut().update(camera_x, camera_z, vel_x, vel_z);
         }
 
+        // Centre the displayed rings on the SAME velocity-led point the scheduler covers
+        // (coverage_center = pos + vel*lead_frames). The slice-8 flicker bug was the view
+        // centring on the raw camera position while the scheduler maintained the led ring, so
+        // the view kept asking for pages the scheduler had released → churn + fallback flicker.
+        let led_x = camera_x + vel_x * self.lead_frames;
+        let led_z = camera_z + vel_z * self.lead_frames;
+
         let num = self.num_levels;
         for level in 0..num {
             let span_l = self.base_span * 2f64.powi(level);
-            let center_x = (camera_x / span_l).floor() * span_l;
-            let center_z = (camera_z / span_l).floor() * span_l;
+            let center_x = (led_x / span_l).floor() * span_l;
+            let center_z = (led_z / span_l).floor() * span_l;
 
             // slice 8: the 3x3 neighborhood's world center is the MIDDLE tile's center
             // (page-origin `center` + half a page); the geomorph normalizes to half the
@@ -113,14 +124,31 @@ impl Wg10TerrainView {
                         (tex, coarse_tex)
                     };
 
-                    let (height_tex, morph) = if tex.is_some() {
-                        let m = if level < num - 1 { self.morph_region } else { 0.0 };
-                        (tex, m)
+                    // Tile PLACEMENT is invariant: it always sits in its fine slot, covering
+                    // world [po, po+span_l]. Only what it SAMPLES varies (self-consistent
+                    // texture+origin+span). The slice-8 flicker bug was a fallback tile sampling
+                    // the coarse texture with the FINE origin+span -> wrong UV. Three cases:
+                    //   - fine resident: sample the fine page (po, span_l); morph to coarse if
+                    //     the coarse parent is resident, else morph OFF.
+                    //   - fine missing, coarse resident: sample the COARSE page in ITS OWN frame
+                    //     (co, span_c) over this tile's footprint; morph OFF. Correct lower-detail.
+                    //   - neither resident: skip (the coarser level's own 3x3 covers this area).
+                    // Tuple: (height_tex, coarse_tex, sample_span, coarse_span, sample_ox, sample_oz, coarse_ox, coarse_oz, morph)
+                    let sample = if let Some(ht) = tex {
+                        match coarse_tex.clone() {
+                            Some(ct) => {
+                                let m = if level < num - 1 { self.morph_region } else { 0.0 };
+                                Some((ht, ct, span_l, span_c, po_x, po_z, co_x, co_z, m))
+                            }
+                            None => Some((ht.clone(), ht, span_l, span_l, po_x, po_z, po_x, po_z, 0.0)),
+                        }
+                    } else if let Some(ct) = coarse_tex.clone() {
+                        Some((ct.clone(), ct, span_c, span_c, co_x, co_z, co_x, co_z, 0.0))
                     } else {
-                        (coarse_tex.clone(), 0.0)
+                        None
                     };
 
-                    if let (Some(ht), Some(ct)) = (height_tex, coarse_tex) {
+                    if let Some((ht, ct, sample_span, coarse_span_b, so_x, so_z, cco_x, cco_z, morph)) = sample {
                         let mut rings = self.rings.as_ref().unwrap().clone();
                         rings.bind_mut().bind_tile(
                             level as i64,
@@ -128,15 +156,15 @@ impl Wg10TerrainView {
                             dz as i64,
                             ht.upcast::<godot::classes::Texture2D>(),
                             ct.upcast::<godot::classes::Texture2D>(),
-                            span_l,
-                            span_c,
+                            Vector2::new(po_x as f32, po_z as f32), // tile_origin (invariant placement)
+                            Vector2::new(sample_span as f32, coarse_span_b as f32), // spans
+                            Vector2::new(span_l as f32, level_half_extent as f32),  // placement: (tile_span, level_half_extent)
                             self.height_scale,
                             morph,
                             self.relief_ref,
-                            Vector2::new(po_x as f32, po_z as f32),
-                            Vector2::new(co_x as f32, co_z as f32),
+                            Vector2::new(so_x as f32, so_z as f32), // sample_origin
+                            Vector2::new(cco_x as f32, cco_z as f32),
                             Vector2::new(level_center_x as f32, level_center_z as f32),
-                            level_half_extent,
                         );
                     }
                 }

@@ -32,6 +32,9 @@ const SEAM_EPS := 1.0e-2          # metres; same scale as the parity gates' ABS_
 const VIEW_SIZE := Vector2i(960, 540)
 const JUMP_THRESH := 0.35         # per-pixel luminance jump that counts as a banding sweep
 const JUMP_FRAC_CEIL := 0.05      # at most 5% of interior samples may jump frame-to-frame
+const RECOMPUTE_FRAC_CEIL := 0.35 # at most 35% of steady flying frames may recompute a page
+                                  # (boundary crossings legitimately recompute; thrashing = ~100%)
+const HELD_CHANGE_CEIL := 0.01    # a camera-static frame must change <1% of pixels (else shimmer)
 
 func _init() -> void:
 	quit(await _run())
@@ -54,7 +57,7 @@ func _run() -> int:
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_FRAMES)
 
 	var errs: Array[String] = []
 
@@ -100,8 +103,8 @@ func _run() -> int:
 			if max_north > SEAM_EPS:
 				errs.append("seam NORTH: max shared-row readback diff %.6f m > %.4f" % [max_north, SEAM_EPS])
 
-	# (2) SOFT morph-banding under motion + a PNG artifact. Render a perspective flight POV,
-	# sample an interior luminance scanline each measured frame, count large frame-to-frame jumps.
+	# Build a perspective flight rig (the POV the owner actually flies — the top-down/settled
+	# checks missed the live defects).
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -123,13 +126,24 @@ func _run() -> int:
 	var heading := Vector2(0.7, 0.7)
 	var dt := 1.0 / 60.0
 	var speed := 800.0
+
+	# (2) CONTINUOUS-FLIGHT churn check (the owner's HUD showed `recomputed` climbing every
+	# frame = the pool thrashing because the camera's own ring wasn't maintained). Fly steadily
+	# for a long run; after warm-up, count how many of the flying frames triggered ANY page
+	# recompute. A boundary-cross legitimately recomputes a few pages, but the steady state must
+	# NOT recompute on most frames. We measure recomputes-per-measured-frame and cap the fraction
+	# of frames that recompute. (Pre-fix: ~100%.)
 	var prev_line := PackedFloat32Array()
 	var big_jumps := 0
 	var samples := 0
-	for f in range(120):
+	var recompute_frames := 0
+	var measured := 0
+	for f in range(200):
 		var vx := heading.x * speed
 		var vz := heading.y * speed
 		pos += Vector2(vx, vz) * dt
+		var st_before: Dictionary = pool.call("stats")
+		var rc_before := int(st_before.get("recomputed", 0)) + int(st_before.get("created", 0))
 		view.call("update", pos.x, pos.y, vx, vz)
 		var eye := Vector3(pos.x - heading.x * 600.0, 900.0, pos.y - heading.y * 600.0)
 		var look := Vector3(pos.x + heading.x * 1200.0, 0.0, pos.y + heading.y * 1200.0)
@@ -137,12 +151,17 @@ func _run() -> int:
 		await process_frame
 		RenderingServer.force_draw()
 		await process_frame
-		if f >= 40 and f % 8 == 0:
+		if f >= 60:
+			measured += 1
+			var st_after: Dictionary = pool.call("stats")
+			var rc_after := int(st_after.get("recomputed", 0)) + int(st_after.get("created", 0))
+			if rc_after > rc_before:
+				recompute_frames += 1
 			var img: Image = vp.get_texture().get_image()
 			if img != null:
-				if f == 40:
+				if f == 60:
 					img.save_png("user://m3_continuity.png")
-				var y := int(img.get_height() * 0.7)   # interior terrain scanline (below the horizon)
+				var y := int(img.get_height() * 0.7)   # interior terrain scanline (below horizon)
 				var line := PackedFloat32Array()
 				for x in range(0, img.get_width(), 4):
 					var c := img.get_pixel(x, y)
@@ -154,13 +173,61 @@ func _run() -> int:
 							big_jumps += 1
 				prev_line = line
 
+	var recompute_frac := float(recompute_frames) / float(max(measured, 1))
+	if recompute_frac > RECOMPUTE_FRAC_CEIL:
+		errs.append("page churn: %.3f of flying frames recomputed a page (>%.2f) — pool thrashing" % [recompute_frac, RECOMPUTE_FRAC_CEIL])
 	var jump_frac := float(big_jumps) / float(max(samples, 1))
 	if jump_frac > JUMP_FRAC_CEIL:
 		errs.append("morph banding: %.3f of interior samples jumped >%.2f frame-to-frame (ceil %.2f)" % [jump_frac, JUMP_THRESH, JUMP_FRAC_CEIL])
 
+	# (3) HOLD-STILL pixel stability (the owner: "changes while staying in the same chunk"). Stop
+	# dead, let streaming settle, then hold for many frames and assert the rendered frame does NOT
+	# change frame-to-frame. A flip-flop here = tiles oscillating between fine and a (now-correct)
+	# fallback, or a page evicting/recomputing while stationary. Pre-fix this shimmered.
+	for _w in range(40):
+		view.call("update", pos.x, pos.y, 0.0, 0.0)
+		await process_frame
+		RenderingServer.force_draw()
+		await process_frame
+	# Lower, near-ground POV looking along the surface — frames inter-tile/level boundaries the
+	# way the owner's in-game camera does (the high overview hid the "clear squares").
+	cam.look_at_from_position(
+		Vector3(pos.x - heading.x * 400.0, 350.0, pos.y - heading.y * 400.0),
+		Vector3(pos.x + heading.x * 2000.0, 100.0, pos.y + heading.y * 2000.0), Vector3.UP)
+	var held_prev: Image = null
+	var held_changed := 0
+	var held_frames := 0
+	for _h in range(16):
+		view.call("update", pos.x, pos.y, 0.0, 0.0)
+		await process_frame
+		RenderingServer.force_draw()
+		await process_frame
+		var himg: Image = vp.get_texture().get_image()
+		if himg != null and _h == 15:
+			himg.save_png("user://m3_continuity_held.png")
+		if himg != null and held_prev != null:
+			held_frames += 1
+			# Count pixels that changed meaningfully between two held (camera-static) frames.
+			var changed := 0
+			var checked := 0
+			var hy0 := int(himg.get_height() / 3)
+			for hy in range(hy0, himg.get_height(), 6):
+				for hx in range(0, himg.get_width(), 6):
+					checked += 1
+					var ca := himg.get_pixel(hx, hy)
+					var cb := held_prev.get_pixel(hx, hy)
+					if absf(ca.r - cb.r) + absf(ca.g - cb.g) + absf(ca.b - cb.b) > 0.04:
+						changed += 1
+			if float(changed) / float(max(checked, 1)) > HELD_CHANGE_CEIL:
+				held_changed += 1
+		held_prev = himg
+	if held_changed > 0:
+		errs.append("hold-still shimmer: %d/%d static frames changed >%.0f%% pixels — tiles oscillating while stationary" % [held_changed, held_frames, HELD_CHANGE_CEIL * 100.0])
+
 	pool.call("free_all")
 
-	print("[wg10-m3-continuity] seam_east=%.5f seam_north=%.5f eps=%.4f morph_jump_frac=%.3f (ceil %.2f)" % [max_east, max_north, SEAM_EPS, jump_frac, JUMP_FRAC_CEIL])
+	print("[wg10-m3-continuity] seam_e=%.5f seam_n=%.5f recompute_frac=%.3f (ceil %.2f) morph_jump=%.3f held_changed=%d/%d" % [
+		max_east, max_north, recompute_frac, RECOMPUTE_FRAC_CEIL, jump_frac, held_changed, held_frames])
 	if not errs.is_empty():
 		for e in errs: push_error(e)
 		print("[wg10-m3-continuity] status=fail errors=%d" % errs.size())

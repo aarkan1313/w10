@@ -52,13 +52,17 @@ fn velocity_lead_shifts_centre_in_travel_direction() {
     // Stationary: level-0 ring centred on origin page (0,0) -> contains (0,0).
     let still = p.coverage(0.0, 0.0, 0.0, 0.0);
     assert!(still.iter().any(|k| k.level == 0 && k.origin_x == 0 && k.origin_z == 0));
-    // Moving +x fast: centre = 0 + 200*10 = 2000 -> level-0 (span 1000) ring is
-    // centred on page origin 2000; the origin-0 page is no longer covered at L0.
+    // Moving +x fast: led centre = 0 + 200*10 = 2000 -> the single led ring shifts to page
+    // origin 2000. The renderer centres on the SAME led point (coverage_center), so it displays
+    // exactly this ring — no churn, no miss — while never-black budget math stays single-ring.
     let moving = p.coverage(0.0, 0.0, 200.0, 0.0);
     assert!(moving.iter().any(|k| k.level == 0 && k.origin_x == 2000),
         "fast +x travel should pull level-0 coverage ahead to x=2000");
     assert!(!moving.iter().any(|k| k.level == 0 && k.origin_x == 0),
-        "origin-0 level-0 page should fall outside the led ring");
+        "origin-0 level-0 page should fall outside the single led ring");
+    // The renderer must use the same led centre the scheduler covers.
+    let (cx, _cz) = p.coverage_center(0.0, 0.0, 200.0, 0.0);
+    assert_eq!(cx, 2000.0, "coverage_center must expose the led point the rings display");
 }
 
 use std::collections::HashSet;

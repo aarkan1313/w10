@@ -74,8 +74,7 @@ impl SchedulePolicy {
     /// (2*radius+1)^2 ring of pages around the velocity-biased centre. Union
     /// across levels. Deduplicated. Pure function of (cfg, pos, vel).
     pub fn coverage(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> Vec<PageKey> {
-        let cx = pos_x + vel_x * self.cfg.lead_frames;
-        let cz = pos_z + vel_z * self.cfg.lead_frames;
+        let (cx, cz) = self.coverage_center(pos_x, pos_z, vel_x, vel_z);
         let r = self.cfg.radius_pages;
         // `seen` dedups defensively: today levels never overlap in key-space
         // (PageKey includes `level`), but this guards future multi-ring overlap.
@@ -98,6 +97,15 @@ impl SchedulePolicy {
             }
         }
         out
+    }
+
+    /// The velocity-led world point coverage (and the renderer) centre their rings on. Exposed
+    /// so `Wg10TerrainView` displays EXACTLY the ring the scheduler maintains — the slice-8
+    /// flicker bug was the view centring on the raw camera position while the scheduler centred
+    /// on the led point, so the view referenced pages the scheduler had released (churn + miss).
+    /// One centre, one ring: never-black budget math (coarsest column <= max_per_frame) is intact.
+    pub fn coverage_center(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> (f64, f64) {
+        (pos_x + vel_x * self.cfg.lead_frames, pos_z + vel_z * self.cfg.lead_frames)
     }
 
     /// For a needed-but-not-resident page, walk UP the levels (coarser) and return
