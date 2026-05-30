@@ -77,11 +77,27 @@ refuted spectral path). The generator (`worldgen_proto.generate`) consumes: `rel
 ridge_strength, valley_depth, warp_amount, base_freq, ridge_freq, valley_freq, warp_freq` (+ schema
 `slope_bias`). All transform constants are named config at the top of `biome_distill.py` (no magic numbers).
 
-| Metric (real units) | Method (simple, debuggable) | → Knob | Transform (v1) |
+**Metric SOURCE (data-driven decision — survey of all 12 families' `kernel.json`):** WG9's pipeline already
+pre-computed some structural metrics in `kernel.json`. A survey showed which are trustworthy and which are
+not, and the choice is made by the pillars + AAA output (NOT by least-code):
+- **TRUST the vetted metadata** where it cleanly separates families: `height_range_m` (relief — mountain
+  4361 m vs grassland 903 m vs wetland 507 m), `mean_slope_deg`/`slope_p50/p95_deg` (slope — 10.5° vs 1.6°
+  vs 0.4°), and `height_std_m`/`curvature_abs_mean`/`roughness_residual_std_m` as roughness cross-checks.
+- **DO NOT trust `ridge_density`/`valley_density`** — they are a CONSTANT 0.100 for EVERY kernel in EVERY
+  family (WG9's ridge/valley detector is degenerate). Trusting them would make `ridge_strength`/`valley_depth`
+  identical across all 12 biomes → the "everything looks the same" collapse the pillars forbid. So the two
+  knobs that make a biome read as itself are **computed from the raw DEM here.**
+- **`anisotropy_score` is weak** (0.19–0.36, barely separates) → used only as a hint; the warp driver is the
+  DEM-computed coherence.
+This hybrid is strictly better for the pillars: it neither re-derives the vetted slope/relief (no waste) nor
+inherits WG9's dead ridge/valley detector (no biome-collapse). Computed metrics are fixture-monotonicity
+gated; trusted-metadata metrics are range/finite asserted.
+
+| Metric (real units) | Source / Method | → Knob | Transform (v1) |
 |---|---|---|---|
-| **relief_real_m** | `height_range_m` from meta (already real) | `relief_m` | direct |
-| **amp_profile[6]** | bandpass DEM into 6 octave bands (difference-of-Gaussian-blurs); each band's std. **Amplitude only — never phase-as-structure** (the spectral lesson) | `octave_amps[6]` | normalize so `amps[0]=1.0`; rest = relative band stds |
-| **dominant_wavelength_m** | radial peak of the amp profile, in metres (pixels × spacing_m) | `base_freq` | `1 / dominant_wavelength_m` |
+| **relief_real_m** | **metadata** `height_range_m` (vetted, clean separation) | `relief_m` | direct |
+| **amp_profile[6]** | **computed** — bandpass DEM into 6 octave bands (difference-of-Gaussian-blurs); each band's std. **Amplitude only — never phase-as-structure** (the spectral lesson) | `octave_amps[6]` | normalize so `amps[0]=1.0`; rest = relative band stds |
+| **dominant_wavelength_m** | **computed** — peak band of the amp profile → its centre wavelength in metres (pixels × spacing_m) | `base_freq` | `1 / dominant_wavelength_m` |
 | (derived) | fixed ratios of base_freq (coherent freqs; S1 convention) | `ridge_freq`, `valley_freq` | ridge ≈ 2× base, valley ≈ 1.2× base (config) |
 | (derived) | warp lower-freq than features (S1 convention) | `warp_freq` | `1 / (k · dominant_wavelength_m)`, k≈2.7 (config) |
 | **ridge_linearity** (0..1) | on upper-elevation mask: structure-tensor eigenvalue ratio (λ₁≫λ₂ ⇒ linear/ridgey; λ₁≈λ₂ ⇒ blobby) | `ridge_strength` | clamped linear map → [0, ~1] |

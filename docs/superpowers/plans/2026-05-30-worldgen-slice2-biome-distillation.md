@@ -18,13 +18,14 @@
 - **Real-scale conversion (exact):** vertical `metres = z * (height_range_m / (z.max() - z.min()))` (rescales the z-score span to the real elevation range); horizontal `metres = pixels * approx_sample_spacing_m`. A 512px×90m kernel ≈ 46 km footprint.
 - Spike guard (reuse `build_pack.py`'s value): drop a kernel if `max(|z|) > 12.0` before measuring.
 - The generator (`worldgen_proto.generate`) consumes a params dict with keys: `relief_m, octave_amps (len 6), ridge_strength, valley_depth, warp_amount, base_freq, ridge_freq, valley_freq, warp_freq`. We additionally produce `slope_bias` (stored, NOT consumed by current `generate`).
+- **METRIC SOURCE (data-driven, surveyed across all 12 families — see spec §4):** `kernel.json` already has vetted metrics. USE the metadata for `height_range_m` (relief) + `mean_slope_deg` (slope_bias) — they cleanly separate families. COMPUTE from the raw DEM: `amp_profile[6]`, `dominant_wavelength_m`, `ridge_linearity`, `incision_depth`, `anisotropy`. **CRITICAL: do NOT use metadata `ridge_density`/`valley_density` — they are a CONSTANT 0.100 for every kernel (WG9's detector is degenerate); trusting them collapses every biome to identical ridge/valley.** So `metrics_for_dem` takes the META dict (for relief+slope) AND the z array (for the computed structure). The computed metrics are fixture-gated; the trusted metadata is range/finite-asserted.
 - Run tests with `python -m pytest` from `tools/dem_pack/` (cwd matters — modules import by bare name; the existing suite does this). Renders write to `D:\tmp\`.
 
 ---
 
 ## File structure
 
-- **Create:** `tools/dem_pack/biome_distill.py` — pure metric functions (`bandpass_amp_profile`, `ridge_linearity`, `incision_depth`, `anisotropy_flow`, `dominant_wavelength_m`, `slope_bias_deg`, `to_metres`) + `metrics_for_dem(z, height_range_m, spacing_m)` (one DEM → metrics dict) + `params_from_metrics(metrics)` (metrics → BiomeParams dict via documented transforms) + `aggregate_median(list_of_metrics)`. Named config constants at top. Pure (arrays/dicts in, dicts out) — no file I/O.
+- **Create:** `tools/dem_pack/biome_distill.py` — pure metric functions (`bandpass_amp_profile`, `ridge_linearity`, `incision_depth`, `anisotropy_flow`, `dominant_wavelength_m`, `to_metres`) + `metrics_for_dem(z, meta)` (one DEM + its kernel.json meta → metrics dict; relief/slope FROM meta, structure COMPUTED from z) + `params_from_metrics(metrics)` (metrics → BiomeParams dict via documented transforms) + `aggregate_median(list_of_metrics)`. Named config constants at top. Pure (arrays/dicts in, dicts out) — no file I/O. **Does NOT read `ridge_density`/`valley_density` from meta (dead-constant).**
 - **Create:** `tools/dem_pack/distill_biomes.py` — the I/O orchestrator (runnable): loads the family map + WG9 kernels, applies the spike guard, calls `biome_distill`, writes a `biome_params.json` (the 12-family table) to `tools/dem_pack/` + injects it into the pack via the pack-writer (Task 5). Mirrors `build_pack.py`'s I/O role.
 - **Create:** `tools/dem_pack/test_biome_distill.py` — pytest: real-scale conversion; fixture monotonicity (ridge/valley/anisotropy metrics measure what they claim); determinism/finite; `params_from_metrics` produces in-domain, bounded, finite, parity-ready params; non-repetition (reuse worldgen_proto) on a distilled-param field.
 - **Create:** `tools/dem_pack/render_biomes.py` — runnable: real-vs-synth side-by-side hillshades, captioned with distilled metrics, to `D:\tmp\`. Reuses `worldgen_proto.generate` + a shared hillshade helper.
@@ -105,14 +106,28 @@ def test_bandpass_amp_profile_is_len6_normalized_finite():
     assert np.all(np.asarray(p) >= 0.0)
 
 
+_META = {"height_range_m": 1801.0, "approx_sample_spacing_m": 90.0, "mean_slope_deg": 12.5}
+
+
 def test_metrics_deterministic_and_finite():
     z = _ridged()
-    m1 = bd.metrics_for_dem(z, height_range_m=1801.0, spacing_m=90.0)
-    m2 = bd.metrics_for_dem(z, height_range_m=1801.0, spacing_m=90.0)
+    m1 = bd.metrics_for_dem(z, _META)
+    m2 = bd.metrics_for_dem(z, _META)
     assert m1 == m2                                             # deterministic (pure)
     for k, v in m1.items():
         arr = np.asarray(v, dtype=float)
         assert np.all(np.isfinite(arr)), f"{k} not finite"
+
+
+def test_metrics_use_metadata_for_relief_and_slope():
+    # relief + slope come straight from the vetted metadata; structure is computed from z.
+    z = _ridged()
+    m = bd.metrics_for_dem(z, _META)
+    assert m["relief_real_m"] == 1801.0          # from meta height_range_m, not computed
+    assert m["slope_bias_deg"] == 12.5           # from meta mean_slope_deg, not computed
+    # structure metrics ARE computed (present + in range)
+    assert 0.0 <= m["ridge_linearity"] <= 1.0
+    assert len(m["amp_profile"]) == bd.N_OCTAVES
 ```
 
 - [ ] **Step 2: Run to verify it FAILS**
@@ -227,14 +242,6 @@ def incision_depth(z_m, spacing_m):
     return float(np.percentile(valley[valley > 0], 90))    # metres of typical deep incision
 
 
-def slope_bias_deg(z_m, spacing_m):
-    """Median slope angle in degrees (gentle vs steep). z_m in metres, spacing in metres/px."""
-    z = np.asarray(z_m, dtype=np.float64)
-    gz, gx = np.gradient(z, float(spacing_m))
-    slope = np.degrees(np.arctan(np.sqrt(gx * gx + gz * gz)))
-    return float(np.median(slope))
-
-
 def dominant_wavelength_m(z, spacing_m, n_octaves=N_OCTAVES):
     """Characteristic feature size in metres: the octave band (from bandpass_amp_profile) with the
     most amplitude -> its centre wavelength = (BASE_BLUR_SIGMA_PX * 2^band) * spacing_m * 2 (period)."""
@@ -244,19 +251,24 @@ def dominant_wavelength_m(z, spacing_m, n_octaves=N_OCTAVES):
     return float(sigma_px * float(spacing_m) * 2.0)
 
 
-def metrics_for_dem(z, height_range_m, spacing_m):
-    """Measure all structural metrics for ONE DEM (z-score array). Returns a plain dict of floats/lists.
-    Vertical converted to real metres for incision/slope; horizontal via spacing_m for wavelengths."""
+def metrics_for_dem(z, meta):
+    """Measure all structural metrics for ONE DEM. RELIEF + SLOPE come from the vetted kernel.json meta
+    (height_range_m, mean_slope_deg — they separate families cleanly); STRUCTURE (amp profile, ridge,
+    incision, anisotropy, wavelength) is COMPUTED from the z-score array (WG9's ridge_density/valley_density
+    are dead-constant 0.100 — never read them). Returns a plain dict of floats/lists. Vertical converted to
+    real metres for incision; horizontal via approx_sample_spacing_m for wavelengths."""
     z = np.asarray(z, dtype=np.float64)
+    height_range_m = float(meta["height_range_m"])
+    spacing_m = float(meta["approx_sample_spacing_m"])
     z_m = to_metres(z, height_range_m)
     return {
-        "relief_real_m": float(height_range_m),
-        "amp_profile": bandpass_amp_profile(z, N_OCTAVES),
-        "ridge_linearity": ridge_linearity(z),
-        "incision_depth_m": incision_depth(z_m, spacing_m),
-        "anisotropy": anisotropy_flow(z),
-        "dominant_wavelength_m": dominant_wavelength_m(z, spacing_m),
-        "slope_bias_deg": slope_bias_deg(z_m, spacing_m),
+        "relief_real_m": height_range_m,                    # META (vetted)
+        "slope_bias_deg": float(meta["mean_slope_deg"]),    # META (vetted)
+        "amp_profile": bandpass_amp_profile(z, N_OCTAVES),  # COMPUTED
+        "ridge_linearity": ridge_linearity(z),              # COMPUTED (meta ridge_density is dead)
+        "incision_depth_m": incision_depth(z_m, spacing_m), # COMPUTED (meta valley_density is dead)
+        "anisotropy": anisotropy_flow(z),                   # COMPUTED (meta anisotropy_score too weak)
+        "dominant_wavelength_m": dominant_wavelength_m(z, spacing_m),  # COMPUTED
     }
 ```
 
@@ -525,7 +537,7 @@ def distill(families=None):
             if max(abs(float(z.min())), abs(float(z.max()))) > MAX_ABS_ZSCORE:
                 print(f"[distill] {fam}: dropped {kid} (z-score spike)")
                 continue
-            metrics_list.append(bd.metrics_for_dem(z, meta["height_range_m"], meta["approx_sample_spacing_m"]))
+            metrics_list.append(bd.metrics_for_dem(z, meta))
             used += 1
         if not metrics_list:
             raise SystemExit(f"[distill] family {fam!r}: all kernels dropped — nothing to distill")
@@ -922,6 +934,7 @@ GIT_TERMINAL_PROMPT=0 git push origin main
 
 ## Self-review notes (planner)
 
+- **Metric source (spec §4, data-driven):** relief + slope_bias FROM vetted `kernel.json` metadata; amp_profile/ridge_linearity/incision/anisotropy/wavelength COMPUTED from the DEM; `ridge_density`/`valley_density` metadata DELIBERATELY UNUSED (dead-constant 0.100 → would collapse all biomes). `metrics_for_dem(z, meta)`.
 - **Spec coverage:** §3 architecture → Tasks 1-6; §4 metrics+mapping → Tasks 1-2 (each metric→one knob, config constants); §5 real-scale (z-score trap) → Task 1 `to_metres` + metres-based incision/slope/wavelength + spike guard in Task 3; §6 pack storage (additive per-family table, validated) → Task 5 + Task 6 wiring; §7 verification (determinism/fixture-monotonicity/bounds/non-repetition + render-first + owner eye) → Tasks 1-2 tests + Tasks 4/6 renders+verdicts; §9 slice plan (prove-on-3 then 12) → Task 4 (3) → Task 6 (12); parity-readiness constraint → `_f32` in Task 2 + `_validate_biome_params` in Task 5; §11 DoD → Task 7.
 - **Placeholder scan:** no TBD/TODO; every code step shows complete code; every command has expected output. Transform constants are concrete named config (refinable by eye, not placeholders).
 - **Type/name consistency:** metric dict keys (`relief_real_m, amp_profile, ridge_linearity, incision_depth_m, anisotropy, dominant_wavelength_m, slope_bias_deg`) consistent across `metrics_for_dem`/`aggregate_median`/`params_from_metrics`; param dict keys match `worldgen_proto.generate`'s consumed keys + `slope_bias`; `attach_biome_params`/`_validate_biome_params`/`REQUIRED_BIOME_PARAM_KEYS` consistent Task 5↔6.
