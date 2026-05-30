@@ -65,8 +65,38 @@ func _run() -> int:
 				if fails <= 3:
 					push_error("visible/collision mismatch @ (%f,%f): gpu=%f cpu=%f d=%f" % [wx, wz, gpu_h, cpu_h, d])
 
-	pool.call("free_all")
 	if fails > 0:
 		print("[wg10-facts-parity] status=fail mismatches=%d/%d maxd=%s" % [fails, checked, str(max_d)]); return 1
 	print("[wg10-facts-parity] status=pass checked=%d maxd=%s (visible==collision on base terrain)" % [checked, str(max_d)])
+
+	# --- relief_scale parity: with relief_scale=R, visible (raw page × R) must equal collision
+	# (facts get_height = height() × R) within the same tolerance. Proves the relief knob scales BOTH
+	# sides identically -> no see/collide gap (spec §5). The raw page (data) is relief-independent;
+	# the shader applies × relief_scale at displacement, mirrored here by gpu_h * R. ---
+	var R := 0.25
+	var facts_r: Object = ClassDB.instantiate("Wg10Facts")
+	var er: String = str(facts_r.call("configure_scaled", pack_os, PACK_FILE, SEED, R))
+	if er != "":
+		push_error("[wg10-facts-parity] configure_scaled failed: %s" % er); return 1
+	var max_d_r := 0.0
+	var fails_r := 0
+	var checked_r := 0
+	for j in range(0, n, 16):
+		for i in range(0, n, 16):
+			var wx := ox + float(i) / denom * BASE_SPAN
+			var wz := oz + float(j) / denom * BASE_SPAN
+			var visible_r: float = data[j * n + i] * R       # shader displaces by × relief_scale
+			var collision_r: float = facts_r.call("get_height", wx, wz)  # facts scaled_base × R
+			var dr: float = absf(visible_r - collision_r)
+			checked_r += 1
+			if dr > max_d_r: max_d_r = dr
+			if dr > ABS_EPS:
+				fails_r += 1
+				if fails_r <= 3:
+					push_error("relief_scale parity mismatch @ (%f,%f): vis=%f col=%f d=%f" % [wx, wz, visible_r, collision_r, dr])
+	if fails_r > 0:
+		print("[wg10-facts-parity] status=fail relief_scale mismatches=%d/%d maxd=%s" % [fails_r, checked_r, str(max_d_r)]); return 1
+	print("[wg10-facts-parity] relief_scale parity ok (checked=%d maxd=%s at R=%.2f)" % [checked_r, str(max_d_r), R])
+
+	pool.call("free_all")
 	return 0
