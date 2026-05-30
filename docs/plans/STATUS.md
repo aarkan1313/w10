@@ -7,10 +7,22 @@ point — see DESIGN §7.3.)
 
 ---
 
-## M5 — Detail & masks (IN PROGRESS — Slice 1 GATED; owner fly found detail INVISIBLE — root-caused)
+## M5 — Detail & masks (IN PROGRESS — Slice 1 detail seam CONFIRMED visible at fly scale)
 
-**⚠️ OWNER FLY FINDING (2026-05-30): pressing N showed NO visible detail change. Root-caused
-systematically (3 offscreen probes + independent code audit) — TWO real defects, NOT a wiring failure:**
+**✅ OWNER RE-FLY (2026-05-30, after the fix): "I can see a small difference with the detail now."**
+The toggle/visibility fixes WORKED — detail is now perceptible at fly scale (was invisible before).
+The S1 detail SEAM is proven on-screen. Owner's caveat — **"hard to tell because we're still [looking at]
+the heightmap, really not real terrain"** — is CORRECT and EXPECTED: the shader is still the `unshaded`
+DEBUG height-color (blue→yellow by elevation, no materials/normals/lighting), so geometry barely reads
+against flat color bands. Flat unshaded color HIDES shape; it's lighting+normals (M6) that make geometry
+READ as terrain. So S1's detail is confirmed working, but FULL visual judgment of the look is correctly
+deferred until there's real shading (M6) + proper scale (the scale milestone) to see it against — exactly
+why the sequencing decision put detail-tuning AFTER mesh density + relief, and why M6 materials are the
+"looks like terrain not a heightmap" milestone. **S1 detail seam ACCEPTED as a working foundation; final
+look judgment deferred to post-M6, as designed.**
+
+[history] OWNER FLY FINDING (2026-05-30, before the fix): pressing N showed NO visible detail change.
+Root-caused systematically (3 offscreen probes + independent code audit) — TWO real defects, NOT a wiring failure:
 
 1. **Toggle starts ON, so first N turns it OFF (phase-inverted).** `m3_review.gd` registers
    `wg_detail_amp` at `DETAIL_AMP`(=60) on load AND `_detail_on := true`, so the scene starts detail-ON.
