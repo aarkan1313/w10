@@ -25,7 +25,7 @@ use godot::classes::{
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
 use crate::page_policy::{PagePolicy, PageKey, Decision};
-use crate::page_compute::compute_into_texture;
+use crate::page_compute::{PageComputeContext, build_page_compute_context, free_page_compute_context, compute_page_cached};
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -48,6 +48,7 @@ pub struct Wg10PagePool {
     pack:         Option<pack::Pack>,
     pack_buffers: Option<PackBuffers>,
     glsl_source:  Option<String>,
+    compute_ctx:  Option<PageComputeContext>,
     page_px:      i64,
     world_span:   f64,
     seed:         i64,
@@ -71,6 +72,7 @@ impl IRefCounted for Wg10PagePool {
             pack:         None,
             pack_buffers: None,
             glsl_source:  None,
+            compute_ctx:  None,
             page_px:      256,
             world_span:   1000.0,
             seed:         0,
@@ -130,6 +132,20 @@ impl Wg10PagePool {
             Err(e) => return GString::from(&format!("glsl: {e}")),
         };
 
+        // --- build the cached compute context ONCE (slice 7) ---
+        // Compile the shader + pipeline + upload the 6 pack buffers (incl. the ~25 MB kernel
+        // atlas) here, reused for every page — so per-page production never recompiles/re-uploads
+        // (the 90 ms boundary-crossing spike the M3 p99 gate caught). Needs the global RD; the
+        // pool is only meaningfully configured windowed (like every pool user).
+        let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
+            Some(r) => r,
+            None    => return GString::from("configure: global RenderingDevice unavailable (windowed-only)"),
+        };
+        let ctx = match build_page_compute_context(&mut rd0, &pb, &glsl) {
+            Ok(c)  => c,
+            Err(e) => return GString::from(&format!("compute context: {e}")),
+        };
+
         // --- init policy + slot vectors ---
         let cap = capacity as usize;
         self.policy      = Some(PagePolicy::new(cap));
@@ -140,6 +156,7 @@ impl Wg10PagePool {
         self.pack         = Some(pack);
         self.pack_buffers = Some(pb);
         self.glsl_source  = Some(glsl);
+        self.compute_ctx  = Some(ctx);
         self.page_px      = page_px;
         self.world_span   = world_span;
         self.seed         = seed;
@@ -237,19 +254,21 @@ impl Wg10PagePool {
                     }
                 };
 
-                // Borrow pack/pb/glsl immutably; no mutable slot access yet.
-                let glsl = self.glsl_source.as_deref().unwrap().to_owned();
-                let result = compute_into_texture(
+                // Dispatch into the new texture using the CACHED compute context (slice 7) —
+                // no shader recompile, no buffer re-upload; just a uniform set + push + dispatch.
+                let ctx = self.compute_ctx.as_ref().unwrap();
+                let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
+                let result = compute_page_cached(
                     &mut rd,
-                    self.pack.as_ref().unwrap(),
-                    self.pack_buffers.as_ref().unwrap(),
+                    ctx,
+                    &self.pack.as_ref().unwrap().grammar_constants,
+                    num_palettes,
                     tex_rid,
-                    &glsl,
                     ox, oz, ws, ppx, sd,
                 );
 
                 if let Err(e) = result {
-                    godot_error!("Wg10PagePool: compute_into_texture failed (slot {slot}): {e}");
+                    godot_error!("Wg10PagePool: compute_page_cached failed (slot {slot}): {e}");
                     // Free the just-created texture — slot was never stored.
                     rd.free_rid(tex_rid);
                     // Roll back the policy fully: remove the key + free the slot
@@ -275,19 +294,20 @@ impl Wg10PagePool {
                 let tex_rid = self.slot_tex[slot]
                     .expect("AllocateEvicting: slot must be occupied");
 
-                let glsl = self.glsl_source.as_deref().unwrap().to_owned();
-                let result = compute_into_texture(
+                let ctx = self.compute_ctx.as_ref().unwrap();
+                let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
+                let result = compute_page_cached(
                     &mut rd,
-                    self.pack.as_ref().unwrap(),
-                    self.pack_buffers.as_ref().unwrap(),
+                    ctx,
+                    &self.pack.as_ref().unwrap().grammar_constants,
+                    num_palettes,
                     tex_rid,
-                    &glsl,
                     ox, oz, ws, ppx, sd,
                 );
 
                 if let Err(e) = result {
                     godot_error!(
-                        "Wg10PagePool: compute_into_texture failed on eviction (slot {slot}): {e}"
+                        "Wg10PagePool: compute_page_cached failed on eviction (slot {slot}): {e}"
                     );
                     // The slot's texture now holds neither key cleanly: the old
                     // key was already evicted from the policy by acquire(), and
@@ -425,9 +445,10 @@ impl Wg10PagePool {
     pub fn free_all(&mut self) {
         let rd_opt = RenderingServer::singleton().get_rendering_device();
         if rd_opt.is_none() {
-            // Windowed mode — no RIDs to free.
+            // No RenderingDevice — nothing to free on the GPU; drop our handles.
             self.slot_tex  = Vec::new();
             self.slot_wrap = Vec::new();
+            self.compute_ctx = None;
             return;
         }
         let mut rd = rd_opt.unwrap();
@@ -439,6 +460,10 @@ impl Wg10PagePool {
         self.slot_tex.clear();
         self.slot_wrap.iter_mut().for_each(|w| *w = None);
         self.slot_wrap.clear();
+        // Free the cached compute context (slice 7) — the pool owns it, built at configure.
+        if let Some(ctx) = self.compute_ctx.take() {
+            free_page_compute_context(&mut rd, &ctx);
+        }
     }
 }
 
