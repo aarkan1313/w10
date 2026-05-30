@@ -361,7 +361,33 @@ M5 S1 (the shader-detail seam + edit-safe/bounded/parity contracts) STAYS as pro
 visibility fix (amp/freq/start-OFF) lets the owner confirm the seam works, then it's tuned at proper
 scale inside the scale milestone.
 
-## Milestone 5 — Detail & masks (GPU, render-only)
+---
+
+## ▶ RE-SEQUENCED PLAN (2026-05-30) — the milestones M5–M7 below are SUPERSEDED by the worldgen rebuild
+
+The original M5 (detail) / M6 (biomes+materials) / M7 (erosion) milestones below assumed the kernel-as-height
+architecture, now being replaced. The CURRENT plan (spec: `docs/superpowers/specs/2026-05-30-worldgen-core-
+design.md`) re-sequences them:
+
+1. **WORLDGEN CORE (active)** — param-driven warped-noise height (replaces the tiling). Slices: S1 generator
+   prototype (DONE, owner-accepted) · **S2 distill DEMs → biome params (NEXT)** · [precondition: close
+   LOOSE_ENDS_LEDGER B1/B2/B3 + doc drift] · S3 Rust core · S4 GPU parity + kill atlas + integrate · S5 scale-
+   tune + live fly. This is the "contiguous structured landmass" fix — the old M5-detail goal, done right at
+   the source instead of as a render-time band-aid.
+2. **MATERIALS / surfacing** (was the look-half of M6) — normals + biome materials + dressing, AFTER the
+   height core looks good. Much of "looks AAA" is shading. Owner: not until the heightmap is good.
+3. **DISTILLED EROSION** (the real M7, Grand-Canyon-grade) — offline-learn real erosion → cheap local
+   operator → online. A big LATER milestone; the warped-noise core is plausible-not-eroded. See the LEDGER.
+4. **MODES** (bounded / spherical-planet / handmade-area blending) — the framework-flex milestones, designed-
+   for via knobs, built after the infinite core is good.
+5. **M8 visible editable terrain** — unchanged (still tracked below).
+
+The grammar (where-biomes-go), render pipeline, facts, relief_scale are KEPT. The original M5/M6/M7 text below
+is retained as HISTORY of the superseded plan.
+
+---
+
+## [SUPERSEDED — see re-sequenced plan above] Milestone 5 — Detail & masks (GPU, render-only)
 
 - [ ] Detail/displacement layer (bounded, shader-only, edge-safe). [Fixes the "bare/blobby"
       look — adds the high-frequency detail the raw kernels lack.]

@@ -14,7 +14,25 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-30 (**M0–M4 DONE, all gates green** — cargo 115, fast 6/6, gpu 4/4, m3 6/6. M3 render layer structurally done + folded into the real classes; M4 Facts API done (drop-in `Wg10Facts`: get_height + sparse Jolt collision + adaptable collidable edit seam + off-frame GPU bake). Added Milestone 8 (visible editable terrain — the other half of M4's edit seam). **NEXT: M5 — detail & masks.** Read STATUS.md for the M3/M4 detail + bug-list; this HANDOFF §6 is the one-line-per-milestone map. The remaining "squareness/blobby/LOD-pop" is test-scale + content (M5–M7), not a render bug.)
+Updated: 2026-05-30 (**MAJOR PIVOT — the height CORE is being rebuilt; M5/M6/M7 as originally framed are
+superseded.** M0–M4 (toolchain, deterministic gen, GPU parity, render pipeline, Facts API) DONE; gates
+cargo 115 · fast 6/6 · gpu 4/4 · **m3 8/8** (NOT the old "6/6" — headlines were stale). **What changed:** an
+owner fly showed the terrain reads "blobby/placed/not a contiguous landmass." Root-caused: `sample_kernel`
+reads DEM kernels as TILING textures and makes the tiled kernel the whole height. A spectral-synthesis fix
+was REFUTED by the owner's eye (a power spectrum captures roughness but discards PHASE = structure). After a
+full step-back re-vision, the new direction is locked: **WorldGen10 is a terrain FRAMEWORK, infinite-
+procedural-first (No Man's Sky reference); the height core becomes PARAMETER-DRIVEN WARPED-NOISE** — distill
+real DEMs into per-biome structural PARAMS, the grammar blends them, one warped-noise generator (domain warp
++ macro fBm landmass + ridged ridgelines + carved valleys) makes infinite seamless terrain (kernels = a DNA
+library, never sampled → no tiling). **Worldgen Slice 1 (offline generator prototype) is OWNER-ACCEPTED**
+("pretty good, a little noisy" — reads as contiguous structured terrain, no grid/repeat). **NEXT: Slice 2
+(distill real DEMs → biome params, offline) → close loose ends (B1/B2/B3 + doc drift, see LOOSE_ENDS_LEDGER)
+before the Rust build (Slice 3) → Rust core → GPU parity → live fly.** READ THESE for the current truth:
+`docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md` (the framework vision),
+`…/2026-05-30-worldgen-core-design.md` (the height-core architecture), `docs/plans/LOOSE_ENDS_LEDGER.md`
+(everything in-flight/tabled), and memory `worldgen10-north-star-vision` / `worldgen10-wg9-height-recipe`.
+STATUS.md top = the live state. The old M5-detail/M6-materials/M7-erosion framing below is SUPERSEDED — see
+§9 + ROADMAP for the re-sequenced plan.)
 
 ---
 
@@ -115,7 +133,7 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 
 ## 6. Where things stand (2026-05-30) — M0–M4 DONE
 
-**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 6/6.** (STATUS.md has the blow-by-blow; this
+**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15.** (STATUS.md has the blow-by-blow; this
 is the one-line-per-milestone map.)
 
 - **M0** toolchain · **M1** deterministic bedrock (hash/noise/fbm bit-exact vs WG9) + grammar +
@@ -157,7 +175,7 @@ render layer. Big-picture intent: DEM kernels are a LIBRARY of real-world landfo
 landforms. The foundation (gen + GPU-dense/CPU-sparse perf + parity + facts) is AAA-capable; the
 LOOK is downstream.
 
-**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 6/6. **`main` is in sync with `origin/main`**
+**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15. **`main` is in sync with `origin/main`**
 (the 174-commit backlog was pushed 2026-05-30 — the assistant CAN push now, see §8).
 (`COMPONENT_INVENTORY.md` was the M3-reset driver doc; it was RETIRED into STATUS once the
 render layer landed — don't look for it.)
@@ -199,34 +217,46 @@ render layer landed — don't look for it.)
   `D:/assets/docs/reference/`); used by `tools/dem_pack/` to fetch DEMs.
 - **Commit trailer:** `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
 
-## 9. What to do next
+## 9. What to do next (the WORLDGEN-CORE REBUILD — supersedes the old M5–M7)
 
-**NEXT MILESTONE: M5 — Detail & masks (GPU, render-only).** ROADMAP §"Milestone 5":
-- Detail/displacement layer (bounded, shader-only, edge-safe) — adds the high-frequency detail the
-  raw kernels lack (the biggest single lever on the "bare/blobby" look).
-- Slope/curvature/debug + world-space masks.
-Start it the same way every milestone has gone: **brainstorm (one question at a time) → spec
-(`docs/superpowers/specs/`) → writing-plans → execute slice-by-slice with gates → audit + update
-the living docs.** M5 is render-only (GPU, no parity contract on the *detail* itself, but it must
-not break the visible-vs-collision agreement at the base — keep edits/facts reading the BASE height,
-detail is a render-time displacement on top). Prove it on-screen (owner-flown), since look-quality
-is the point and gates can't judge "looks good."
+The active work is the **worldgen height-core rebuild** (spec: `docs/superpowers/specs/2026-05-30-worldgen-
+core-design.md`). It REPLACES `height::height`/`sample_kernel` (the tiling) with a parameter-driven warped-
+noise generator. The old "M5 detail / M6 materials / M7 erosion" milestones are RE-SEQUENCED into this (see
+ROADMAP). Methodology unchanged: **brainstorm → spec → writing-plans → execute slice-by-slice with gates →
+owner-flown acceptance → update living docs.** Look-quality is owner-judged (render images + fly); gates
+prove invariants (parity/perf/non-repetition), not "looks good."
 
-**Optional before M5 (owner's call):** the M3 §7.3 acceptance fly of `m3_review.tscn` (5 levels +
-fog) — render gates are green so it's a formality, but it's the documented final sign-off. Launch:
-`$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn`
-(WASD + Shift sprint + mouse-look + Space/C; M = morph heatmap, K = cull-toggle debug).
+**The slice plan (worldgen core):**
+- **Slice 1 — generator prototype (offline Python): DONE, owner-accepted.** `tools/dem_pack/worldgen_proto.py`
+  + render images. Warped-noise reads as contiguous structured terrain, no grid/repeat.
+- **Slice 2 — biome distillation (offline Python): NEXT.** Distill the 115 real DEMs → per-biome structural
+  param-sets (ridge_strength/valley_depth/warp/octave_amps/relief — STRUCTURAL metrics, NOT a power spectrum
+  — that was refuted). Render each biome from its DISTILLED params; owner judges per-biome fidelity.
+- **PRECONDITION before Slice 3 (the first RUNTIME build): close the loose ends** in
+  `docs/plans/LOOSE_ENDS_LEDGER.md` — **B1** (Wg10PagePool GPU-RID leak: no Drop impl + 2 wrong comments),
+  **B3** (hardened perf gate: a sky frame scores nonblack=1.0; add terrain-vs-sky + detail on/off), **B2**
+  (never-black is capacity-dependent not structural: protect held coarse pages + capacity-pressure gate),
+  and the **doc-drift pass** (distinct 18→15, dead 0.35→0.25, m3 6/6→8/8, DESIGN stale, STATUS M5 two-states).
+  These live in the KEPT render pipeline + perf gate the rebuild sits on — fix before building on them.
+- **Slice 3 — Rust generator core:** port `generate` + `blend_biome_params` to `height.rs` (replace
+  `sample_kernel`); gates determinism/bounded/seam/non-repetition.
+- **Slice 4 — GPU parity + integrate:** mirror `generate` in GLSL, REMOVE the 25 MB kernel atlas, re-baseline
+  `gpu_parity_check`, wire into render + facts (relief_scale, visible==collision hold), hardened perf gate.
+- **Slice 5 — scale tune + live blend + the owner FLY:** dial scale toward the 1-10 m adaptable target,
+  confirm seamless biome transitions live; "Google-Maps contiguity" acceptance fly (where the "a little
+  noisy" gets its honest judgment). Audit vs pillars; update living docs.
 
-**Then, per ROADMAP:** M6 biomes/materials (normals fix the coarse-mesh facets — the real
-"looks AAA" milestone) → M7 erosion (carves the extreme DEM cliffs) → M8 visible editable terrain
-(the other half of M4's edit seam: make dug craters SEEN, not just collided). Each gets its own
-spec → plan → execute → audit cycle. **Don't re-chase the "squareness/blobby/LOD-pop" in the render
-layer — it's test-scale + content, fixed by M5–M7 + a saner pack.**
+**BIG LATER roadmap item (tracked, NOT now): distilled erosion** (Grand-Canyon-grade). The warped-noise core
+is PLAUSIBLE terrain, not real connected erosion. The bridge = the owner's insight: OFFLINE run real hydraulic
+erosion → distill a cheap LOCAL operator → apply online (infinite+fast). A major milestone after the noise-
+tier core ships. See LOOSE_ENDS_LEDGER.
 
-**Deferred but tracked** (don't build early): async/background page production — build it behind
-`Wg10PagePool::acquire_page` IF heavy multi-pass pages (M5 detail, M6 biomes, M7 erosion) make
-synchronous N-per-frame computes blow the frame budget. Async-ready by design ⇒ zero scheduler
-change. (Not needed yet — caching solved the M3 spike.)
+**Other tabled work (recorded, not lost):** materials/normals/biome-surfacing (after the height core looks
+good); modes (bounded/spherical-planet/handmade-area blending); M8 visible-editable-terrain; async page
+production. All in the LEDGER with revisit conditions.
+
+**KEPT, proven, don't rebuild:** the infinite streaming clipmap render pipeline, the grammar (where biomes
+go), facts/collision + relief_scale, the parity-gated noise primitives, the hardened GPU-time perf gate.
 
 **Build/run reminder:** Rust rebuilds use `tools/build_rust.ps1` (do NOT kill the editor; it
 releases the DLL on focus-loss — alt-tab + retry, or close it if you're not using it). GDScript +

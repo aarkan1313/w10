@@ -5,7 +5,23 @@ conflicts with code, either the code is wrong or this doc is — reconcile
 immediately, do not let them drift. (That drift is why WorldGen9 is being
 restarted.)
 
-Last updated: 2026-05-29 (M2: GPU formula + CPU/GPU parity gate green; integer hash; §2.4 and §9 updated; §3 first real DEM pack wired; §9 M2 atlas risk closed)
+Last updated: 2026-05-29 (M2 era). **⚠️ PARTIALLY SUPERSEDED 2026-05-30 — read this notice first.**
+
+> **HEIGHT-CORE ARCHITECTURE SUPERSEDED (2026-05-30).** §2.1 (Worldgen core) and §3 (Terrain packs)
+> describe the original "kernels sampled as the height field" architecture. An owner fly showed that
+> produces blobby/placed/tiling terrain; root-caused to `sample_kernel` reading DEMs as TILING textures.
+> The height core is being REBUILT as **parameter-driven warped-noise**: distill real DEMs into per-biome
+> structural PARAMS → grammar blends them → one warped-noise generator (domain warp + macro fBm landmass +
+> ridged ridgelines + carved valleys) makes infinite seamless terrain; kernels become a DNA library, never
+> sampled (no tiling). The CURRENT architecture is in `docs/superpowers/specs/2026-05-30-worldgen-core-
+> design.md` + `…/2026-05-30-worldgen10-north-star-vision.md` (WG10 = a terrain FRAMEWORK, infinite-
+> procedural-first). The `hash→noise→region/province→kernel→landform` flow in §1/§2.1 is replaced by
+> `hash→noise→grammar(blends biome params)→warped-noise generate`. **STILL ACCURATE + KEPT** (do NOT treat
+> as superseded): §1 the four pillars · §2.2 Facts API · §2.3/§5 the render pipeline · §2.4 the CPU/GPU
+> parity split (the new generator must still honor it) · §4 determinism/parity contracts · §6 config/drop-in
+> · §7 rules. The framework also now targets multiple game modes (infinite/bounded/spherical/handmade) via
+> knobs — see the vision spec. This DESIGN doc will be rewritten to fold in the new core once the rebuild
+> lands; until then, treat §2.1/§3 as historical and the two 2026-05-30 specs as the height-core truth.
 
 ---
 
