@@ -38,13 +38,13 @@ func _ready() -> void:
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
 	var glsl_os := ProjectSettings.globalize_path(GLSL)
 
-	var pool := ClassDB.instantiate("Wg10PagePool")
-	var err := str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))
+	var pool: Object = ClassDB.instantiate("Wg10PagePool")
+	var err: String = str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))
 	if err != "":
 		push_error("m3_review: pool configure failed: %s" % err); return
-	var streamer := ClassDB.instantiate("Wg10Streamer")
+	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
 	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
-	var rings := ClassDB.instantiate("Wg10ClipmapRings")
+	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	add_child(rings)
 	_view = ClassDB.instantiate("Wg10TerrainView")
@@ -60,12 +60,13 @@ func _ready() -> void:
 	_camera = load(FLY_CAMERA).new()
 	_camera.environment = env
 	_camera.far = BASE_SPAN * 32.0
-	_camera.global_position = Vector3(0.0, 1200.0, 0.0)
 	add_child(_camera)
+	# Set position AFTER the node is in the tree (global_position pre-tree warns + no-ops).
+	_camera.global_position = Vector3(0.0, 1200.0, 0.0)
 
-	var profiler := load(PROFILER).new()
+	var profiler: Node = load(PROFILER).new()
 	add_child(profiler)
-	var overlay := load(OVERLAY).new()
+	var overlay: CanvasLayer = load(OVERLAY).new()
 	add_child(overlay)
 	overlay.call("bind_sources", profiler, _view)
 
