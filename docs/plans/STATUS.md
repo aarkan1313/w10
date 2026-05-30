@@ -5,7 +5,7 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-Last updated: 2026-05-29 (**M3 slice 6 — fly harness built + p99 acceptance gate found a REAL blocker**. The four §6.4 harness components (Wg10FlyCamera, Wg10Profiler, Wg10DiagnosticsOverlay, m3_review scene) are DONE. `m3_accept_check` (scripted ~1000 m/s flight, vsync off) gives a **clean diagnosis**: render-only frames ≤ **2.0 ms** (the 27-tile 3×3 render is well under the 6 ms budget — that concern is RESOLVED), but the ~4 boundary-crossing frames that synchronously COMPUTE a page spike to **90 ms** → **p99=16.7 ms FAILS the 6 ms budget**. This is the **synchronous page production deferred since slice 3** — the design predicted exactly this trigger; one compute (90 ms) ≫ 6 ms so it can't be amortized synchronously. **NEXT: async/background page production** (the scheduler↔pool seam is already async-ready → drops in behind `acquire_page` with zero scheduler/view/rings change), which makes the p99 gate go green. The gate is committed RED (honest — not relaxed; §7.3 forbids green-over-a-real-stall). M3 BLOCKED on: async producer → p99 green → owner manual fly. m3 suite 5 checks (4 pass + accept RED); 103 cargo tests green.
+Last updated: 2026-05-29 (**M3 slice 7 — page-compute caching DONE; the p99 acceptance gate is GREEN**. The slice-6 90 ms spike was redundant per-page CPU setup (recompiling the shader + re-uploading the ~25 MB kernel atlas EVERY page — the dispatch itself is fire-and-forget). Fix: cache the shader+pipeline+6 pack-buffer RIDs ONCE in `Wg10PagePool` (`PageComputeContext`, built at configure / freed at free_all), per-page work shrinks to a uniform set + push constant + dispatch. Re-measured: **p99=2.41 ms (budget 6) | max=3.29 ms | compute-frame max=2.90 ms (was 90) | render-only ≤2.66 ms** at ~1000 m/s. **Async page production NOT needed** — caching alone resolved it (diagnose-before-architecting: the slice-6 finding assumed async, the code said caching). The automated acceptance gate (`m3_accept_check`) is GREEN with a `compute_ms_max<6ms` ceiling locking it in. **M3 has ONE box left: the owner's manual fly of `m3_review.tscn`** (the final authority, §7.3). m3 suite **5 checks fail=0**; fast 5, gpu 2; 103 cargo tests green.
 
 [prior] **M3 slice 5b DONE — 3×3 ring tiling + rings↔streamer live wiring, proven under motion**. `Wg10ClipmapRings` rebuilt to N levels × 9 page tiles (each level a 3×3 neighborhood that SURROUNDS the camera; finer-on-top overlap via render_priority); `Wg10TerrainView` drives the live loop via the read-only `get_resident_page` (never computes on the render path) + coarser fallback. `m3_view_check` passes WINDOWED over a 5-position +x sweep across page boundaries: **full coverage** (nonblack≥0.98 — the 3×3 surrounds the camera, fixing 5a's 0.25), real relief, no z-fight (two settled captures pixel-stable), never-black, **view triggers zero compute** after steady state, tile↔page mapping. PNG eyeballed (terrain fills the frame + follows the camera; faint tile-edge lines but no gaps). m3 suite **4** checks fail=0 (m3_rings retired, m3_view added); fast 5, gpu 2 unchanged; **103** cargo tests green. M3 in progress — remaining: fly camera + diagnostics overlay + p99<6ms acceptance gate + manual fly)
 
@@ -13,7 +13,7 @@ Last updated: 2026-05-29 (**M3 slice 6 — fly harness built + p99 acceptance ga
 
 ## Current state
 
-**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) + slice 4 (clipmap rings) + slice 5a (carry-forward fixes) + slice 5b (3×3 tiling + live wiring) DONE**. Remaining M3: fly camera + diagnostics overlay + the p99<6ms acceptance gate + manual fly.
+**Phase:** M0 toolchain green + M1 deterministic bedrock + grammar + height + first real DEM pack wired + M2 GPU formula + parity gate green + **M3 IN PROGRESS — slice 1 (first rendered page) + slice 2 (page pool) + slice 3 (stream-ahead scheduler) + slice 4 (clipmap rings) + slice 5a (carry-forward fixes) + slice 5b (3×3 tiling + live wiring) + slice 6 (fly harness) + slice 7 (page-compute caching → p99 GREEN) DONE**. Remaining M3: **only the owner's manual fly** of `m3_review.tscn` (the automated p99<6ms + no-black gate is green).
 
 - Godot 4.6 project at `wg-10/` (Forward+, D3D12, Jolt, .NET `wg10`).
 - Native `wg10_terrain` Rust GDExtension **builds and loads in Godot 4.6**.
@@ -191,7 +191,7 @@ Last updated: 2026-05-29 (**M3 slice 6 — fly harness built + p99 acceptance ga
   one-page gate was retired — its geometry is gone; this supersedes it.)
 - Gate runner: `python tools/gate.py --suite fast` → `[gate] suite=fast checks=5
   fail=0` (headless). `--suite gpu` → `[gate] suite=gpu checks=2 fail=0 skip=0`
-  (windowed). `--suite m3` → `[gate] suite=m3 checks=4 fail=0 skip=0` (windowed).
+  (windowed). `--suite m3` → `[gate] suite=m3 checks=5 fail=0 skip=0` (windowed; incl. m3_accept p99 GREEN).
 - Three living docs (DESIGN, ROADMAP, STATUS). Architecture locked — see DESIGN.
 
 ## What works
@@ -256,15 +256,18 @@ Last updated: 2026-05-29 (**M3 slice 6 — fly harness built + p99 acceptance ga
 
 ## What's next
 
-1. **M3 close-out slice — fly-test harness + acceptance gate (the LAST M3 slice):** the
-   render pipeline is now complete and proven under scripted motion (pages → pool → scheduler
-   → 3×3 rings → live view, seamless + never-black + surrounds the camera). What remains to
-   close M3: a free-fly **WASD/mouse camera** + movement controller, a **diagnostics/profiling
-   overlay** (live fps + p99 + stats), a **manual fly-test scene** (assemble the above + the
-   `Wg10TerrainView`), and the real **M3 acceptance gate** — renderer **p99 < 6 ms** + no
-   black/holes, **in motion at ~1000 m/s**, manually confirmed by the owner. The overlap
-   overdraw (3×3 levels, watch-items) is an explicit input to this p99 measurement. M3 stays
-   OPEN until the p99 gate passes AND a manual fly confirms no stalls/black.
+1. **M3 close-out — the OWNER's manual fly (the ONLY thing left for M3).** The render pipeline
+   is complete and the automated acceptance gate is GREEN: p99=2.41 ms at ~1000 m/s, no-black,
+   never-stall. Per §7.3, gate-green is necessary but NOT sufficient — the owner's live fly is
+   the final authority. **To do this:** launch `wg-10/worldgen_terrain/harness/m3_review.tscn`
+   windowed (the Godot editor → run that scene, or
+   `Godot_console.exe --path wg-10 res://worldgen_terrain/harness/m3_review.tscn`). Controls:
+   **WASD** move, **Shift** sprint (to ~1000s m/s), **mouse** look, **Space/C** up/down, **ESC**
+   release mouse. Watch the HUD (top-left): fps, frame p99 (should stay well under 6 ms),
+   resident pages. **Confirm:** terrain surrounds you, follows smoothly at speed, no stalls/
+   hitches crossing page boundaries, no black holes/gaps. If it feels right → M3 is DONE; tell
+   me and I'll mark the milestone closed and move to M4. If anything's off → that's a real
+   finding, tell me what you saw and I'll fix it.
 2. **Visual tuning of `relief_m` / `footprint_m`** (deferred to M3): physical
    ground-truth values in place; visual feel needs the renderer. `footprint_scale`
    knob exists for then.
@@ -354,17 +357,15 @@ Last updated: 2026-05-29 (**M3 slice 6 — fly harness built + p99 acceptance ga
   a tile at its previous transform (stale-but-bounded; the coarse blanket makes it transient) —
   add a clarifying comment. (b) `bound_page_key` returns `Vector2i` (i32) truncating the i64
   page origin — fine for M3 scale, revisit at M4 planetary scale.
-- **Async page production — TRIGGER FIRED (slice 6 p99 gate), building NEXT:** the M3
-  p99 acceptance gate measured a **90 ms synchronous page-compute spike** on
-  boundary-crossing frames (render-only frames are ≤2 ms — well under budget). That is
-  the documented trigger: a single page compute (90 ms) ≫ the 6 ms frame budget, so it
-  CANNOT be amortized synchronously — background production is now required (came earlier
-  than the M5–M7 multi-pass estimate; the single-pass DEM compute at 256² is already
-  heavy enough at 1000 m/s). The scheduler↔pool seam is async-ready exactly for this:
-  the view reads only the *observed* resident set + coarser fallback, never assuming
-  same-frame residency, so moving `compute_into_texture` to a background path drops in
-  **behind `acquire_page` with ZERO scheduler/view/rings change**. This is the next
-  slice; it makes the p99 gate go green. (Spec §1.1, §7; slice-3 design §1.1.)
+- **Async page production — NOT NEEDED (slice 7 resolved the spike via caching).** The
+  slice-6 p99 gate's 90 ms "compute" spike turned out NOT to be GPU work or genuinely-expensive
+  compute (the dispatch is fire-and-forget) — it was **redundant per-page CPU setup**:
+  recompiling GLSL→SPIRV + re-uploading the ~25 MB kernel atlas EVERY page. Slice 7 caches those
+  once (`PageComputeContext` in `Wg10PagePool`): compute-frame cost dropped 90 ms → **2.9 ms**,
+  p99 → **2.41 ms** (budget 6). So the async/threading path was the WRONG fix (it would just move
+  redundant work to another thread, with `RenderingDevice`-thread-safety risk). The async-ready
+  seam remains valuable for the future (M5–M7 genuinely-multi-pass pages may re-fire the trigger
+  with a real per-page cost — *then* it's the lever), but it is NOT needed for M3.
 
 ## Build / run gotchas (learned 2026-05-28 wiring the toolchain)
 
