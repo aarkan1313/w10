@@ -10,6 +10,7 @@ use crate::pack::{self, Pack};
 use crate::height;
 use crate::edit_layer::{EditProvider, StampEdits};
 use crate::facts;
+use crate::gpu_compute::Wg10GpuCompute;
 use std::path::Path;
 
 #[derive(GodotClass)]
@@ -138,6 +139,63 @@ impl Wg10Facts {
         );
         for h in grid {
             out.push(h);
+        }
+        out
+    }
+
+    /// BULK collision bake for a LARGE area, via the GPU (DESIGN §2.2 bulk path). Returns the same
+    /// n×n row-major height grid as `get_collision_field`, but computes the dense BASE heights on
+    /// the GPU (`gpu.heights`, batched) instead of point-by-point on the CPU — a win only for big
+    /// areas. **OFF-FRAME ONLY:** `gpu.heights` does a deliberate GPU→CPU READBACK (a stall). The
+    /// `bake_*` name + this doc are the contract: call at load / one-shot, NEVER per frame (that
+    /// readback-on-the-hot-path is exactly what killed WG9). Edits + bedrock clamp are composed on
+    /// the CPU over the readback, so the GPU only does the base formula (parity-identical). The
+    /// caller passes its own `Wg10GpuCompute` (already `load_pack_dir`'d with height_field.glsl) so
+    /// Wg10Facts keeps no GPU state. Empty + error on bad args / not configured / size mismatch.
+    #[func]
+    fn bake_collision_region(
+        &self,
+        gpu: Gd<Wg10GpuCompute>,
+        center_x: f64,
+        center_z: f64,
+        world_size: f64,
+        samples_per_side: i64,
+    ) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        if self.pack.is_none() {
+            godot_error!("Wg10Facts: bake_collision_region before configure()");
+            return out;
+        }
+        let n = samples_per_side;
+        if n < 2 || world_size <= 0.0 {
+            godot_error!("Wg10Facts: bake_collision_region bad args (n={n}, size={world_size}); need n>=2, size>0");
+            return out;
+        }
+        let n = n as usize;
+        // Build the texel-corner grid coords (same layout as facts::collision_field).
+        let corner_x = center_x - world_size * 0.5;
+        let corner_z = center_z - world_size * 0.5;
+        let step = world_size / (n as f64 - 1.0);
+        let mut xs = PackedFloat64Array::new();
+        let mut zs = PackedFloat64Array::new();
+        for j in 0..n {
+            let wz = corner_z + j as f64 * step;
+            for i in 0..n {
+                xs.push(corner_x + i as f64 * step);
+                zs.push(wz);
+            }
+        }
+        // GPU batch base heights (the bulk win) — this is the deliberate off-frame readback.
+        let base = gpu.bind().heights(xs.clone(), zs.clone(), self.seed);
+        if base.len() != n * n {
+            godot_error!("Wg10Facts: bake_collision_region GPU returned {} heights, expected {}", base.len(), n * n);
+            return out;
+        }
+        // Compose edits + clamp on the CPU over the readback (edits stay CPU-authoritative).
+        for k in 0..(n * n) {
+            let b = base.get(k).unwrap_or(0.0);
+            let delta = self.edits.delta(xs.get(k).unwrap_or(0.0), zs.get(k).unwrap_or(0.0)) as f64;
+            out.push(facts::composed_height(b, delta, self.floor, self.ceil) as f32);
         }
         out
     }

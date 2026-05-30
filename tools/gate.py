@@ -25,6 +25,7 @@ CHECKS = {
         "worldgen_terrain/tests/gpu_parity_check.gd",
         "worldgen_terrain/tests/gpu_parity_dem_check.gd",
         "worldgen_terrain/tests/facts_collision_parity_check.gd",
+        "worldgen_terrain/tests/facts_bake_check.gd",
     ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
