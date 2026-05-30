@@ -84,7 +84,7 @@ func _run() -> int:
 	mat.shader = load("res://worldgen_terrain/shaders/ring_displace.gdshader")
 	mat.set_shader_parameter("height_tex", tex)
 	mat.set_shader_parameter("world_span", WORLD_SPAN)
-	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
 	mi.material_override = mat
 
 	var light := DirectionalLight3D.new()

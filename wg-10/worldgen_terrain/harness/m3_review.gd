@@ -30,9 +30,9 @@ const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY := 96       # 5 levels x 9 = 45 + stream-ahead + parent-fetch headroom
 const MORPH_REGION := 0.15
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
-const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×HEIGHT_SCALE 0.35 = ~122 m effective — chosen
+const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~88 m effective — chosen
 							 # to be clearly VISIBLE at fly scale (60 m → ~21 m was invisible; see STATUS
 							 # M5 fly finding). STARTING value for live owner tuning, not a final look.
 
@@ -66,7 +66,7 @@ func _ready() -> void:
 	add_child(rings)
 	_rings = rings
 	_view = ClassDB.instantiate("Wg10TerrainView")
-	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	# Loaded extent = the coarsest 3x3's half-width from the camera. Match the far plane + fog to it
 	# so the horizon fades to sky BEFORE the loaded edge — you never see ground load/unload at a

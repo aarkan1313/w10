@@ -57,7 +57,7 @@ func _run() -> int:
 	mat.shader = shader
 	mat.set_shader_parameter("height_tex",   tex)
 	mat.set_shader_parameter("world_span",   WORLD_SPAN)
-	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
 	mat.set_shader_parameter("relief_ref",   RELIEF_REF)
 
 	var mi := MeshInstance3D.new()

@@ -158,7 +158,7 @@ func _build_step4() -> void:
 		mat.set_shader_parameter("world_span", BASE_SPAN)
 		mat.set_shader_parameter("coarse_span", BASE_SPAN)
 		mat.set_shader_parameter("level_half_extent", BASE_SPAN)
-		mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+		mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
 		mat.set_shader_parameter("morph_region", 0.0)   # morph off (single level)
 		mat.set_shader_parameter("relief_ref", RELIEF_REF)
 		mi.set_material_override(mat)
@@ -217,7 +217,7 @@ func _build_step5() -> void:
 			mat.set_shader_parameter("world_span", span_l)
 			mat.set_shader_parameter("coarse_span", span_l)
 			mat.set_shader_parameter("level_half_extent", span_l)
-			mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+			mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
 			# only the FINE level (0) morphs toward its coarse parent; the coarsest level has
 			# nothing coarser to blend to, so it stays morph-off.
 			var morph: float = _morph_region if level == 0 else 0.0
@@ -369,7 +369,7 @@ func _build_tile(ox: float, oz: float) -> MeshInstance3D:
 	mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
 	mat.set_shader_parameter("level_center", Vector2(ox + BASE_SPAN * 0.5, oz + BASE_SPAN * 0.5))
 	mat.set_shader_parameter("level_half_extent", BASE_SPAN)   # morph off, value irrelevant
-	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
 	mat.set_shader_parameter("morph_region", 0.0)              # MORPH OFF — pure fine sample
 	mat.set_shader_parameter("relief_ref", RELIEF_REF)
 	mi.set_material_override(mat)

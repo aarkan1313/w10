@@ -20,7 +20,7 @@ const TILES_PER_LEVEL: usize = 9;
 /// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
 /// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
 /// their flat (y=0) box leaves the frustum. Generous enough for worst-case z-score DEM heights
-/// times any reasonable height_scale; over-sizing only slightly loosens culling (negligible).
+/// times any reasonable relief_scale; over-sizing only slightly loosens culling (negligible).
 const DISPLACE_AABB_HALF_M: f32 = 8000.0;
 
 /// Flat tile index from (level, dx, dz) with dx,dz in {-1,0,+1}.
@@ -101,7 +101,7 @@ impl Wg10ClipmapRings {
                     // a TALL custom AABB a tile whose displaced terrain is on-screen gets culled when
                     // its flat box leaves the frustum (tiles vanish on rotation / slow creep near the
                     // view edge). Set a custom AABB spanning the tile's full XZ footprint + a generous
-                    // Y range covering worst-case displacement (z-score DEM heights * height_scale).
+                    // Y range covering worst-case displacement (z-score DEM heights * relief_scale).
                     let half = (span_l * 0.5) as f32;
                     let y_half = DISPLACE_AABB_HALF_M;
                     mi.set_custom_aabb(Aabb::new(
@@ -164,7 +164,7 @@ impl Wg10ClipmapRings {
         // — folded into Vector2 to stay under gdext's #[func] param-arity cap (max 15 args).
         spans: Vector2,
         placement: Vector2,
-        height_scale: f64,
+        relief_scale: f64,
         morph_region: f64,
         relief_ref: f64,
         sample_origin: Vector2,
@@ -206,7 +206,7 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("coarse_height_tex", &coarse_tex.to_variant());
         mat.set_shader_parameter("world_span", &sample_span.to_variant());
         mat.set_shader_parameter("coarse_span", &coarse_span.to_variant());
-        mat.set_shader_parameter("height_scale", &height_scale.to_variant());
+        mat.set_shader_parameter("relief_scale", &relief_scale.to_variant());
         mat.set_shader_parameter("morph_region", &morph_region.to_variant());
         mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
         mat.set_shader_parameter("coarse_origin", &coarse_origin.to_variant());

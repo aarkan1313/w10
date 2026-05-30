@@ -17,7 +17,7 @@ pub struct Wg10TerrainView {
     rings: Option<Gd<Wg10ClipmapRings>>,
     num_levels: i32,
     base_span: f64,
-    height_scale: f64,
+    relief_scale: f64,
     morph_region: f64,
     relief_ref: f64,
     base: Base<Node3D>,
@@ -32,7 +32,7 @@ impl INode3D for Wg10TerrainView {
             rings: None,
             num_levels: 0,
             base_span: 0.0,
-            height_scale: 1.0,
+            relief_scale: 1.0,
             morph_region: 0.0,
             relief_ref: 2000.0,
             base,
@@ -50,7 +50,7 @@ impl Wg10TerrainView {
         rings: Gd<Wg10ClipmapRings>,
         num_levels: i64,
         base_span: f64,
-        height_scale: f64,
+        relief_scale: f64,
         morph_region: f64,
         relief_ref: f64,
         _lead_seconds: f64,  // kept for call-signature stability; the view now reads the clamped
@@ -61,7 +61,7 @@ impl Wg10TerrainView {
         self.rings = Some(rings);
         self.num_levels = num_levels as i32;
         self.base_span = base_span;
-        self.height_scale = height_scale;
+        self.relief_scale = relief_scale;
         self.morph_region = morph_region;
         self.relief_ref = relief_ref;
     }
@@ -172,7 +172,7 @@ impl Wg10TerrainView {
                         Vector2::new(po_x as f32, po_z as f32),                       // tile_origin (placement)
                         Vector2::new(span_l as f32, coarse_span as f32),             // spans (sample, coarse)
                         Vector2::new(span_l as f32, level_half_extent as f32),       // placement (tile_span, half_extent)
-                        self.height_scale,
+                        self.relief_scale,
                         morph,
                         self.relief_ref,
                         Vector2::new(po_x as f32, po_z as f32),                       // sample_origin = own page corner
