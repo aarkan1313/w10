@@ -238,11 +238,12 @@ now) and fold `COMPONENT_INVENTORY.md` into STATUS/ROADMAP + delete it (3-living
 M4 — Facts API (`get_height` + Jolt collision) via brainstorm→spec→plan→execute→audit. After M4:
 M5 detail → M6 biomes/textures → M7 erosion.
 
-**Known-latent (reported, NOT reproducible — don't fix blind):** tiles may frustum-cull on
-rotation because the flat tile meshes lack a tall custom AABB (Godot culls on the flat y=0 box
-while the shader displaces the geometry up). Fix when reproducible: `set_custom_aabb` tall enough
-for the displacement. **Squareness/lines = content (extreme DEM), fixed in M6 normals + M7 erosion
-+ saner pack relief — NOT render.** Both tracked in COMPONENT_INVENTORY.
+**FIXED post-fold-back:** tiles vanishing on rotation AND a chunk blinking in/out on slow creep
+to a boundary were the SAME frustum-cull bug — flat tile meshes + GPU vertex displacement, no
+custom AABB, so Godot culled on the flat y=0 box. `Wg10ClipmapRings::configure` now sets a tall
+custom AABB per tile (±8000 m Y); gates still green (p99=1.87 ms). LESSON: GPU-displaced meshes
+ALWAYS need a custom AABB. **Squareness/lines = content (extreme DEM), fixed in M6 normals + M7
+erosion + saner pack relief — NOT render.** Tracked in COMPONENT_INVENTORY.
 
 **Squareness/lines = content, NOT render** (don't re-chase): diagnosed as extreme dem_v1 data
 (~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff). Fixed by

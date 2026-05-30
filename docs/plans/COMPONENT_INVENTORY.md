@@ -9,15 +9,15 @@ defect the live fly caught).
 > This is a temporary working doc to drive the reset. When the render layer is proven end to
 > end, fold the outcome into STATUS/ROADMAP and delete this (the 3-living-docs rule).
 
-## KNOWN-LATENT (step 7, NOT yet reproduced — do NOT fix blind)
-Owner reported "stuff disappears when moving the view left/right" (rotation, not translation),
-but then could NOT replicate it. LIKELY cause (unverified): the tile meshes are FLAT (y=0; the
-shader displaces VERTEX.y on the GPU), so each MeshInstance's AABB is a flat plane and Godot
-frustum-culls on it — a tile whose DISPLACED terrain is on-screen can be culled when the flat AABB
-leaves the frustum on rotation. There is no custom AABB in the code, so this is a real latent bug
-even if intermittent. FIX (when reproduced): `MeshInstance3D.set_custom_aabb(...)` tall enough to
-contain the displacement range (±max height). Deferred until it can be reliably triggered — do not
-write the fix against a phantom.
+## FIXED — frustum-cull of GPU-displaced tiles (was the rotation-vanish AND creep-blink)
+Owner reported tiles vanishing on rotation, and (later, reproducible) a chunk blinking in/out when
+creeping slowly toward a boundary and stopping. SAME root cause: flat (y=0) tile meshes + GPU
+vertex displacement → Godot frustum-culls on the flat AABB → a tile whose displaced terrain is
+on-screen gets culled when its flat box leaves the frustum. Data-residency probes showed 0
+never-black holes, which correctly pointed at RENDERING, not residency. FIX (done):
+`Wg10ClipmapRings::configure` sets a custom AABB per tile (full XZ footprint + ±8000 m Y for
+worst-case z-score DEM displacement). Probe: terrain persists 100% across a rotation sweep; m3 6/6
+green (accept p99=1.87 ms — even cheaper). Lesson: GPU-displaced meshes ALWAYS need a custom AABB.
 
 ## CONFIRMED ROOT CAUSE (step 2, owner-verified 2026-05-29)
 **The page texture samplers defaulted to REPEAT wrap.** A tile edge vertex at `uv=1.0` wrapped

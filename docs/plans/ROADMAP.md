@@ -196,8 +196,9 @@ Remaining slices (NOT done):
 - [ ] **MANUAL ACCEPTANCE (the ONE box left to close M3):** owner flies `m3_review.tscn` (now the
       REAL rebuilt `Wg10TerrainView`) at full speed and confirms no stalls, no black/holes, no
       inter-tile seam, no switching. (§7.3 — the final authority.) Then retire the proving ground.
-      Known-latent (reported, not reproducible): tiles may frustum-cull on rotation (flat meshes
-      lack a tall custom AABB — fix = set_custom_aabb when it can be triggered).
+      FIXED post-fold-back: the rotation-vanish + slow-creep chunk-blink were the same frustum-cull
+      bug (flat meshes + GPU displacement, no custom AABB); Wg10ClipmapRings now sets a tall custom
+      AABB per tile — gates green, p99=1.87 ms.
 
 > **Diagnosed, fixed ELSEWHERE (not M3):** the "blue squares / hard lines" the owner sees are
 > EXTREME DEM DATA — the `dem_v1` pack height field has ~450 m cliffs over 500 m; deep blue is
