@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pytest
 import spectral
@@ -59,3 +61,21 @@ def test_spectral_fidelity_roundtrip():
     u = np.array(src["amp_octaves"]); v = np.array(syn["amp_octaves"])
     cos = float(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-12))
     assert cos > 0.9, f"spectral fidelity too low: cos={cos:.3f} src={u} syn={v}"
+
+
+REAL_KERNEL = os.path.join(
+    os.path.dirname(__file__), "..", "..",
+    "wg-10", "worldgen_terrain", "packs", "dem_v1", "kernels",
+    "badlands__cop30_badlands_grand_canyon_112_1_36_1.npy")
+
+
+@pytest.mark.skipif(not os.path.exists(REAL_KERNEL), reason="real kernel .npy not present")
+def test_fidelity_on_real_kernel():
+    dem = np.load(REAL_KERNEL).astype(np.float64)
+    src = spectral.analyze_signature(dem, spacing_m=90.0)
+    field = spectral.synthesize_field(src, size=256, spacing_m=90.0, seed=5)
+    syn = spectral.analyze_signature(field, spacing_m=90.0)
+    u = np.array(src["amp_octaves"]); v = np.array(syn["amp_octaves"])
+    cos = float(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-12))
+    print(f"\n[real-kernel fidelity] grand_canyon cos={cos:.3f}\n  src={np.round(u,3)}\n  syn={np.round(v,3)}")
+    assert cos > 0.85, f"real-kernel spectral fidelity cos={cos:.3f} (src={u} syn={v})"
