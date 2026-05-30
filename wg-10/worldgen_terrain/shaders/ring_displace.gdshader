@@ -17,7 +17,7 @@ uniform float height_scale = 1.0;         // visual amplitude (config; 1.0 = raw
 uniform float morph_region = 0.0;         // transition width as a fraction of the half-extent (0 = no morph)
 uniform float relief_ref = 2000.0;        // color gradient normalization
 
-varying float v_height;
+varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
 // GLOBAL debug mode (one RenderingServer.global_shader_parameter for the whole scene, so a key in
 // the review scene flips it with no per-tile material access / no Rust rebuild):
@@ -38,7 +38,7 @@ float wg_hash2(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
-// value noise: bilinear blend of 4 lattice hashes with a smootherstep weight.
+// value noise: bilinear blend of 4 lattice hashes with a smoothstep (cubic, C1) weight.
 float wg_value_noise(vec2 x) {
 	vec2 i = floor(x);
 	vec2 f = fract(x);
@@ -61,7 +61,7 @@ float wg_value_noise(vec2 x) {
 // ceiling directly.
 const int   WG_DETAIL_OCTAVES = 5;
 const float WG_DETAIL_GAIN    = 0.5;
-const float WG_DETAIL_FREQ    = 0.0009;   // ~1/1100 m base wavelength; tuned to GRID_RES in S4
+const float WG_DETAIL_FREQ    = 0.0009;   // ~1/1111 m base wavelength; tuned to GRID_RES in S4
 float wg_fbm_detail(vec2 world_xz) {
 	float sum = 0.0;
 	float amp = 1.0;
@@ -108,10 +108,10 @@ void vertex() {
 	// world.xz -> abutting tiles agree on shared edges (edge-safe). h (above) is unchanged,
 	// so facts/collision parity is preserved. Slice 1 = flat amp (no modulation/fade yet).
 	float detail = wg_fbm_detail(world.xz) * wg_detail_amp;
-	// v_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
+	// v_render_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
 	// facts/collision height: collision reads h_base via the separate CPU facts path, so the
 	// parity contract is on h (unchanged above), not on this varying.
-	v_height = h + detail;
+	v_render_height = h + detail;
 	VERTEX.y = (h + detail) * height_scale;
 }
 
@@ -122,7 +122,7 @@ void fragment() {
 		// geomorph shows a WIDE green gradient where fine eases into coarse.
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
-		float t = clamp(v_height / relief_ref * 0.5 + 0.5, 0.0, 1.0);
+		float t = clamp(v_render_height / relief_ref * 0.5 + 0.5, 0.0, 1.0);
 		ALBEDO = vec3(t, t * 0.8 + 0.1, 1.0 - t);
 	}
 }

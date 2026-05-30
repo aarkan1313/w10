@@ -8,11 +8,14 @@ extends SceneTree
 #   (1) BOUNDED     — detail-on does not blow the surface past the height-color range
 #                     (saturated-pixel fraction stays low). |detail| <= wg_detail_amp by
 #                     construction (fbm normalized to [-1,1]); the capture confirms no blowup.
-#   (2) EDGE-SAFE   — two ABUTTING tiles (page at (0,0) and (SPAN,0)), each with its correct
-#                     page_origin, agree along the shared world seam (x==SPAN) within a tight
-#                     luma epsilon — because detail is a pure function of world XZ. If detail
-#                     were page-local, the seam columns would diverge. (The M3 seam contract
-#                     must survive M5.)
+#   (2) EDGE-SAFE   — two ABUTTING tiles (page at (0,0) and (SPAN,0)), each rendered SEPARATELY
+#                     and each framing exactly its own [origin, origin+SPAN] span at the same
+#                     pixel resolution. Tile A's RIGHTMOST column and tile B's LEFTMOST column are
+#                     then the SAME world points on the shared edge (x==SPAN), so comparing them
+#                     row-by-row isolates seam AGREEMENT from the normal terrain height-gradient.
+#                     They must match within a tight luma epsilon because detail is a pure function
+#                     of world XZ; if detail were page-local the shared edge would diverge. (The M3
+#                     seam contract must survive M5.)
 #   (3) NON-VACUOUS — detail-on differs from detail-off (detail genuinely displaces; the gate
 #                     can't pass on a no-op).
 
@@ -59,6 +62,9 @@ func _run() -> int:
 
 	var off_img := await _capture(tex, 0.0)
 	var on_img := await _capture(tex, DETAIL_AMP)
+	# Wg10PagePool is RefCounted — it releases its pages/RIDs automatically when the last
+	# reference drops (here, when `pool`/`tex` go out of scope at function return). Do NOT call
+	# .free() on it: RefCounted objects reject manual free ("Attempted to free a RefCounted object").
 	if off_img == null or on_img == null:
 		push_error("[wg10-m5] capture failed")
 		return 1
@@ -104,6 +110,17 @@ func _capture(tex, amp: float) -> Image:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.position = Vector3(WORLD_SPAN * 0.5, 0.0, WORLD_SPAN * 0.5)
+	mi.material_override = _make_tile_material(tex, 0.0)
+	vp.add_child(mi)
+	get_root().add_child(vp)
+	await process_frame
+	await process_frame
+	RenderingServer.force_draw()
+	var img := vp.get_texture().get_image()
+	vp.queue_free()
+	return img
+
+func _make_tile_material(tex, origin_x: float) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(SHADER)
 	mat.set_shader_parameter("height_tex", tex)
@@ -113,19 +130,11 @@ func _capture(tex, amp: float) -> Image:
 	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
 	mat.set_shader_parameter("morph_region", 0.0)
 	mat.set_shader_parameter("relief_ref", RELIEF_REF)
-	mat.set_shader_parameter("page_origin", Vector2(0.0, 0.0))
-	mat.set_shader_parameter("coarse_origin", Vector2(0.0, 0.0))
-	mat.set_shader_parameter("level_center", Vector2(WORLD_SPAN * 0.5, WORLD_SPAN * 0.5))
+	mat.set_shader_parameter("page_origin", Vector2(origin_x, 0.0))
+	mat.set_shader_parameter("coarse_origin", Vector2(origin_x, 0.0))
+	mat.set_shader_parameter("level_center", Vector2(origin_x + WORLD_SPAN * 0.5, WORLD_SPAN * 0.5))
 	mat.set_shader_parameter("level_half_extent", WORLD_SPAN * 1.5)
-	mi.material_override = mat
-	vp.add_child(mi)
-	get_root().add_child(vp)
-	await process_frame
-	await process_frame
-	RenderingServer.force_draw()
-	var img := vp.get_texture().get_image()
-	vp.queue_free()
-	return img
+	return mat
 
 func _mean_abs_diff(a: Image, b: Image) -> float:
 	var n := 0
@@ -156,22 +165,45 @@ func _saturated_frac(img: Image) -> float:
 	return float(sat) / float(maxi(n, 1))
 
 func _edge_safe(amp: float) -> bool:
-	var seam_max := await _capture_strip(amp)
-	print("[wg10-m5]   edge seam_max_luma_delta=%.5f" % seam_max)
-	return seam_max < 0.01
+	# Render the two abutting tiles SEPARATELY, each framing exactly its own span at the same
+	# resolution. A's rightmost column and B's leftmost column are the SAME shared-edge world
+	# points (x==WORLD_SPAN), so this isolates seam agreement from the terrain height-gradient.
+	var img_a := await _capture_one_tile(amp, 0.0)         # tile x in [0, SPAN], page_origin.x=0
+	var img_b := await _capture_one_tile(amp, WORLD_SPAN)  # tile x in [SPAN, 2*SPAN], page_origin.x=SPAN
+	if img_a == null or img_b == null:
+		print("[wg10-m5]   edge capture failed")
+		return false
+	if img_a.get_height() != img_b.get_height():
+		push_error("[wg10-m5] edge tiles differ in pixel height — rows do not align")
+		return false
+	var m := 0.0
+	var y := 0
+	while y < img_a.get_height():
+		var left_of_seam := img_a.get_pixel(img_a.get_width() - 1, y).v
+		var right_of_seam := img_b.get_pixel(0, y).v
+		m = maxf(m, absf(left_of_seam - right_of_seam))
+		y += 1
+	print("[wg10-m5]   edge seam_max_luma_delta=%.5f" % m)
+	return m < 0.01
 
-func _capture_strip(amp: float) -> float:
+# Render ONE tile covering world [origin_x, origin_x+SPAN] x [0, SPAN], top-down ortho framing
+# EXACTLY that tile, with its correct page_origin. Acquires (and frees) its own page+pool.
+func _capture_one_tile(amp: float, origin_x: float) -> Image:
 	RenderingServer.global_shader_parameter_set("wg_detail_amp", amp)
 	var pool2: Object = ClassDB.instantiate("Wg10PagePool")
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
 	var glsl_os := ProjectSettings.globalize_path(GLSL)
-	pool2.call("configure", pack_os, PACK_FILE, glsl_os, 4, PAGE_PX, WORLD_SPAN, SEED)
-	var ta = pool2.call("acquire_page", 0, 0.0, 0.0)
-	var tb = pool2.call("acquire_page", 0, WORLD_SPAN, 0.0)
-	if ta == null or tb == null:
-		return 999.0
+	# Wg10PagePool is RefCounted: it self-releases when pool2/tex go out of scope. Don't .free() it.
+	var e := str(pool2.call("configure", pack_os, PACK_FILE, glsl_os, 4, PAGE_PX, WORLD_SPAN, SEED))
+	if e != "":
+		push_error("[wg10-m5] configure failed: %s" % e)
+		return null
+	var tex = pool2.call("acquire_page", 0, origin_x, 0.0)
+	if tex == null:
+		push_error("[wg10-m5] acquire_page failed (origin_x=%.1f)" % origin_x)
+		return null
 	var vp := SubViewport.new()
-	vp.size = Vector2i(1024, 512)
+	vp.size = VIEW_SIZE
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	vp.own_world_3d = true
 	vp.world_3d = World3D.new()
@@ -180,31 +212,12 @@ func _capture_strip(amp: float) -> float:
 	envh.background_color = Color.BLACK
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size = WORLD_SPAN * 2.0
-	cam.position = Vector3(WORLD_SPAN, 5000.0, WORLD_SPAN * 0.5)
+	cam.size = WORLD_SPAN
+	cam.position = Vector3(origin_x + WORLD_SPAN * 0.5, 5000.0, WORLD_SPAN * 0.5)
 	cam.rotation_degrees = Vector3(-90.0, 0.0, 0.0)
 	cam.far = 20000.0
 	cam.environment = envh
 	vp.add_child(cam)
-	_add_strip_tile(vp, ta, 0.0)
-	_add_strip_tile(vp, tb, WORLD_SPAN)
-	get_root().add_child(vp)
-	await process_frame
-	await process_frame
-	RenderingServer.force_draw()
-	var img := vp.get_texture().get_image()
-	var col := img.get_width() / 2
-	var m := 0.0
-	var y := 0
-	while y < img.get_height():
-		var l := img.get_pixel(col - 1, y).v
-		var r := img.get_pixel(col + 1, y).v
-		m = maxf(m, absf(l - r))
-		y += 1
-	vp.queue_free()
-	return m
-
-func _add_strip_tile(vp: SubViewport, tex, origin_x: float) -> void:
 	var mesh := PlaneMesh.new()
 	mesh.size = Vector2(WORLD_SPAN, WORLD_SPAN)
 	mesh.subdivide_width = GRID_RES
@@ -212,18 +225,12 @@ func _add_strip_tile(vp: SubViewport, tex, origin_x: float) -> void:
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.position = Vector3(origin_x + WORLD_SPAN * 0.5, 0.0, WORLD_SPAN * 0.5)
-	var mat := ShaderMaterial.new()
-	mat.shader = load(SHADER)
-	mat.set_shader_parameter("height_tex", tex)
-	mat.set_shader_parameter("coarse_height_tex", tex)
-	mat.set_shader_parameter("world_span", WORLD_SPAN)
-	mat.set_shader_parameter("coarse_span", WORLD_SPAN)
-	mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
-	mat.set_shader_parameter("morph_region", 0.0)
-	mat.set_shader_parameter("relief_ref", RELIEF_REF)
-	mat.set_shader_parameter("page_origin", Vector2(origin_x, 0.0))
-	mat.set_shader_parameter("coarse_origin", Vector2(origin_x, 0.0))
-	mat.set_shader_parameter("level_center", Vector2(origin_x + WORLD_SPAN * 0.5, WORLD_SPAN * 0.5))
-	mat.set_shader_parameter("level_half_extent", WORLD_SPAN * 1.5)
-	mi.material_override = mat
+	mi.material_override = _make_tile_material(tex, origin_x)
 	vp.add_child(mi)
+	get_root().add_child(vp)
+	await process_frame
+	await process_frame
+	RenderingServer.force_draw()
+	var img := vp.get_texture().get_image()
+	vp.queue_free()
+	return img
