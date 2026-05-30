@@ -14,7 +14,7 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-29 (**M3 RENDER-LAYER RESET in progress.** Slices 1–8 built but the multi-level render looked "a mess" under a real fly, so the PRESENTATION layer is being rebuilt prove-one-thing-at-a-time in `proving_ground.tscn`, owner-flown, keeping the proven leaves. Steps 1–6 owner-confirmed; Step 7 (3rd level + p99 = M3 acceptance) next. Read `docs/plans/COMPONENT_INVENTORY.md` FIRST for the inventory + step plan + the bugs found. The "squareness/lines" are extreme DEM data (M6/M7 fix), not a render bug.)
+Updated: 2026-05-30 (**M0–M4 DONE, all gates green** — cargo 115, fast 6/6, gpu 4/4, m3 6/6. M3 render layer structurally done + folded into the real classes; M4 Facts API done (drop-in `Wg10Facts`: get_height + sparse Jolt collision + adaptable collidable edit seam + off-frame GPU bake). Added Milestone 8 (visible editable terrain — the other half of M4's edit seam). **NEXT: M5 — detail & masks.** Read STATUS.md for the M3/M4 detail + bug-list; this HANDOFF §6 is the one-line-per-milestone map. The remaining "squareness/blobby/LOD-pop" is test-scale + content (M5–M7), not a render bug.)
 
 ---
 
@@ -113,80 +113,53 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 - **Exit codes:** 0 pass / 1 fail / 2 skip. A no-GPU/headless box returns SKIP (2) on
   gpu/m3 — never miscounted as a pass.
 
-## 6. Where things stand (2026-05-29)
+## 6. Where things stand (2026-05-30) — M0–M4 DONE
 
-**Built & gated green:** M0 toolchain · M1 deterministic bedrock (hash/noise/fbm,
-bit-exact vs WG9) + grammar + height + first real DEM pack (`packs/dem_v1`, 115
-kernels / 12 families) · M2 GPU formula + CPU/GPU parity gate (family selection
-EXACT, height within f32 epsilon, validated at real 512×512 scale) · **M3 slice 1**
-(first rendered page: compute → R32F Texture2DRD → vertex displace, real relief
-visible) · **M3 slice 2** (`Wg10PagePool` — the single RID owner; `PagePolicy` —
-LRU + protected + budget, 11 headless tests, WG9-killer rules proven; zero-churn
-eviction).
+**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 6/6.** (STATUS.md has the blow-by-blow; this
+is the one-line-per-milestone map.)
 
-…plus **M3 slices 3–8 all built & gated:** slice 3 stream-ahead scheduler
-(`SchedulePolicy` + `Wg10Streamer`, coarsest-first never-black, async-ready seam) ·
-slice 4 clipmap ring geometry · slice 5a/5b 3×3 page-tile clipmap + live read-only
-view (`Wg10TerrainView` uses `get_resident_page` — NEVER computes on the render path) ·
-slice 6 fly harness (`m3_review.tscn` + fly camera + profiler + overlay) · slice 7
-page-compute caching (`PageComputeContext` → p99 GREEN, async NOT needed) · **slice 8
-visual stability** (texel-corner page gen + world-UV fine sampling + neighborhood-center
-geomorph → inter-tile seam = 0 and the per-tile morph lattice gone; `m3_continuity_check`
-reads back real production pages to prove `seam=0.0` + a perspective morph-banding ceiling).
+- **M0** toolchain · **M1** deterministic bedrock (hash/noise/fbm bit-exact vs WG9) + grammar +
+  height + first real DEM pack (`packs/dem_v1`, 115 kernels / 12 families).
+- **M2** GPU formula + CPU/GPU parity gate (family selection EXACT, height within f32 epsilon).
+- **M3 render pipeline — structurally DONE.** `Wg10PagePool` (single RID owner) + `PagePolicy` (LRU/
+  protected/budget, zero-churn eviction) + `SchedulePolicy`/`Wg10Streamer` (coarsest-first
+  never-black, clamped velocity-lead) + N-level 3×3 clipmap (`Wg10ClipmapRings` + `Wg10TerrainView`,
+  reads `get_resident_page` — NEVER computes on the render path) + `ring_displace.gdshader` +
+  `page_compute` caching. p99 well under 6 ms at ~1000 m/s. Built via a prove-one-thing-at-a-time
+  RESET (the stacked slices had been "a mess" under a real fly), folded into the real classes.
+- **M4 Facts API — DONE.** Drop-in `Wg10Facts` (RefCounted): `get_height` = `clamp(base +
+  edit-provider.delta, bedrock, ceiling)`; sparse `get_collision_field` (CPU, no readback,
+  Jolt-ready — caller owns the body); adaptable circular-stamp edit seam (`apply_edit`/`clear_edits`/
+  `set_bedrock`, pluggable provider); off-frame GPU `bake_collision_region`. Visible==collision
+  parity 0.0009 m. Edits are COLLIDABLE but NOT yet visible (Milestone 8).
 
-**The 3 render-time sampling defects slice 8 fixed (so a future session doesn't reintroduce them):**
-(1) geomorph must use distance to the 3×3 NEIGHBORHOOD center (`level_center` uniform,
-normalized to `1.5·span`), NOT tile-local `VERTEX.xz` — tile-local fires the morph at all 9
-tile edges. (2) The fine page is sampled by TRUE WORLD UV (`page_origin` uniform), NOT
-`VERTEX.xz/span+0.5` — the latter hits texture borders, a half-texel off the texel centers.
-(3) `height_page.glsl` uses a texel-CORNER convention (`u=px/(N-1)`: texel 0→origin,
-N-1→origin+span) so abutting pages SHARE boundary samples — texel-center leaves them a texel
-apart → a seam. `height_at()` is UNCHANGED (parity-critical; the M2 gpu suite never exercises
-the page pixel→world mapping). Page textures carry CAN_COPY_FROM so the gate can read them
-back (no render-path cost; p99 unaffected).
-
-**THEN the slices-4→8 multi-level render turned out to be "a mess" under a REAL fly** (overlapping
-sheets, seams, switching). Why the gates missed it: they proved *properties* (p99, never-black,
-data-seam=0) but never *perceptual continuity in a flown perspective POV*. **So we are RESETTING
-the presentation layer prove-one-thing-at-a-time** — keep the proven leaves (pool, page_policy,
-schedule_policy, streamer, ring_geometry, page_compute — verified clean, one-directional deps),
-rebuild ONLY `Wg10TerrainView` + `Wg10ClipmapRings` + `ring_displace.gdshader` step by step in
-`proving_ground.tscn` (a STEP const flips on one component at a time), each owner-flown + approved
-before the next. **`docs/plans/COMPONENT_INVENTORY.md` is the driving doc for this** (inventory of
-every part + what proves it + the 7-step sequence). Steps owner-confirmed: 1 one page · 2 two-page
-seam · 3 static 3×3 · 4 streamer-driven 3×3 · 5 coarse never-black blanket · 6 geomorph. Next:
-Step 7 (3rd level + p99<6 ms at ~1000 m/s = the M3 acceptance), then fold the proven presentation
-back into the real classes + reconcile the old m3 gates (they still exercise the OLD view path).
-
-**Real bugs the reset found + fixed (each owner-confirmed; don't reintroduce):**
+**Render-layer bugs found + fixed — DO NOT reintroduce (the expensive lessons):**
 - **Page sampler defaulted to REPEAT wrap** → tile-edge vertices (uv=1) wrapped to the page's
-  opposite edge → seams at EVERY tile boundary (the dominant "overlapping sheets"). Fix:
-  `uniform sampler2D height_tex : filter_linear, repeat_disable;` (clamp-to-edge) in the shader.
-- **Velocity lead was unit-wrong + unclamped.** `lead_frames` × velocity-in-m/s gave up to 64 km
-  of lead at sprint → the 3×3 flew off the camera (pop-in, terrain-lag-under-you, churn). Fix:
-  renamed `lead_seconds`; `SchedulePolicy::coverage_center` CLAMPS the offset to
-  ±(radius_pages−0.5)·base_span so the camera is ALWAYS inside its ring at any speed; the view +
-  proving ground READ that clamped centre from the streamer (no view/scheduler desync).
-- **Step-5 "LOD line"** was the morph being OFF (each fine tile bound its OWN page as the morph
-  target = nothing to blend). Step 6 wires each fine tile to the REAL coarse parent page
-  (coarse_height_tex/coarse_origin/coarse_span) + the fine-neighborhood centre, then blends.
+  opposite edge → seams at EVERY tile boundary. Fix: `sampler2D ... : filter_linear, repeat_disable`
+  (clamp-to-edge) in `ring_displace.gdshader`.
+- **Velocity lead was unit-wrong + unclamped** (`lead_frames` × m/s → 64 km lead at sprint, ring
+  flew off the camera). Fix: `lead_seconds` + `SchedulePolicy::coverage_center` clamps to
+  ±(radius−0.5)·span (camera always in-ring); the view READS that clamped centre from the streamer.
+- **Geomorph / fine-UV / page-gen convention** (M3): geomorph from the 3×3 NEIGHBORHOOD centre (not
+  tile-local); fine page by TRUE WORLD UV (`page_origin`); texel-CORNER page gen (`u=px/(N-1)`) so
+  abutting pages SHARE boundary samples. `height_at()` / `height::height` UNCHANGED (parity-critical
+  — the M2 gpu suite + M4 facts depend on it; never touch the formula).
+- **GPU-displaced flat meshes need a custom AABB** (`Wg10ClipmapRings` sets one) or they
+  frustum-cull (tiles vanish on rotation). Coarsest level HOLDS LAST-GOOD on a miss (never blank the
+  bottom blanket). "Loads then unloads" was view-distance > loaded extent → fixed with more levels +
+  far-plane/fog matched to the loaded edge (config), not an unload bug.
 
-**The slice-8 3 sampling fixes (still valid, carried into the reset):** geomorph from the 3×3
-NEIGHBORHOOD center (not tile-local); fine page by TRUE WORLD UV (`page_origin`); texel-CORNER
-page gen (`u=px/(N-1)`) so abutting pages SHARE boundary samples. `height_at()` UNCHANGED
-(parity-critical). Page textures carry CAN_COPY_FROM for gate readback (no render-path cost).
+**The "blue squares / blobby / LOD-pop" look is EXTREME DEM DATA + TEST SCALE, not a render bug**
+(`dem_v1` has ~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff).
+Fixed downstream by M5 detail + M6 materials/normals + M7 erosion + a saner pack relief — NOT in the
+render layer. Big-picture intent: DEM kernels are a LIBRARY of real-world landform stamps; grammar
+(where) + height field (blend) arrange them into a procedural generator that speaks in real
+landforms. The foundation (gen + GPU-dense/CPU-sparse perf + parity + facts) is AAA-capable; the
+LOOK is downstream.
 
-**The "blue squares / hard lines" the owner still sees are EXTREME DEM DATA, not a render bug**
-(diagnosed: dem_v1 height field has ~450 m cliffs over 500 m; deep blue = real low elevation;
-coarse mesh draws a cliff as a flat facet + hard edge). Fixes live in data/material/erosion
-(M6 normals, M7 erosion, saner pack relief) — see COMPONENT_INVENTORY. Do NOT chase in the render
-layer. Also recorded the big-picture intent there: DEM kernels are a LIBRARY of real-world
-landform stamps; the grammar (where) + height field (blend) arrange them into a procedural
-generator that speaks in real landforms.
-
-**Counts:** cargo 103 green · fast 5 / gpu 2 (the m3 suite predates the reset — it exercises the
-OLD view path + now uses LEAD_SECONDS; reconcile when the rebuilt view lands). **`main` is ~150
-commits ahead of `origin/main` (unpushed — the OWNER pushes).**
+**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 6/6. **`main` is ~170+ commits ahead of `origin/main`
+(unpushed — the OWNER pushes).** (`COMPONENT_INVENTORY.md` was the M3-reset driver doc; it was
+RETIRED into STATUS once the render layer landed — don't look for it.)
 
 ## 7. Build / run gotchas (these bit prior sessions — read before touching the toolchain)
 
@@ -222,37 +195,34 @@ commits ahead of `origin/main` (unpushed — the OWNER pushes).**
 
 ## 9. What to do next
 
-**Immediate — the ONE box left to close M3: the owner's ACCEPTANCE FLY of `m3_review.tscn`.**
-The render-layer RESET is DONE and FOLDED BACK: the proven prove-one-at-a-time model (steps 1–7,
-in `proving_ground.tscn`) now lives in the REAL `Wg10TerrainView` + `Wg10ClipmapRings`, so
-`m3_review.tscn` flies the shippable components. All gates green on the rebuilt path (m3 6/6 —
-accept p99=3.94 ms<6; gpu 2/2; fast 5/5; cargo 103). Launch:
-```
-$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn
-```
-Fly: WASD + Shift sprint (~1000 m/s) + mouse-look + Space/C, ESC frees the mouse. Confirm no
-stalls, no black/holes, no inter-tile seam, no switching. On sign-off, **M3 closes.**
+**NEXT MILESTONE: M5 — Detail & masks (GPU, render-only).** ROADMAP §"Milestone 5":
+- Detail/displacement layer (bounded, shader-only, edge-safe) — adds the high-frequency detail the
+  raw kernels lack (the biggest single lever on the "bare/blobby" look).
+- Slope/curvature/debug + world-space masks.
+Start it the same way every milestone has gone: **brainstorm (one question at a time) → spec
+(`docs/superpowers/specs/`) → writing-plans → execute slice-by-slice with gates → audit + update
+the living docs.** M5 is render-only (GPU, no parity contract on the *detail* itself, but it must
+not break the visible-vs-collision agreement at the base — keep edits/facts reading the BASE height,
+detail is a render-time displacement on top). Prove it on-screen (owner-flown), since look-quality
+is the point and gates can't judge "looks good."
 
-**Then:** retire `proving_ground.{gd,tscn}` (its job is done — the logic is in the real classes
-now) and fold `COMPONENT_INVENTORY.md` into STATUS/ROADMAP + delete it (3-living-docs rule). THEN
-M4 — Facts API (`get_height` + Jolt collision) via brainstorm→spec→plan→execute→audit. After M4:
-M5 detail → M6 biomes/textures → M7 erosion.
+**Optional before M5 (owner's call):** the M3 §7.3 acceptance fly of `m3_review.tscn` (5 levels +
+fog) — render gates are green so it's a formality, but it's the documented final sign-off. Launch:
+`$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn`
+(WASD + Shift sprint + mouse-look + Space/C; M = morph heatmap, K = cull-toggle debug).
 
-**FIXED post-fold-back:** tiles vanishing on rotation AND a chunk blinking in/out on slow creep
-to a boundary were the SAME frustum-cull bug — flat tile meshes + GPU vertex displacement, no
-custom AABB, so Godot culled on the flat y=0 box. `Wg10ClipmapRings::configure` now sets a tall
-custom AABB per tile (±8000 m Y); gates still green (p99=1.87 ms). LESSON: GPU-displaced meshes
-ALWAYS need a custom AABB. **Squareness/lines = content (extreme DEM), fixed in M6 normals + M7
-erosion + saner pack relief — NOT render.** Tracked in COMPONENT_INVENTORY.
+**Then, per ROADMAP:** M6 biomes/materials (normals fix the coarse-mesh facets — the real
+"looks AAA" milestone) → M7 erosion (carves the extreme DEM cliffs) → M8 visible editable terrain
+(the other half of M4's edit seam: make dug craters SEEN, not just collided). Each gets its own
+spec → plan → execute → audit cycle. **Don't re-chase the "squareness/blobby/LOD-pop" in the render
+layer — it's test-scale + content, fixed by M5–M7 + a saner pack.**
 
-**Squareness/lines = content, NOT render** (don't re-chase): diagnosed as extreme dem_v1 data
-(~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff). Fixed by
-M6 normals + M7 erosion + a saner pack relief, tracked in ROADMAP/COMPONENT_INVENTORY.
+**Deferred but tracked** (don't build early): async/background page production — build it behind
+`Wg10PagePool::acquire_page` IF heavy multi-pass pages (M5 detail, M6 biomes, M7 erosion) make
+synchronous N-per-frame computes blow the frame budget. Async-ready by design ⇒ zero scheduler
+change. (Not needed yet — caching solved the M3 spike.)
 
-**Deferred but tracked** (don't forget, don't build early): async/background page
-production — build it behind `Wg10PagePool::acquire_page` when heavy multi-pass
-pages (M5 detail/normals, M6 biomes, M7 erosion) make synchronous N-per-frame
-computes blow the frame budget. Async-ready by design ⇒ zero scheduler change.
-
-Then M4 (Facts API + Jolt collision) → M5 (detail/masks) → M6 (biomes/textures) →
-M7 (erosion/hydrology). Each gets its own spec → plan → execute → audit cycle.
+**Build/run reminder:** Rust rebuilds use `tools/build_rust.ps1` (do NOT kill the editor; it
+releases the DLL on focus-loss — alt-tab + retry, or close it if you're not using it). GDScript +
+shader changes hot-reload, no rebuild. The proving-ground scene + debug toggles (M/K, flip-log)
+stay in for LOD/M5 tuning — harmless, off by default.
