@@ -2,6 +2,7 @@
 take parsed dicts so they are unit-testable. (review_tags.py / build_pack.py do
 the I/O.) See docs/superpowers/specs/2026-05-29-real-dem-pack-design.md."""
 from __future__ import annotations
+import math
 
 SCHEMA = "worldgen10.terrain_pack.v1"
 FAMILIES_PER_PALETTE = 3
@@ -121,3 +122,45 @@ def build_pack_dict(fam_of, meta, footprint_scale=1.0):
         "compatibility": compatibility,
         "families": families,
     }
+
+
+REQUIRED_BIOME_PARAM_KEYS = (
+    "relief_m", "octave_amps", "ridge_strength", "valley_depth", "warp_amount",
+    "base_freq", "ridge_freq", "valley_freq", "warp_freq", "slope_bias",
+)
+N_OCTAVE_AMPS = 6
+
+
+def _validate_biome_params(family, bp):
+    """Reject NaN/degenerate/out-of-domain params with a descriptive error NAMING the family
+    (pillar 4 — no silent default; parity-readiness — finite, f32-representable, in-domain)."""
+    for k in REQUIRED_BIOME_PARAM_KEYS:
+        if k not in bp:
+            raise ValueError(f"biome_params[{family!r}]: missing key {k!r}")
+    amps = bp["octave_amps"]
+    if not isinstance(amps, (list, tuple)) or len(amps) != N_OCTAVE_AMPS:
+        raise ValueError(f"biome_params[{family!r}]: octave_amps must be length {N_OCTAVE_AMPS}")
+    scalars = {k: bp[k] for k in REQUIRED_BIOME_PARAM_KEYS if k != "octave_amps"}
+    for k, v in list(scalars.items()) + [(f"octave_amps[{i}]", a) for i, a in enumerate(amps)]:
+        fv = float(v)
+        if not math.isfinite(fv):
+            raise ValueError(f"biome_params[{family!r}]: {k} not finite ({v})")
+    for fk in ("base_freq", "ridge_freq", "valley_freq", "warp_freq"):
+        if float(bp[fk]) <= 0.0:
+            raise ValueError(f"biome_params[{family!r}]: {fk} must be > 0 (got {bp[fk]})")
+    if float(bp["relief_m"]) <= 0.0:
+        raise ValueError(f"biome_params[{family!r}]: relief_m must be > 0 (got {bp['relief_m']})")
+    if not (0.0 <= float(bp["ridge_strength"]) <= 1.0):
+        raise ValueError(f"biome_params[{family!r}]: ridge_strength out of [0,1] ({bp['ridge_strength']})")
+    if not (0.0 <= float(bp["valley_depth"]) <= 1.0):
+        raise ValueError(f"biome_params[{family!r}]: valley_depth out of [0,1] ({bp['valley_depth']})")
+
+
+def attach_biome_params(pack_dict, biome_params):
+    """Additively attach a per-FAMILY biome_params table to a pack dict (validated). Returns a NEW dict;
+    the existing per-kernel `families` entries + kernels are untouched (atlas removal is Slice 4)."""
+    for family, bp in biome_params.items():
+        _validate_biome_params(family, bp)
+    out = dict(pack_dict)
+    out["biome_params"] = {f: dict(bp) for f, bp in biome_params.items()}
+    return out

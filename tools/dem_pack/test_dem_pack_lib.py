@@ -1,3 +1,4 @@
+import pytest
 import dem_pack_lib as lib
 
 
@@ -113,3 +114,45 @@ def test_seed_family_map_excludes_uncategorized_even_if_confident():
     m = lib.seed_family_map(["u"], inferences, threshold=0.7)
     assert m["map"] == {}
     assert m["excluded"] == ["u"]
+
+
+def test_attach_biome_params_adds_table():
+    pack = {"schema": lib.SCHEMA, "version": 1, "families": {"k1": {"kernel": "kernels/k1.npy"}}}
+    bp = {"mountain": {"relief_m": 1200.0, "octave_amps": [1.0, 0.5, 0.25, 0.12, 0.06, 0.03],
+                       "ridge_strength": 0.8, "valley_depth": 0.3, "warp_amount": 2000.0,
+                       "base_freq": 1.0/6000, "ridge_freq": 2.0/6000, "valley_freq": 1.2/6000,
+                       "warp_freq": 1.0/16200, "slope_bias": 20.0}}
+    out = lib.attach_biome_params(pack, bp)
+    assert "biome_params" in out
+    assert out["biome_params"]["mountain"]["relief_m"] == 1200.0
+    assert out["families"] == pack["families"]   # per-kernel entries untouched (additive)
+
+
+def test_attach_biome_params_rejects_nan_naming_family():
+    pack = {"schema": lib.SCHEMA, "version": 1, "families": {}}
+    bad = {"badlands": {"relief_m": float("nan"), "octave_amps": [1.0]*6, "ridge_strength": 0.4,
+                        "valley_depth": 0.9, "warp_amount": 1800.0, "base_freq": 1.0/2200,
+                        "ridge_freq": 2.0/2200, "valley_freq": 1.2/2200, "warp_freq": 1.0/5940,
+                        "slope_bias": 30.0}}
+    with pytest.raises(ValueError, match="badlands"):
+        lib.attach_biome_params(pack, bad)
+
+
+def test_attach_biome_params_rejects_out_of_domain_freq():
+    pack = {"schema": lib.SCHEMA, "version": 1, "families": {}}
+    bad = {"coast": {"relief_m": 100.0, "octave_amps": [1.0]*6, "ridge_strength": 0.1,
+                     "valley_depth": 0.1, "warp_amount": 500.0, "base_freq": 0.0,  # invalid: freq must be >0
+                     "ridge_freq": 0.0, "valley_freq": 0.0, "warp_freq": 0.0, "slope_bias": 5.0}}
+    with pytest.raises(ValueError, match="coast"):
+        lib.attach_biome_params(pack, bad)
+
+
+def test_attach_biome_params_rejects_wrong_octave_count():
+    # ADDED (code-review hardening): octave_amps must be exactly 6 (else the generator/GLSL mirror mis-reads).
+    pack = {"schema": lib.SCHEMA, "version": 1, "families": {}}
+    bad = {"desert": {"relief_m": 200.0, "octave_amps": [1.0, 0.5, 0.25],  # only 3, must be 6
+                      "ridge_strength": 0.2, "valley_depth": 0.2, "warp_amount": 800.0,
+                      "base_freq": 1.0/3000, "ridge_freq": 2.0/3000, "valley_freq": 1.2/3000,
+                      "warp_freq": 1.0/8100, "slope_bias": 8.0}}
+    with pytest.raises(ValueError, match="desert"):
+        lib.attach_biome_params(pack, bad)
