@@ -36,6 +36,13 @@ after the editor was closed; `cargo test` isolated target **121 passed / 0 faile
 deliberately tight pool budget. B3's hardened perf gate also passed with terrain-vs-sky and detail-on/off
 checks active (`GPU p99=0.082ms`, `terrain_frac_min=1.000`, `detail_delta=0.53739`).
 
+**Slice 2A first render batch:** `tools/dem_pack/render_structure_ab.py` now renders baseline vs four
+structure-basis candidates (`recursive_warp`, `multifractal_ridges`, `ridge_valley_coupled`,
+`cellular_valleys`) using the same seeds/views. Review sheets are in `D:\tmp\wg10_structure_ab\`:
+mountain/plains/badlands at 200 km + 20 km, plus a mountain→plains transition strip. Tests:
+`python -m pytest tools\dem_pack -q` = **45 passed**. **Owner verdict pending** — these are not accepted
+terrain until image review.
+
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
 `docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**

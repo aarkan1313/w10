@@ -47,6 +47,28 @@ def test_domain_warp_displaces_the_field():
     assert np.allclose(wx0, wx) and np.allclose(wz0, wz)
 
 
+def test_recursive_domain_warp_is_deterministic_and_active():
+    wx, wz = _grid()
+    ax, az = wg.recursive_domain_warp(wx, wz, warp_amount=1500.0, warp_freq=1.0/6000.0, seed=4, steps=3)
+    bx, bz = wg.recursive_domain_warp(wx, wz, warp_amount=1500.0, warp_freq=1.0/6000.0, seed=4, steps=3)
+    assert np.allclose(ax, bx) and np.allclose(az, bz)
+    assert not np.allclose(ax, wx)
+    assert not np.allclose(az, wz)
+    nx, nz = wg.recursive_domain_warp(wx, wz, warp_amount=0.0, warp_freq=1.0/6000.0, seed=4)
+    assert np.allclose(nx, wx) and np.allclose(nz, wz)
+
+
+def test_ridged_multifractal_and_cellular_edges_are_bounded_nonflat():
+    wx, wz = _grid()
+    r = wg.ridged_multifractal(wx, wz, base_freq=1.0/2500.0, octaves=5, seed=6)
+    c = wg.cellular_edges(wx, wz, freq=1.0/3000.0, seed=7)
+    for field in (r, c):
+        assert field.shape == wx.shape
+        assert np.all(np.isfinite(field))
+        assert field.min() >= -0.0001 and field.max() <= 1.0001
+        assert float(np.ptp(field)) > 0.1
+
+
 MOUNTAIN = {
     "relief_m": 1200.0,
     "octave_amps": [1.0, 0.5, 0.25, 0.12, 0.06, 0.03],
@@ -73,6 +95,20 @@ def test_generate_deterministic_finite_relief_scaled():
     # mountain (relief 1200, ridge_strength 0.9) has much more vertical range than plains
     p = wg.generate(wx, wz, PLAINS, seed=5)
     assert float(np.ptp(a)) > 3.0 * float(np.ptp(p))
+
+
+def test_generate_structure_variants_are_deterministic_finite_and_nonbaseline():
+    wx, wz = _grid(96, span=20000.0)
+    baseline = wg.generate(wx, wz, MOUNTAIN, seed=5)
+    assert np.allclose(wg.generate_variant(wx, wz, MOUNTAIN, seed=5, variant="baseline"), baseline)
+    for variant in wg.STRUCTURE_VARIANTS:
+        a = wg.generate_variant(wx, wz, MOUNTAIN, seed=5, variant=variant)
+        b = wg.generate_variant(wx, wz, MOUNTAIN, seed=5, variant=variant)
+        assert a.shape == wx.shape
+        assert np.all(np.isfinite(a))
+        assert np.allclose(a, b)
+        if variant != "baseline":
+            assert not np.allclose(a, baseline)
 
 
 def test_generate_bounded_by_closed_form():

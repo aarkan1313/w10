@@ -64,6 +64,29 @@ def domain_warp(wx, wz, warp_amount, warp_freq, seed=0):
     return wx + warp_amount * dx, wz + warp_amount * dz
 
 
+def recursive_domain_warp(wx, wz, warp_amount, warp_freq, seed=0, steps=3, decay=0.55, freq_mul=1.9):
+    """Recursive low-frequency coordinate bending for Slice 2A structure A/Bs.
+
+    Plain single-pass warp bends roughness, but often still reads as same-noise texture. Re-warping the
+    already-warped coordinates creates longer, more tangled corridors while staying local, deterministic,
+    and parity-portable. This is still just an offline candidate until owner image review accepts it.
+    """
+    if warp_amount == 0.0 or steps <= 0:
+        return wx, wz
+    out_x = np.array(wx, dtype=np.float64, copy=True)
+    out_z = np.array(wz, dtype=np.float64, copy=True)
+    amount = float(warp_amount)
+    freq = float(warp_freq)
+    for i in range(int(steps)):
+        dx = fbm(out_x, out_z, freq, 3, seed + 101 + i * 37)
+        dz = fbm(out_x, out_z, freq, 3, seed + 151 + i * 37)
+        out_x = out_x + amount * dx
+        out_z = out_z + amount * dz
+        amount *= float(decay)
+        freq *= float(freq_mul)
+    return out_x, out_z
+
+
 def generate(wx, wz, params, seed=0):
     """The worldgen generator (spec §3): warp -> macro fBm landmass -> ridged ridgelines ->
     inverted-ridged valley carving -> ×relief. params is a BiomeParams dict. Pure function of
@@ -84,4 +107,134 @@ def generate(wx, wz, params, seed=0):
     # 4. VALLEYS — inverted ridged noise carves connected drainage.
     h = h - params["valley_depth"] * ridged_fbm(w_x, w_z, params["valley_freq"], 4, seed + 200)
     # 5. relief
+    return h * params["relief_m"]
+
+
+def ridged_multifractal(wx, wz, base_freq, octaves, seed=0, gain=0.5, lacunarity=2.0,
+                        offset=1.0, weight_gain=1.35):
+    """Musgrave-style ridged multifractal candidate. Returns a normalized [0,1] ridge field.
+
+    Unlike `ridged_fbm`, each octave is weighted by the previous octave's ridge signal, so crests tend to
+    reinforce into connected ridge chains instead of independent roughness at every scale.
+    """
+    h = np.zeros_like(wx, dtype=np.float64)
+    weight = np.ones_like(wx, dtype=np.float64)
+    amp = 1.0
+    norm = 0.0
+    freq = base_freq
+    for i in range(octaves):
+        signal = float(offset) - np.abs(value_noise(wx * freq, wz * freq, seed + i))
+        signal = np.clip(signal, 0.0, None)
+        signal = signal * signal
+        signal = signal * weight
+        h += amp * signal
+        norm += amp
+        weight = np.clip(signal * float(weight_gain), 0.0, 1.0)
+        amp *= gain
+        freq *= lacunarity
+    return np.clip(h / max(norm, 1e-9), 0.0, 1.0)
+
+
+def cellular_edges(wx, wz, freq, seed=0, sharpness=2.0):
+    """Cheap Worley/cellular edge network candidate. Returns [0,1], high near cell borders.
+
+    This is an optional A/B for "large organizing lines" only. It is local and deterministic, but likely too
+    cellular if overused; the render batch lets the owner reject it cheaply.
+    """
+    x = wx * freq
+    z = wz * freq
+    ix = np.floor(x).astype(np.int64)
+    iz = np.floor(z).astype(np.int64)
+    fx = x - ix
+    fz = z - iz
+    f1 = np.full_like(wx, np.inf, dtype=np.float64)
+    f2 = np.full_like(wx, np.inf, dtype=np.float64)
+    for dz in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            cx = ix + dx
+            cz = iz + dz
+            px = float(dx) + _hash2(cx, cz, seed + 11)
+            pz = float(dz) + _hash2(cx, cz, seed + 29)
+            d2 = (px - fx) * (px - fx) + (pz - fz) * (pz - fz)
+            old_f1 = f1
+            f1 = np.minimum(f1, d2)
+            f2 = np.minimum(np.maximum(old_f1, d2), f2)
+    gap = np.sqrt(f2) - np.sqrt(f1)
+    return 1.0 - np.clip(gap * float(sharpness), 0.0, 1.0)
+
+
+STRUCTURE_VARIANTS = (
+    "baseline",
+    "recursive_warp",
+    "multifractal_ridges",
+    "ridge_valley_coupled",
+    "cellular_valleys",
+)
+
+
+def _macro_height(w_x, w_z, params, seed):
+    h = np.zeros_like(w_x, dtype=np.float64)
+    freq = params["base_freq"]
+    for i, amp in enumerate(params["octave_amps"]):
+        h += amp * value_noise(w_x * freq, w_z * freq, seed + i)
+        freq *= 2.0
+    return h
+
+
+def _upland_mask(h):
+    upland = np.clip((h - (-0.1)) / 0.6, 0.0, 1.0)
+    return upland * upland * (3.0 - 2.0 * upland)
+
+
+def generate_variant(wx, wz, params, seed=0, variant="baseline"):
+    """Generate one Slice 2A structure candidate.
+
+    `baseline` is exactly `generate()`. Other variants are render-first experiments, not accepted runtime
+    architecture. They keep the same params so image differences come from the structure basis.
+    """
+    if variant == "baseline":
+        return generate(wx, wz, params, seed)
+    if variant not in STRUCTURE_VARIANTS:
+        raise ValueError(f"unknown structure variant {variant!r}; expected one of {STRUCTURE_VARIANTS}")
+
+    warp_amount = params["warp_amount"]
+    warp_freq = params["warp_freq"]
+    if variant == "recursive_warp":
+        w_x, w_z = recursive_domain_warp(wx, wz, warp_amount * 1.8, warp_freq * 0.75, seed, steps=3)
+    else:
+        w_x, w_z = recursive_domain_warp(wx, wz, warp_amount * 1.25, warp_freq, seed, steps=2)
+
+    h = _macro_height(w_x, w_z, params, seed)
+    upland = _upland_mask(h)
+
+    if variant == "recursive_warp":
+        ridges = ridged_fbm(w_x, w_z, params["ridge_freq"] * 0.85, 4, seed + 100, gain=0.55)
+        valleys = ridged_fbm(w_x, w_z, params["valley_freq"] * 0.80, 4, seed + 200, gain=0.55)
+        h = h + params["ridge_strength"] * upland * ridges
+        h = h - params["valley_depth"] * (0.35 + 0.65 * upland) * valleys
+    elif variant == "multifractal_ridges":
+        ridges = ridged_multifractal(w_x, w_z, params["ridge_freq"] * 0.75, 5, seed + 100, gain=0.58)
+        valleys = ridged_multifractal(w_x, w_z, params["valley_freq"] * 0.65, 5, seed + 200, gain=0.54)
+        h = h + params["ridge_strength"] * (0.25 + 0.75 * upland) * ridges
+        h = h - params["valley_depth"] * (0.25 + 0.75 * upland) * np.power(valleys, 1.25)
+    elif variant == "ridge_valley_coupled":
+        ridges = ridged_multifractal(w_x, w_z, params["ridge_freq"] * 0.70, 5, seed + 100, gain=0.60)
+        valley_net = ridged_multifractal(
+            w_x + ridges * warp_amount * 0.18,
+            w_z - ridges * warp_amount * 0.18,
+            params["valley_freq"] * 0.58,
+            5,
+            seed + 200,
+            gain=0.56,
+        )
+        h = h + params["ridge_strength"] * upland * ridges
+        h = h - params["valley_depth"] * (0.20 + 0.95 * upland) * (0.65 * valley_net + 0.35 * valley_net * ridges)
+    elif variant == "cellular_valleys":
+        ridges = ridged_multifractal(w_x, w_z, params["ridge_freq"] * 0.70, 5, seed + 100, gain=0.58)
+        valley_net = ridged_multifractal(w_x, w_z, params["valley_freq"] * 0.55, 5, seed + 200, gain=0.55)
+        cells = cellular_edges(w_x, w_z, params["valley_freq"] * 0.28, seed + 300, sharpness=2.6)
+        channels = np.maximum(valley_net, cells * 0.85)
+        h = h + params["ridge_strength"] * upland * ridges
+        h = h - params["valley_depth"] * (0.20 + 0.90 * upland) * channels
+
     return h * params["relief_m"]
