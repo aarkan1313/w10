@@ -64,16 +64,27 @@ adaptable down to 1-10m near-field detail.** Recipe = the WG9 blueprint (macro f
 ranges + carved valleys + DEMOTED kernel overlay), built adaptable (every layer a knob), fitting the
 KEPT clipmap/parity architecture. See memory `worldgen10-wg9-height-recipe` + `worldgen10-north-star-vision`.
 
-## Close-out status (updated 2026-05-30)
+## Close-out status (updated 2026-05-30, late)
 - **Doc-drift (the A-* items): ✅ DONE** (the doc-reconciliation pass — HANDOFF/DESIGN/ROADMAP/STATUS/
-  memory + 2 cold-read validations). The docs now tell one consistent story; a fresh session lands on
-  Slice 2.
+  memory + 2 cold-read validations).
 - **Worldgen brainstorm/spec/Slice-1: ✅ DONE** (S1 owner-accepted).
-- **STILL OPEN — the CODE bugs B1/B2/B3 (above):** these are the real remaining FIX-NOW, and the
-  PRECONDITION before Slice 3 (the first runtime build), in this order:
-  1. **B1** (pool `Drop` impl + fix 2 sites + delete wrong comments) — small, removes leak + footgun.
-  2. **B3** (perf-gate terrain-vs-sky + detail on/off) — make the rebuild's measuring stick trustworthy.
-  3. **B2** (structural never-black + capacity-pressure gate) — the KEPT render foundation must be sound.
-- **Slice 2** (offline biome distillation) is OFFLINE — it can proceed before/parallel to B1/B2/B3; only
-  Slice 3 (Rust runtime) requires them closed first.
-(Owner may choose to fold some of these INTO the rebuild instead of before — triage decision pending.)
+- **Worldgen Slice 2 (offline distillation tooling): ✅ BUILT + GATED, but the LOOK is NOT accepted** —
+  tooling (biome_distill/distill_biomes/attach_biome_params/render_biomes) committed + pytest-green;
+  owner verdict on the renders = "still not terrain, same noise, not real world." **PAUSED pending a
+  structure-approach research/review** (plain warped/ridged noise = roughness, not connected ridgeline/
+  drainage STRUCTURE — same truth as the spectral refutation). The distillation half is KEPT; the
+  GENERATOR's structure stage is what's under research. See STATUS "Slice 2" section.
+- **CODE bugs B1/B2/B3 — status corrected after a source audit (the 'did the findings get worked on?' check):**
+  1. **B1** (pool RID leak) — ✅ **SOURCE FIXED + committed `be9c4f2`** (Rust `Drop` impl → `free_all_impl`;
+     `_exit_tree`+`_pool` in m3_review.gd; `free_all` at the 3 pool-owning returns in m5_detail_check.gd;
+     the 2 wrong comments deleted). `cargo check` clean. **NOT yet gate-verified** — needs the editor closed
+     to rebuild the real DLL + run `--suite m3` (8 checks) to confirm no regression. ← the ONE B1 to-do left.
+  2. **B3** (perf-gate terrain-vs-sky + detail on/off) — ✅ **ALREADY DONE + committed** (found by audit:
+     the perf gate already has `MIN_TERRAIN_FRAC`/`_terrain_frac`/`SKY` + `DETAIL_DELTA_MIN`/detail on-off).
+     No action needed.
+  3. **B2** (structural never-black + capacity-pressure gate) — ❌ **STILL OPEN** (Rust). Protect held coarse
+     pages from eviction + re-validate the held RID maps to its key before display + a capacity-pressure gate.
+     Best batched with the B1 rebuild in one editor-close window.
+- **Precondition for Slice 3 (first runtime build):** B1 gate-verified + B2 done. (B3 already satisfied.)
+(Owner may choose to fold some of these INTO the structure rebuild instead of before — triage pending the
+research outcome.)
