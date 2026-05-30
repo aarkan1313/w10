@@ -9,6 +9,16 @@ defect the live fly caught).
 > This is a temporary working doc to drive the reset. When the render layer is proven end to
 > end, fold the outcome into STATUS/ROADMAP and delete this (the 3-living-docs rule).
 
+## CONFIRMED ROOT CAUSE (step 2, owner-verified 2026-05-29)
+**The page texture samplers defaulted to REPEAT wrap.** A tile edge vertex at `uv=1.0` wrapped
+to sample the page's OPPOSITE edge → a wrong height exactly at every tile boundary → the visible
+seams / "overlapping offset sheets". Heights and mesh placement were always correct (CPU model
+matched to 0.00025 m); the bug was purely the GPU sampler wrap mode. FIX: declare the page
+samplers `filter_linear, repeat_disable` (clamp-to-edge) in `ring_displace.gdshader`. Owner
+confirmed two pages now join as one continuous landmass. This is why the slice-8 "seam=0" data
+gate missed it — it compared texel DATA (correct), not the wrapped GPU SAMPLE (wrong). This bug
+was corrupting EVERY tile boundary in the full clipmap.
+
 ## The two suspected gaps (hypotheses to confirm, not facts yet)
 
 - **G1 — levels overdraw (not hollow rings).** `clipmap_rings::configure` builds EVERY level as

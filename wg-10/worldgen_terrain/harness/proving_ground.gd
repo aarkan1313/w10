@@ -18,12 +18,12 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 2
+const STEP := 3
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
 const GRID_RES := 64          # mesh cells across the page (vertices = 65x65)
-const CAPACITY := 8
+const CAPACITY := 16    # step 3 needs 9 resident pages; margin to spare
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
 
@@ -55,16 +55,26 @@ func _ready() -> void:
 		_build_step1()
 	elif STEP == 2:
 		_build_step2()
+	elif STEP == 3:
+		_build_step3()
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
 	_camera.environment = env
 	_camera.far = BASE_SPAN * 16.0
 	add_child(_camera)
-	# Start above the area, looking down. For step 2+ bias toward the seam at x=BASE_SPAN.
-	var start_x := BASE_SPAN * 0.5 if STEP == 1 else BASE_SPAN
-	_camera.global_position = Vector3(start_x, 2500.0, BASE_SPAN * 0.5)
-	_camera.rotation_degrees = Vector3(-45.0, 0.0, 0.0)
+	# Start above the area, looking down. Centre over whatever the step builds.
+	match STEP:
+		1:
+			_camera.global_position = Vector3(BASE_SPAN * 0.5, 2500.0, BASE_SPAN * 0.5)
+		2:
+			_camera.global_position = Vector3(BASE_SPAN, 2500.0, BASE_SPAN * 0.5)
+		3:
+			# 3x3 spans [0, 3*BASE_SPAN]; centre over the middle page, higher to see all 9.
+			_camera.global_position = Vector3(BASE_SPAN * 1.5, 6000.0, BASE_SPAN * 1.5)
+		_:
+			_camera.global_position = Vector3(BASE_SPAN, 2500.0, BASE_SPAN * 0.5)
+	_camera.rotation_degrees = Vector3(-50.0, 0.0, 0.0)
 
 	# --- HUD ---
 	var layer := CanvasLayer.new()
@@ -88,6 +98,15 @@ func _build_step1() -> void:
 func _build_step2() -> void:
 	if _build_tile(0.0, 0.0) == null or _build_tile(BASE_SPAN, 0.0) == null:
 		push_error("proving_ground STEP2: a page acquire returned null")
+
+# STEP 3: a 3x3 of level-0 pages around the origin (page origins at (i,j)*BASE_SPAN for
+# i,j in {0,1,2}), each its own tile sampled in its own frame, morph OFF. All edges are now
+# the proven clamp-to-edge seam. Prove: nine pages read as ONE surface — no internal grid lines.
+func _build_step3() -> void:
+	for j in range(3):
+		for i in range(3):
+			if _build_tile(i * BASE_SPAN, j * BASE_SPAN) == null:
+				push_error("proving_ground STEP3: page (%d,%d) acquire returned null" % [i, j])
 
 # Acquire one level-0 page at world (ox,oz) and build its full-grid tile over world
 # [ox, ox+BASE_SPAN], sampling that page by world UV, morph OFF. Returns the MeshInstance or null.
@@ -152,6 +171,7 @@ func _process(_delta: float) -> void:
 	match STEP:
 		1: desc = "STEP 1: ONE level-0 page, ONE flat tile, morph OFF, no streamer"
 		2: desc = "STEP 2: TWO adjacent pages — fly the seam at x=%.0f (look for a crack)" % BASE_SPAN
+		3: desc = "STEP 3: 3x3 of level-0 pages — one surface? any internal grid lines?"
 		_: desc = "STEP %d" % STEP
 	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s" % [
 		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc]
