@@ -248,7 +248,29 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 > rather than pure noise). M5–M7 below are the systems that MODULATE/REFINE how the kernels
 > combine — and are where the current "squareness / spiky / extreme" look gets fixed.
 
-## 🧬 FOUNDATIONAL PIVOT — Kernel-DNA synthesis (2026-05-30, supersedes the kernel-tiling model)
+## 🌟 NORTH-STAR RE-VISION (2026-05-30, supersedes the spectral pivot below)
+
+The spectral kernel-DNA synthesis (the pivot directly below) was **REFUTED by the owner's eye** before any
+runtime rebuild: a real kernel hillshade looks amazing, but value-noise / gradient-noise / even the
+spectrally-PERFECT iFFT field all look like noise — **a power spectrum captures roughness but discards
+PHASE, and phase is where STRUCTURE (ridgelines/drainage) lives.** This forced a full step-back. The
+re-vision is in `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md` (READ IT — it's the
+current top-level picture). Summary:
+- **WorldGen10 = a terrain FRAMEWORK for any game** (Space Engineers planet / Diablo zone / SotF island),
+  adaptable via knobs. **Primary mode (build first): infinite + procedural, like No Man's Sky.** Handmade
+  areas + other modes (bounded/spherical) layer/knob onto the infinite core.
+- **Structure** (the thing the spectrum lacked) comes from NMS-style LOCAL deterministic structure-
+  approximating functions (domain warp, ridged/billow, analytic uplift), DEM-INFORMED params (not reduced
+  to a spectrum). + heavy **materials/dressing** (much of "amazing" is shading, not the heightfield).
+- **Erosion/hydro** resolves the infinite-vs-global-sim tension via the owner's insight: OFFLINE run real
+  erosion → analyze its effect → DISTILL a CHEAP LOCAL operator → apply online per-page in-budget
+  (offline-heavy → online-cheap, the recurring pattern). Erosion-LOOKING, infinite, parity-safe.
+- **Keep (proven):** the render pipeline, grammar, facts, relief_scale. The rebuild is the height CONTENT +
+  structure + materials.
+- **DEAD:** spectral synthesis (`tools/dem_pack/spectral.py` kept as a documented negative result).
+First concrete piece to design = owner's pick (structure core / materials / erosion-distillation research).
+
+## 🧬 [SUPERSEDED] FOUNDATIONAL PIVOT — Kernel-DNA synthesis (spectral; REFUTED by eye, see north-star above)
 
 Owner flew the relief-scaled terrain → "blobby, placed, not a contiguous landmass; kernels just placed,
 not informing." ROOT CAUSE: `height::height`→`sample_kernel` reads kernel pixels as a TILING texture
