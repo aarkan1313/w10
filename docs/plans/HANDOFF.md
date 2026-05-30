@@ -60,17 +60,24 @@ Godot 4.6 game, with a tiny public API (`set_config`, `get_height(x,z)`,
 - A **unified GPU clipmap renderer** that streams height *pages* ahead of the
   camera, never blocks a frame, and degrades to **coarser-but-valid** terrain
   instead of going black.
-- Fed by **authoritative sparse CPU facts** (the deterministic worldgen formula:
-  hash → noise → region/province grammar → kernel → landform → height).
-- Driven by **data-driven terrain packs** (first pack = real DEM/OpenTopo kernels);
-  the core makes no assumptions about the data source.
-- **Determinism + CPU/GPU parity** as hard contracts: same `(x,z,seed,pack)` ⇒ same
-  height, on CPU and GPU, seam-exact at axis crossings.
+- Fed by **authoritative sparse CPU facts** (a deterministic worldgen formula). NOTE: the
+  formula is being REBUILT (§9). OLD (being replaced): `hash → grammar → kernel SAMPLED as a
+  tiling texture → height` (this is what produced the blobby/tiling look). NEW (the rebuild):
+  `hash → grammar (blends per-biome PARAMS) → warped-noise GENERATE → height` — kernels are
+  distilled into a DNA library, never sampled, so nothing tiles. See the worldgen-core spec.
+- Driven by **data-driven packs** — but the pack now stores per-biome PARAM SETS (distilled
+  from the real DEMs), not raw kernel pixels. The core makes no assumption about the data source.
+- **Determinism + CPU/GPU parity** as hard contracts: same `(x,z,seed,pack)` ⇒ same height,
+  CPU and GPU, seam-exact at axis crossings. (The new generator must still honor this.)
+- **WorldGen10 is also a FRAMEWORK** (owner-confirmed re-vision): infinite-procedural FIRST
+  (No Man's Sky reference), adaptable to bounded / spherical-planet / handmade-area modes via
+  knobs. See `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md`.
 
-Read `docs/plans/DESIGN.md` for the locked architecture (it is the source of truth):
-§1 pillars, §2.4 CPU/GPU split, §3 packs, §4 determinism/parity, §5 render pipeline
-(rings / page pool / stream-ahead scheduler / frame loop), §6 config + drop-in
-boundary, §7 the rules, §9 open items.
+Read `docs/plans/DESIGN.md` for the architecture — BUT note its top superseded-notice: §2.1
+(worldgen core) + §3 (packs) describe the OLD kernel-as-height design (historical); the CURRENT
+height-core truth is the two 2026-05-30 specs (vision + worldgen-core). DESIGN §1 pillars, §2.2
+facts, §2.3/§5 render pipeline, §2.4 parity split, §4 contracts, §6 config/drop-in, §7 rules are
+STILL accurate + kept.
 
 ## 3. The four pillars (DESIGN §1 — these decide every call)
 
@@ -107,29 +114,37 @@ inline.
 5. **Audit** — independently review the slice against its spec + the pillars before
    moving on.
 
-Supporting habits: **probe-first de-risking** (throw a quick probe at an unknown —
-GPU compute, offscreen render, hash portability — before building on it);
-**honest-baseline docs** (STATUS says what is *actually true*, separating "passed a
-counter gate" from "accepted"). TDD always: where a WG9 fixture exists, assert
-**exact** values, not just bounds (a width-mismatch hash bug once passed a property
-test and was only caught by exact-value parity).
+Supporting habits (each earned the hard way): **probe-first de-risking** (throw a quick
+probe at an unknown — GPU compute, offscreen render, a noise basis — before building on
+it); **render-images-first for look work** (render the terrain to images the OWNER judges
+BEFORE any runtime — this killed the spectral approach + a sandpaper-scale bug offline, for
+~half a day each, instead of a wasted runtime rebuild); **look-quality is OWNER-judged** —
+gates prove invariants (parity/perf/non-repetition/bounds), they CANNOT judge "looks like
+terrain," so every look milestone ends in an owner fly/eyeball; **honest-baseline docs**
+(STATUS says what is *actually true*, separating "passed a gate" from "owner-accepted").
+TDD always; assert **exact** values where a fixture exists (a width-mismatch hash bug once
+passed a property test, caught only by exact-value parity). And: a gate that round-trips
+its own assumption proves nothing (the spectral gate tested the iFFT path, not the shipping
+basis) — make gates exercise the REAL thing.
 
 ## 5. Gates (the evidence; run before any "done")
 
 `tools/gate.py` runs `*_check.gd` scripts through Godot (after one `--import` pass so
 the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 
-- `python tools/gate.py --suite fast` — **headless**, 5 checks: hash parity,
-  determinism, grammar, height, DEM pack. (Pure-CPU layers.)
-- `python tools/gate.py --suite gpu` — **WINDOWED**, 2 checks: CPU/GPU parity
-  (synthetic) + DEM parity (real 512×512 kernels). Global RenderingDevice is null
-  under `--headless` on this D3D12 box, so GPU/render gates must run windowed.
-- `python tools/gate.py --suite m3` — **WINDOWED**, currently 2 checks (slice-1 render
-  + slice-2 pool); slice 3 adds a 3rd (`m3_stream_check.gd`).
-- `cargo test` (from `wg-10/rust`, with `CARGO_TARGET_DIR` unset — see §7): 81 tests
-  green as of slice 2.
+- `python tools/gate.py --suite fast` — **headless**, **6 checks** (hash parity,
+  determinism, grammar, height, DEM pack, facts). Pure-CPU layers.
+- `python tools/gate.py --suite gpu` — **WINDOWED**, **4 checks** (CPU/GPU parity
+  synthetic + DEM parity + facts-collision-parity + facts-bake). Global RenderingDevice
+  is null under `--headless` on this D3D12 box, so GPU/render gates must run windowed.
+- `python tools/gate.py --suite m3` — **WINDOWED**, **8 checks** (slice1 render, pool,
+  stream, view, accept, continuity, m5_detail, m5_perf_hardened).
+- `cargo test` (from `wg-10/rust`, `CARGO_TARGET_DIR` unset — see §7): **115 tests** green.
+- `python -m pytest` (from `tools/dem_pack/`): **15 tests** — the offline pack + worldgen-
+  prototype tools (`worldgen_proto.py`, `spectral.py` [a kept negative result], `dem_pack_lib`).
 - **Exit codes:** 0 pass / 1 fail / 2 skip. A no-GPU/headless box returns SKIP (2) on
-  gpu/m3 — never miscounted as a pass.
+  gpu/m3 — never miscounted as a pass. (A single windowed run can exit non-zero on teardown;
+  trust the `[gate] suite=… fail=0` summary line, re-run once to confirm.)
 
 ## 6. Where things stand (2026-05-30) — M0–M4 DONE
 
@@ -167,18 +182,18 @@ is the one-line-per-milestone map.)
   bottom blanket). "Loads then unloads" was view-distance > loaded extent → fixed with more levels +
   far-plane/fog matched to the loaded edge (config), not an unload bug.
 
-**The "blue squares / blobby / LOD-pop" look is EXTREME DEM DATA + TEST SCALE, not a render bug**
-(`dem_v1` has ~450 m cliffs over 500 m; deep blue = real low elevation; coarse mesh facets a cliff).
-Fixed downstream by M5 detail + M6 materials/normals + M7 erosion + a saner pack relief — NOT in the
-render layer. Big-picture intent: DEM kernels are a LIBRARY of real-world landform stamps; grammar
-(where) + height field (blend) arrange them into a procedural generator that speaks in real
-landforms. The foundation (gen + GPU-dense/CPU-sparse perf + parity + facts) is AAA-capable; the
-LOOK is downstream.
+**⚠️ The "blobby / placed / not-a-contiguous-landmass" look is the HEIGHT CONTENT, not the render
+layer — and it is what the worldgen-core rebuild (§9) fixes.** (An EARLIER belief, now DISPROVEN, was
+"it's extreme DEM data + test scale, fixed downstream by M5 detail / M6 materials / M7 erosion." That
+was wrong — do NOT re-chase it.) ROOT CAUSE, owner-confirmed: `sample_kernel` reads the DEM kernels as
+TILING textures and makes the tiled kernel the WHOLE height → repeating stamps, no continuous structure.
+The fix is NOT detail/materials/erosion on top — it's rebuilding the height core so it generates a
+contiguous structured landmass (param-driven warped-noise; §9). The render pipeline + parity + facts
+foundation is solid and KEPT; the *height content* is what's being rebuilt.
 
 **Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15. **`main` is in sync with `origin/main`**
-(the 174-commit backlog was pushed 2026-05-30 — the assistant CAN push now, see §8).
-(`COMPONENT_INVENTORY.md` was the M3-reset driver doc; it was RETIRED into STATUS once the
-render layer landed — don't look for it.)
+(the assistant CAN push — see §8). (`COMPONENT_INVENTORY.md` was the M3-reset driver doc, RETIRED into
+STATUS — don't look for it.)
 
 ## 7. Build / run gotchas (these bit prior sessions — read before touching the toolchain)
 
