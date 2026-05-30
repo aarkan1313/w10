@@ -12,7 +12,7 @@ const SHADER_SPATIAL := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const WORLD_SPAN    := 8192.0
 const PAGE_PX       := 256
 const GRID_RES      := 128
-const HEIGHT_SCALE  := 0.35
+const RELIEF_SCALE  := 0.25
 const RELIEF_REF    := 2000.0
 const SEED          := 1337
 const VIEW_SIZE     := Vector2i(640, 480)
@@ -58,7 +58,7 @@ func _run() -> int:
 	mat.shader = shader
 	mat.set_shader_parameter("height_tex",   tex)
 	mat.set_shader_parameter("world_span",   WORLD_SPAN)
-	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 	mat.set_shader_parameter("relief_ref",   RELIEF_REF)
 
 	var mi := MeshInstance3D.new()

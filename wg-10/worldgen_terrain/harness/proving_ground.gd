@@ -24,7 +24,7 @@ const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
 const GRID_RES := 64          # mesh cells across the page (vertices = 65x65)
 const CAPACITY := 96    # step 7: 3 levels x 9 = 27 + stream-ahead + parent-fetch headroom
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
 # Streamer tunables. NUM_LEVELS grows with the step (4 = 1 level; 5+ = 2 levels for never-black).
 const RADIUS_PAGES := 1
@@ -158,7 +158,7 @@ func _build_step4() -> void:
 		mat.set_shader_parameter("world_span", BASE_SPAN)
 		mat.set_shader_parameter("coarse_span", BASE_SPAN)
 		mat.set_shader_parameter("level_half_extent", BASE_SPAN)
-		mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+		mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 		mat.set_shader_parameter("morph_region", 0.0)   # morph off (single level)
 		mat.set_shader_parameter("relief_ref", RELIEF_REF)
 		mi.set_material_override(mat)
@@ -217,7 +217,7 @@ func _build_step5() -> void:
 			mat.set_shader_parameter("world_span", span_l)
 			mat.set_shader_parameter("coarse_span", span_l)
 			mat.set_shader_parameter("level_half_extent", span_l)
-			mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+			mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 			# only the FINE level (0) morphs toward its coarse parent; the coarsest level has
 			# nothing coarser to blend to, so it stays morph-off.
 			var morph: float = _morph_region if level == 0 else 0.0
@@ -369,7 +369,7 @@ func _build_tile(ox: float, oz: float) -> MeshInstance3D:
 	mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
 	mat.set_shader_parameter("level_center", Vector2(ox + BASE_SPAN * 0.5, oz + BASE_SPAN * 0.5))
 	mat.set_shader_parameter("level_half_extent", BASE_SPAN)   # morph off, value irrelevant
-	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 	mat.set_shader_parameter("morph_region", 0.0)              # MORPH OFF — pure fine sample
 	mat.set_shader_parameter("relief_ref", RELIEF_REF)
 	mi.set_material_override(mat)

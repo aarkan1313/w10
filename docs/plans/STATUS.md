@@ -7,6 +7,30 @@ point — see DESIGN §7.3.)
 
 ---
 
+## MILESTONE: Shaded terrain at the right scale (the WG9 looks-alright baseline) — IN PROGRESS
+
+Spec: `docs/superpowers/specs/2026-05-30-shaded-terrain-at-scale-design.md`. Closing the owner's "still a
+heightmap, not real terrain" gap to WG9's proven baseline (finer mesh + sane relief + normals/lighting),
+designed as ONE coupled milestone. 4 slices: **S1 relief scale** → S2 normals/lighting → S3 mesh density
+(perf-gated) → S4 integrate + M5 detail tune. M5 detail's S2-S4 fold in here.
+
+**Slice 1 — relief_scale knob: DONE (code), owner A/B fly PENDING.** Commits `55fdd3b..c49640b` (+ review
+fix). One authoritative `relief_scale` config knob multiplies the base height field, applied IDENTICALLY
+on render (shader `VERTEX.y * relief_scale`) AND all 3 facts consume points (`get_height`,
+`get_collision_field` closure, `bake_collision_region` — via a `scaled_base()` helper = `height::height()
+* relief_scale`). Folds in the old `height_scale` → ONE relief knob. Raw `height::height` formula UNTOUCHED
+(M2 parity intact). Default `RELIEF_SCALE := 0.25` (~2765 m → ~690 m; a STARTING value for owner live-tune).
+- **Gates:** fast 6/6 (`[facts] relief_scale ok` max_err=0 — scaled==unscaled×0.25 exactly) · **gpu 4/4:
+  base parity maxd=0.000932 m UNCHANGED + `relief_scale parity ok maxd=0.000233 m` (=0.0009×0.25) →
+  visible==collision HELD with the knob** · m3 8/8 (perf gate now measures at the shipped 0.25, GPU
+  p99=0.083 ms) · cargo 115.
+- **Two-stage review:** spec-compliant; parity verified across ALL 4 base-height paths; 3 implementer
+  deviations confirmed correct (f64 not f32 at bake, `%.9f` not invalid `%g`, has_method RED guard). ONE
+  must-fix closed: stale `HEIGHT_SCALE := 0.35` constants in the gates renamed to `RELIEF_SCALE := 0.25`
+  so the perf gate measures the SHIPPED relief, not a different one.
+- **NEXT:** owner A/B fly (`m3_review.tscn` — relief is now ~4× shorter; confirm "sane height, not 2.7 km
+  spikes"), then S2 (normals + basic lighting — the big "looks like terrain" lever).
+
 ## M5 — Detail & masks (IN PROGRESS — Slice 1 detail seam CONFIRMED visible at fly scale)
 
 **✅ OWNER RE-FLY (2026-05-30, after the fix): "I can see a small difference with the detail now."**

@@ -25,7 +25,7 @@ const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY := 48
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const MORPH_REGION := 0.15
 const RELIEF_REF := 2000.0
 const SEAM_EPS := 1.0e-2          # metres; same scale as the parity gates' ABS_EPS
@@ -57,7 +57,7 @@ func _run() -> int:
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	var errs: Array[String] = []
 

@@ -29,7 +29,7 @@ const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY := 96
 const MORPH_REGION := 0.15
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
 const DETAIL_AMP := 350.0        # detail ON (the real shipped render path includes M5 detail cost)
 const VIEW_SIZE := Vector2i(960, 540)
@@ -80,7 +80,7 @@ func _run() -> int:
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE

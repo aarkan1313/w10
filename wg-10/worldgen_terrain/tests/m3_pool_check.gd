@@ -12,7 +12,7 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const WORLD_SPAN := 8192.0
 const PAGE_PX := 256
 const GRID_RES := 128
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const SEED := 1337
 const CAPACITY := 2
 const VIEW_SIZE := Vector2i(640, 480)
@@ -84,7 +84,7 @@ func _run() -> int:
 	mat.shader = load("res://worldgen_terrain/shaders/ring_displace.gdshader")
 	mat.set_shader_parameter("height_tex", tex)
 	mat.set_shader_parameter("world_span", WORLD_SPAN)
-	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 	mi.material_override = mat
 
 	var light := DirectionalLight3D.new()

@@ -20,7 +20,7 @@ const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY     := 48        # >= per-level coverage (3 levels x 9 = 27) + stream-ahead headroom
 const MORPH_REGION := 0.15
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const RELIEF_REF   := 2000.0
 const VIEW_SIZE    := Vector2i(512, 512)
 const MIN_DISTINCT := 8
@@ -56,7 +56,7 @@ func _run() -> int:
 		push_error("expected %d tiles, got %s" % [NUM_LEVELS*9, str(rings.call("tile_count"))]); return 1
 
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
 	var errs: Array[String] = []
 

@@ -26,7 +26,7 @@ const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const WORLD_SPAN := 8192.0
 const PAGE_PX := 256
 const GRID_RES := 128
-const HEIGHT_SCALE := 0.35
+const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
 const SEED := 1337
 const DETAIL_AMP := 60.0           # metres of peak detail for the test (visible, bounded)
@@ -127,7 +127,7 @@ func _make_tile_material(tex, origin_x: float) -> ShaderMaterial:
 	mat.set_shader_parameter("coarse_height_tex", tex)
 	mat.set_shader_parameter("world_span", WORLD_SPAN)
 	mat.set_shader_parameter("coarse_span", WORLD_SPAN)
-	mat.set_shader_parameter("relief_scale", HEIGHT_SCALE)
+	mat.set_shader_parameter("relief_scale", RELIEF_SCALE)
 	mat.set_shader_parameter("morph_region", 0.0)
 	mat.set_shader_parameter("relief_ref", RELIEF_REF)
 	mat.set_shader_parameter("page_origin", Vector2(origin_x, 0.0))
