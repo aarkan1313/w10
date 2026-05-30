@@ -433,6 +433,44 @@ impl Wg10PagePool {
     }
 
     // -----------------------------------------------------------------------
+    // Display pinning (B2 — structural never-black; the view drives this)
+    // -----------------------------------------------------------------------
+
+    /// Clear all display pins, then the view re-pins exactly what it binds this frame.
+    /// Call at the START of the view's per-frame bind pass.
+    #[func]
+    pub fn clear_display_pins(&mut self) {
+        if let Some(p) = self.policy.as_mut() {
+            p.clear_display_pins();
+        }
+    }
+
+    /// Pin the page `(level, origin_x, origin_z)` as currently-displayed so it can NEVER be evicted/
+    /// recycled while on screen (B2). The view calls this for every page it binds — especially the
+    /// held coarse blanket — so a streamer `release` can't recycle the slot under a visible tile
+    /// (the page-A-geometry-with-page-B-pixels corruption). No-op if the page isn't resident.
+    #[func]
+    pub fn pin_displayed_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {
+        if let Some(p) = self.policy.as_mut() {
+            p.pin_displayed(PageKey {
+                level: level as i32,
+                origin_x: origin_x as i64,
+                origin_z: origin_z as i64,
+            });
+        }
+    }
+
+    /// True if `(level, origin_x, origin_z)` is resident AND display-pinned. Gate/test introspection.
+    #[func]
+    pub fn is_displayed_pinned(&self, level: i64, origin_x: f64, origin_z: f64) -> bool {
+        self.policy.as_ref().map_or(false, |p| p.is_pinned(&PageKey {
+            level: level as i32,
+            origin_x: origin_x as i64,
+            origin_z: origin_z as i64,
+        }))
+    }
+
+    // -----------------------------------------------------------------------
     // free_all  (the ONLY place that frees page texture RIDs)
     // -----------------------------------------------------------------------
 

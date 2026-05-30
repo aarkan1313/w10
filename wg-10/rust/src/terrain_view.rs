@@ -77,6 +77,14 @@ impl Wg10TerrainView {
             streamer.bind_mut().update(camera_x, camera_z, vel_x, vel_z);
         }
 
+        // B2 (structural never-black): clear last frame's display pins, then re-pin exactly the pages
+        // we bind below. A pinned page can't be evicted/recycled while displayed, so the held coarse
+        // blanket can never show page-A geometry with page-B pixels under capacity pressure.
+        {
+            let mut pool = self.pool.as_ref().unwrap().clone();
+            pool.bind_mut().clear_display_pins();
+        }
+
         // Centre the displayed rings on the SAME clamped velocity-led point the scheduler covers
         // — ask the streamer for it rather than recomputing, so the view can NEVER desync from
         // coverage and always inherits the lead clamp (camera stays inside its ring). Recomputing
@@ -135,10 +143,44 @@ impl Wg10TerrainView {
                         // numbers — vs. budget-spiking or lead-tuning fixes that only reduce it.)
                         if !is_coarsest {
                             rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                        } else {
+                            // B2: HOLD LAST-GOOD on the coarsest level. The tile keeps showing the
+                            // page it last bound (tracked by the rings). RE-VALIDATE that page is
+                            // still resident as ITSELF and PIN it so eviction can't recycle the slot
+                            // underneath it (page-A geometry + page-B pixels). If the held page is no
+                            // longer resident-as-itself, there is nothing safe to show — fall through
+                            // to hide rather than display a recycled RID.
+                            let bk = rings.bind().bound_page_key(level as i64, dx as i64, dz as i64);
+                            let held_ox = bk.x as f64;
+                            let held_oz = bk.y as f64;
+                            let still_there = self
+                                .pool
+                                .as_ref()
+                                .unwrap()
+                                .bind()
+                                .get_resident_page(level as i64, held_ox, held_oz)
+                                .is_some();
+                            if still_there {
+                                // pin the held page so the streamer can't evict/recycle it while shown.
+                                let mut pool = self.pool.as_ref().unwrap().clone();
+                                pool.bind_mut().pin_displayed_page(level as i64, held_ox, held_oz);
+                            } else {
+                                // held page gone (recycled under capacity pressure) — don't show wrong
+                                // pixels; hide. (Default-capacity flying never hits this; it's the
+                                // structural guard the capacity-pressure gate exercises.)
+                                rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                            }
                         }
-                        // coarsest: do nothing -> the tile keeps its last valid page + position.
                         continue;
                     };
+
+                    // B2: pin the page we are ACTUALLY binding this frame so it can't be evicted/
+                    // recycled while on screen. Pins are cleared at the top of update() and re-set
+                    // here, so a page that stops being displayed becomes evictable again next frame.
+                    {
+                        let mut pool = self.pool.as_ref().unwrap().clone();
+                        pool.bind_mut().pin_displayed_page(level as i64, po_x, po_z);
+                    }
 
                     // morph target: this level's REAL parent page (level+1) covering this tile's
                     // centre, in the parent's own UV frame. If the parent isn't resident (or this

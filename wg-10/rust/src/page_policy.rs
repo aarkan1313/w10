@@ -36,7 +36,8 @@ pub struct PagePolicy {
     slots: Vec<Option<PageKey>>,   // slot -> occupying key (None = free)
     map: BTreeMap<PageKey, usize>, // key -> slot
     stamp: Vec<u64>,               // slot -> last-acquire stamp (LRU = smallest)
-    protected: BTreeSet<usize>,    // protected slot indices
+    protected: BTreeSet<usize>,    // protected slot indices (scheduler-acquired, evict-skipped)
+    pinned: BTreeSet<usize>,       // slot indices the VIEW is displaying (B2 — never evict/recycle)
     clock: u64,
 }
 
@@ -49,6 +50,7 @@ impl PagePolicy {
             map: BTreeMap::new(),
             stamp: vec![0; capacity],
             protected: BTreeSet::new(),
+            pinned: BTreeSet::new(),
             clock: 0,
         }
     }
@@ -97,9 +99,12 @@ impl PagePolicy {
             self.touch(slot);
             return Decision::Allocate(slot);
         }
-        // miss at capacity: LRU unprotected slot
+        // miss at capacity: LRU slot that is neither protected NOR display-pinned (B2). A pinned
+        // slot is always protected too, so the protected filter already excludes it; the explicit
+        // pinned filter makes the never-recycle-a-visible-page invariant robust to future changes
+        // in how `protected` is maintained.
         let victim = (0..self.capacity)
-            .filter(|s| !self.protected.contains(s))
+            .filter(|s| !self.protected.contains(s) && !self.pinned.contains(s))
             .min_by_key(|&s| self.stamp[s]);
         match victim {
             Some(slot) => {
@@ -123,14 +128,52 @@ impl PagePolicy {
         if let Some(slot) = self.map.remove(&key) {
             self.slots[slot] = None;
             self.protected.remove(&slot);
+            self.pinned.remove(&slot);   // a freed slot can't be display-pinned (B2)
             // stamp left as-is; an empty slot is taken by the free-slot path before LRU.
         }
     }
 
     /// Release a page (unprotect; stays resident + LRU-eligible). Idempotent.
+    ///
+    /// NOTE (B2): release only clears scheduler protection. A page the VIEW is actively displaying
+    /// (a held coarse blanket tile) is kept un-evictable by a SEPARATE display-pin (`pin_displayed`),
+    /// so the streamer releasing a coarse page can never recycle the slot out from under a visible
+    /// tile. The pin is independent of `protected` and is NOT cleared here.
     pub fn release(&mut self, key: PageKey) {
         if let Some(&slot) = self.map.get(&key) {
-            self.protected.remove(&slot);
+            // Don't unprotect a slot that is display-pinned (still on screen).
+            if !self.pinned.contains(&slot) {
+                self.protected.remove(&slot);
+            }
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Display pinning (B2 — structural never-black)
+    // -----------------------------------------------------------------------
+
+    /// Pin the slot holding `key` so it can NEVER be evicted while the view is displaying it.
+    /// The view calls this for every page it actually binds this frame (esp. the held coarse
+    /// blanket). A pinned slot is also kept protected (so the LRU victim search skips it), so a
+    /// streamer `release` of a coarse page can't recycle the slot under a visible tile — the
+    /// page-A-geometry-with-page-B-pixels bug. No-op if `key` isn't resident. Idempotent.
+    pub fn pin_displayed(&mut self, key: PageKey) {
+        if let Some(&slot) = self.map.get(&key) {
+            self.pinned.insert(slot);
+            self.protected.insert(slot);
+        }
+    }
+
+    /// Clear ALL display pins. The view calls this at the START of each frame's bind pass, then
+    /// re-pins exactly the pages it binds — so a page that stops being displayed becomes evictable
+    /// again (no permanent leak of protection). Pins removed here do NOT auto-unprotect; the
+    /// scheduler's own acquire/release governs `protected` for non-displayed pages.
+    pub fn clear_display_pins(&mut self) {
+        self.pinned.clear();
+    }
+
+    /// True if the slot holding `key` is currently display-pinned. (Test/gate introspection.)
+    pub fn is_pinned(&self, key: &PageKey) -> bool {
+        self.map.get(key).map_or(false, |s| self.pinned.contains(s))
     }
 }
