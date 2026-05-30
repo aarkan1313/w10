@@ -1,8 +1,12 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled;
 
-uniform sampler2D height_tex;             // this level's R32F page (pool Texture2DRD)
-uniform sampler2D coarse_height_tex;      // next-coarser level's page (for the morph)
+// Explicit sampler state: linear filter, CLAMP-to-edge, no repeat. The page covers
+// [origin, origin+span] with texel 0 at the corner (texel-corner gen); clamp_to_edge means a
+// vertex exactly on the boundary (uv=0 or 1) reads the edge texel with NO wrap/border bleed, so
+// abutting pages return the identical boundary value -> the shared edge joins.
+uniform sampler2D height_tex : filter_linear, repeat_disable;        // this level's R32F page (pool Texture2DRD)
+uniform sampler2D coarse_height_tex : filter_linear, repeat_disable; // next-coarser level's page (for the morph)
 uniform float world_span = 8192.0;        // this level's page world span
 uniform float coarse_span = 8192.0;       // the coarser level's page world span
 uniform vec2 page_origin = vec2(0.0);     // this fine page's WORLD lower-XZ corner; page covers [origin, origin+world_span]
@@ -33,7 +37,7 @@ void vertex() {
 	// Tile-local distance fired the morph at every one of the 9 tiles' edges (an interior lattice
 	// that swept under motion). Chebyshev (max-of-axes) so the band is a square matching the ring;
 	// cheb in [0,1], 1 at the neighborhood outer edge.
-	float cheb = max(abs(world.x - level_center.x), abs(world.z - level_center.z)) / level_half_extent;
+	float cheb = max(abs(world.x - level_center.x), abs(world.z - level_center.y)) / level_half_extent;
 	float region = max(morph_region, 1e-6);
 	float t = clamp((cheb - (1.0 - region)) / region, 0.0, 1.0); // 0 until the inner edge of the region
 
