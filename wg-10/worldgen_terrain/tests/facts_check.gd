@@ -30,6 +30,24 @@ func _run() -> int:
 		if fv != bv:
 			errors.append("no-edit Facts height != base @ %s: %f vs %f" % [str(c), fv, bv])
 
+	# relief_scale: a facts configured with relief_scale=R returns R× the unscaled base height
+	var facts_scaled: Object = ClassDB.instantiate("Wg10Facts")
+	var rs := 0.25
+	if not facts_scaled.has_method("configure_scaled"):
+		push_error("[facts] Wg10Facts has no configure_scaled method"); return 1
+	var es: String = str(facts_scaled.call("configure_scaled", os_dir, PACK_FILE, SEED, rs))
+	if es != "":
+		push_error("[facts] configure_scaled failed: %s" % es); return 1
+	var max_rel_err := 0.0
+	for c in coords:   # reuse the same coords the no-edit parity loop uses
+		var h_unscaled: float = facts.call("get_height", c.x, c.y)
+		var h_scaled: float = facts_scaled.call("get_height", c.x, c.y)
+		max_rel_err = max(max_rel_err, absf(h_scaled - h_unscaled * rs))
+	if max_rel_err > 1e-6:
+		errors.append("relief_scale mismatch: max|scaled - R*unscaled|=%.9f > 1e-6" % max_rel_err)
+	else:
+		print("[facts] relief_scale ok (max_err=%.9f at R=%.2f)" % [max_rel_err, rs])
+
 	# stamp: digging a crater lowers get_height at the centre by ~depth; base elsewhere unchanged.
 	var probe := Vector2(40000.0, 9000.0)
 	var before: float = facts.call("get_height", probe.x, probe.y)

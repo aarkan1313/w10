@@ -13,11 +13,21 @@ use crate::facts;
 use crate::gpu_compute::Wg10GpuCompute;
 use std::path::Path;
 
+/// The authoritative scaled base height: the parity-gated procedural height times the world-relief
+/// multiplier. relief_scale is applied AFTER height::height (the formula is untouched -> M2 parity
+/// holds); both the render shader and this facts path apply the SAME multiplier -> visible==collision.
+#[inline]
+fn scaled_base(x: f64, z: f64, seed: i64, pack: &Pack, relief_scale: f64) -> f64 {
+    height::height(x, z, seed, pack) * relief_scale
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10Facts {
     pack: Option<Pack>,
     seed: i64,
+    relief_scale: f64,   // authoritative world-relief multiplier on the base height field;
+                         // render + facts/collision both apply it -> visible==collision held.
     edits: StampEdits,   // the concrete provider; empty == NoEdits behaviour (delta 0)
     floor: f64,          // bedrock clamp (default: unbounded)
     ceil: f64,
@@ -30,6 +40,7 @@ impl IRefCounted for Wg10Facts {
         Self {
             pack: None,
             seed: 0,
+            relief_scale: 1.0,
             edits: StampEdits::new(),
             floor: f64::NEG_INFINITY,
             ceil: f64::INFINITY,
@@ -40,20 +51,28 @@ impl IRefCounted for Wg10Facts {
 
 #[godot_api]
 impl Wg10Facts {
-    /// Load + validate the pack and set the seed. Returns "" on success or the error message.
+    /// Load + validate the pack, set seed + relief_scale. relief_scale multiplies the base height
+    /// field (default 1.0 = unscaled). Returns "" on success or the error message.
     /// `dir` is an OS path (GDScript resolves res:// via ProjectSettings.globalize_path).
     /// The Facts node loads its OWN pack — independent of the renderer/pool — so it is a true
     /// standalone drop-in. The in-memory grammar constants are tiny, so the independence is free.
     #[func]
-    fn configure(&mut self, dir: GString, file: GString, seed: i64) -> GString {
+    fn configure_scaled(&mut self, dir: GString, file: GString, seed: i64, relief_scale: f64) -> GString {
         match pack::load_pack_dir(Path::new(&dir.to_string()), &file.to_string()) {
             Ok(p) => {
                 self.pack = Some(p);
                 self.seed = seed;
+                self.relief_scale = relief_scale;
                 GString::new()
             }
             Err(e) => GString::from(&e),
         }
+    }
+
+    /// Back-compat: configure with relief_scale = 1.0 (unscaled).
+    #[func]
+    fn configure(&mut self, dir: GString, file: GString, seed: i64) -> GString {
+        self.configure_scaled(dir, file, seed, 1.0)
     }
 
     /// Authoritative composed height at (x,z): clamp(base + edit delta, floor, ceil).
@@ -64,7 +83,7 @@ impl Wg10Facts {
             godot_error!("Wg10Facts: get_height called before configure()");
             return 0.0;
         };
-        let base = height::height(x, z, self.seed, p);
+        let base = scaled_base(x, z, self.seed, p, self.relief_scale);
         let delta = self.edits.delta(x, z) as f64;
         facts::composed_height(base, delta, self.floor, self.ceil)
     }
@@ -127,13 +146,14 @@ impl Wg10Facts {
         let seed = self.seed;
         let edits = &self.edits;
         let (floor, ceil) = (self.floor, self.ceil);
+        let relief_scale = self.relief_scale;
         let grid = facts::collision_field(
             center_x,
             center_z,
             world_size,
             samples_per_side as usize,
             |x, z| {
-                let base = height::height(x, z, seed, p);
+                let base = scaled_base(x, z, seed, p, relief_scale);
                 facts::composed_height(base, edits.delta(x, z) as f64, floor, ceil)
             },
         );
@@ -193,7 +213,7 @@ impl Wg10Facts {
         }
         // Compose edits + clamp on the CPU over the readback (edits stay CPU-authoritative).
         for k in 0..(n * n) {
-            let b = base.get(k).unwrap_or(0.0);
+            let b = base.get(k).unwrap_or(0.0) * self.relief_scale;
             let delta = self.edits.delta(xs.get(k).unwrap_or(0.0), zs.get(k).unwrap_or(0.0)) as f64;
             out.push(facts::composed_height(b, delta, self.floor, self.ceil) as f32);
         }
