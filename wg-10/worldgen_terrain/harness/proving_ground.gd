@@ -18,7 +18,7 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 3
+const STEP := 4
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
@@ -26,8 +26,15 @@ const GRID_RES := 64          # mesh cells across the page (vertices = 65x65)
 const CAPACITY := 16    # step 3 needs 9 resident pages; margin to spare
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
+# Step 4 streamer tunables (single level for now).
+const NUM_LEVELS := 1
+const RADIUS_PAGES := 1
+const LEAD_FRAMES := 8.0
+const MAX_PER_FRAME := 4
 
 var _pool: Object
+var _streamer: Object          # step 4+: drives page residency from camera pos/vel
+var _step4_tiles: Array = []   # 9 persistent MeshInstance3D re-bound each frame
 var _hud: Label
 var _camera: Camera3D
 
@@ -57,6 +64,8 @@ func _ready() -> void:
 		_build_step2()
 	elif STEP == 3:
 		_build_step3()
+	elif STEP == 4:
+		_build_step4()
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
@@ -72,9 +81,12 @@ func _ready() -> void:
 		3:
 			# 3x3 spans [0, 3*BASE_SPAN]; centre over the middle page, higher to see all 9.
 			_camera.global_position = Vector3(BASE_SPAN * 1.5, 6000.0, BASE_SPAN * 1.5)
+		4:
+			# moving 3x3 follows the camera — start at the origin, a bit up, looking ahead.
+			_camera.global_position = Vector3(0.0, 1800.0, 0.0)
 		_:
 			_camera.global_position = Vector3(BASE_SPAN, 2500.0, BASE_SPAN * 0.5)
-	_camera.rotation_degrees = Vector3(-50.0, 0.0, 0.0)
+	_camera.rotation_degrees = Vector3(-35.0, 0.0, 0.0)
 
 	# --- HUD ---
 	var layer := CanvasLayer.new()
@@ -107,6 +119,62 @@ func _build_step3() -> void:
 		for i in range(3):
 			if _build_tile(i * BASE_SPAN, j * BASE_SPAN) == null:
 				push_error("proving_ground STEP3: page (%d,%d) acquire returned null" % [i, j])
+
+# STEP 4: the STREAMER drives a MOVING 3x3 of level-0 tiles that follows the camera. 9 persistent
+# tile meshes; each frame we call streamer.update(pos,vel) (which acquires/releases pages via the
+# proven pool), then re-place + re-bind each tile to the resident page for its slot around the
+# camera. A page not yet resident -> that tile is hidden (single level: no coarser fallback yet;
+# never-black comes with level 2 at step 5). Prove: fly fast, the surface stays continuous, the
+# HUD `recomputed` counter does NOT climb every frame (no churn), no flicker.
+func _build_step4() -> void:
+	_streamer = ClassDB.instantiate("Wg10Streamer")
+	_streamer.call("configure", _pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_FRAMES, MAX_PER_FRAME)
+	# 9 persistent tiles, each a full level-0 grid mesh, re-placed + re-bound each frame.
+	for _t in range(9):
+		var mi := MeshInstance3D.new()
+		mi.set_mesh(_make_grid_mesh(BASE_SPAN, GRID_RES))
+		var mat := ShaderMaterial.new()
+		mat.set_shader(load(SHADER))
+		mat.set_shader_parameter("world_span", BASE_SPAN)
+		mat.set_shader_parameter("coarse_span", BASE_SPAN)
+		mat.set_shader_parameter("level_half_extent", BASE_SPAN)
+		mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+		mat.set_shader_parameter("morph_region", 0.0)   # morph off (single level)
+		mat.set_shader_parameter("relief_ref", RELIEF_REF)
+		mi.set_material_override(mat)
+		mi.visible = false
+		add_child(mi)
+		_step4_tiles.append(mi)
+
+# Per-frame Step 4 drive: stream around the camera, then place + bind the 3x3 to resident pages.
+func _drive_step4(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> void:
+	# 1) let the proven streamer maintain residency (acquire/release via the pool).
+	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
+	# 2) place the 3x3 around the velocity-led centre (same point the streamer covers) and bind
+	#    each slot to its resident page; hide a slot whose page isn't resident yet.
+	var led_x: float = cam_x + vel_x * LEAD_FRAMES
+	var led_z: float = cam_z + vel_z * LEAD_FRAMES
+	var cox: float = floor(led_x / BASE_SPAN) * BASE_SPAN
+	var coz: float = floor(led_z / BASE_SPAN) * BASE_SPAN
+	var slot := 0
+	for dz in range(-1, 2):
+		for dx in range(-1, 2):
+			var ox: float = cox + dx * BASE_SPAN
+			var oz: float = coz + dz * BASE_SPAN
+			var mi: MeshInstance3D = _step4_tiles[slot]
+			var tex: Object = _pool.call("get_resident_page", 0, ox, oz)
+			if tex == null:
+				mi.visible = false
+			else:
+				mi.visible = true
+				mi.position = Vector3(ox + BASE_SPAN * 0.5, 0.0, oz + BASE_SPAN * 0.5)
+				var mat: ShaderMaterial = mi.get_material_override()
+				mat.set_shader_parameter("height_tex", tex)
+				mat.set_shader_parameter("coarse_height_tex", tex)
+				mat.set_shader_parameter("page_origin", Vector2(ox, oz))
+				mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
+				mat.set_shader_parameter("level_center", Vector2(cox + BASE_SPAN * 0.5, coz + BASE_SPAN * 0.5))
+			slot += 1
 
 # Acquire one level-0 page at world (ox,oz) and build its full-grid tile over world
 # [ox, ox+BASE_SPAN], sampling that page by world UV, morph OFF. Returns the MeshInstance or null.
@@ -167,11 +235,22 @@ func _process(_delta: float) -> void:
 	if _hud == null or _camera == null:
 		return
 	var p: Vector3 = _camera.global_position
+
+	# Step 4+: drive the streamer + moving 3x3 from the camera each frame.
+	var pool_line := ""
+	if STEP == 4 and _streamer != null:
+		var v: Vector3 = _camera.call("get_velocity")
+		_drive_step4(p.x, p.z, v.x, v.z)
+		var st: Dictionary = _pool.call("stats")
+		pool_line = "\nresident %d   created %d   recomputed %d   (recomputed should NOT climb while flying steadily)" % [
+			int(st.get("resident", 0)), int(st.get("created", 0)), int(st.get("recomputed", 0))]
+
 	var desc := ""
 	match STEP:
 		1: desc = "STEP 1: ONE level-0 page, ONE flat tile, morph OFF, no streamer"
 		2: desc = "STEP 2: TWO adjacent pages — fly the seam at x=%.0f (look for a crack)" % BASE_SPAN
 		3: desc = "STEP 3: 3x3 of level-0 pages — one surface? any internal grid lines?"
+		4: desc = "STEP 4: STREAMER drives a moving 3x3 — fly fast; watch for churn/flicker"
 		_: desc = "STEP %d" % STEP
-	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s" % [
-		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc]
+	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s%s" % [
+		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc, pool_line]
