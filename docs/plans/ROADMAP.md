@@ -217,18 +217,22 @@ Facts API (§6.2), adds collision, and builds an adaptable edit SEAM. Core stays
 (none = 0 cost; one concrete = circular stamps), clamp + bedrock are config (adaptable: no edits /
 shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last):
 
-- [ ] **Slice 1 — CPU seam:** `Wg10Facts.get_height(x,z)` = base + empty edit-provider + clamp.
-      Drop-in node (`set_config`/pack/seed). Gate: no-edit parity with `Wg10Height`.
-- [ ] **Slice 2 — stamps + bedrock:** `StampEdits` provider (`apply_edit(cx,cz,radius,depth,falloff)`,
-      `clear_edits`) + `set_bedrock(floor,ceil)` clamp. The diggable collidable hole.
-- [ ] **Slice 3 — sparse collision:** `get_collision_field(cx,cz,world_size,samples_per_side) ->`
-      PackedFloat32Array (CPU, hot-path, no readback); caller builds Jolt `HeightMapShape3D`+body,
-      owns it. Gate: visible(GPU)-vs-collision(CPU) parity on BASE terrain (§4 contract; edited
-      cells a known collidable-not-visible exception until M-edits-visible).
-- [ ] **Slice 4 — GPU bulk bake (off-frame only):** `bake_collision_region(...)` for large-area
-      collision via the `Wg10GpuCompute` batch path + a DELIBERATE load-time readback. Named `bake_*`
-      + documented blocking/async so it can NEVER reach the hot path (the WG9 readback rule). Most
-      concurrency-subtle — last.
+- [x] **Slice 1 — CPU seam:** `Wg10Facts.configure` + `get_height(x,z)` = clamp(base + NoEdits, floor,
+      ceil). Drop-in RefCounted node, loads its own pack/seed. Gate `facts_check`: no-edit parity
+      with `Wg10Height` (Facts can't alter base terrain).
+- [x] **Slice 2 — stamps + bedrock:** `StampEdits` (`apply_edit(cx,cz,radius,depth,falloff)` with
+      cosine falloff, summed; `clear_edits`) + `set_bedrock(floor,ceil)`. The diggable collidable
+      hole; gate asserts dig/clamp/clear.
+- [x] **Slice 3 — sparse collision:** `get_collision_field(cx,cz,world_size,samples_per_side) ->`
+      PackedFloat32Array (CPU, hot-path, no readback); caller builds the Jolt `HeightMapShape3D`+body.
+      Gate `facts_collision_parity_check`: visible(GPU)-vs-collision(CPU) parity on BASE terrain =
+      **maxd 0.0009 m** (§4 contract — entities don't float/sink). Edited cells a known collidable-
+      not-visible exception until the visible-edits milestone.
+- [x] **Slice 4 — GPU bulk bake (off-frame only):** `bake_collision_region(gpu, ...)` — large-area
+      collision via `Wg10GpuCompute.heights` (GPU batch) + a DELIBERATE readback; edits/clamp
+      composed CPU-side. `bake_*` name + doc = the off-frame contract (never hot-path; the WG9
+      readback rule). Gate `facts_bake_check`: GPU bake == CPU collision (maxd 0.0070 m over 33×33).
+      **M4 COMPLETE — cargo 115, fast 6/6, gpu 4/4, m3 6/6 all green.**
 
 > **Deferred to its own milestone (NOT M4):** making edits VISIBLE in the GPU render (the meteor
 > crater you SEE, not just collide). That composes the edit delta into the height pages — a render-
