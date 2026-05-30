@@ -126,8 +126,11 @@ biome_params: {                    # NEW top-level table, keyed by FAMILY name (
 The exact key/shape is finalized in the plan, but the principle is fixed: **additive, a separate per-family
 table, existing per-kernel entries and pixels untouched** (no existing pack consumer breaks; the runtime
 loader reads this table by family in Slice 3+). **Validated on write/load:** reject NaN/degenerate/out-of-
-range params with a descriptive error naming the family (pillar 4 — no silent default). Distillation keeps the
-source DEMs to regenerate.
+range params with a descriptive error naming the family (pillar 4 — no silent default). **Parity-readiness
+constraint (forward-looking, pillar 4):** distilled values must be finite, f32-representable, and within each
+knob's documented domain (e.g. `ridge_strength`/`valley_depth` ∈ [0, ceiling], freqs > 0), so the Slice 3/4
+GLSL mirror can represent them exactly and the parity contract is not silently violated downstream. Clamp +
+descriptive-error on violation; do NOT silently coerce. Distillation keeps the source DEMs to regenerate.
 
 ## 7. Verification
 
@@ -204,5 +207,5 @@ owner-judged, before any runtime).
 - Real-vs-synth renders for all 12 families written; **owner eye verdict per family recorded verbatim**
   (character match accepted, or refine-and-re-render noted).
 - Pack carries validated `biome_params` for all 12 families (kernels/pixels still present; atlas removal is
-  Slice 4).
+  Slice 4) — every value finite, f32-representable, within its knob domain (parity-readiness for Slice 3/4).
 - STATUS/ROADMAP updated; spec + plan committed. No Rust/GLSL/engine/render touched.
