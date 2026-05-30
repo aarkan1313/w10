@@ -4,6 +4,11 @@
 `docs/plans/HANDOFF.md` (read that first for the project's what/why/how). This file says exactly what
 happened THIS session, what is committed, what is verified vs not, and the precise next actions.
 
+**Current-session addendum:** after this handoff was written, the structure audit was folded into ROADMAP,
+the B2 unit tests were re-run honestly (**121 passed / 0 failed**, isolated target), the B2
+capacity-pressure gate was added to the m3 suite, the Rust DLL was rebuilt after the editor closed, and the
+gates are now green: **fast 6/6 · gpu 4/4 · m3 9/9**. The B-bug closeout is no longer blocking Slice 2A.
+
 > Read order for a fresh session: `docs/plans/HANDOFF.md` → this file → `docs/plans/STATUS.md` (top) →
 > `docs/plans/LOOSE_ENDS_LEDGER.md` → the two specs the HANDOFF names. Memory index:
 > `C:\Users\josep\.claude\projects\d--workflows\memory\MEMORY.md` (esp. `worldgen10-slice2-structure-gap`,
@@ -20,8 +25,9 @@ noise, doesn't look like the real world."* That is the same deep truth as the ea
 Slice 2 is therefore **PAUSED**, and the owner is taking the *structure approach* to a research/review chat
 (a ready-to-paste research prompt is in §5). In parallel this session closed loose-end code bugs: **B1 (RID
 leak) and B3 (perf-gate hole) are source-fixed + committed; B2 (structural never-black) is source-fixed +
-unit-tested + committed.** None of the Rust B-bug fixes are **windowed-gate-verified yet** — that needs the
-editor closed + a rebuild (§4). `main` is ~21 commits ahead of `origin/main` (not pushed this session).
+unit-tested + committed.** Current addendum: the editor-closed rebuild and gates have since verified this
+batch (**fast 6/6 · gpu 4/4 · m3 9/9**). `main` is ~21 commits ahead of `origin/main` (not pushed this
+session).
 
 ## 2. What is committed this session (all on `main`, NOT pushed)
 
@@ -83,26 +89,21 @@ fixes this session:
   clears pins each frame, pins every bound page, and on coarsest HOLD-LAST-GOOD re-validates the held page is
   resident-as-itself (else hides) + pins it. 6 new unit tests (cargo 121 green).
 
-**THE REMAINING WORK (next chat, needs editor closed):**
-1. **Rebuild the Rust DLL** — owner closes the Godot editor; then:
+**B-bug closeout verification (now done):**
+1. **Rust DLL rebuilt after the owner closed Godot:**
    ```powershell
    $env:GODOT_BIN = "C:\tmp\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe"
-   # from wg-10/rust, with CARGO_TARGET_DIR unset (env -u), build the real debug dll the editor loads:
-   #   tools/build_rust.ps1   (or: $env:CARGO_TARGET_DIR=$null; cargo build)
+   powershell -ExecutionPolicy Bypass -File .\tools\build_rust.ps1
    ```
-2. **Run the windowed gates** to verify B1+B2+B3 didn't regress:
+2. **Gate results:**
    ```powershell
-   python tools/gate.py --suite fast   # 6 checks, headless
-   python tools/gate.py --suite gpu    # 4 checks, windowed
-   python tools/gate.py --suite m3     # 8 checks, windowed (includes the hardened perf gate = B3)
+   python tools/gate.py --suite fast   # 6/6
+   python tools/gate.py --suite gpu    # 4/4
+   python tools/gate.py --suite m3     # 9/9
    ```
-   Trust the `[gate] suite=… fail=0` line; a single windowed run can exit nonzero on teardown — re-run once.
-3. **Write the B2 capacity-pressure GATE** (the one piece of B2 not yet built): a windowed check that
-   configures a DELIBERATELY SMALL pool (force coarse eviction during motion) and asserts no held tile ever
-   displays content from a different page than its geometry (e.g. via `is_displayed_pinned` + a page-identity
-   check, or a pixel check that the held coarse tile matches its own page). Add it to the `m3` suite list in
-   `tools/gate.py`. The unit tests already prove the policy invariant; this gate proves it end-to-end on the
-   render path (the FINDINGS B2 ask).
+   The new B2 capacity-pressure check passes non-vacuously (`full_delta=3`, `pressure_held=3`, `resident=9`).
+   B3's hardened perf check passes with terrain-vs-sky and detail-on/off active (`GPU p99=0.082ms`,
+   `terrain_frac_min=1.000`, `detail_delta=0.53739`).
 
 ## 5. The STRUCTURE research (the real blocker) — ready-to-paste prompt
 
@@ -140,8 +141,8 @@ is the generator's structure stage (and possibly a richer metric set to feed it)
 
 ## 7. The immediate next action (pick based on what the owner wants)
 
-- **If continuing the B-bugs:** owner closes the editor → rebuild → run the 3 gate suites → write the B2
-  capacity-pressure gate → re-run m3 → if green, B1/B2/B3 are DONE (Slice-3 precondition met). Then push.
+- **If continuing from here:** B1/B2/B3 are DONE for the rebuild precondition. Next action is Slice 2A
+  structure-basis salvage (offline Python, render-first), then owner image review. Push at the next sync point.
 - **If the structure research is back:** brainstorm the new generator-structure approach (§5) → spec → plan →
   execute; the distillation tooling feeds it.
 - **Either way:** the distillation LOOK is owner-judged; gates prove invariants only. Keep STATUS honest

@@ -6,8 +6,9 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 point — see DESIGN §7.3.)
 
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
-> point-in-time state (Slice 2 paused for structure research; B1/B2/B3 source-fixed+committed but the
-> Rust ones need an editor-closed rebuild + windowed gates to verify; `main` ~21 ahead of origin, unpushed).
+> point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now
+> gate-verified after an editor-closed rebuild: **cargo 121 passed**, **fast 6/6**, **gpu 4/4**, **m3 9/9**.
+> `main` remains ahead of `origin/main` and unpushed.
 
 ---
 
@@ -27,6 +28,13 @@ A/Bs. Slice 2B then fixes the metric/schema set (HI, slope moments, curvature si
 audit `anisotropy`). No Rust/GLSL port until an owner-accepted offline image set exists and B1/B2/B3 are
 closed. True connected drainage is now explicitly Phase 7B (world-anchored coarse flow), not a promise of
 the local height generator.
+
+**B-bug closeout state:** B1/B2/B3 are now closed for the rebuild precondition. Evidence: Rust DLL rebuilt
+after the editor was closed; `cargo test` isolated target **121 passed / 0 failed**; `fast` **6/6**; `gpu`
+**4/4**; `m3` **9/9**. The new B2 capacity-pressure gate passed non-vacuously
+(`full_delta=3`, `pressure_held=3`, `resident=9`), proving the live view holds pinned coarsest pages under a
+deliberately tight pool budget. B3's hardened perf gate also passed with terrain-vs-sky and detail-on/off
+checks active (`GPU p99=0.082ms`, `terrain_frac_min=1.000`, `detail_delta=0.53739`).
 
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
@@ -54,8 +62,8 @@ before more param-tuning** (candidate directions: stronger domain warp, ridged-m
 owner's standing "distilled-erosion" idea — offline-run real erosion → learn a cheap LOCAL operator → apply
 online; tracked in the ledger as the big enhancement). **The distillation tooling + the metric fixes are KEPT**
 (they're the param-extraction half and they work); what's under research is the GENERATOR's structure stage.
-**NEXT:** execute ROADMAP Slice 2A (structure-basis salvage) in parallel with closing known FIX-NOW work
-(ledger B1/B2/B3). The distillation tooling remains kept, but scalar tuning is not the next move until the
+**NEXT:** execute ROADMAP Slice 2A (structure-basis salvage). The B1/B2/B3 FIX-NOW work is closed and
+verified, so the distillation tooling remains kept, but scalar tuning is not the next move until the
 generator basis can pass the owner's structure read.
 
 **Slice 1 — generator prototype (OFFLINE, render-first): ACCEPTED by owner eye (2026-05-30).**
@@ -73,7 +81,7 @@ noise judgment deferred to the live-scene fly.** Honest framing (owner-confirmed
 terrain, NOT real connected erosion (Grand-Canyon look = real-world history); **distilled-erosion is a big
 LATER roadmap enhancement** (ledger), not needed for the foundation. This old "NEXT: Slice 2 distill real
 DEMs" note is superseded by the structure audit above: Slice 2 tooling is built/kept, and the next accepted
-step is Slice 2A structure-basis salvage. (Precondition before the RUST build, Slice 3: close ledger B1/B2/B3.)
+step is Slice 2A structure-basis salvage. (Precondition before the RUST build, Slice 3: ledger B1/B2/B3 is now closed.)
 
 [below: prior milestone status — M5/shaded-scale/synthesis — partly superseded by the worldgen rebuild; see
 the LOOSE_ENDS_LEDGER for what's KEEP / FOLD-IN / TABLED.]
@@ -88,7 +96,7 @@ kept for the record + the bug-lessons. **Do NOT treat their "IN PROGRESS / NEXT"
 they are re-sequenced or tabled per `LOOSE_ENDS_LEDGER.md` (KEEP / FOLD-IN / TABLED) and the
 ROADMAP forward plan. What's still KEPT + true from here: the render pipeline, grammar, facts,
 `relief_scale` (RELIEF_SCALE=0.25 shipped — any older "× 0.35" arithmetic below is dead), the
-hardened perf gate, and the gate counts (fast 6 · gpu 4 · m3 8 · cargo 115 · dem_pack pytest 22).
+hardened perf gate, and the gate counts (fast 6 · gpu 4 · m3 9 · cargo 121 · dem_pack pytest 22).
 
 ---
 

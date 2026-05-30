@@ -170,7 +170,7 @@ func _run() -> int:
 	# --- DETAIL on-vs-off (B3): capture the same framed view with detail ON then OFF; they must differ.
 	# Proves M5 detail genuinely contributes at fly scale — a detail regression (detail silently doing
 	# nothing) now fails the PERF gate too, not only the separate static-page detail gate.
-	var detail_delta := _detail_on_off_delta(vp, cam, view, pos, headings)
+	var detail_delta: float = await _detail_on_off_delta(vp, cam, view, pos, headings)
 
 	# --- GPU p99 ---
 	gpu_samples.sort()

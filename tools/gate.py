@@ -32,6 +32,7 @@ CHECKS = {
         "worldgen_terrain/tests/m3_pool_check.gd",
         "worldgen_terrain/tests/m3_stream_check.gd",
         "worldgen_terrain/tests/m3_view_check.gd",
+        "worldgen_terrain/tests/m3_b2_capacity_check.gd",
         "worldgen_terrain/tests/m3_accept_check.gd",
         "worldgen_terrain/tests/m3_continuity_check.gd",
         "worldgen_terrain/m5/m5_detail_check.gd",

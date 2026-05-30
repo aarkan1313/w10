@@ -15,8 +15,8 @@ the dated specs/plans under `docs/superpowers/`.
 > the failure we are actively avoiding.
 
 Updated: 2026-05-30 (**MAJOR PIVOT — the height CORE is being rebuilt; M5/M6/M7 as originally framed are
-superseded.** M0–M4 (toolchain, deterministic gen, GPU parity, render pipeline, Facts API) DONE; gates
-cargo 115 · fast 6/6 · gpu 4/4 · **m3 8/8** (NOT the old "6/6" — headlines were stale). **What changed:** an
+superseded.** M0–M4 (toolchain, deterministic gen, GPU parity, render pipeline, Facts API) DONE; latest
+verified gates: cargo 121 · fast 6/6 · gpu 4/4 · **m3 9/9**. **What changed:** an
 owner fly showed the terrain reads "blobby/placed/not a contiguous landmass." Root-caused: `sample_kernel`
 reads DEM kernels as TILING textures and makes the tiled kernel the whole height. A spectral-synthesis fix
 was REFUTED by the owner's eye (a power spectrum captures roughness but discards PHASE = structure). After a
@@ -25,9 +25,10 @@ procedural-first (No Man's Sky reference); the height core becomes PARAMETER-DRI
 real DEMs into per-biome structural PARAMS, the grammar blends them, one warped-noise generator (domain warp
 + macro fBm landmass + ridged ridgelines + carved valleys) makes infinite seamless terrain (kernels = a DNA
 library, never sampled → no tiling). **Worldgen Slice 1 (offline generator prototype) is OWNER-ACCEPTED**
-("pretty good, a little noisy" — reads as contiguous structured terrain, no grid/repeat). **NEXT: Slice 2
-(distill real DEMs → biome params, offline) → close loose ends (B1/B2/B3 + doc drift, see LOOSE_ENDS_LEDGER)
-before the Rust build (Slice 3) → Rust core → GPU parity → live fly.** READ THESE for the current truth:
+("pretty good, a little noisy" — reads as contiguous structured terrain, no grid/repeat). **Slice 2
+distillation tooling is built but the LOOK is not accepted; NEXT is Slice 2A structure-basis salvage
+(offline Python, render-first). B1/B2/B3 are closed and no longer block the rebuild.** READ THESE for the
+current truth:
 `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md` (the framework vision),
 `…/2026-05-30-worldgen-core-design.md` (the height-core architecture), `docs/plans/LOOSE_ENDS_LEDGER.md`
 (everything in-flight/tabled), and memory `worldgen10-north-star-vision` / `worldgen10-wg9-height-recipe`.
@@ -137,9 +138,9 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 - `python tools/gate.py --suite gpu` — **WINDOWED**, **4 checks** (CPU/GPU parity
   synthetic + DEM parity + facts-collision-parity + facts-bake). Global RenderingDevice
   is null under `--headless` on this D3D12 box, so GPU/render gates must run windowed.
-- `python tools/gate.py --suite m3` — **WINDOWED**, **8 checks** (slice1 render, pool,
-  stream, view, accept, continuity, m5_detail, m5_perf_hardened).
-- `cargo test` (from `wg-10/rust`, `CARGO_TARGET_DIR` unset — see §7): **115 tests** green.
+- `python tools/gate.py --suite m3` — **WINDOWED**, **9 checks** (slice1 render, pool,
+  stream, view, B2 capacity, accept, continuity, m5_detail, m5_perf_hardened).
+- `cargo test` (from `wg-10/rust`, isolated target is okay while the editor is open — see §7): **121 tests** green.
 - `python -m pytest` (from `tools/dem_pack/`): **22 tests** — the offline pack + worldgen-
   prototype tools (`worldgen_proto.py`, `spectral.py` [a kept negative result], `dem_pack_lib`).
 - **Exit codes:** 0 pass / 1 fail / 2 skip. A no-GPU/headless box returns SKIP (2) on
@@ -148,7 +149,7 @@ the GDExtension is registered). Plus `cargo test` for the pure Rust modules.
 
 ## 6. Where things stand (2026-05-30) — M0–M4 DONE
 
-**All gates green: cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 22.** (STATUS.md has the blow-by-blow; this
+**All gates green: cargo 121 · fast 6/6 · gpu 4/4 · m3 9/9 · dem_pack pytest 22.** (STATUS.md has the blow-by-blow; this
 is the one-line-per-milestone map.)
 
 - **M0** toolchain · **M1** deterministic bedrock (hash/noise/fbm bit-exact vs WG9) + grammar +
@@ -191,8 +192,8 @@ The fix is NOT detail/materials/erosion on top — it's rebuilding the height co
 contiguous structured landmass (param-driven warped-noise; §9). The render pipeline + parity + facts
 foundation is solid and KEPT; the *height content* is what's being rebuilt.
 
-**Counts:** cargo 115 · fast 6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 22. **`main` is in sync with `origin/main`**
-(the assistant CAN push — see §8). (`COMPONENT_INVENTORY.md` was the M3-reset driver doc, RETIRED into
+**Counts:** cargo 121 · fast 6/6 · gpu 4/4 · m3 9/9 · dem_pack pytest 22. **`main` is currently ahead of
+`origin/main` and not pushed** (the assistant CAN push at a sync point — see §8). (`COMPONENT_INVENTORY.md` was the M3-reset driver doc, RETIRED into
 STATUS — don't look for it.)
 
 ## 7. Build / run gotchas (these bit prior sessions — read before touching the toolchain)
@@ -244,15 +245,13 @@ prove invariants (parity/perf/non-repetition), not "looks good."
 **The slice plan (worldgen core):**
 - **Slice 1 — generator prototype (offline Python): DONE, owner-accepted.** `tools/dem_pack/worldgen_proto.py`
   + render images. Warped-noise reads as contiguous structured terrain, no grid/repeat.
-- **Slice 2 — biome distillation (offline Python): NEXT.** Distill the 115 real DEMs → per-biome structural
-  param-sets (ridge_strength/valley_depth/warp/octave_amps/relief — STRUCTURAL metrics, NOT a power spectrum
-  — that was refuted). Render each biome from its DISTILLED params; owner judges per-biome fidelity.
-- **PRECONDITION before Slice 3 (the first RUNTIME build): close the loose ends** in
-  `docs/plans/LOOSE_ENDS_LEDGER.md` — **B1** (Wg10PagePool GPU-RID leak: no Drop impl + 2 wrong comments),
-  **B3** (hardened perf gate: a sky frame scores nonblack=1.0; add terrain-vs-sky + detail on/off), **B2**
-  (never-black is capacity-dependent not structural: protect held coarse pages + capacity-pressure gate),
-  and the **doc-drift pass** (distinct 18→15, dead 0.35→0.25, m3 6/6→8/8, DESIGN stale, STATUS M5 two-states).
-  These live in the KEPT render pipeline + perf gate the rebuild sits on — fix before building on them.
+- **Slice 2 — biome distillation tooling: BUILT + gated, but LOOK not accepted.** The scalar param extraction
+  half is kept; the generator still reads as noise/roughness rather than connected structure.
+- **Slice 2A — structure-basis salvage: NEXT.** Offline Python, render-first: multifractal weighting,
+  stronger recursive warp, ridge/uplift-coupled valleys, optional Worley/cellular A/Bs, then owner image
+  review before any Rust/GLSL port.
+- **PRECONDITION before Slice 3 (the first RUNTIME build): close the loose ends** — now satisfied. B1/B2/B3
+  are source-fixed and verified (`cargo 121`, `fast 6/6`, `gpu 4/4`, `m3 9/9`).
 - **Slice 3 — Rust generator core:** port `generate` + `blend_biome_params` to `height.rs` (replace
   `sample_kernel`); gates determinism/bounded/seam/non-repetition.
 - **Slice 4 — GPU parity + integrate:** mirror `generate` in GLSL, REMOVE the 25 MB kernel atlas, re-baseline
