@@ -7,7 +7,7 @@ point — see DESIGN §7.3.)
 
 ---
 
-## CURRENT DIRECTION: Worldgen Core rebuild (param-driven warped-noise) — Slice 1 ACCEPTED
+## CURRENT DIRECTION: Worldgen Core rebuild (param-driven warped-noise) — Slice 2 PAUSED for a structure rethink
 
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`. After the spectral approach was refuted
 by eye, the owner steered a new height-core architecture: distill real DEMs → per-biome structural PARAMS →
@@ -15,6 +15,35 @@ grammar blends them → one warped-noise GENERATOR (domain warp + macro fBm land
 inverted-ridged valley carving) makes infinite seamless terrain. Kernels never sampled (DNA library, no
 tiling). Targets "Google-Maps-explore" contiguity. Keeps render/grammar/facts/relief_scale. Full context:
 memory `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`; loose ends in `LOOSE_ENDS_LEDGER.md`.
+
+### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
+Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
+`docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**
+the offline distillation pipeline — `tools/dem_pack/biome_distill.py` (structural metrics → generator knobs,
+pure, 16 fixture-gated tests), `distill_biomes.py` (real DEMs by family → `biome_params.json`, spike-guarded
+median), `attach_biome_params` in `dem_pack_lib.py` (additive validated per-family pack table), `render_biomes.py`
+(real-vs-synth hillshades). Full dem_pack pytest suite green.
+**Two real findings caught OFFLINE (render-first did its job — cheap, before any runtime):**
+1. **The first two structural metrics were DEAD on real DEMs** — structure-tensor `ridge_linearity` ≈ 0.30 and
+   argmax `dominant_wavelength_m` ≈ 25 km for EVERY family (don't vary on real 512px terrain). Also WG9's
+   metadata `ridge_density`/`valley_density` are a dead-constant 0.100. Fix applied: drive `valley_depth` ←
+   incision/relief (height-normalized carving), `ridge_strength` ← slope; the dead metrics are kept for
+   diagnostics but no longer drive any knob (a trap-gate test proves height alone doesn't buy ridge_strength).
+2. **A scale bug made the synth "sandpaper"** (base wavelength 8 km vs ~190 km tiles → features repeated ~24×)
+   AND the distilled octave amplitudes were INVERTED (fine octaves dominated). Fixing both (decaying fBm amps +
+   continental base scale) removed the sandpaper and produced visible macro structure.
+**BUT — OWNER VERDICT on the tuned renders: "still not terrain — it all looks like the same noise, doesn't look
+like the real world."** This is the same deeper truth the spectral refutation already exposed: **plain warped/
+ridged noise produces ROUGHNESS but not real STRUCTURE (connected ridgelines + branching drainage = the thing
+that reads as real geography).** Per-biome params now genuinely differ (mountain rugged vs grassland smooth —
+the distillation architecture works), but the *generator* can't yet turn those params into real-world-looking
+structure. **DECISION (owner): PAUSE Slice 2; research the right way to get real structure from the kernels
+before more param-tuning** (candidate directions: stronger domain warp, ridged-multifractal, and especially the
+owner's standing "distilled-erosion" idea — offline-run real erosion → learn a cheap LOCAL operator → apply
+online; tracked in the ledger as the big enhancement). **The distillation tooling + the metric fixes are KEPT**
+(they're the param-extraction half and they work); what's under research is the GENERATOR's structure stage.
+**NEXT (owner-chosen): the structure research/review, in parallel with closing the known FIX-NOW work** (ledger
+B1/B2/B3) so the rebuild's KEPT foundation is sound regardless of which structure technique wins.
 
 **Slice 1 — generator prototype (OFFLINE, render-first): ACCEPTED by owner eye (2026-05-30).**
 `tools/dem_pack/worldgen_proto.py` (`value_noise`/`fbm`/`ridged_fbm`/`domain_warp`/`generate`) + 7 tests
