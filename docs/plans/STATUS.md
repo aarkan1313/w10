@@ -143,6 +143,20 @@ clipmap-with-detail render at fly scale. CPU `view.update` time kept as the stre
 fully answers the owner's "is profiling real?" — a real GPU-ms number that MOVES 9× with load, can't pass
 on an empty scene, and doesn't distort what it measures.
 
+**⇒ BUILT + GREEN (2026-05-30): `m5_perf_hardened_check.gd`** (m3 suite → now **8 checks**, WINDOWED).
+Scripted ~1000 m/s flight, detail ON, 5 levels. Result: **REAL GPU p99 = 0.082 ms** (mean 0.075, max
+0.082; budget 6) with the did-real-work floors all cleared — nonblack 1.000, stream_events 45 (pages
+streamed under motion), prim_max 368,640 (geometry drawn), resident 45, cpu_update_mean 0.771 ms. A green
+result PROVABLY = the real streaming-clipmap-with-detail render (can't pass empty/static/black). Relief-
+VARIETY deliberately NOT asserted here (a fly-POV color-bucket count is the wrong instrument — mostly
+distant fogged terrain; relief variety is proven by m3_view_check's top-down ortho). **Finding while
+building it:** the OLD `m3_accept_check` (wall-time) is FLAKY — one run reported p99=5.96 ms + a phantom
+**max=77.26 ms "stall" with compute_frames=0** (no GPU work could cause a real 77 ms stall → it's wall-
+time/GC/pacing noise, not a regression). That intermittent phantom is EXACTLY why wall-time was replaced;
+m3_accept is kept for now (passes most runs) but the hardened GPU-ms gate is the trustworthy perf signal.
+The m5_perf gate measures GRID_RES=64 today — when the scale milestone raises near-field density, this gate
+is the instrument that says whether the denser mesh stays within the GPU budget.
+
 [superseded plan] The S4 hardened perf gate was to measure TRUE GPU time
 via `RenderingDevice` timestamp queries (NOT wall-time-per-draw), AND co-assert the scene did REAL WORK
 (relief variety present + detail non-vacuous + tiles visible + pages streamed/counter-moved + nonblack),

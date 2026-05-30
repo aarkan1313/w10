@@ -35,6 +35,7 @@ CHECKS = {
         "worldgen_terrain/tests/m3_accept_check.gd",
         "worldgen_terrain/tests/m3_continuity_check.gd",
         "worldgen_terrain/m5/m5_detail_check.gd",
+        "worldgen_terrain/tests/m5_perf_hardened_check.gd",
     ],
 }
 
