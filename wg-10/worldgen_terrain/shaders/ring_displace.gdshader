@@ -13,7 +13,9 @@ uniform vec2 page_origin = vec2(0.0);     // this fine page's WORLD lower-XZ cor
 uniform vec2 coarse_origin = vec2(0.0);   // the coarser page's WORLD lower-XZ corner; covers [origin, origin+coarse_span]
 uniform vec2 level_center = vec2(0.0);    // WORLD center of this level's 3x3 tile neighborhood
 uniform float level_half_extent = 12288.0;// 1.5 * world_span (half the 3x3 neighborhood width)
-uniform float height_scale = 1.0;         // visual amplitude (config; 1.0 = raw metres)
+uniform float relief_scale = 1.0;         // authoritative world-relief multiplier (render side). Same
+                                          // value as Wg10Facts.relief_scale -> visible==collision. Was
+                                          // `height_scale`; folded into one relief knob (spec §5).
 uniform float morph_region = 0.0;         // transition width as a fraction of the half-extent (0 = no morph)
 uniform float relief_ref = 2000.0;        // color gradient normalization
 
@@ -118,7 +120,7 @@ void vertex() {
 	// facts/collision height: collision reads h_base via the separate CPU facts path, so the
 	// parity contract is on h (unchanged above), not on this varying.
 	v_render_height = h + detail;
-	VERTEX.y = (h + detail) * height_scale;
+	VERTEX.y = (h + detail) * relief_scale;
 }
 
 void fragment() {
