@@ -81,6 +81,14 @@ impl Wg10TerrainView {
             let center_x = (camera_x / span_l).floor() * span_l;
             let center_z = (camera_z / span_l).floor() * span_l;
 
+            // slice 8: the 3x3 neighborhood's world center is the MIDDLE tile's center
+            // (page-origin `center` + half a page); the geomorph normalizes to half the
+            // neighborhood width (3 tiles of span_l -> half-extent 1.5*span_l) so it engages
+            // only at the level's true outer ring, not at every interior tile edge.
+            let level_center_x = center_x + span_l * 0.5;
+            let level_center_z = center_z + span_l * 0.5;
+            let level_half_extent = 1.5 * span_l;
+
             let span_c = if level < num - 1 {
                 self.base_span * 2f64.powi(level + 1)
             } else {
@@ -125,10 +133,10 @@ impl Wg10TerrainView {
                             self.height_scale,
                             morph,
                             self.relief_ref,
-                            po_x,
-                            po_z,
-                            co_x,
-                            co_z,
+                            Vector2::new(po_x as f32, po_z as f32),
+                            Vector2::new(co_x as f32, co_z as f32),
+                            Vector2::new(level_center_x as f32, level_center_z as f32),
+                            level_half_extent,
                         );
                     }
                 }

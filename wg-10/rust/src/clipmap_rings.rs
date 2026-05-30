@@ -146,10 +146,10 @@ impl Wg10ClipmapRings {
         height_scale: f64,
         morph_region: f64,
         relief_ref: f64,
-        page_origin_x: f64,
-        page_origin_z: f64,
-        coarse_origin_x: f64,
-        coarse_origin_z: f64,
+        page_origin: Vector2,
+        coarse_origin: Vector2,
+        level_center: Vector2,
+        level_half_extent: f64,
     ) {
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
@@ -160,9 +160,9 @@ impl Wg10ClipmapRings {
             let mi = &mut self.tiles[idx];
             let mut t = mi.get_transform();
             t.origin = Vector3::new(
-                (page_origin_x + span_l * 0.5) as f32,
+                page_origin.x + (span_l * 0.5) as f32,
                 0.0,
-                (page_origin_z + span_l * 0.5) as f32,
+                page_origin.y + (span_l * 0.5) as f32,
             );
             mi.set_transform(t);
         }
@@ -180,9 +180,13 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("height_scale", &height_scale.to_variant());
         mat.set_shader_parameter("morph_region", &morph_region.to_variant());
         mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
-        let co = Vector2::new(coarse_origin_x as f32, coarse_origin_z as f32);
-        mat.set_shader_parameter("coarse_origin", &co.to_variant());
-        self.bound_keys[idx] = (page_origin_x as i64, page_origin_z as i64);
+        mat.set_shader_parameter("coarse_origin", &coarse_origin.to_variant());
+        // slice 8: fine page's world corner (world-UV fine sampling, seam-free) + the level's
+        // 3x3 neighborhood center & half-extent (geomorph engages at the true outer ring only).
+        mat.set_shader_parameter("page_origin", &page_origin.to_variant());
+        mat.set_shader_parameter("level_center", &level_center.to_variant());
+        mat.set_shader_parameter("level_half_extent", &level_half_extent.to_variant());
+        self.bound_keys[idx] = (page_origin.x as i64, page_origin.y as i64);
     }
 }
 
