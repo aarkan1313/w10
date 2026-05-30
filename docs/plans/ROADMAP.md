@@ -234,11 +234,11 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
       readback rule). Gate `facts_bake_check`: GPU bake == CPU collision (maxd 0.0070 m over 33×33).
       **M4 COMPLETE — cargo 115, fast 6/6, gpu 4/4, m3 6/6 all green.**
 
-> **Deferred to its own milestone (NOT M4):** making edits VISIBLE in the GPU render (the meteor
-> crater you SEE, not just collide). That composes the edit delta into the height pages — a render-
-> pipeline change. M4 ships collidable-but-not-visible edits; the visible half is a later milestone
-> once the edit store is proven. (Owner wants editable terrain — meteor/shovel/laser — long-term;
-> M4 builds the cheap adaptable seam so adding it later is zero downstream rework.)
+> **Deferred to M8 (NOT M4):** making edits VISIBLE in the GPU render (the meteor crater you SEE,
+> not just collide). That composes the edit delta into the height pages — a render-pipeline change.
+> M4 ships collidable-but-not-visible edits; the visible half is **Milestone 8** below, once the
+> edit store is proven. (Owner wants editable terrain — meteor/shovel/laser — long-term; M4 built
+> the cheap adaptable seam so M8 is low-rework. See M8 for the tracked task list.)
 
 > **The big picture (owner-confirmed intent, 2026-05-29):** the DEM kernels are NOT "the terrain"
 > — they are a LIBRARY of real-world landform stamps (extracted from real elevation data). The
@@ -267,6 +267,31 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 - [ ] Erosion/hydrology, integrated without breaking determinism/parity. [**Carves the extreme
       DEM cliffs into believable slopes/drainage** — the data-level fix for the spiky height
       field, complementing a saner pack relief scale.]
+
+## Milestone 8 — VISIBLE editable terrain (the other half of the M4 edit seam)
+
+The M4 Facts API already makes edits (meteor crater / shovel / laser pit) **collidable** —
+`Wg10Facts.apply_edit` dents `get_height`/`get_collision_field`, so a body falls into the hole. But
+the GPU renderer draws from its own height pages, which DON'T see the edit — so right now **you fall
+into a hole you can't see** (a documented, intentional M4 divergence). M8 closes that: make edits
+appear in the rendered surface.
+
+- [ ] **Edit store the render side can read.** The M4 edit provider is a CPU `delta(x,z)`; the GPU
+      needs the same edits in a form a compute/vertex shader can sample (e.g. an edit texture/SSBO,
+      or stamps uploaded as uniforms). Shared, deterministic, parity-preserving.
+- [ ] **Compose the edit delta into the height pages.** `height_page.glsl` adds the edit delta when
+      it generates a page (or a re-bake pass applies edits to resident pages) so the displaced
+      surface matches `get_height` (clamp + bedrock included) — closing the collidable-vs-visible
+      gap. Re-uses the M4 `bake_collision_region`/page path; the visible-vs-collision parity gate
+      then extends to cover EDITED cells (no longer an exception).
+- [ ] **Live edit → page refresh** (only the affected pages recompute; never a hot-path stall —
+      the WG9 rule still holds; refresh is bounded/async like normal page production).
+- [ ] **Edit persistence (save/load)** — optional sub-item; the M4 seam already isolates the edit
+      store, so saving it is additive. Defer until a game needs it.
+
+> Ordering note: M8 depends on the render pipeline (M3) + ideally materials (M6) so the dug surface
+> shades correctly. It's listed last because nothing yet CONSUMES visible edits — but it is a real,
+> tracked milestone (the owner wants meteor/shovel/laser long-term), NOT a forgotten footnote.
 
 ---
 
