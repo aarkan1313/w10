@@ -178,8 +178,15 @@ float height_at(float x, float z) {
 void main() {
     ivec2 px = ivec2(gl_GlobalInvocationID.xy);
     if (px.x >= P.page_px || px.y >= P.page_px) return;
-    float u = (float(px.x) + 0.5) / float(P.page_px);
-    float v = (float(px.y) + 0.5) / float(P.page_px);
+    // Texel-CORNER convention (slice 8): texel 0 -> origin, texel N-1 -> origin+span, so
+    // abutting pages (exactly `span` apart) SHARE their boundary row/column samples and the
+    // ring shader's world-UV fine sample is bit-identical across a tile seam. (Was texel-center
+    // (px+0.5)/page_px, which left abutting pages' boundary samples one texel apart -> a seam.)
+    // height_at() is UNCHANGED — only this pixel->world mapping differs; the M2 parity gates
+    // sample height_field.glsl at explicit coords and never exercise this mapping.
+    float denom = float(max(P.page_px - 1, 1));
+    float u = float(px.x) / denom;
+    float v = float(px.y) / denom;
     float wx = P.origin_x + u * P.world_span;
     float wz = P.origin_z + v * P.world_span;
     imageStore(height_img, px, vec4(height_at(wx, wz), 0.0, 0.0, 1.0));
