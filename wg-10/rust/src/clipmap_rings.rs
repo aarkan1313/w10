@@ -232,6 +232,34 @@ impl Wg10ClipmapRings {
         }
         self.tiles[idx].set_visible(visible);
     }
+
+    /// DEBUG: per-tile current state as a flat array, 3 ints per tile in tile-index order:
+    /// [visible(0/1), bound_ox, bound_oz]. Lets the review scene detect & log flips
+    /// (HIDE/SHOW/REPAGE) so a vanishing chunk in the live fly names its own (level, slot) + cause
+    /// — the residency/coverage probes all show 0 holes, so the bug is in render/visibility, and
+    /// this surfaces exactly which tile drops and why.
+    #[func]
+    pub fn debug_tile_states(&self) -> PackedInt64Array {
+        let mut out = PackedInt64Array::new();
+        for (idx, mi) in self.tiles.iter().enumerate() {
+            out.push(if mi.is_visible() { 1 } else { 0 });
+            let (ox, oz) = self.bound_keys[idx];
+            out.push(ox);
+            out.push(oz);
+        }
+        out
+    }
+
+    /// DEBUG: force every tile's frustum culling off (`set_extra_cull_margin` huge) so a tile is
+    /// NEVER culled regardless of its AABB. If a "vanishing chunk" STOPS with this on, the cause is
+    /// frustum culling (AABB); if it persists, the cause is the bind/visibility path. A/B switch.
+    #[func]
+    pub fn debug_disable_culling(&mut self, disabled: bool) {
+        let margin: f32 = if disabled { 1.0e9 } else { 0.0 };
+        for mi in self.tiles.iter_mut() {
+            mi.set_extra_cull_margin(margin);
+        }
+    }
 }
 
 fn build_array_mesh(rm: &RingMesh) -> Gd<ArrayMesh> {

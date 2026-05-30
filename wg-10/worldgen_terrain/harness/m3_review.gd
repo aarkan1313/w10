@@ -31,6 +31,12 @@ const RELIEF_REF := 2000.0
 
 var _view: Object
 var _camera: Camera3D
+var _rings: Object               # debug: poll tile states for the flip log
+var _dbg_label: Label
+var _prev_states: PackedInt64Array = PackedInt64Array()
+var _flip_log: Array[String] = []
+var _cull_disabled := false
+var _frame := 0
 
 func _ready() -> void:
 	if RenderingServer.get_rendering_device() == null:
@@ -47,6 +53,7 @@ func _ready() -> void:
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	add_child(rings)
+	_rings = rings
 	_view = ClassDB.instantiate("Wg10TerrainView")
 	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, HEIGHT_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
 
@@ -70,9 +77,51 @@ func _ready() -> void:
 	add_child(overlay)
 	overlay.call("bind_sources", profiler, _view)
 
+	# DEBUG flip-log HUD (bottom-left). Press K to toggle cull-disable (A/B test the AABB-cull
+	# theory): if a vanishing chunk STOPS with culling off, it's frustum culling; if it persists,
+	# it's the bind/visibility path. The log names the last tiles that flipped HIDE/SHOW/REPAGE.
+	var dbg_layer := CanvasLayer.new()
+	add_child(dbg_layer)
+	_dbg_label = Label.new()
+	_dbg_label.position = Vector2(12, 360)
+	_dbg_label.add_theme_color_override("font_color", Color.YELLOW)
+	dbg_layer.add_child(_dbg_label)
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
+		_cull_disabled = not _cull_disabled
+		if _rings != null:
+			_rings.call("debug_disable_culling", _cull_disabled)
+
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:
 		return
+	_frame += 1
 	var p: Vector3 = _camera.global_position
 	var v: Vector3 = _camera.call("get_velocity")
 	_view.call("update", p.x, p.z, v.x, v.z)
+
+	# poll tile states AFTER update; log any visibility/page flip so a vanish names its tile.
+	if _rings != null:
+		var states: PackedInt64Array = _rings.call("debug_tile_states")
+		if _prev_states.size() == states.size():
+			var t := 0
+			while t * 3 + 2 < states.size():
+				var vis := states[t * 3]
+				var ox := states[t * 3 + 1]
+				var oz := states[t * 3 + 2]
+				var pv := _prev_states[t * 3]
+				var pox := _prev_states[t * 3 + 1]
+				var poz := _prev_states[t * 3 + 2]
+				var level := t / 9
+				var slot := t % 9
+				if vis != pv:
+					_flip_log.append("f%d L%d s%d %s" % [_frame, level, slot, "SHOW" if vis == 1 else "HIDE"])
+				elif vis == 1 and (ox != pox or oz != poz):
+					_flip_log.append("f%d L%d s%d REPAGE" % [_frame, level, slot])
+				t += 1
+		_prev_states = states
+		while _flip_log.size() > 8:
+			_flip_log.pop_front()
+		_dbg_label.text = "cull %s (K toggles)\n%s" % [
+			"DISABLED" if _cull_disabled else "on", "\n".join(_flip_log)]
