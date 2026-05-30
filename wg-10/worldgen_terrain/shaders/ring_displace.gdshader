@@ -29,6 +29,53 @@ global uniform float wg_dbg_mode;
 // untouched (facts read h_base). See spec §4 invariant 1.
 global uniform float wg_detail_amp;
 
+// ---- M5 detail: value-noise fBm, pure function of world XZ (edge-safe by construction) ----
+// Integer hash (no sin-banding): 2D -> [0,1). Cheap, no texture, no streaming.
+float wg_hash2(vec2 p) {
+	// fract-of-large-product hash with two mixing steps; stable + bandless enough for detail.
+	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+// value noise: bilinear blend of 4 lattice hashes with a smootherstep weight.
+float wg_value_noise(vec2 x) {
+	vec2 i = floor(x);
+	vec2 f = fract(x);
+	float a = wg_hash2(i);
+	float b = wg_hash2(i + vec2(1.0, 0.0));
+	float c = wg_hash2(i + vec2(0.0, 1.0));
+	float d = wg_hash2(i + vec2(1.0, 1.0));
+	vec2 u = f * f * (3.0 - 2.0 * f);
+	float n = mix(mix(a, b, u.x), mix(c, d, u.x), u.y);  // in [0,1]
+	// Mild contrast: the bilinear blend of 4 hashes clusters near 0.5 (central tendency), which
+	// wastes the [-1,1] budget. smoothstep is monotonic [0,1]->[0,1], so the bound is preserved
+	// exactly (still in [0,1]) while the distribution is pushed toward the extremes -> more
+	// realized relief per metre of wg_detail_amp.
+	return smoothstep(0.0, 1.0, n);  // in [0,1], higher contrast
+}
+
+// fBm: DETAIL_OCTAVES of value noise, centered to [-1,1]*ceiling. Fixed octaves/gain for
+// Slice 1 (they become config in Slice 4). Returns a value whose |.| <= 1.0 (the sum of a
+// geometric series with gain 0.5 over 5 octaves, normalized) so wg_detail_amp is the metre
+// ceiling directly.
+const int   WG_DETAIL_OCTAVES = 5;
+const float WG_DETAIL_GAIN    = 0.5;
+const float WG_DETAIL_FREQ    = 0.0009;   // ~1/1100 m base wavelength; tuned to GRID_RES in S4
+float wg_fbm_detail(vec2 world_xz) {
+	float sum = 0.0;
+	float amp = 1.0;
+	float norm = 0.0;
+	float freq = WG_DETAIL_FREQ;
+	for (int i = 0; i < WG_DETAIL_OCTAVES; i++) {
+		sum  += amp * (wg_value_noise(world_xz * freq) * 2.0 - 1.0); // center to [-1,1]
+		norm += amp;
+		freq *= 2.0;
+		amp  *= WG_DETAIL_GAIN;
+	}
+	return sum / max(norm, 1e-6);   // normalized to [-1,1]
+}
+
 // World XZ of this vertex = mesh-local XZ + the instance origin (rings recenter by
 // translating the instance). MODEL_MATRIX maps local -> world.
 void vertex() {
@@ -55,10 +102,17 @@ void vertex() {
 	vec2 uv_coarse = (world.xz - coarse_origin) / coarse_span;
 	float h_coarse = texture(coarse_height_tex, uv_coarse).r;
 
-	float h = mix(h_fine, h_coarse, t);
-	v_height = h;
+	float h = mix(h_fine, h_coarse, t);   // h_base: THE facts/collision height (untouched)
 	v_morph = t;
-	VERTEX.y = h * height_scale;
+	// M5 detail: bounded world-space fBm added ON TOP of the base height. Pure function of
+	// world.xz -> abutting tiles agree on shared edges (edge-safe). h (above) is unchanged,
+	// so facts/collision parity is preserved. Slice 1 = flat amp (no modulation/fade yet).
+	float detail = wg_fbm_detail(world.xz) * wg_detail_amp;
+	// v_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
+	// facts/collision height: collision reads h_base via the separate CPU facts path, so the
+	// parity contract is on h (unchanged above), not on this varying.
+	v_height = h + detail;
+	VERTEX.y = (h + detail) * height_scale;
 }
 
 void fragment() {
