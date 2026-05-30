@@ -57,8 +57,25 @@ slice with real per-vertex cost will be S3's descriptor (+4 page taps), which th
 against this clean baseline. (The formal detail-on p99 sign-off is still S4; this is early data, not the
 gate.)
 
+**Independent pillar-audit of the shipped S1 slice (2026-05-30): all 4 pillars PASS (3 with notes);
+"sound to build S2/S3 on top of."** Confirmed the 3 core contracts independently — bounded (closed-form
+`|fbm|≤1` normalization, holds with smoothstep), base-untouched (`h` byte-identical; Rust `facts_api::
+get_height` is shader-independent), edge-safe (the gate's separate-tile A-right-vs-B-left seam compare is
+the STRONG test). S2/S3 extend cleanly (the detail term is one multiplicative expression they wrap;
+`t`/`world_span`/`page_origin`/`height_tex` already present; `textureSize` gives texel size — no new
+uniform/Rust). **Three carry-forwards for S4 (none blocking):**
+  1. **Gate the "base-unchanged-with-detail-on" invariant explicitly** (spec §8 inv 3). T4 already showed
+     `facts_collision_parity_check`=0.000932 m green with the suite, but the m5 gate proves base-untouched
+     only structurally — fold an explicit detail-on parity assertion into S4's gate-consolidation pass.
+  2. **`WG_DETAIL_FREQ=0.0009` GRID_RES mismatch:** the m5 gate renders at GRID_RES=128 but `m3_review.gd`
+     (the owner fly) uses GRID_RES=64. The freq was chosen against one; record which in S4 config so the
+     shipped visual matches what was gated. (If the owner's fly look differs from the gate's PNG, this is
+     why — a mesh-density/detail-frequency interaction, tune in S4, not a correctness bug.)
+  3. **Bounded gate is a saturation proxy** (`sat<0.20`); fine for S1's fixed octaves/gain, but when S4
+     opens them to config, switch to a direct arithmetic bound (`detail_amp × Σ gain^i`).
+
 **Next M5 slices:** S2 LOD fade (detail → 0 into coarse/morph band) · S3 surface descriptor +
-slope modulation (the M6/M7 reusable seam) · S4 config + p99 sign-off + docs audit.
+slope modulation (the M6/M7 reusable seam) · S4 config + p99 sign-off + docs audit (+ the 3 carry-forwards).
 
 ---
 

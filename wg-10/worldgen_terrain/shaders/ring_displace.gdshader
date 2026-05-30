@@ -61,7 +61,10 @@ float wg_value_noise(vec2 x) {
 // ceiling directly.
 const int   WG_DETAIL_OCTAVES = 5;
 const float WG_DETAIL_GAIN    = 0.5;
-const float WG_DETAIL_FREQ    = 0.0009;   // ~1/1111 m base wavelength; tuned to GRID_RES in S4
+const float WG_DETAIL_FREQ    = 0.0009;   // ~1/1111 m base wavelength. NOTE: detail visibility
+                                          // interacts with mesh density (GRID_RES) — the m5 gate
+                                          // renders at 128, m3_review (owner fly) at 64; lock the
+                                          // freq vs the SHIPPED GRID_RES in S4 (STATUS M5 S1 cf #2).
 float wg_fbm_detail(vec2 world_xz) {
 	float sum = 0.0;
 	float amp = 1.0;
