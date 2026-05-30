@@ -97,4 +97,48 @@ impl Wg10Facts {
         self.floor = floor;
         self.ceil = ceiling;
     }
+
+    /// Authoritative collision heights over a square patch: an n×n row-major PackedFloat32Array
+    /// (raw metres) of composed height, centred at (center_x, center_z) spanning `world_size` m.
+    /// The CALLER builds the Jolt HeightMapShape3D (map_width=n, map_depth=n, map_data=this) + body
+    /// and owns its lifetime — the Facts API stays a pure sparse query (no physics state here).
+    /// CPU only, no GPU readback (the hot-path rule). Empty array (+ error) on bad args / not
+    /// configured (Jolt needs samples_per_side >= 2).
+    #[func]
+    fn get_collision_field(
+        &self,
+        center_x: f64,
+        center_z: f64,
+        world_size: f64,
+        samples_per_side: i64,
+    ) -> PackedFloat32Array {
+        let mut out = PackedFloat32Array::new();
+        let Some(p) = &self.pack else {
+            godot_error!("Wg10Facts: get_collision_field before configure()");
+            return out;
+        };
+        if samples_per_side < 2 || world_size <= 0.0 {
+            godot_error!(
+                "Wg10Facts: get_collision_field bad args (n={samples_per_side}, size={world_size}); need n>=2, size>0"
+            );
+            return out;
+        }
+        let seed = self.seed;
+        let edits = &self.edits;
+        let (floor, ceil) = (self.floor, self.ceil);
+        let grid = facts::collision_field(
+            center_x,
+            center_z,
+            world_size,
+            samples_per_side as usize,
+            |x, z| {
+                let base = height::height(x, z, seed, p);
+                facts::composed_height(base, edits.delta(x, z) as f64, floor, ceil)
+            },
+        );
+        for h in grid {
+            out.push(h);
+        }
+        out
+    }
 }

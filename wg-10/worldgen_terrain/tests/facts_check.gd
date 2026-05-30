@@ -55,6 +55,31 @@ func _run() -> int:
 	if absf(restored - before) > 1e-6:
 		errors.append("clear_edits did not restore base: %f vs %f" % [restored, before])
 
+	# collision_field cell (i,j) must equal get_height at that exact world point (no edits active).
+	facts.call("clear_edits")
+	var n := 5
+	var cs := 400.0
+	var ccx := 12345.0
+	var ccz := -6789.0
+	var field: PackedFloat32Array = facts.call("get_collision_field", ccx, ccz, cs, n)
+	if field.size() != n * n:
+		errors.append("collision_field size %d != %d" % [field.size(), n * n])
+	else:
+		var corner_x := ccx - cs * 0.5
+		var corner_z := ccz - cs * 0.5
+		var step := cs / float(n - 1)
+		for j in range(n):
+			for i in range(n):
+				var wx := corner_x + i * step
+				var wz := corner_z + j * step
+				var pt: float = facts.call("get_height", wx, wz)
+				if absf(field[j * n + i] - pt) > 1e-3:
+					errors.append("collision cell (%d,%d) %f != point %f" % [i, j, field[j*n+i], pt])
+	# bad args -> empty array, not a crash
+	var bad: PackedFloat32Array = facts.call("get_collision_field", 0.0, 0.0, 0.0, 1)
+	if bad.size() != 0:
+		errors.append("bad-arg collision_field not empty: %d" % bad.size())
+
 	if not errors.is_empty():
 		for er in errors: push_error(er)
 		print("[wg10-facts] status=fail errors=%d" % errors.size()); return 1
