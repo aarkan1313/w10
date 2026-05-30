@@ -86,87 +86,87 @@ impl Wg10TerrainView {
         let led_x = led.x as f64;       // Vector2 packs world (x, z) as (.x, .y)
         let led_z = led.y as f64;
 
+        // Render model (proven by the prove-one-at-a-time reset, owner-flown): EVERY level draws
+        // its full 3x3; coarser levels are drawn UNDERNEATH (lower render_priority, set at
+        // configure) as the never-black blanket. For each tile:
+        //   - its own level page MISSING  -> HIDE the tile; the coarser full 3x3 shows through.
+        //   - present -> SHOW + place in its own slot, sample its own page by world UV; and if it
+        //     is not the coarsest level, geomorph toward its REAL PARENT page (level+1) over this
+        //     level's 3x3 outer band. Coarsest level: no morph.
+        // (This replaces the old per-tile coarse-fallback-in-own-frame model, whose wrong-UV
+        // fallback + lead/centre desync caused the seams/flicker/"stuff disappears" the reset fixed.)
         let num = self.num_levels;
         for level in 0..num {
             let span_l = self.base_span * 2f64.powi(level);
             let center_x = (led_x / span_l).floor() * span_l;
             let center_z = (led_z / span_l).floor() * span_l;
-
-            // slice 8: the 3x3 neighborhood's world center is the MIDDLE tile's center
-            // (page-origin `center` + half a page); the geomorph normalizes to half the
-            // neighborhood width (3 tiles of span_l -> half-extent 1.5*span_l) so it engages
-            // only at the level's true outer ring, not at every interior tile edge.
+            // this level's 3x3 neighborhood centre (= the middle tile's centre) + half-extent
+            // (3 tiles wide -> half is 1.5*span); the geomorph rises to 1 at the outer ring.
             let level_center_x = center_x + span_l * 0.5;
             let level_center_z = center_z + span_l * 0.5;
             let level_half_extent = 1.5 * span_l;
-
-            let span_c = if level < num - 1 {
-                self.base_span * 2f64.powi(level + 1)
-            } else {
-                span_l
-            };
-            let coarse_level = if level < num - 1 { level + 1 } else { level };
+            let is_coarsest = level == num - 1;
+            let parent_span = span_l * 2.0;
 
             for dz in -1..=1 {
                 for dx in -1..=1 {
                     let po_x = center_x + dx as f64 * span_l;
                     let po_z = center_z + dz as f64 * span_l;
 
-                    let tc_x = po_x + span_l * 0.5;
-                    let tc_z = po_z + span_l * 0.5;
-                    let co_x = (tc_x / span_c).floor() * span_c;
-                    let co_z = (tc_z / span_c).floor() * span_c;
+                    let mut rings = self.rings.as_ref().unwrap().clone();
 
-                    let (tex, coarse_tex) = {
-                        let pool = self.pool.as_ref().unwrap().bind();
-                        let tex = pool.get_resident_page(level as i64, po_x, po_z);
-                        let coarse_tex = pool.get_resident_page(coarse_level as i64, co_x, co_z);
-                        (tex, coarse_tex)
+                    // own-level page (READ-ONLY; never computes on the render path).
+                    let tex = self
+                        .pool
+                        .as_ref()
+                        .unwrap()
+                        .bind()
+                        .get_resident_page(level as i64, po_x, po_z);
+                    let Some(ht) = tex else {
+                        // not resident yet -> hide; the coarser level underneath covers this area.
+                        rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                        continue;
                     };
 
-                    // Tile PLACEMENT is invariant: it always sits in its fine slot, covering
-                    // world [po, po+span_l]. Only what it SAMPLES varies (self-consistent
-                    // texture+origin+span). The slice-8 flicker bug was a fallback tile sampling
-                    // the coarse texture with the FINE origin+span -> wrong UV. Three cases:
-                    //   - fine resident: sample the fine page (po, span_l); morph to coarse if
-                    //     the coarse parent is resident, else morph OFF.
-                    //   - fine missing, coarse resident: sample the COARSE page in ITS OWN frame
-                    //     (co, span_c) over this tile's footprint; morph OFF. Correct lower-detail.
-                    //   - neither resident: skip (the coarser level's own 3x3 covers this area).
-                    // Tuple: (height_tex, coarse_tex, sample_span, coarse_span, sample_ox, sample_oz, coarse_ox, coarse_oz, morph)
-                    let sample = if let Some(ht) = tex {
-                        match coarse_tex.clone() {
-                            Some(ct) => {
-                                let m = if level < num - 1 { self.morph_region } else { 0.0 };
-                                Some((ht, ct, span_l, span_c, po_x, po_z, co_x, co_z, m))
-                            }
-                            None => Some((ht.clone(), ht, span_l, span_l, po_x, po_z, po_x, po_z, 0.0)),
-                        }
-                    } else if let Some(ct) = coarse_tex.clone() {
-                        Some((ct.clone(), ct, span_c, span_c, co_x, co_z, co_x, co_z, 0.0))
+                    // morph target: this level's REAL parent page (level+1) covering this tile's
+                    // centre, in the parent's own UV frame. If the parent isn't resident (or this
+                    // is the coarsest level), morph OFF and the coarse sampler just points at the
+                    // own page (unused at morph=0).
+                    let (coarse_tex, coarse_span, cco_x, cco_z, morph) = if is_coarsest {
+                        (ht.clone(), span_l, po_x, po_z, 0.0)
                     } else {
-                        None
+                        let tc_x = po_x + span_l * 0.5;
+                        let tc_z = po_z + span_l * 0.5;
+                        let p_ox = (tc_x / parent_span).floor() * parent_span;
+                        let p_oz = (tc_z / parent_span).floor() * parent_span;
+                        let ptex = self
+                            .pool
+                            .as_ref()
+                            .unwrap()
+                            .bind()
+                            .get_resident_page((level + 1) as i64, p_ox, p_oz);
+                        match ptex {
+                            Some(pt) => (pt, parent_span, p_ox, p_oz, self.morph_region),
+                            None => (ht.clone(), span_l, po_x, po_z, 0.0),
+                        }
                     };
 
-                    if let Some((ht, ct, sample_span, coarse_span_b, so_x, so_z, cco_x, cco_z, morph)) = sample {
-                        let mut rings = self.rings.as_ref().unwrap().clone();
-                        rings.bind_mut().bind_tile(
-                            level as i64,
-                            dx as i64,
-                            dz as i64,
-                            ht.upcast::<godot::classes::Texture2D>(),
-                            ct.upcast::<godot::classes::Texture2D>(),
-                            Vector2::new(po_x as f32, po_z as f32), // tile_origin (invariant placement)
-                            Vector2::new(sample_span as f32, coarse_span_b as f32), // spans
-                            Vector2::new(span_l as f32, level_half_extent as f32),  // placement: (tile_span, level_half_extent)
-                            self.height_scale,
-                            morph,
-                            self.relief_ref,
-                            Vector2::new(so_x as f32, so_z as f32), // sample_origin
-                            Vector2::new(cco_x as f32, cco_z as f32),
-                            Vector2::new(level_center_x as f32, level_center_z as f32),
-                        );
-                    }
+                    rings.bind_mut().bind_tile(
+                        level as i64,
+                        dx as i64,
+                        dz as i64,
+                        ht.upcast::<godot::classes::Texture2D>(),
+                        coarse_tex.upcast::<godot::classes::Texture2D>(),
+                        Vector2::new(po_x as f32, po_z as f32),                       // tile_origin (placement)
+                        Vector2::new(span_l as f32, coarse_span as f32),             // spans (sample, coarse)
+                        Vector2::new(span_l as f32, level_half_extent as f32),       // placement (tile_span, half_extent)
+                        self.height_scale,
+                        morph,
+                        self.relief_ref,
+                        Vector2::new(po_x as f32, po_z as f32),                       // sample_origin = own page corner
+                        Vector2::new(cco_x as f32, cco_z as f32),                    // coarse (parent) origin
+                        Vector2::new(level_center_x as f32, level_center_z as f32),  // this level's neighborhood centre
+                    );
                 }
             }
         }

@@ -197,7 +197,22 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("page_origin", &sample_origin.to_variant());
         mat.set_shader_parameter("level_center", &level_center.to_variant());
         mat.set_shader_parameter("level_half_extent", &level_half_extent.to_variant());
+        self.tiles[idx].set_visible(true);   // binding a tile implies it is shown
         self.bound_keys[idx] = (sample_origin.x as i64, sample_origin.y as i64);
+    }
+
+    /// Show/hide one tile. The view HIDES a tile whose own level page is not resident, so the
+    /// coarser level's full 3x3 (drawn underneath, lower render_priority) shows through — the
+    /// never-black blanket. A bound tile is shown; an unready one is hidden, NEVER left at a
+    /// stale position (that was the slice-8 "stuff overlaid on stuff" bug).
+    #[func]
+    pub fn set_tile_visible(&mut self, level: i64, dx: i64, dz: i64, visible: bool) {
+        let idx = tile_index(level as i32, dx as i32, dz as i32);
+        if idx >= self.tiles.len() {
+            godot_error!("Wg10ClipmapRings::set_tile_visible: ({level},{dx},{dz}) out of range");
+            return;
+        }
+        self.tiles[idx].set_visible(visible);
     }
 }
 
