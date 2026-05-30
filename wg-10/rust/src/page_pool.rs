@@ -481,8 +481,15 @@ impl Wg10PagePool {
         fmt.set_width(px);
         fmt.set_height(px);
         fmt.set_format(DataFormat::R32_SFLOAT);
+        // STORAGE (compute writes it) + SAMPLING (the ring shader reads it). CAN_COPY_FROM lets a
+        // GATE read the page back with texture_get_data to assert seam-freeness against the real
+        // height_page.glsl output (slice 8). CAN_COPY_FROM only permits a copy source; unlike
+        // CPU_READ it allocates no CPU-side mirror, so page residency cost is unchanged on the
+        // render path.
         fmt.set_usage_bits(
-            TextureUsageBits::STORAGE_BIT | TextureUsageBits::SAMPLING_BIT,
+            TextureUsageBits::STORAGE_BIT
+                | TextureUsageBits::SAMPLING_BIT
+                | TextureUsageBits::CAN_COPY_FROM_BIT,
         );
         let view    = RdTextureView::new_gd();
         let tex_rid = rd.texture_create(&fmt, &view);

@@ -65,64 +65,40 @@ func _run() -> int:
 		view.call("update", px, pz, 0.0, 0.0)
 		await process_frame
 
-	# (1) HARD seam check on level 0 — proven on the CPU height field (no GPU readback: the page
-	# textures are STORAGE+SAMPLING only, deliberately NOT CPU_READ, so reading them back would
-	# force a render-path cost just for a gate; and GPU==CPU parity is already the M2 gpu suite's
-	# job). This asserts the SAMPLING CONVENTION directly: under texel-corner generation, a fine
-	# page (origin O, span S, N texels) samples texel (i,j) at world (O + i/(N-1)*S, O + j/(N-1)*S).
-	# Page A's last column (i=N-1, world O+S) and abutting page B's first column (i=0, world
-	# O_B = O+S) therefore land on the SAME world line -> the same height_at value -> no seam. We
-	# verify the world coords coincide AND that Wg10Height agrees there (catches a convention drift
-	# that would move the shared edge off a shared sample, i.e. reintroduce the seam).
+	# (1) HARD seam check on level 0 — reads back the REAL production page textures (the actual
+	# output of height_page.glsl) and asserts that abutting pages' SHARED-EDGE texels are bit-equal.
+	# Under the texel-corner convention, page A's last column (i=N-1, world ox+span0) IS page B's
+	# first column (i=0, world ox+span0): the same world line -> the same height -> seam_diff=0.
+	# Reverting the convention (e.g. back to texel-center) on the generation OR shader side would
+	# move those texels off the shared line and the readback values would differ -> this gate fails.
+	# This exercises height_page.glsl directly, so it is NOT tautological. Readback needs the page
+	# textures' CAN_COPY_FROM bit (added in page_pool::create_page_texture; no render-path cost).
+	# texture_get_data blocks until the page is readable — fine for a gate, banned on the hot path.
 	var span0 := BASE_SPAN
 	var ox: float = floor(px / span0) * span0
 	var oz: float = floor(pz / span0) * span0
-	# Reconstruct each page's per-texel WORLD sample points from the page's own (origin, span) under
-	# the texel-corner convention — exactly as height_page.glsl main() does: texel k -> world
-	# origin + k/(N-1)*span. Then evaluate the GPU height field (Wg10GpuCompute -> height_field.glsl,
-	# the readback-capable parity path) at page A's shared-edge texels AND at page B's shared-edge
-	# texels, and assert they MATCH within EPS. If a future change reverts the convention (e.g. back
-	# to texel-center) on either the generation or the shader side, the two pages' shared-edge world
-	# points diverge by ~one texel and the heights differ -> this gate fails. This is the precise,
-	# non-tautological proof the seam is gone, without reading the (deliberately non-CPU-readable)
-	# production page textures.
-	var gpu: Object = ClassDB.instantiate("Wg10GpuCompute")
-	var ge: String = str(gpu.call("load_pack_dir", pack_os, PACK_FILE, glsl_os))
-	if ge != "":
-		push_error("gpu pack load failed: %s" % ge); return 1
-	var denom := float(PAGE_PX - 1)
-
-	# EAST seam: page A=(ox,oz) last column (i=N-1) vs page B=(ox+span0,oz) first column (i=0).
-	var ax_xs := PackedFloat64Array(); var ax_zs := PackedFloat64Array()
-	var bx_xs := PackedFloat64Array(); var bx_zs := PackedFloat64Array()
-	for j in range(PAGE_PX):
-		var v: float = float(j) / denom
-		# A: origin (ox,oz), texel (N-1, j)
-		ax_xs.append(ox + 1.0 * span0); ax_zs.append(oz + v * span0)
-		# B: origin (ox+span0,oz), texel (0, j)
-		bx_xs.append((ox + span0) + 0.0 * span0); bx_zs.append(oz + v * span0)
-	var a_east: PackedFloat64Array = gpu.call("heights", ax_xs, ax_zs, SEED)
-	var b_east: PackedFloat64Array = gpu.call("heights", bx_xs, bx_zs, SEED)
-	var max_east := 0.0
-	for j in range(PAGE_PX):
-		max_east = maxf(max_east, absf(a_east[j] - b_east[j]))
-	if max_east > SEAM_EPS:
-		errs.append("seam EAST: max shared-column height diff %.6f m > %.4f" % [max_east, SEAM_EPS])
-
-	# NORTH seam: page A last row (j=N-1) vs page C=(ox,oz+span0) first row (j=0).
-	var az_xs := PackedFloat64Array(); var az_zs := PackedFloat64Array()
-	var cz_xs := PackedFloat64Array(); var cz_zs := PackedFloat64Array()
-	for i in range(PAGE_PX):
-		var u: float = float(i) / denom
-		az_xs.append(ox + u * span0); az_zs.append(oz + 1.0 * span0)          # A texel (i, N-1)
-		cz_xs.append(ox + u * span0); cz_zs.append((oz + span0) + 0.0 * span0) # C texel (i, 0)
-	var a_north: PackedFloat64Array = gpu.call("heights", az_xs, az_zs, SEED)
-	var c_north: PackedFloat64Array = gpu.call("heights", cz_xs, cz_zs, SEED)
-	var max_north := 0.0
-	for i in range(PAGE_PX):
-		max_north = maxf(max_north, absf(a_north[i] - c_north[i]))
-	if max_north > SEAM_EPS:
-		errs.append("seam NORTH: max shared-row height diff %.6f m > %.4f" % [max_north, SEAM_EPS])
+	var center_data := _read_page(rd, pool, 0, ox, oz)
+	var east_data := _read_page(rd, pool, 0, ox + span0, oz)
+	var north_data := _read_page(rd, pool, 0, ox, oz + span0)
+	var max_east := -1.0
+	var max_north := -1.0
+	if center_data.is_empty():
+		errs.append("seam: center page (%.0f,%.0f) not resident/readable — cannot test the seam" % [ox, oz])
+	else:
+		if east_data.is_empty():
+			errs.append("seam: east page not resident/readable — cannot test EAST seam")
+		else:
+			# center's last column (x=N-1) vs east's first column (x=0), all rows z.
+			max_east = _max_col_diff(center_data, PAGE_PX - 1, east_data, 0)
+			if max_east > SEAM_EPS:
+				errs.append("seam EAST: max shared-column readback diff %.6f m > %.4f" % [max_east, SEAM_EPS])
+		if north_data.is_empty():
+			errs.append("seam: north page not resident/readable — cannot test NORTH seam")
+		else:
+			# center's last row (z=N-1) vs north's first row (z=0), all cols x.
+			max_north = _max_row_diff(center_data, PAGE_PX - 1, north_data, 0)
+			if max_north > SEAM_EPS:
+				errs.append("seam NORTH: max shared-row readback diff %.6f m > %.4f" % [max_north, SEAM_EPS])
 
 	# (2) SOFT morph-banding under motion + a PNG artifact. Render a perspective flight POV,
 	# sample an interior luminance scanline each measured frame, count large frame-to-frame jumps.
@@ -191,3 +167,32 @@ func _run() -> int:
 		return 1
 	print("[wg10-m3-continuity] status=pass")
 	return 0
+
+# Read a resident R32F page back as a PackedFloat32Array (row-major, PAGE_PX*PAGE_PX). Empty if
+# the page is not resident or unreadable. GATE-only readback (texture_get_data blocks the GPU;
+# never on the render path). Needs the page texture's CAN_COPY_FROM bit.
+func _read_page(rd: RenderingDevice, pool: Object, level: int, ox: float, oz: float) -> PackedFloat32Array:
+	var tex: Object = pool.call("get_resident_page", level, ox, oz)
+	if tex == null:
+		return PackedFloat32Array()
+	var rid: RID = tex.call("get_texture_rd_rid")
+	if not rid.is_valid():
+		return PackedFloat32Array()
+	var bytes: PackedByteArray = rd.texture_get_data(rid, 0)
+	if bytes.size() < PAGE_PX * PAGE_PX * 4:
+		return PackedFloat32Array()
+	return bytes.to_float32_array()
+
+# Max |diff| between column `ax` of page `a` and column `bx` of page `b`, over all rows (z).
+func _max_col_diff(a: PackedFloat32Array, ax: int, b: PackedFloat32Array, bx: int) -> float:
+	var m := 0.0
+	for row in range(PAGE_PX):
+		m = maxf(m, absf(a[row * PAGE_PX + ax] - b[row * PAGE_PX + bx]))
+	return m
+
+# Max |diff| between row `az` of page `a` and row `bz` of page `b`, over all columns (x).
+func _max_row_diff(a: PackedFloat32Array, az: int, b: PackedFloat32Array, bz: int) -> float:
+	var m := 0.0
+	for col in range(PAGE_PX):
+		m = maxf(m, absf(a[az * PAGE_PX + col] - b[bz * PAGE_PX + col]))
+	return m
