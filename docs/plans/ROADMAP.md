@@ -207,11 +207,34 @@ Remaining slices (NOT done):
 > hard edge. The render layer is correct. Fixes belong to the data/material/erosion layers below
 > (saner pack relief, M6 materials+normals, M7 erosion), tracked there — do NOT chase in M3.
 
-## Milestone 4 — Facts API (authoritative, sparse)
+## Milestone 4 — Facts API (authoritative, sparse) + adaptable edit seam
 
-- [ ] `get_height(x, z)` authoritative sparse query.
-- [ ] `get_collision_field(area)` + Jolt `HeightMapShape3D` integration.
-- [ ] Save/edit layer hook (composition over base height).
+Brainstormed design 2026-05-30 (spec: `docs/superpowers/specs/2026-05-30-m4-facts-api-design.md`).
+The base `Wg10Height::height(x,z)` already exists + is parity-gated — M4 PACKAGES it as the drop-in
+Facts API (§6.2), adds collision, and builds an adaptable edit SEAM. Core stays engine-agnostic
+(pure Rust; numbers out, no Godot/Jolt dep). The query everything funnels through:
+`height = clamp(base + edit_provider.delta(x,z), bedrock_floor, ceiling)` — provider pluggable
+(none = 0 cost; one concrete = circular stamps), clamp + bedrock are config (adaptable: no edits /
+shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last):
+
+- [ ] **Slice 1 — CPU seam:** `Wg10Facts.get_height(x,z)` = base + empty edit-provider + clamp.
+      Drop-in node (`set_config`/pack/seed). Gate: no-edit parity with `Wg10Height`.
+- [ ] **Slice 2 — stamps + bedrock:** `StampEdits` provider (`apply_edit(cx,cz,radius,depth,falloff)`,
+      `clear_edits`) + `set_bedrock(floor,ceil)` clamp. The diggable collidable hole.
+- [ ] **Slice 3 — sparse collision:** `get_collision_field(cx,cz,world_size,samples_per_side) ->`
+      PackedFloat32Array (CPU, hot-path, no readback); caller builds Jolt `HeightMapShape3D`+body,
+      owns it. Gate: visible(GPU)-vs-collision(CPU) parity on BASE terrain (§4 contract; edited
+      cells a known collidable-not-visible exception until M-edits-visible).
+- [ ] **Slice 4 — GPU bulk bake (off-frame only):** `bake_collision_region(...)` for large-area
+      collision via the `Wg10GpuCompute` batch path + a DELIBERATE load-time readback. Named `bake_*`
+      + documented blocking/async so it can NEVER reach the hot path (the WG9 readback rule). Most
+      concurrency-subtle — last.
+
+> **Deferred to its own milestone (NOT M4):** making edits VISIBLE in the GPU render (the meteor
+> crater you SEE, not just collide). That composes the edit delta into the height pages — a render-
+> pipeline change. M4 ships collidable-but-not-visible edits; the visible half is a later milestone
+> once the edit store is proven. (Owner wants editable terrain — meteor/shovel/laser — long-term;
+> M4 builds the cheap adaptable seam so adding it later is zero downstream rework.)
 
 > **The big picture (owner-confirmed intent, 2026-05-29):** the DEM kernels are NOT "the terrain"
 > — they are a LIBRARY of real-world landform stamps (extracted from real elevation data). The
