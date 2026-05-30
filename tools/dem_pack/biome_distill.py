@@ -26,6 +26,11 @@ WARP_AMOUNT_FRAC = 0.35      # warp_amount = WARP_AMOUNT_FRAC * dominant_wavelen
 UPPER_MASK_PCTL = 60.0       # ridge_linearity measured on the upper-elevation mask (top 40%)
 BASE_BLUR_SIGMA_PX = 1.0     # smallest octave-band blur sigma in pixels
 
+# --- blur-sigma knobs (tuned by eye in later tasks; named so tuning is one-place) ---
+INCISION_REGIONAL_SIGMA_PX = 6.0  # regional smoothing window for incision_depth baseline surface
+CURVATURE_GATE_SIGMA_PX = 1.0     # light blur before Laplacian concavity gate in incision_depth
+TENSOR_SMOOTH_SIGMA_PX = 2.0      # structure-tensor component smoothing for coherence estimation
+
 
 def to_metres(z, height_range_m):
     """Rescale a z-score DEM so its min->max span equals the real height_range_m (metres)."""
@@ -38,7 +43,8 @@ def to_metres(z, height_range_m):
 
 def bandpass_amp_profile(z, n_octaves=N_OCTAVES):
     """Difference-of-Gaussian-blur octave bands; each band's std = its AMPLITUDE (not phase).
-    Returned profile is normalized so band 0 == 1.0. Amplitude-only (the spectral lesson)."""
+    Returned profile is normalized so band 0 == 1.0 for any non-degenerate field; a
+    flat/degenerate field returns all-zeros. Amplitude-only (the spectral lesson)."""
     z = np.asarray(z, dtype=np.float64)
     prev = z.copy()
     amps = []
@@ -61,9 +67,9 @@ def _structure_tensor_coherence(z):
     gx = sobel(z, axis=1, mode="reflect")
     gz = sobel(z, axis=0, mode="reflect")
     # smooth the tensor components so coherence reflects regional, not per-pixel, structure
-    jxx = gaussian_filter(gx * gx, 2.0, mode="reflect")
-    jzz = gaussian_filter(gz * gz, 2.0, mode="reflect")
-    jxz = gaussian_filter(gx * gz, 2.0, mode="reflect")
+    jxx = gaussian_filter(gx * gx, TENSOR_SMOOTH_SIGMA_PX, mode="reflect")
+    jzz = gaussian_filter(gz * gz, TENSOR_SMOOTH_SIGMA_PX, mode="reflect")
+    jxz = gaussian_filter(gx * gz, TENSOR_SMOOTH_SIGMA_PX, mode="reflect")
     tr = jxx + jzz
     disc = np.sqrt(np.maximum((jxx - jzz) ** 2 + 4.0 * jxz * jxz, 0.0))
     l1 = 0.5 * (tr + disc)
@@ -91,23 +97,32 @@ def incision_depth(z_m, spacing_m):
     """Drainage incision in REAL metres: how far concave/low areas sit below their local surroundings.
     local_relief = (regional mean) - z in concave spots; report the high-incision quantile."""
     z = np.asarray(z_m, dtype=np.float64)
-    regional = gaussian_filter(z, sigma=6.0, mode="reflect")
+    regional = gaussian_filter(z, sigma=INCISION_REGIONAL_SIGMA_PX, mode="reflect")
     below = np.clip(regional - z, 0.0, None)      # how far below the regional surface (valleys positive)
     # curvature gate: keep concave (valley) areas (laplacian > 0 for pits/channels)
-    lap = (gaussian_filter(z, 1.0, mode="reflect") - z)
+    lap = (gaussian_filter(z, CURVATURE_GATE_SIGMA_PX, mode="reflect") - z)
     valley = below * (lap > 0)
     if not np.any(valley > 0):
         return 0.0
     return float(np.percentile(valley[valley > 0], 90))    # metres of typical deep incision
 
 
-def dominant_wavelength_m(z, spacing_m, n_octaves=N_OCTAVES):
-    """Characteristic feature size in metres: the octave band (from bandpass_amp_profile) with the
-    most amplitude -> its centre wavelength = (BASE_BLUR_SIGMA_PX * 2^band) * spacing_m * 2 (period)."""
-    prof = np.asarray(bandpass_amp_profile(z, n_octaves), dtype=np.float64)
+def dominant_wavelength_from_profile(profile, spacing_m):
+    """Return dominant wavelength in metres given an already-computed bandpass amp profile.
+    Pure helper: argmax band -> sigma_px -> period in metres. Avoids recomputing the profile."""
+    prof = np.asarray(profile, dtype=np.float64)
     band = int(np.argmax(prof))
     sigma_px = BASE_BLUR_SIGMA_PX * (2 ** band)
     return float(sigma_px * float(spacing_m) * 2.0)
+
+
+def dominant_wavelength_m(z, spacing_m, n_octaves=N_OCTAVES):
+    """Characteristic feature size in metres: the octave band (from bandpass_amp_profile) with the
+    most amplitude -> its centre wavelength = (BASE_BLUR_SIGMA_PX * 2^band) * spacing_m * 2 (period).
+    Calls bandpass_amp_profile then dominant_wavelength_from_profile; use the latter directly when
+    the profile is already in hand (e.g. inside metrics_for_dem) to avoid duplicate filtering."""
+    prof = bandpass_amp_profile(z, n_octaves)
+    return dominant_wavelength_from_profile(prof, spacing_m)
 
 
 def metrics_for_dem(z, meta):
@@ -120,12 +135,14 @@ def metrics_for_dem(z, meta):
     height_range_m = float(meta["height_range_m"])
     spacing_m = float(meta["approx_sample_spacing_m"])
     z_m = to_metres(z, height_range_m)
+    # compute profile once; reuse for both amp_profile and dominant_wavelength (avoids 6 extra blurs)
+    profile = bandpass_amp_profile(z, N_OCTAVES)
     return {
         "relief_real_m": height_range_m,                    # META (vetted)
         "slope_bias_deg": float(meta["mean_slope_deg"]),    # META (vetted)
-        "amp_profile": bandpass_amp_profile(z, N_OCTAVES),  # COMPUTED
+        "amp_profile": profile,                             # COMPUTED
         "ridge_linearity": ridge_linearity(z),              # COMPUTED (meta ridge_density is dead)
         "incision_depth_m": incision_depth(z_m, spacing_m), # COMPUTED (meta valley_density is dead)
         "anisotropy": anisotropy_flow(z),                   # COMPUTED (meta anisotropy_score too weak)
-        "dominant_wavelength_m": dominant_wavelength_m(z, spacing_m),  # COMPUTED
+        "dominant_wavelength_m": dominant_wavelength_from_profile(profile, spacing_m),  # COMPUTED
     }
