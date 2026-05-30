@@ -14,7 +14,7 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-29 (M3 slice 2 built; slice 3 stream-ahead scheduler spec'd, about to be planned + built).
+Updated: 2026-05-29 (M3 slices 1–8 built; slice 8 visual stability done — seam + geomorph fixed, continuity gate green; ALL automated M3 gates green; only the owner's RE-fly remains to close M3).
 
 ---
 
@@ -124,16 +124,29 @@ visible) · **M3 slice 2** (`Wg10PagePool` — the single RID owner; `PagePolicy
 LRU + protected + budget, 11 headless tests, WG9-killer rules proven; zero-churn
 eviction).
 
-**Spec'd, not yet built:** **M3 slice 3 — stream-ahead scheduler**
-(`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`, approved). `SchedulePolicy`
-(pure Rust: `coverage`/`plan_frame`/`coarser_fallback`, multi-level, bounded
-acquires, never-black property) + `Wg10Streamer` (godot frame-loop driver) +
-`page_pool.resident_keys()` + `m3_stream_check.gd`. Synchronous page production this
-slice; the scheduler↔pool seam is async-ready so background production drops in later
-with **zero scheduler change**.
+…plus **M3 slices 3–8 all built & gated:** slice 3 stream-ahead scheduler
+(`SchedulePolicy` + `Wg10Streamer`, coarsest-first never-black, async-ready seam) ·
+slice 4 clipmap ring geometry · slice 5a/5b 3×3 page-tile clipmap + live read-only
+view (`Wg10TerrainView` uses `get_resident_page` — NEVER computes on the render path) ·
+slice 6 fly harness (`m3_review.tscn` + fly camera + profiler + overlay) · slice 7
+page-compute caching (`PageComputeContext` → p99 GREEN, async NOT needed) · **slice 8
+visual stability** (texel-corner page gen + world-UV fine sampling + neighborhood-center
+geomorph → inter-tile seam = 0 and the per-tile morph lattice gone; `m3_continuity_check`
+reads back real production pages to prove `seam=0.0` + a perspective morph-banding ceiling).
 
-**Counts:** cargo 81 green · fast 5 / gpu 2 / m3 2, all `fail=0`. **`main` is ~68
-commits ahead of `origin/main` (unpushed).**
+**The 3 render-time sampling defects slice 8 fixed (so a future session doesn't reintroduce them):**
+(1) geomorph must use distance to the 3×3 NEIGHBORHOOD center (`level_center` uniform,
+normalized to `1.5·span`), NOT tile-local `VERTEX.xz` — tile-local fires the morph at all 9
+tile edges. (2) The fine page is sampled by TRUE WORLD UV (`page_origin` uniform), NOT
+`VERTEX.xz/span+0.5` — the latter hits texture borders, a half-texel off the texel centers.
+(3) `height_page.glsl` uses a texel-CORNER convention (`u=px/(N-1)`: texel 0→origin,
+N-1→origin+span) so abutting pages SHARE boundary samples — texel-center leaves them a texel
+apart → a seam. `height_at()` is UNCHANGED (parity-critical; the M2 gpu suite never exercises
+the page pixel→world mapping). Page textures carry CAN_COPY_FROM so the gate can read them
+back (no render-path cost; p99 unaffected).
+
+**Counts:** cargo 103 green · fast 5 / gpu 2 / m3 6, all `fail=0`. m3_accept p99=1.88 ms at
+~1000 m/s. **`main` is ~140 commits ahead of `origin/main` (unpushed — the OWNER pushes).**
 
 ## 7. Build / run gotchas (these bit prior sessions — read before touching the toolchain)
 
@@ -169,21 +182,27 @@ commits ahead of `origin/main` (unpushed).**
 
 ## 9. What to do next
 
-**Immediate:** the slice-3 spec is approved and committed. Next steps in the loop:
+**Immediate — the ONE thing left to close M3: the owner RE-flies `m3_review.tscn`.**
+All automated M3 gates are green (m3 6/6, p99=1.88 ms, seam=0, no morph banding), but
+§7.3 makes the live fly the final authority — and the owner's *first* fly is exactly what
+caught the slice-8 "switching" defects the gates couldn't see. Launch it WINDOWED:
 
-1. **Owner reviews the slice-3 spec** (`docs/superpowers/specs/2026-05-29-m3-slice3-design.md`)
-   — the brainstorming gate before planning.
-2. **`superpowers:writing-plans`** → a dated TDD plan for slice 3 in
-   `docs/superpowers/plans/`.
-3. **`superpowers:subagent-driven-development`** → execute task-by-task with the
-   two-stage review; verify the `m3` suite goes to 3 checks `fail=0` + cargo green.
-4. **Audit** against spec + pillars; update STATUS/ROADMAP; commit each task.
+```
+$env:GODOT_BIN --path "D:\workflows\worldgen10\wg-10" worldgen_terrain/harness/m3_review.tscn
+```
+(or open the project in the editor and run that scene). Fly with WASD + Shift (sprint to
+~1000 m/s) + mouse-look + Space/C up/down, ESC to release the mouse. Confirm: no stalls, no
+black/holes, **no hard inter-tile vertical seam, and no interior morph lattice/switching** —
+smooth LOD blend only at the level boundaries. On the owner's sign-off, **M3 closes.**
 
-**After slice 3 (remaining M3 slices, in order):** clipmap rings (concentric,
-persistent meshes, recenter, L↔L+1 morph) → modular harness components
-(camera/movement, diagnostics/profiling, UI overlay) → manual fly-test scene →
-**the M3 acceptance gate** (renderer p99 < 6 ms + no black/holes, manually confirmed
-at ~1000 m/s — gate green is necessary, not sufficient; the owner flies it).
+Then run the slice-8 brainstorm→spec→plan→execute→audit cycle for **M4 — Facts API**
+(`get_height(x,z)` authoritative sparse query + Jolt collision field). After M4: M5 detail/
+masks → M6 biomes/textures → M7 erosion/hydrology. Each gets its own full cycle.
+
+NOTE (tuning, not a bug): the slice-8 PNG shows faint mesh-facet creases at grazing angles —
+GRID_RES=64 over an 8192 m page = 128 m cells, unshaded. That's a tessellation-density knob
+(ROADMAP "tune finest-ring spacing"), NOT a seam — the continuity gate proves the page
+boundary height diff is exactly 0.
 
 **Deferred but tracked** (don't forget, don't build early): async/background page
 production — build it behind `Wg10PagePool::acquire_page` when heavy multi-pass

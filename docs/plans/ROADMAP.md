@@ -4,7 +4,7 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-29 (M3 slice 7 — page-compute caching DONE; **the p99 acceptance gate is GREEN** (p99=2.41 ms at ~1000 m/s, budget 6). The slice-6 90 ms spike was redundant per-page setup (recompile shader + re-upload the 25 MB atlas every page); caching the shader+pipeline+buffers once in Wg10PagePool fixed it — async page production NOT needed. m3 suite 5 checks fail=0; fast 5, gpu 2; 103 cargo tests green. **M3 has ONE box left: the owner's manual fly of m3_review.tscn** — the automated gate is green but §7.3 makes the live fly the final authority)
+Last updated: 2026-05-29 (M3 slice 8 — visual stability DONE; **seam + geomorph fixed, a windowed continuity gate locks it, p99 still green** (p99=1.88 ms at ~1000 m/s). The owner's first fly found "crazy switching" — 3 render-time sampling defects (tile-local geomorph fired at every tile edge; fine UV hit texture borders; texel-center page gen left abutting pages a texel apart → seam). Fixed: neighborhood-center geomorph + world-UV fine sampling + texel-corner page gen (abutting pages share boundary samples, seam zero by construction). `height_at` unchanged → gpu parity still 2/2. New `m3_continuity_check` reads back real production pages (seam=0.0) + a morph-banding ceiling (0.0). m3 suite **6 checks fail=0**; fast 5, gpu 2; 103 cargo tests green. **M3 has ONE box left: the owner's RE-fly of m3_review.tscn** — all automated gates green; §7.3 makes the live fly the final authority)
 
 Legend: `[x]` done · `[~]` partially done (note inline) · `[ ]` not started.
 
@@ -168,11 +168,23 @@ Remaining slices (NOT done):
       dropped it to 2.9 ms. Threading would have been the wrong fix. The async-ready seam stays
       available for the future (M5–M7 multi-pass pages may re-fire the trigger with a real
       per-page cost — then it's the lever), but M3 doesn't need it.
+- [x] **Visual stability (slice 8) — seam + geomorph fixed; continuity gate added.** The
+      owner's first fly found "crazy switching": (1) tile-LOCAL geomorph fired at every one of
+      the 9 tiles' edges → now from the 3×3 NEIGHBORHOOD center (engages only at the level's
+      true outer ring); (2) fine UV mapped edge vertices onto the texture border → now sampled
+      by true world UV (`page_origin` uniform); (3) texel-CENTER page generation left abutting
+      pages' boundary samples a texel apart → texel-CORNER (`u=px/(N-1)`) so abutting pages
+      SHARE boundary samples (seam zero by construction). `height_at()` unchanged → parity
+      intact. New `m3_continuity_check` (windowed) reads back real production pages
+      (`seam=0.0`) + a perspective morph-banding ceiling (`jump_frac=0.0`); CAN_COPY_FROM on
+      page textures enables readback at no render-path cost. m3 suite 6/6, p99=1.88 ms.
 - [ ] Tune finest-ring spacing + ring count against the review scene (config;
-      not a locked constant — revisit when real assets exist).
-- [ ] **MANUAL ACCEPTANCE:** owner flies `m3_review.tscn` at full speed and confirms no
-      stalls and no black/holes. (Gate green is necessary, not sufficient — the final
-      authority. Pending the async slice + p99 green.)
+      not a locked constant — revisit when real assets exist). NOTE: slice-8 PNG shows faint
+      mesh-facet creases at grazing angles (GRID_RES=64 → 128 m cells, unshaded) — a
+      tessellation-density tuning knob, NOT a seam (the gate proves boundary height diff = 0).
+- [ ] **MANUAL ACCEPTANCE:** owner RE-flies `m3_review.tscn` at full speed and confirms no
+      stalls, no black/holes, no inter-tile seam, and no interior morph switching. (Gate green
+      is necessary, not sufficient — the final authority, §7.3. All automated gates now green.)
 
 ## Milestone 4 — Facts API (authoritative, sparse)
 
