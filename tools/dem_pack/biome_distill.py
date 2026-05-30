@@ -125,6 +125,56 @@ def dominant_wavelength_m(z, spacing_m, n_octaves=N_OCTAVES):
     return dominant_wavelength_from_profile(prof, spacing_m)
 
 
+def aggregate_median(metrics_list):
+    """Median of each metric across a family's per-kernel metrics dicts. amp_profile is per-band median."""
+    if not metrics_list:
+        raise ValueError("aggregate_median: empty metrics list")
+    keys = metrics_list[0].keys()
+    out = {}
+    for k in keys:
+        if k == "amp_profile":
+            stacked = np.asarray([m[k] for m in metrics_list], dtype=np.float64)  # (kernels, N_OCTAVES)
+            out[k] = np.median(stacked, axis=0).tolist()
+        else:
+            out[k] = float(np.median([float(m[k]) for m in metrics_list]))
+    return out
+
+
+def _f32(x):
+    """Round a python float to f32 precision so distilled values are parity-ready (CPU==GPU later)."""
+    return float(np.float32(x))
+
+
+def params_from_metrics(metrics):
+    """Map structural metrics -> the warped-noise generator's knobs via documented simple transforms.
+    Every constant is named config above. Returns a BiomeParams dict (worldgen_proto.generate-compatible
+    + slope_bias). All values finite, in-domain, f32-representable (parity-ready for Slice 3/4)."""
+    wl = max(float(metrics["dominant_wavelength_m"]), 1.0)
+    base_freq = 1.0 / wl
+    # amp_profile normalized so band0==1.0 (already normalized by bandpass; re-assert defensively)
+    amps = np.asarray(metrics["amp_profile"], dtype=np.float64)
+    a0 = amps[0] if abs(amps[0]) > 1e-12 else 1.0
+    amps = (amps / a0)
+    ridge_strength = float(np.clip(metrics["ridge_linearity"], 0.0, 1.0)) * RIDGE_STRENGTH_MAX
+    # valley_depth: incision normalized by relief -> a 0..1 fraction, clamped
+    relief = max(float(metrics["relief_real_m"]), 1.0)
+    valley_depth = float(np.clip(metrics["incision_depth_m"] / relief, 0.0, 1.0)) * VALLEY_DEPTH_MAX
+    warp_amount = WARP_AMOUNT_FRAC * wl * float(np.clip(metrics["anisotropy"], 0.0, 1.0))
+    p = {
+        "relief_m": _f32(relief),
+        "octave_amps": [_f32(a) for a in amps],
+        "ridge_strength": _f32(ridge_strength),
+        "valley_depth": _f32(valley_depth),
+        "warp_amount": _f32(warp_amount),
+        "base_freq": _f32(base_freq),
+        "ridge_freq": _f32(RIDGE_FREQ_RATIO * base_freq),
+        "valley_freq": _f32(VALLEY_FREQ_RATIO * base_freq),
+        "warp_freq": _f32(1.0 / (WARP_FREQ_K * wl)),
+        "slope_bias": _f32(metrics["slope_bias_deg"]),  # STORED; not yet consumed by generate()
+    }
+    return p
+
+
 def metrics_for_dem(z, meta):
     """Measure all structural metrics for ONE DEM. RELIEF + SLOPE come from the vetted kernel.json meta
     (height_range_m, mean_slope_deg — they separate families cleanly); STRUCTURE (amp profile, ridge,
