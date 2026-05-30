@@ -40,6 +40,7 @@ var _dbg_label: Label
 var _prev_states: PackedInt64Array = PackedInt64Array()
 var _flip_log: Array[String] = []
 var _cull_disabled := false
+var _morph_view := false
 var _frame := 0
 
 func _ready() -> void:
@@ -96,6 +97,11 @@ func _ready() -> void:
 	add_child(overlay)
 	overlay.call("bind_sources", profiler, _view)
 
+	# DEBUG: register the global shader debug-mode param (used by ring_displace's wg_dbg_mode).
+	# Press M to toggle the MORPH-BAND HEATMAP: blue=fine, green=blend, red=coarse. A hard LOD pop
+	# shows as a blue->red edge with NO green; a proper geomorph shows a wide green gradient.
+	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+
 	# DEBUG flip-log HUD (bottom-left). Press K to toggle cull-disable (A/B test the AABB-cull
 	# theory): if a vanishing chunk STOPS with culling off, it's frustum culling; if it persists,
 	# it's the bind/visibility path. The log names the last tiles that flipped HIDE/SHOW/REPAGE.
@@ -111,6 +117,9 @@ func _input(event: InputEvent) -> void:
 		_cull_disabled = not _cull_disabled
 		if _rings != null:
 			_rings.call("debug_disable_culling", _cull_disabled)
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_M:
+		_morph_view = not _morph_view
+		RenderingServer.global_shader_parameter_set("wg_dbg_mode", 1.0 if _morph_view else 0.0)
 
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:

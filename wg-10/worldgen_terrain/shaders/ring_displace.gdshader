@@ -18,6 +18,11 @@ uniform float morph_region = 0.0;         // transition width as a fraction of t
 uniform float relief_ref = 2000.0;        // color gradient normalization
 
 varying float v_height;
+varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
+// GLOBAL debug mode (one RenderingServer.global_shader_parameter for the whole scene, so a key in
+// the review scene flips it with no per-tile material access / no Rust rebuild):
+// 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
+global uniform float wg_dbg_mode;
 
 // World XZ of this vertex = mesh-local XZ + the instance origin (rings recenter by
 // translating the instance). MODEL_MATRIX maps local -> world.
@@ -47,10 +52,18 @@ void vertex() {
 
 	float h = mix(h_fine, h_coarse, t);
 	v_height = h;
+	v_morph = t;
 	VERTEX.y = h * height_scale;
 }
 
 void fragment() {
-	float t = clamp(v_height / relief_ref * 0.5 + 0.5, 0.0, 1.0);
-	ALBEDO = vec3(t, t * 0.8 + 0.1, 1.0 - t);
+	if (wg_dbg_mode > 0.5) {
+		// morph-band heatmap: blue = pure fine (t=0), red = pure coarse (t=1), green = the blend
+		// in between. A hard LOD pop shows as an abrupt blue->red edge with NO green; a proper
+		// geomorph shows a WIDE green gradient where fine eases into coarse.
+		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
+	} else {
+		float t = clamp(v_height / relief_ref * 0.5 + 0.5, 0.0, 1.0);
+		ALBEDO = vec3(t, t * 0.8 + 0.1, 1.0 - t);
+	}
 }
