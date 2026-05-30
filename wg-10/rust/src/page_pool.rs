@@ -437,12 +437,51 @@ impl Wg10PagePool {
     // -----------------------------------------------------------------------
 
     /// Free all page texture RIDs on the global RenderingDevice and clear the
-    /// slot vectors.  Must be called during scene teardown; the GDScript owner
-    /// is responsible for calling this before the pool goes out of scope.
+    /// slot vectors.  Safe to call during scene teardown; idempotent.
     ///
-    /// This is the ONLY site that calls `rd.free_rid` on page textures.
+    /// As of the B1 fix this is ALSO called automatically from `Drop` (below), so
+    /// leak-freedom is structural — a GDScript owner that forgets to call it no
+    /// longer leaks. Calling it explicitly is still fine (the second call is a
+    /// no-op: the slot vectors are already cleared and `compute_ctx` is `None`).
+    ///
+    /// This is the ONLY site (via `free_all_impl`) that calls `rd.free_rid` on
+    /// page textures.
     #[func]
     pub fn free_all(&mut self) {
+        self.free_all_impl();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Drop — structural leak-freedom (B1)
+// ---------------------------------------------------------------------------
+
+impl Drop for Wg10PagePool {
+    /// Release all page-texture RIDs + the cached compute context when the pool
+    /// is dropped, regardless of whether the GDScript owner called `free_all()`.
+    ///
+    /// A Godot `Rid` is a POD handle — dropping the Rust struct does NOT free the
+    /// underlying GPU resource, so without this the RIDs orphan on the device
+    /// (the B1 leak). `free_all_impl` guards for "no RenderingDevice" (headless /
+    /// already-torn-down), so this is safe at any drop time, and idempotent with
+    /// an explicit `free_all()` call.
+    fn drop(&mut self) {
+        self.free_all_impl();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Private helpers
+// ---------------------------------------------------------------------------
+
+impl Wg10PagePool {
+    /// The actual teardown logic, callable from both the `#[func] free_all` and
+    /// `Drop` (B1). Frees every page-texture RID + the cached compute context on
+    /// the global RenderingDevice and clears the slot vectors. Idempotent and
+    /// safe with no RenderingDevice (headless / already torn down).
+    ///
+    /// This is the ONLY site that calls `rd.free_rid` on page textures.
+    fn free_all_impl(&mut self) {
         let rd_opt = RenderingServer::singleton().get_rendering_device();
         if rd_opt.is_none() {
             // No RenderingDevice — nothing to free on the GPU; drop our handles.
@@ -465,13 +504,7 @@ impl Wg10PagePool {
             free_page_compute_context(&mut rd, &ctx);
         }
     }
-}
 
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
-
-impl Wg10PagePool {
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px × page_px`.
     /// Returns `Some(Rid)` on success; logs a godot_error and returns `None` on
     /// failure.  The ONLY `texture_create` call for page textures.

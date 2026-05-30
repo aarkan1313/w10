@@ -62,11 +62,9 @@ func _run() -> int:
 
 	var off_img := await _capture(tex, 0.0)
 	var on_img := await _capture(tex, DETAIL_AMP)
-	# Wg10PagePool is RefCounted — it releases its pages/RIDs automatically when the last
-	# reference drops (here, when `pool`/`tex` go out of scope at function return). Do NOT call
-	# .free() on it: RefCounted objects reject manual free ("Attempted to free a RefCounted object").
 	if off_img == null or on_img == null:
 		push_error("[wg10-m5] capture failed")
+		pool.call("free_all")  # release page-texture RIDs before the early return (B1)
 		return 1
 
 	var diff := _mean_abs_diff(off_img, on_img)
@@ -83,6 +81,10 @@ func _run() -> int:
 	var ok := non_vacuous and bounded and edge_safe
 	print("[wg10-m5] non_vacuous=%s (diff=%.4f) bounded=%s (sat=%.3f) edge_safe=%s -> %s" % [
 		non_vacuous, diff, bounded, sat, edge_safe, "PASS" if ok else "FAIL"])
+	# Free the pool's page-texture RIDs explicitly (B1). Wg10PagePool now also self-frees via a
+	# Rust Drop impl when the last RefCounted reference drops, so this is belt-and-suspenders — but
+	# it releases the GPU RIDs deterministically at end-of-check rather than at GC time.
+	pool.call("free_all")
 	return 0 if ok else 1
 
 func _capture(tex, amp: float) -> Image:
@@ -193,7 +195,6 @@ func _capture_one_tile(amp: float, origin_x: float) -> Image:
 	var pool2: Object = ClassDB.instantiate("Wg10PagePool")
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
 	var glsl_os := ProjectSettings.globalize_path(GLSL)
-	# Wg10PagePool is RefCounted: it self-releases when pool2/tex go out of scope. Don't .free() it.
 	var e := str(pool2.call("configure", pack_os, PACK_FILE, glsl_os, 4, PAGE_PX, WORLD_SPAN, SEED))
 	if e != "":
 		push_error("[wg10-m5] configure failed: %s" % e)
@@ -201,6 +202,7 @@ func _capture_one_tile(amp: float, origin_x: float) -> Image:
 	var tex = pool2.call("acquire_page", 0, origin_x, 0.0)
 	if tex == null:
 		push_error("[wg10-m5] acquire_page failed (origin_x=%.1f)" % origin_x)
+		pool2.call("free_all")  # release any allocated RIDs before the early return (B1)
 		return null
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE
@@ -233,4 +235,5 @@ func _capture_one_tile(amp: float, origin_x: float) -> Image:
 	RenderingServer.force_draw()
 	var img := vp.get_texture().get_image()
 	vp.queue_free()
+	pool2.call("free_all")  # release this tile's page-texture RIDs before returning (B1)
 	return img

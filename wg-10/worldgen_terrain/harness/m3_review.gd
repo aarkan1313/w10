@@ -37,6 +37,7 @@ const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~8
 							 # M5 fly finding). STARTING value for live owner tuning, not a final look.
 
 var _view: Object
+var _pool: Object                # kept so _exit_tree can free its page-texture RIDs (B1)
 var _camera: Camera3D
 var _rings: Object               # debug: poll tile states for the flip log
 var _dbg_label: Label
@@ -56,6 +57,7 @@ func _ready() -> void:
 	var glsl_os := ProjectSettings.globalize_path(GLSL)
 
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
+	_pool = pool   # keep a reference for deterministic teardown in _exit_tree (B1)
 	var err: String = str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))
 	if err != "":
 		push_error("m3_review: pool configure failed: %s" % err); return
@@ -120,6 +122,14 @@ func _ready() -> void:
 	_dbg_label.position = Vector2(12, 360)
 	_dbg_label.add_theme_color_override("font_color", Color.YELLOW)
 	dbg_layer.add_child(_dbg_label)
+
+func _exit_tree() -> void:
+	# Free the pool's page-texture RIDs on scene teardown (B1). Wg10PagePool also self-frees via a
+	# Rust Drop impl when its last reference drops, so this is deterministic belt-and-suspenders —
+	# it releases the GPU RIDs at scene-exit rather than at GC time.
+	if _pool != null:
+		_pool.call("free_all")
+		_pool = null
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
