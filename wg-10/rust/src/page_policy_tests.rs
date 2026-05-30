@@ -145,3 +145,69 @@ fn resident_keys_lists_all_resident_pages() {
     assert_eq!(got, want);
     assert_eq!(got.len(), p.resident_count());
 }
+
+// --- B2: display pinning (structural never-black) ---
+
+#[test]
+fn b2_pinned_page_is_never_evicted_even_when_released_and_lru() {
+    // Core B2 invariant: a page the VIEW is displaying (pinned) must never be the eviction victim,
+    // even after the scheduler released it and it is the least-recently-used slot.
+    let mut p = PagePolicy::new(2);
+    p.acquire(k(0,0,0));            // held coarse blanket page (slot 0)
+    p.acquire(k(0,1,0));            // other (slot 1)
+    p.release(k(0,0,0));           // scheduler no longer needs it...
+    p.pin_displayed(k(0,0,0));     // ...but the view is still displaying it -> pinned
+    p.acquire(k(0,1,0));           // touch other so held is the LRU candidate
+    p.release(k(0,1,0));           // other is not displayed and is evictable
+    assert_eq!(p.acquire(k(0,2,0)), Decision::AllocateEvicting { slot: 1, evicted: k(0,1,0) });
+    assert!(p.is_pinned(&k(0,0,0)), "held page must still be pinned + resident");
+    assert!(p.slot_of(&k(0,0,0)).is_some(), "held page must remain resident");
+}
+
+#[test]
+fn b2_release_does_not_unprotect_a_pinned_slot() {
+    let mut p = PagePolicy::new(2);
+    p.acquire(k(0,0,0));
+    p.pin_displayed(k(0,0,0));
+    p.release(k(0,0,0));
+    assert!(p.is_protected(&k(0,0,0)), "pinned slot must stay protected through release");
+}
+
+#[test]
+fn b2_clear_display_pins_makes_page_evictable_again() {
+    let mut p = PagePolicy::new(2);
+    p.acquire(k(0,0,0));
+    p.acquire(k(0,1,0));
+    p.release(k(0,0,0));
+    p.pin_displayed(k(0,0,0));
+    p.clear_display_pins();        // view no longer displays it next frame
+    p.release(k(0,0,0));          // now release can unprotect (no pin)
+    p.acquire(k(0,1,0));          // touch other so k(0,0,0) is LRU
+    assert_eq!(p.acquire(k(0,2,0)), Decision::AllocateEvicting { slot: 0, evicted: k(0,0,0) });
+}
+
+#[test]
+fn b2_pin_displayed_is_noop_for_nonresident_key() {
+    let mut p = PagePolicy::new(2);
+    p.pin_displayed(k(9,9,9));     // not resident -> must not panic / pin nothing
+    assert!(!p.is_pinned(&k(9,9,9)));
+}
+
+#[test]
+fn b2_whole_capacity_pinned_miss_returns_full_not_corruption() {
+    // Every slot pinned (more displayed pages than capacity): a miss must return Full (caller uses
+    // a coarser page), never evict a visible page.
+    let mut p = PagePolicy::new(2);
+    p.acquire(k(0,0,0)); p.pin_displayed(k(0,0,0));
+    p.acquire(k(0,1,0)); p.pin_displayed(k(0,1,0));
+    assert_eq!(p.acquire(k(0,2,0)), Decision::Full);
+}
+
+#[test]
+fn b2_pinned_slot_excluded_from_lru_victim_search() {
+    // With one pinned + one unprotected page, an eviction must pick the unprotected one.
+    let mut p = PagePolicy::new(2);
+    p.acquire(k(0,0,0)); p.pin_displayed(k(0,0,0));  // pinned (slot 0)
+    p.acquire(k(0,1,0)); p.release(k(0,1,0));        // unprotected, LRU-eligible (slot 1)
+    assert_eq!(p.acquire(k(0,2,0)), Decision::AllocateEvicting { slot: 1, evicted: k(0,1,0) });
+}

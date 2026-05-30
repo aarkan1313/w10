@@ -20,6 +20,14 @@ inverted-ridged valley carving) makes infinite seamless terrain. Kernels never s
 tiling). Targets "Google-Maps-explore" contiguity. Keeps render/grammar/facts/relief_scale. Full context:
 memory `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`; loose ends in `LOOSE_ENDS_LEDGER.md`.
 
+**Roadmap update from structure audit:** `STRUCTURE_AUDIT_EXTRACT.md` has been folded into ROADMAP Phase 5.
+Current next work is **Slice 2A structure-basis salvage** (offline Python, render-first): multifractal
+weighting, stronger recursive warp, ridge/uplift-coupled valleys, and optional Worley/cellular structure
+A/Bs. Slice 2B then fixes the metric/schema set (HI, slope moments, curvature signs, VRM, windowed relief;
+audit `anisotropy`). No Rust/GLSL port until an owner-accepted offline image set exists and B1/B2/B3 are
+closed. True connected drainage is now explicitly Phase 7B (world-anchored coarse flow), not a promise of
+the local height generator.
+
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
 `docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**
@@ -46,8 +54,9 @@ before more param-tuning** (candidate directions: stronger domain warp, ridged-m
 owner's standing "distilled-erosion" idea — offline-run real erosion → learn a cheap LOCAL operator → apply
 online; tracked in the ledger as the big enhancement). **The distillation tooling + the metric fixes are KEPT**
 (they're the param-extraction half and they work); what's under research is the GENERATOR's structure stage.
-**NEXT (owner-chosen): the structure research/review, in parallel with closing the known FIX-NOW work** (ledger
-B1/B2/B3) so the rebuild's KEPT foundation is sound regardless of which structure technique wins.
+**NEXT:** execute ROADMAP Slice 2A (structure-basis salvage) in parallel with closing known FIX-NOW work
+(ledger B1/B2/B3). The distillation tooling remains kept, but scalar tuning is not the next move until the
+generator basis can pass the owner's structure read.
 
 **Slice 1 — generator prototype (OFFLINE, render-first): ACCEPTED by owner eye (2026-05-30).**
 `tools/dem_pack/worldgen_proto.py` (`value_noise`/`fbm`/`ridged_fbm`/`domain_warp`/`generate`) + 7 tests
@@ -62,9 +71,9 @@ ridges/valleys work.** Owner reviewed a de-noise comparison and PREFERRED the cu
 toolkit over de-noised variants — "hard to know until it's in a live scene." **So: NO toolkit change; final
 noise judgment deferred to the live-scene fly.** Honest framing (owner-confirmed): warped noise = PLAUSIBLE
 terrain, NOT real connected erosion (Grand-Canyon look = real-world history); **distilled-erosion is a big
-LATER roadmap enhancement** (ledger), not needed for the foundation. **NEXT: Slice 2 — distill real DEMs
-into biome params (offline).** (Precondition before the RUST build, Slice 3: close ledger B1/B2/B3 + doc
-drift.)
+LATER roadmap enhancement** (ledger), not needed for the foundation. This old "NEXT: Slice 2 distill real
+DEMs" note is superseded by the structure audit above: Slice 2 tooling is built/kept, and the next accepted
+step is Slice 2A structure-basis salvage. (Precondition before the RUST build, Slice 3: close ledger B1/B2/B3.)
 
 [below: prior milestone status — M5/shaded-scale/synthesis — partly superseded by the worldgen rebuild; see
 the LOOSE_ENDS_LEDGER for what's KEEP / FOLD-IN / TABLED.]
