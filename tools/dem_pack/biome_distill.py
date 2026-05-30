@@ -22,7 +22,12 @@ VALLEY_FREQ_RATIO = 1.2      # valley_freq = VALLEY_FREQ_RATIO * base_freq
 WARP_FREQ_K = 2.7            # warp_freq = 1 / (WARP_FREQ_K * dominant_wavelength_m)
 RIDGE_STRENGTH_MAX = 1.0     # clamp ceiling for ridge_strength
 VALLEY_DEPTH_MAX = 1.0       # clamp ceiling for valley_depth
-WARP_AMOUNT_FRAC = 0.35      # warp_amount = WARP_AMOUNT_FRAC * dominant_wavelength_m * flow
+WARP_AMOUNT_FRAC = 0.35      # warp_amount = WARP_AMOUNT_FRAC * BASE_WAVELENGTH_M * flow
+BASE_WAVELENGTH_M = 8000.0   # fixed characteristic feature scale (argmax wavelength was dead ~25km for all)
+VALLEY_RATIO_LO = 0.02       # incision/relief at/below this -> valley_depth 0  (real DEM p10)
+VALLEY_RATIO_HI = 0.12       # incision/relief at/above this -> valley_depth 1  (real DEM p90)
+RIDGE_SLOPE_LO_DEG = 0.0     # slope at/below this -> ridge_strength 0
+RIDGE_SLOPE_HI_DEG = 25.0    # slope at/above this -> ridge_strength 1
 UPPER_MASK_PCTL = 60.0       # ridge_linearity measured on the upper-elevation mask (top 40%)
 BASE_BLUR_SIGMA_PX = 1.0     # smallest octave-band blur sigma in pixels
 
@@ -148,17 +153,35 @@ def _f32(x):
 def params_from_metrics(metrics):
     """Map structural metrics -> the warped-noise generator's knobs via documented simple transforms.
     Every constant is named config above. Returns a BiomeParams dict (worldgen_proto.generate-compatible
-    + slope_bias). All values finite, in-domain, f32-representable (parity-ready for Slice 3/4)."""
-    wl = max(float(metrics["dominant_wavelength_m"]), 1.0)
+    + slope_bias). All values finite, in-domain, f32-representable (parity-ready for Slice 3/4).
+
+    Height-normalized mapping (2026-05-30 revision):
+    - base_freq uses FIXED BASE_WAVELENGTH_M (argmax dominant_wavelength_m was ~25km for EVERY family — dead).
+    - ridge_strength <- slope_bias_deg (steepness character); NOT ridge_linearity (~0.30 for every family — dead).
+    - valley_depth <- incision_depth_m / relief_real_m (height-independent carving fraction).
+    ridge_linearity and dominant_wavelength_m remain in the metrics dict (computed, for diagnostics) but
+    are intentionally NOT read here — changing them must not change any output param."""
+    # fixed characteristic scale — dominant_wavelength_m is intentionally NOT read (dead argmax)
+    wl = BASE_WAVELENGTH_M
     base_freq = 1.0 / wl
     # amp_profile normalized so band0==1.0 (already normalized by bandpass; re-assert defensively)
     amps = np.asarray(metrics["amp_profile"], dtype=np.float64)
     a0 = amps[0] if abs(amps[0]) > 1e-12 else 1.0
     amps = (amps / a0)
-    ridge_strength = float(np.clip(metrics["ridge_linearity"], 0.0, 1.0)) * RIDGE_STRENGTH_MAX
-    # valley_depth: incision normalized by relief -> a 0..1 fraction, clamped
     relief = max(float(metrics["relief_real_m"]), 1.0)
-    valley_depth = float(np.clip(metrics["incision_depth_m"] / relief, 0.0, 1.0)) * VALLEY_DEPTH_MAX
+    # ridge_strength <- slope_bias_deg normalized to [RIDGE_SLOPE_LO_DEG, RIDGE_SLOPE_HI_DEG]
+    # ridge_linearity is intentionally NOT read (structure-tensor coherence ~0.30 for every family — dead)
+    slope_deg = float(metrics["slope_bias_deg"])
+    ridge_strength = float(np.clip(
+        (slope_deg - RIDGE_SLOPE_LO_DEG) / (RIDGE_SLOPE_HI_DEG - RIDGE_SLOPE_LO_DEG),
+        0.0, 1.0
+    )) * RIDGE_STRENGTH_MAX
+    # valley_depth <- incision/relief (height-independent carving fraction), normalized to [VALLEY_RATIO_LO, VALLEY_RATIO_HI]
+    valley_ratio = float(metrics["incision_depth_m"]) / relief
+    valley_depth = float(np.clip(
+        (valley_ratio - VALLEY_RATIO_LO) / (VALLEY_RATIO_HI - VALLEY_RATIO_LO),
+        0.0, 1.0
+    )) * VALLEY_DEPTH_MAX
     warp_amount = WARP_AMOUNT_FRAC * wl * float(np.clip(metrics["anisotropy"], 0.0, 1.0))
     p = {
         "relief_m": _f32(relief),
@@ -170,7 +193,7 @@ def params_from_metrics(metrics):
         "ridge_freq": _f32(RIDGE_FREQ_RATIO * base_freq),
         "valley_freq": _f32(VALLEY_FREQ_RATIO * base_freq),
         "warp_freq": _f32(1.0 / (WARP_FREQ_K * wl)),
-        "slope_bias": _f32(metrics["slope_bias_deg"]),  # STORED; not yet consumed by generate()
+        "slope_bias": _f32(slope_deg),  # STORED; not yet consumed by generate()
     }
     return p
 

@@ -84,14 +84,15 @@ def test_metrics_use_metadata_for_relief_and_slope():
 import worldgen_proto as wg  # for the bounds + non-repetition checks
 
 
-def _metrics(relief=1200.0, ridge=0.8, incis=300.0, aniso=0.7, wl=6000.0, slope=20.0):
+def _metrics(relief=1200.0, incis=120.0, slope=10.0, aniso=0.7, wl=10000.0):
+    # incis/relief = carving SHAPE (height-independent); slope = steepness character.
     return {
         "relief_real_m": relief,
         "amp_profile": [1.0, 0.5, 0.25, 0.12, 0.06, 0.03],
-        "ridge_linearity": ridge,
+        "ridge_linearity": 0.3,            # DEAD metric — present but must NOT drive ridge_strength
         "incision_depth_m": incis,
         "anisotropy": aniso,
-        "dominant_wavelength_m": wl,
+        "dominant_wavelength_m": wl,        # DEAD metric — present but must NOT drive base_freq
         "slope_bias_deg": slope,
     }
 
@@ -119,25 +120,50 @@ def test_params_from_metrics_in_domain_and_finite():
             assert float(np.float32(v)) == pytest.approx(v, rel=1e-5), f"{k} not f32-representable"
 
 
-def test_freqs_derive_from_dominant_wavelength():
-    p = bd.params_from_metrics(_metrics(wl=6000.0))
-    assert np.isclose(p["base_freq"], 1.0 / 6000.0)
-    assert np.isclose(p["ridge_freq"], bd.RIDGE_FREQ_RATIO / 6000.0)
-    assert np.isclose(p["valley_freq"], bd.VALLEY_FREQ_RATIO / 6000.0)
+def test_valley_depth_from_height_normalized_incision():
+    # deeper carving RELATIVE TO RELIEF -> more valley_depth; height alone does not.
+    shallow = bd.params_from_metrics(_metrics(relief=2000.0, incis=40.0))   # incis/relief = 0.02
+    deep = bd.params_from_metrics(_metrics(relief=2000.0, incis=240.0))     # incis/relief = 0.12
+    assert deep["valley_depth"] > shallow["valley_depth"] + 0.3
+    # SAME shape ratio at DIFFERENT heights -> SAME valley_depth (height-independent)
+    small = bd.params_from_metrics(_metrics(relief=500.0, incis=30.0))      # ratio 0.06
+    big = bd.params_from_metrics(_metrics(relief=4000.0, incis=240.0))      # ratio 0.06
+    assert abs(small["valley_depth"] - big["valley_depth"]) < 0.05
 
 
-def test_more_ridged_metrics_give_more_ridge_strength():
-    lo = bd.params_from_metrics(_metrics(ridge=0.1))
-    hi = bd.params_from_metrics(_metrics(ridge=0.9))
-    assert hi["ridge_strength"] > lo["ridge_strength"]
+def test_ridge_strength_from_slope_not_height():
+    # steeper -> more ridge_strength
+    gentle = bd.params_from_metrics(_metrics(slope=2.0))
+    steep = bd.params_from_metrics(_metrics(slope=20.0))
+    assert steep["ridge_strength"] > gentle["ridge_strength"] + 0.3
+    # THE TRAP GATE: a tall-but-smooth biome (high relief, LOW slope, low carving) must NOT read as ridgy
+    tall_smooth = bd.params_from_metrics(_metrics(relief=4000.0, slope=2.0, incis=80.0))  # ratio 0.02
+    assert tall_smooth["ridge_strength"] < 0.3      # height does not buy ridge_strength
+    assert tall_smooth["valley_depth"] < 0.2        # nor valley_depth
+
+
+def test_freqs_positive_and_derived_from_base():
+    p = bd.params_from_metrics(_metrics())
+    assert p["base_freq"] > 0
+    assert np.isclose(p["ridge_freq"], bd.RIDGE_FREQ_RATIO * p["base_freq"])
+    assert np.isclose(p["valley_freq"], bd.VALLEY_FREQ_RATIO * p["base_freq"])
+    assert p["warp_freq"] > 0
+
+
+def test_dead_metrics_do_not_drive_params():
+    # changing the DEAD metrics (ridge_linearity, dominant_wavelength_m) must NOT change any param
+    base = bd.params_from_metrics(_metrics())
+    m2 = _metrics(); m2["ridge_linearity"] = 0.95; m2["dominant_wavelength_m"] = 99999.0
+    changed = bd.params_from_metrics(m2)
+    assert base == changed, "dead metrics still influence params — they must not"
 
 
 def test_aggregate_median_is_per_metric_median():
-    ms = [_metrics(relief=1000.0, ridge=0.2), _metrics(relief=2000.0, ridge=0.8),
-          _metrics(relief=1500.0, ridge=0.5)]
+    ms = [_metrics(relief=1000.0, slope=5.0), _metrics(relief=2000.0, slope=15.0),
+          _metrics(relief=1500.0, slope=10.0)]
     agg = bd.aggregate_median(ms)
     assert agg["relief_real_m"] == 1500.0          # median of [1000,2000,1500]
-    assert agg["ridge_linearity"] == 0.5
+    assert agg["slope_bias_deg"] == 10.0           # median of [5,15,10]
     assert len(agg["amp_profile"]) == bd.N_OCTAVES  # per-band median
 
 
