@@ -79,12 +79,16 @@ KEPT clipmap/parity architecture. See memory `worldgen10-wg9-height-recipe` + `w
      `_exit_tree`+`_pool` in m3_review.gd; `free_all` at the 3 pool-owning returns in m5_detail_check.gd;
      the 2 wrong comments deleted). `cargo check` clean. **NOT yet gate-verified** — needs the editor closed
      to rebuild the real DLL + run `--suite m3` (8 checks) to confirm no regression. ← the ONE B1 to-do left.
-  2. **B3** (perf-gate terrain-vs-sky + detail on/off) — ✅ **ALREADY DONE + committed** (found by audit:
-     the perf gate already has `MIN_TERRAIN_FRAC`/`_terrain_frac`/`SKY` + `DETAIL_DELTA_MIN`/detail on-off).
-     No action needed.
+  2. **B3** (perf-gate terrain-vs-sky + detail on/off) — ❌ **STILL OPEN** (an earlier note in this session
+     wrongly said "done" off a corrupted file read; a `git show HEAD` audit corrected it). The committed
+     `m5_perf_hardened_check.gd` still has the hole: nonblack counts any `c.r/g/b > 0.03` so a 100%-sky frame
+     scores 1.0 (no `SKY`/`MIN_TERRAIN_FRAC`/`_terrain_frac`), and detail is set once, never on/off-asserted
+     (`DETAIL_DELTA_MIN` absent). GDScript-only fix → can do without a rebuild. Fix = terrain-vs-sky nonblack
+     (count a pixel real only if it differs from the sky color) + a detail-on-vs-off frame-delta assertion.
   3. **B2** (structural never-black + capacity-pressure gate) — ❌ **STILL OPEN** (Rust). Protect held coarse
      pages from eviction + re-validate the held RID maps to its key before display + a capacity-pressure gate.
      Best batched with the B1 rebuild in one editor-close window.
-- **Precondition for Slice 3 (first runtime build):** B1 gate-verified + B2 done. (B3 already satisfied.)
+- **Precondition for Slice 3 (first runtime build):** B1 gate-verified + B2 done + B3 done. (Plan: do B3
+  GDScript-only now, then one editor-close window for B1 rebuild + B2 + full gate run verifies all three.)
 (Owner may choose to fold some of these INTO the structure rebuild instead of before — triage pending the
 research outcome.)
