@@ -7,6 +7,37 @@ point — see DESIGN §7.3.)
 
 ---
 
+## CURRENT DIRECTION: Worldgen Core rebuild (param-driven warped-noise) — Slice 1 ACCEPTED
+
+Spec: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`. After the spectral approach was refuted
+by eye, the owner steered a new height-core architecture: distill real DEMs → per-biome structural PARAMS →
+grammar blends them → one warped-noise GENERATOR (domain warp + macro fBm landmass + ridged ridgelines +
+inverted-ridged valley carving) makes infinite seamless terrain. Kernels never sampled (DNA library, no
+tiling). Targets "Google-Maps-explore" contiguity. Keeps render/grammar/facts/relief_scale. Full context:
+memory `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`; loose ends in `LOOSE_ENDS_LEDGER.md`.
+
+**Slice 1 — generator prototype (OFFLINE, render-first): ACCEPTED by owner eye (2026-05-30).**
+`tools/dem_pack/worldgen_proto.py` (`value_noise`/`fbm`/`ridged_fbm`/`domain_warp`/`generate`) + 7 tests
+green incl. the NON-REPETITION autocorrelation gate (no spike at the old 8192 m page / 50-100 km kernel
+periods → the warped field provably doesn't tile). `render_worldgen.py` → hillshaded PNGs for 3 biomes
+(200 km + 10 km closeup + transition strip). **Owner verdict: "pretty good, a little noisy."** Mountains
+read as a real range from above (ranges/valleys/canyons, no grid/repeat), plains as soft lowlands, badlands
+distinct, transition seamless (no hard line) — ALL from one `generate()` with different knobs (the
+architecture working). **Scale finding (caught+fixed mid-render): the macro base octave must be LOW-freq
+continental (~45-80 km) or a 200 km view is high-freq "sandpaper"; the 10 km closeup proved the warped
+ridges/valleys work.** Owner reviewed a de-noise comparison and PREFERRED the current (more-detailed)
+toolkit over de-noised variants — "hard to know until it's in a live scene." **So: NO toolkit change; final
+noise judgment deferred to the live-scene fly.** Honest framing (owner-confirmed): warped noise = PLAUSIBLE
+terrain, NOT real connected erosion (Grand-Canyon look = real-world history); **distilled-erosion is a big
+LATER roadmap enhancement** (ledger), not needed for the foundation. **NEXT: Slice 2 — distill real DEMs
+into biome params (offline).** (Precondition before the RUST build, Slice 3: close ledger B1/B2/B3 + doc
+drift.)
+
+[below: prior milestone status — M5/shaded-scale/synthesis — partly superseded by the worldgen rebuild; see
+the LOOSE_ENDS_LEDGER for what's KEEP / FOLD-IN / TABLED.]
+
+---
+
 ## MILESTONE: Shaded terrain at the right scale (the WG9 looks-alright baseline) — IN PROGRESS
 
 Spec: `docs/superpowers/specs/2026-05-30-shaded-terrain-at-scale-design.md`. Closing the owner's "still a
