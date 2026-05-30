@@ -64,6 +64,9 @@ adaptable down to 1-10m near-field detail.** Recipe = the WG9 blueprint (macro f
 ranges + carved valleys + DEMOTED kernel overlay), built adaptable (every layer a knob), fitting the
 KEPT clipmap/parity architecture. See memory `worldgen10-wg9-height-recipe` + `worldgen10-north-star-vision`.
 
+> **See `docs/plans/SESSION_HANDOFF_2026-05-30.md` for the latest point-in-time state + the exact remaining
+> steps (rebuild-verify B1/B2/B3, write the B2 capacity-pressure gate, structure research).**
+
 ## Close-out status (updated 2026-05-30, late)
 - **Doc-drift (the A-* items): ✅ DONE** (the doc-reconciliation pass — HANDOFF/DESIGN/ROADMAP/STATUS/
   memory + 2 cold-read validations).

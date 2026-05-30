@@ -5,6 +5,10 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
+> point-in-time state (Slice 2 paused for structure research; B1/B2/B3 source-fixed+committed but the
+> Rust ones need an editor-closed rebuild + windowed gates to verify; `main` ~21 ahead of origin, unpushed).
+
 ---
 
 ## CURRENT DIRECTION: Worldgen Core rebuild (param-driven warped-noise) — Slice 2 PAUSED for a structure rethink
