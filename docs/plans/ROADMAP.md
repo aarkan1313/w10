@@ -248,6 +248,57 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 > rather than pure noise). M5–M7 below are the systems that MODULATE/REFINE how the kernels
 > combine — and are where the current "squareness / spiky / extreme" look gets fixed.
 
+## ⚖️ SCALE GAP vs WG9 — the "get to AAA scale" analysis (2026-05-30)
+
+The owner: "W9 had the scale we want down." Read WG9's ACTUAL scale config (READ-ONLY ref) and
+compared to WG10. The blobby/spiky look is mostly a **scale-config gap**, and it reframes M5–M7.
+
+**WG9 ran a 3-TIER mesh stack** (each tier its own node), near→far:
+- **Local detail patches** (`terrain_detail_tier_policy.gd`): 256 m patch × 257 verts → **1 m vertex
+  spacing**, with per-family `detail_scale_m` = **22–62 m** amplitude. (The fine "you're standing on
+  real ground" tier.)
+- **Base chunks** (`terrain_settings.gd`): `CHUNK_SIZE_M=2048` × 129 verts → **16 m spacing**.
+- **Far clipmap** (`terrain_far_clipmap_node.gd`): `vertices_per_side=129`, `base_spacing_m=64` → 64 m+,
+  spacing doubling per level (the same clipmap principle WG10 uses).
+- **Per-family relief** (`relief_scale_m`): **190–640 m**. Region size 32768 m.
+
+**WG10 NOW** (one unified GPU clipmap — the deliberate anti-WG9-perf design):
+- `Wg10ClipmapRings`: `GRID_RES=64` verts/tile, level-0 span 8192 m → **128 m vertex spacing** (finest!).
+  `GRID_RES` is WG10's analogue of WG9's `vertices_per_side` (64 vs 129).
+- dem_v1 per-family relief ≈ **990–2765 m** (z-score DEM, ~4× WG9).
+- No fine detail tier yet (that's M5); detail amp I just set to 350 m (a coarse-mesh brute-force, wrong).
+
+**THE THREE SCALE GAPS (root of "blobby / spiky / extreme"):**
+1. **Mesh density: WG10 finest = 128 m vs WG9 near = 1–16 m → WG10 is 8–128× COARSER.** This is the
+   PRIMARY "blobby" cause — WG10's mesh physically cannot carry sub-128 m shape. **M5 shader detail
+   can't fix a 128 m mesh** (you'd paint detail the geometry can't hold — exactly the S1 octave-
+   aliasing we just hit). The fix is finer NEAR-field density.
+2. **Vertical relief: WG10 ≈ 990–2765 m vs WG9 190–640 m → WG10 ~4× TOO TALL.** The "extreme cliffs/
+   spiky" complaint, quantified. A pack rescaled to WG9-range relief (~200–600 m) reads believable.
+3. **Detail amplitude/model: WG9 = subtle 22–62 m on a 1 m mesh; WG10 = 350 m guess on a 128 m mesh.**
+   The right model is WG9's: fine near-mesh + MODEST detail, NOT huge detail on a coarse mesh.
+
+**THE ARCHITECTURAL TENSION (do NOT just copy WG9's numbers):** WG9's 1–16 m near meshes at distance
+are LITERALLY what killed its perf (128 ms/chunk, 5 fps — the failure WG10 exists to avoid). The goal
+is **WG9's NEAR-FIELD density (1–16 m at the finest ring only) delivered through WG10's clipmap, which
+degrades to coarse far rings — without WG9's per-chunk-sync death.** WG10's clipmap is BUILT for this
+(fine ring near camera, coarse far, GPU pages, never-black, p99<6 ms proven). It is currently just
+CONFIGURED far too coarse. The levers, in order of impact:
+- **(a) Raise finest-ring density** (GRID_RES 64 → 128/256, OR add finer levels with smaller base_span
+  so the near ring reaches ~1–16 m spacing) — measured on the S4 hardened p99 gate (more near verts is
+  the real cost; the clipmap means only the NEAR ring pays it, far rings stay cheap).
+- **(b) Rescale pack relief to ~WG9 range** (~200–600 m) — a pack/data change (M7 / pack tuning), the
+  single biggest "spiky→believable" lever, cheap.
+- **(c) THEN M5 detail at WG9-modest amplitude** (~20–60 m) on the now-fine near mesh — detail that the
+  geometry can actually carry, the way WG9 did it.
+
+**Roadmap implication:** the current M5 (shader detail) is NECESSARY but NOT SUFFICIENT for AAA scale —
+it must be paired with **finest-ring mesh-density tuning** (a config lever, partly the deferred M3
+"tune GRID_RES vs real assets" task) and **pack-relief rescaling** (M7 / data). Sequence to AAA look:
+finer near mesh (config) → saner relief (data) → modest M5 detail (shader) → M6 normals (hide remaining
+facets) → M7 erosion (carve cliffs). M5 alone on a 128 m mesh will keep looking blobby — which is
+exactly the S1 fly finding. This analysis is WHY.
+
 ## Milestone 5 — Detail & masks (GPU, render-only)
 
 - [ ] Detail/displacement layer (bounded, shader-only, edge-safe). [Fixes the "bare/blobby"
