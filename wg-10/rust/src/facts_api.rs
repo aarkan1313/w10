@@ -67,4 +67,34 @@ impl Wg10Facts {
         let delta = self.edits.delta(x, z) as f64;
         facts::composed_height(base, delta, self.floor, self.ceil)
     }
+
+    /// Add a circular edit stamp (crater/mound). `depth` signed metres (neg = dig), `radius` m,
+    /// `falloff` in [0,1] (0 = flat dent, 1 = smooth cosine fade). Takes effect on the next
+    /// get_height/get_collision_field (no cache). Ignored if radius <= 0.
+    #[func]
+    fn apply_edit(&mut self, cx: f64, cz: f64, radius: f64, depth: f64, falloff: f64) {
+        if radius <= 0.0 {
+            godot_warn!("Wg10Facts: apply_edit ignored, radius <= 0 ({radius})");
+            return;
+        }
+        self.edits.add(cx, cz, radius, depth as f32, falloff as f32);
+    }
+
+    /// Remove all edits (terrain returns to pure base).
+    #[func]
+    fn clear_edits(&mut self) {
+        self.edits.clear();
+    }
+
+    /// Set the bedrock floor + ceiling clamp (metres). Rejected (config unchanged) if floor > ceil.
+    /// Defaults are unbounded; e.g. set_bedrock(-2.0, 1e30) gives "dig down 2 m then hit bedrock".
+    #[func]
+    fn set_bedrock(&mut self, floor: f64, ceiling: f64) {
+        if floor > ceiling {
+            godot_error!("Wg10Facts: set_bedrock rejected, floor {floor} > ceiling {ceiling}");
+            return;
+        }
+        self.floor = floor;
+        self.ceil = ceiling;
+    }
 }

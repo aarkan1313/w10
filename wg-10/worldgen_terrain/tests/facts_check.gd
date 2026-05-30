@@ -30,6 +30,31 @@ func _run() -> int:
 		if fv != bv:
 			errors.append("no-edit Facts height != base @ %s: %f vs %f" % [str(c), fv, bv])
 
+	# stamp: digging a crater lowers get_height at the centre by ~depth; base elsewhere unchanged.
+	var probe := Vector2(40000.0, 9000.0)
+	var before: float = facts.call("get_height", probe.x, probe.y)
+	facts.call("apply_edit", probe.x, probe.y, 200.0, -50.0, 1.0)
+	var after: float = facts.call("get_height", probe.x, probe.y)
+	if not (after < before - 40.0):
+		errors.append("stamp did not dig: before=%f after=%f" % [before, after])
+	# a point well outside the stamp is unchanged
+	var far_before: float = h.call("height", probe.x + 5000.0, probe.y, SEED)
+	var far_after: float = facts.call("get_height", probe.x + 5000.0, probe.y)
+	if far_after != far_before:
+		errors.append("stamp leaked outside radius: %f vs %f" % [far_after, far_before])
+	# bedrock clamp: a huge dig is floored, not bottomless.
+	facts.call("set_bedrock", before - 5.0, 1.0e9)
+	facts.call("apply_edit", probe.x, probe.y, 200.0, -100000.0, 0.0)
+	var clamped: float = facts.call("get_height", probe.x, probe.y)
+	if absf(clamped - (before - 5.0)) > 0.5:
+		errors.append("bedrock did not clamp: got %f expected ~%f" % [clamped, before - 5.0])
+	# clear_edits + unbounded bedrock restores pure base.
+	facts.call("clear_edits")
+	facts.call("set_bedrock", -1.0e30, 1.0e30)
+	var restored: float = facts.call("get_height", probe.x, probe.y)
+	if absf(restored - before) > 1e-6:
+		errors.append("clear_edits did not restore base: %f vs %f" % [restored, before])
+
 	if not errors.is_empty():
 		for er in errors: push_error(er)
 		print("[wg10-facts] status=fail errors=%d" % errors.size()); return 1

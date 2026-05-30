@@ -21,9 +21,7 @@ impl EditProvider for NoEdits {
 /// One circular edit stamp: a crater (negative depth) or mound (positive) centred at (cx,cz) with
 /// the given radius (m), depth (signed m), and falloff in [0,1] (0 = flat dent to the edge,
 /// 1 = smooth cosine fade to 0 at the edge).
-// fields are written by `add` in slice 1 and READ by `delta` in slice 2; allow until then.
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub struct Stamp {
     pub cx: f64,
     pub cz: f64,
@@ -62,16 +60,37 @@ impl StampEdits {
         self.stamps.clear();
     }
 
-    #[allow(dead_code)]
     pub fn len(&self) -> usize {
         self.stamps.len()
     }
 }
 
 impl EditProvider for StampEdits {
-    fn delta(&self, _x: f64, _z: f64) -> f32 {
-        // M4 slice 1 stub: no summation yet -> always 0 (matches NoEdits, so base parity holds).
-        // Slice 2 replaces this with the per-stamp cosine-falloff sum.
-        0.0
+    fn delta(&self, x: f64, z: f64) -> f32 {
+        let mut sum = 0.0f32;
+        for s in &self.stamps {
+            let dx = x - s.cx;
+            let dz = z - s.cz;
+            let dist = (dx * dx + dz * dz).sqrt();
+            if dist >= s.radius {
+                continue; // outside this stamp
+            }
+            let t = (dist / s.radius) as f32; // 0 at centre .. 1 at edge
+            // weight: 1 in the flat core, easing to 0 at the edge over the `falloff` fraction.
+            // falloff 0 -> flat dent (weight 1 until the edge); falloff 1 -> cosine from centre.
+            let w = if s.falloff <= 1e-6 {
+                1.0
+            } else {
+                let inner = 1.0 - s.falloff; // start of the fade band, as a fraction of radius
+                if t <= inner {
+                    1.0
+                } else {
+                    let u = (t - inner) / s.falloff; // 0..1 across the fade band
+                    0.5 * (1.0 + (std::f32::consts::PI * u).cos()) // cosine 1 -> 0
+                }
+            };
+            sum += s.depth * w;
+        }
+        sum
     }
 }
