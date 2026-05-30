@@ -120,13 +120,28 @@ found a working alternative:**
   real, exposed, strongly load-responsive (heavy scene = 242,406 primitives / 3 draw calls vs ~0 light).
   A monotonic GEOMETRY-LOAD metric that a regression moves directly + deterministically, no async issue.
 
-**⇒ REVISED hardened-gate design (honest, given what THIS box exposes):** a COMPOSITE of REAL signals, not
-a single fake GPU-time number — (1) **primitive count** at representative fly scale (real geometry load:
-asserts the scene drew the expected millions of tris = did-real-work, AND bounds it = a density regression
-fails), (2) **CPU `view.update` time** (already real — streaming/scheduling cost), (3) **did-real-work
-asserts** (pages streamed, nonblack, relief variety, detail present — can't pass on an empty scene), (4)
-honest DOC that true GPU-*time* isn't measurable here so the gate uses load+CPU-time+work-proof instead of
-a hollow ms. This DIRECTLY answers the owner's "is profiling real?" — the metrics now MOVE with real work.
+**⇒ RESOLVED — REAL GPU TIME IS AVAILABLE after all (research + verify, 2026-05-30).** The earlier "no GPU
+time" wall was a WRONG METHOD NAME, not a missing capability. Web research (cited in commit) + a verify
+probe found:
+- **`RenderingServer.viewport_get_measured_render_time_gpu(viewport_rid)`** returns REAL per-viewport GPU
+  milliseconds. Enable once with `viewport_set_measure_render_time(rid, true)`. **VERIFIED on this D3D12
+  box:** light scene 0.0196 ms vs heavy 0.1761 ms = **8.97× load response** (wall-time was 1.00–1.28× =
+  useless). Non-zero, strongly load-responsive.
+- **Zero observer-effect (the owner's constraint):** it's a DEFERRED read of an already-completed frame's
+  timestamp (write this frame, read a finished frame N later) — **no fence, no GPU stall.** Godot docs
+  explicitly state it "accurately reflects GPU utilization even if framerate is capped via V-Sync" — which
+  is exactly why it works where the vsync-pinned wall-time failed. Returns 0 only on Metal (not us).
+- The earlier `get_captured_timestamp_gpu_RESULT` has_method=false was a NAME bug — the real RenderingDevice
+  method is `get_captured_timestamp_gpu_TIME` (a finer per-pass alternative, also non-stalling, if needed).
+- Native D3D12 timestamp via `get_driver_resource` was researched + REJECTED (can't inject markers into
+  Godot's draw command list; crash-history fragility) — not needed, the viewport timer is the clean path.
+
+**⇒ HARDENED-GATE DESIGN (final):** primary signal = `viewport_get_measured_render_time_gpu` (REAL GPU ms,
+no stall) for the p99/budget assertion, PLUS the did-real-work co-asserts (pages streamed + nonblack +
+relief/detail present + primitive count in expected range) so a green number provably = the real streaming-
+clipmap-with-detail render at fly scale. CPU `view.update` time kept as the streaming-cost signal. This
+fully answers the owner's "is profiling real?" — a real GPU-ms number that MOVES 9× with load, can't pass
+on an empty scene, and doesn't distort what it measures.
 
 [superseded plan] The S4 hardened perf gate was to measure TRUE GPU time
 via `RenderingDevice` timestamp queries (NOT wall-time-per-draw), AND co-assert the scene did REAL WORK
