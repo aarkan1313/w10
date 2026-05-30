@@ -299,6 +299,26 @@ finer near mesh (config) → saner relief (data) → modest M5 detail (shader) �
 facets) → M7 erosion (carve cliffs). M5 alone on a 128 m mesh will keep looking blobby — which is
 exactly the S1 fly finding. This analysis is WHY.
 
+**DECISION (2026-05-30, owner: "whatever you think, pillars, long-term fix"):** resolved via the four
+pillars. **Pillar 4 (no shortcuts):** finishing M5 shader-detail on a known-too-coarse 128 m mesh is
+polishing a broken substrate — rejected. **Pillar 2 (perf):** mesh density is the ONE scale lever that
+costs frame budget and is exactly where WG9 died, so it CANNOT be pushed without a TRUSTWORTHY perf
+gate — and we proved the current p99 method is GPU-insensitive (1.28× on a 90× load). Therefore the
+honest **hardened perf gate is the literal PREREQUISITE** for any scale work. **Long-term-best:** scale
+is deeply coupled (density ↔ perf ↔ relief ↔ detail-tier) and foundational, so it earns a real
+brainstorm → spec → plan pass (vs WG9's proven 3-tier stack), not ad-hoc knob-twiddling. **Sequence:**
+1. **Build the hardened perf gate** — true GPU time (RenderingDevice timestamps) + did-real-work asserts
+   at a representative multi-level FLY scale (not a close single-tile capture). Non-blocked (no visual
+   judgment); already mandated by the owner's "is profiling real?" callout; now also the scale prereq.
+2. **Brainstorm a unified "scale & density" milestone** — near-ring density target (~1–16 m), relief
+   rescale, how the M5 detail tier fits — designed coherently against WG9's 3-tier stack. **M5's
+   remaining slices (S2 LOD fade, S3 descriptor, S4 config) FOLD INTO this** as the near-mesh + modest-
+   detail tier; M5 is not abandoned, it's absorbed into the right-scoped scale design.
+3. M6 normals → M7 erosion + relief rescale.
+M5 S1 (the shader-detail seam + edit-safe/bounded/parity contracts) STAYS as proven foundation; the
+visibility fix (amp/freq/start-OFF) lets the owner confirm the seam works, then it's tuned at proper
+scale inside the scale milestone.
+
 ## Milestone 5 — Detail & masks (GPU, render-only)
 
 - [ ] Detail/displacement layer (bounded, shader-only, edge-safe). [Fixes the "bare/blobby"
