@@ -49,13 +49,26 @@ speed? any perceived seam the gate's epsilon missed?). **Until that fly, Slice 1
 ACCEPTED.** Owner deferred the fly; resuming Slices 2–4 should keep this provisional (S2 LOD fade
 modifies this same detail — if the owner's fly finds a look problem, fix before/with S2).
 
-**Perf de-risked early (throwaway probe, 2026-05-30):** ran the m3_accept ~1000 m/s scripted flight
-with detail OFF vs ON (the probe was uncommitted, cleaned up). **detail OFF p99 = 1.90 ms · detail ON
-p99 = 1.82 ms · delta ≈ 0** — the S1 fBm vertex math costs no measurable frame time (≈40 ALU ops over a
-64² mesh, no extra memory traffic), ~3× under the 6 ms budget. So S1 detail is perf-free; the only M5
-slice with real per-vertex cost will be S3's descriptor (+4 page taps), which the S4 p99 gate measures
-against this clean baseline. (The formal detail-on p99 sign-off is still S4; this is early data, not the
-gate.)
+**Perf de-risked early (throwaway probes, 2026-05-30 — both uncommitted, cleaned up):**
+- Probe A (detail OFF vs ON over the m3_accept ~1000 m/s flight): detail OFF p99 = 1.90 ms · ON = 1.82 ms
+  · delta ≈ 0 → S1 fBm adds no measurable frame time at the current method's resolution.
+- **Probe B (GPU-time honesty — prompted by the owner's "is the profiling measuring REAL work?" callout):**
+  benchmarked a LIGHT scene (4-subdiv, trivial shader) vs a HEAVY scene (9×200-subdiv ≈ 360k verts + a
+  64-iter noise vertex loop) via wall-time-per-`force_draw`, vsync off. **light = 0.686 ms · heavy =
+  0.878 ms · ratio = 1.28×.** VERDICT: **PARTIAL** — wall-time-per-draw captures SOME GPU cost (heavy >
+  light, so not vacuous) but is **dominated by ~0.69 ms of CPU-submit/frame-pacing overhead**, so a ~90×
+  vertex-load increase moved it only 1.28×. **⇒ the current p99 method is GPU-cost-INSENSITIVE** — fine
+  for confirming S1's already-cheap detail, but TOO SOFT as a regression gate (a real GPU regression in
+  M6/M7 could hide under the CPU-submit floor). **This makes the owner's concern concrete and CORRECT.**
+
+**OWNER-MANDATED S4 REQUIREMENT (evidence-backed):** the S4 hardened perf gate MUST measure TRUE GPU time
+via `RenderingDevice` timestamp queries (NOT wall-time-per-draw), AND co-assert the scene did REAL WORK
+(relief variety present + detail non-vacuous + tiles visible + pages streamed/counter-moved + nonblack),
+so a green p99 provably corresponds to the real streaming-clipmap-with-detail render under motion. A
+green number that isn't doing real work is worthless (the WG9 failure mode). The S3 descriptor (+4 page
+taps) is the first slice with real GPU cost — measured against this on the hardened gate. (m3_accept TODAY
+is substantially real — vsync-off + real motion + streaming-proven + nonblack≥0.85 — but its TIMER is the
+soft spot; hardening it is the S4 job.) See memory: profiling-must-be-real.
 
 **Independent pillar-audit of the shipped S1 slice (2026-05-30): all 4 pillars PASS (3 with notes);
 "sound to build S2/S3 on top of."** Confirmed the 3 core contracts independently — bounded (closed-form
