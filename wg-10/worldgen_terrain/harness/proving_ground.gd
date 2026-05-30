@@ -18,23 +18,25 @@ const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const STEP := 4
+const STEP := 5
 const PAGE_PX := 256
 const SEED := 1337
 const BASE_SPAN := 8192.0     # one level-0 page spans this many metres
 const GRID_RES := 64          # mesh cells across the page (vertices = 65x65)
-const CAPACITY := 16    # step 3 needs 9 resident pages; margin to spare
+const CAPACITY := 48    # step 5: 2 levels x 9 + stream-ahead headroom
 const HEIGHT_SCALE := 0.35
 const RELIEF_REF := 2000.0
-# Step 4 streamer tunables (single level for now).
-const NUM_LEVELS := 1
+# Streamer tunables. NUM_LEVELS grows with the step (4 = 1 level; 5+ = 2 levels for never-black).
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5    # velocity lead in SECONDS (clamped by the policy to stay in-ring)
 const MAX_PER_FRAME := 4
 
+var _num_levels: int = 1       # set per step in _ready
 var _pool: Object
 var _streamer: Object          # step 4+: drives page residency from camera pos/vel
-var _step4_tiles: Array = []   # 9 persistent MeshInstance3D re-bound each frame
+var _step4_tiles: Array = []   # step 4: 9 single-level tiles
+# step 5+: per level, 9 persistent MeshInstance3D (level 0 = fine on top, level 1 = coarse under).
+var _level_tiles: Array = []   # Array of Array[MeshInstance3D], indexed [level][slot]
 var _hud: Label
 var _camera: Camera3D
 
@@ -49,6 +51,9 @@ func _ready() -> void:
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
 	add_child(light)
+
+	# levels per step: steps 1-4 are single-level; step 5+ add a coarser level for never-black.
+	_num_levels = 2 if STEP >= 5 else 1
 
 	# --- proven leaves: configure the pool, acquire ONE page ---
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
@@ -66,6 +71,8 @@ func _ready() -> void:
 		_build_step3()
 	elif STEP == 4:
 		_build_step4()
+	elif STEP == 5:
+		_build_step5()
 
 	# --- fly camera ---
 	_camera = load(FLY_CAMERA).new()
@@ -81,7 +88,7 @@ func _ready() -> void:
 		3:
 			# 3x3 spans [0, 3*BASE_SPAN]; centre over the middle page, higher to see all 9.
 			_camera.global_position = Vector3(BASE_SPAN * 1.5, 6000.0, BASE_SPAN * 1.5)
-		4:
+		4, 5:
 			# moving 3x3 follows the camera — start at the origin, a bit up, looking ahead.
 			_camera.global_position = Vector3(0.0, 1800.0, 0.0)
 		_:
@@ -128,7 +135,7 @@ func _build_step3() -> void:
 # HUD `recomputed` counter does NOT climb every frame (no churn), no flicker.
 func _build_step4() -> void:
 	_streamer = ClassDB.instantiate("Wg10Streamer")
-	_streamer.call("configure", _pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
+	_streamer.call("configure", _pool, _num_levels, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	# 9 persistent tiles, each a full level-0 grid mesh, re-placed + re-bound each frame.
 	for _t in range(9):
 		var mi := MeshInstance3D.new()
@@ -175,6 +182,70 @@ func _drive_step4(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> voi
 				mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
 				mat.set_shader_parameter("level_center", Vector2(cox + BASE_SPAN * 0.5, coz + BASE_SPAN * 0.5))
 			slot += 1
+
+# STEP 5: TWO levels for NEVER-BLACK. Level 1 (coarse, span 2x) is a 3x3 ALWAYS drawn underneath;
+# level 0 (fine) is a 3x3 drawn on top, each fine tile shown only when its page is resident. When
+# a fine tile isn't ready yet, the coarse page shows through -> coarse-but-correct terrain, never
+# a hole or wink (this is what kills the edge "switching" of step 4). Morph still OFF (step 6 adds
+# the smooth fine<->coarse blend). render_priority: fine = 1 (on top), coarse = 0 (under).
+func _build_step5() -> void:
+	_streamer = ClassDB.instantiate("Wg10Streamer")
+	_streamer.call("configure", _pool, _num_levels, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
+	_level_tiles.clear()
+	for level in range(_num_levels):
+		var span_l: float = BASE_SPAN * pow(2.0, level)
+		var prio := _num_levels - 1 - level   # finest highest -> drawn on top
+		var tiles: Array = []
+		for _t in range(9):
+			var mi := MeshInstance3D.new()
+			mi.set_mesh(_make_grid_mesh(span_l, GRID_RES))
+			var mat := ShaderMaterial.new()
+			mat.set_shader(load(SHADER))
+			mat.set_shader_parameter("world_span", span_l)
+			mat.set_shader_parameter("coarse_span", span_l)
+			mat.set_shader_parameter("level_half_extent", span_l)
+			mat.set_shader_parameter("height_scale", HEIGHT_SCALE)
+			mat.set_shader_parameter("morph_region", 0.0)   # morph off until step 6
+			mat.set_shader_parameter("relief_ref", RELIEF_REF)
+			mat.set_render_priority(prio)
+			mi.set_material_override(mat)
+			mi.visible = false
+			add_child(mi)
+			tiles.append(mi)
+		_level_tiles.append(tiles)
+
+# Per-frame Step 5 drive: stream both levels, then place each level's 3x3 on its own clamped led
+# centre. Coarse (level 1) ALWAYS shows where resident (the blanket); fine (level 0) shows on top
+# where resident, else the coarse beneath shows through. No fine tile is ever left visible at a
+# stale position.
+func _drive_step5(cam_x: float, cam_z: float, vel_x: float, vel_z: float) -> void:
+	_streamer.call("update", cam_x, cam_z, vel_x, vel_z)
+	var led: Vector2 = _streamer.call("coverage_center", cam_x, cam_z, vel_x, vel_z)
+	for level in range(_num_levels):
+		var span_l: float = BASE_SPAN * pow(2.0, level)
+		var cox: float = floor(led.x / span_l) * span_l
+		var coz: float = floor(led.y / span_l) * span_l
+		var tiles: Array = _level_tiles[level]
+		var slot := 0
+		for dz in range(-1, 2):
+			for dx in range(-1, 2):
+				var ox: float = cox + dx * span_l
+				var oz: float = coz + dz * span_l
+				var mi: MeshInstance3D = tiles[slot]
+				var tex: Object = _pool.call("get_resident_page", level, ox, oz)
+				if tex == null:
+					mi.visible = false
+				else:
+					mi.visible = true
+					mi.position = Vector3(ox + span_l * 0.5, 0.0, oz + span_l * 0.5)
+					var mat: ShaderMaterial = mi.get_material_override()
+					mat.set_shader_parameter("world_span", span_l)
+					mat.set_shader_parameter("height_tex", tex)
+					mat.set_shader_parameter("coarse_height_tex", tex)
+					mat.set_shader_parameter("page_origin", Vector2(ox, oz))
+					mat.set_shader_parameter("coarse_origin", Vector2(ox, oz))
+					mat.set_shader_parameter("level_center", Vector2(cox + span_l * 0.5, coz + span_l * 0.5))
+				slot += 1
 
 # Acquire one level-0 page at world (ox,oz) and build its full-grid tile over world
 # [ox, ox+BASE_SPAN], sampling that page by world UV, morph OFF. Returns the MeshInstance or null.
@@ -238,9 +309,12 @@ func _process(_delta: float) -> void:
 
 	# Step 4+: drive the streamer + moving 3x3 from the camera each frame.
 	var pool_line := ""
-	if STEP == 4 and _streamer != null:
+	if _streamer != null:
 		var v: Vector3 = _camera.call("get_velocity")
-		_drive_step4(p.x, p.z, v.x, v.z)
+		if STEP == 4:
+			_drive_step4(p.x, p.z, v.x, v.z)
+		elif STEP == 5:
+			_drive_step5(p.x, p.z, v.x, v.z)
 		var st: Dictionary = _pool.call("stats")
 		pool_line = "\nresident %d   created %d   recomputed %d   (recomputed should NOT climb while flying steadily)" % [
 			int(st.get("resident", 0)), int(st.get("created", 0)), int(st.get("recomputed", 0))]
@@ -251,6 +325,7 @@ func _process(_delta: float) -> void:
 		2: desc = "STEP 2: TWO adjacent pages — fly the seam at x=%.0f (look for a crack)" % BASE_SPAN
 		3: desc = "STEP 3: 3x3 of level-0 pages — one surface? any internal grid lines?"
 		4: desc = "STEP 4: STREAMER drives a moving 3x3 — fly fast; watch for churn/flicker"
+		5: desc = "STEP 5: 2 levels — coarse blanket UNDER fine. Fly fast: edge should NOT wink (coarse shows through)"
 		_: desc = "STEP %d" % STEP
 	_hud.text = "PROVING GROUND  STEP %d\nfps %d   cam (%.0f, %.0f, %.0f)\n%s%s" % [
 		STEP, Engine.get_frames_per_second(), p.x, p.y, p.z, desc, pool_line]

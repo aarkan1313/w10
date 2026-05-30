@@ -19,6 +19,32 @@ confirmed two pages now join as one continuous landmass. This is why the slice-8
 gate missed it — it compared texel DATA (correct), not the wrapped GPU SAMPLE (wrong). This bug
 was corrupting EVERY tile boundary in the full clipmap.
 
+## Mechanism vs policy (owner clarified, 2026-05-29) — what's fixed vs what's tunable
+The owner asked: "long term we'll have adjustable size/detail/chunk-count — what's best?" The
+answer is a clean split:
+- **MECHANISM (architecture, pillar-fixed, NOT a preference):** a coarser clipmap level is ALWAYS
+  resident under the finer one, so any unready fine tile falls back to coarse-but-correct terrain
+  — never a hole, never a wink. This IS never-black (Pillar 3, never-collapse); it's the
+  structural defense against WG9's black-slab death. Step 5 builds it unconditionally.
+- **POLICY (config, Pillar 1 "no magic numbers", tuned later vs real assets):** page span,
+  number of levels, resident capacity (how many chunks stay loaded), lead_seconds (pre-fetch
+  distance), max_per_frame. These are ALREADY config args to `configure` — we just haven't picked
+  good defaults yet (no real content). The "adjustable size/detail/chunk-count" the owner wants is
+  exactly these, and the architecture already supports them being knobs.
+So: build the never-black fallback now (pillars decide it); the size/detail/capacity stay the
+adjustable config they already are.
+
+## Scale / look is DELIBERATELY a stand-in at this stage (owner asked, 2026-05-29)
+What looks "off-scale" now is test scaffolding, resolved later on the roadmap — NOT a bug to fix
+in the render reset:
+- `HEIGHT_SCALE=0.35`, `BASE_SPAN=8192` (8.2 km/finest page), `GRID_RES=64` (128 m triangles) are
+  proving-ground constants chosen to see shape, not final values. All are CONFIG (pillar 1: no
+  magic numbers) — tuned against real assets once M5/M6 exist.
+- Blue/yellow gradient is debug coloring (height→color); real materials/normals come in M6.
+- The blobby/coarse look = missing high-frequency detail (M5) + no textures (M6) + un-eroded
+  large forms (M7). The `dem_v1` pack is a gate subset placeholder.
+We are proving STRUCTURE (continuity, streaming, LOD) now; scale + look are filled in by M5–M7.
+
 ## The two suspected gaps (hypotheses to confirm, not facts yet)
 
 - **G1 — levels overdraw (not hollow rings).** `clipmap_rings::configure` builds EVERY level as
