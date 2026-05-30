@@ -30,6 +30,9 @@ const WARM_FRAMES := 60        # let streaming + frame times settle (excluded fr
 const MEASURE_FRAMES := 240    # measured window
 const P99_BUDGET_MS := 6.0
 const STALL_CEIL_MS := 33.0    # no single frame worse than this (a visible hitch)
+const COMPUTE_CEIL_MS := 6.0   # a frame that COMPUTES a page must also fit the budget (slice 7
+                               # caching eliminated the 90ms per-page rebuild; a regression to
+                               # per-page recompile/re-upload would blow this again)
 const MIN_NONBLACK := 0.85     # flight POV has sky; terrain must dominate the lower frame
 
 func _init() -> void:
@@ -145,6 +148,8 @@ func _run() -> int:
 		errs.append("p99 %.2f ms > %.1f ms budget (at ~%d m/s)" % [p99, P99_BUDGET_MS, int(SPEED)])
 	if mx > STALL_CEIL_MS:
 		errs.append("stall: max frame %.2f ms > %.1f ms ceiling" % [mx, STALL_CEIL_MS])
+	if compute_ms_max > COMPUTE_CEIL_MS:
+		errs.append("compute-frame spike %.2f ms > %.1f ms (per-page rebuild regressed? caching broken)" % [compute_ms_max, COMPUTE_CEIL_MS])
 
 	pool.call("free_all")
 
