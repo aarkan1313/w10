@@ -193,12 +193,13 @@ Remaining slices (NOT done):
 - [ ] Tune finest-ring spacing + ring count + GRID_RES against real assets (config; no magic
       numbers). The faint mesh-facet creases at grazing angles are a tessellation-density knob,
       hidden for real by M6 normal mapping — NOT a seam.
-- [ ] **MANUAL ACCEPTANCE (the ONE box left to close M3):** owner flies `m3_review.tscn` (now the
-      REAL rebuilt `Wg10TerrainView`) at full speed and confirms no stalls, no black/holes, no
-      inter-tile seam, no switching. (§7.3 — the final authority.) Then retire the proving ground.
-      FIXED post-fold-back: the rotation-vanish + slow-creep chunk-blink were the same frustum-cull
-      bug (flat meshes + GPU displacement, no custom AABB); Wg10ClipmapRings now sets a tall custom
-      AABB per tile — gates green, p99=1.87 ms.
+- [x] **RENDER LAYER STRUCTURALLY DONE (owner-flown).** The reset's proven model is folded into the
+      real `Wg10TerrainView`/`Wg10ClipmapRings`; m3_review flies them (5 levels + fog). Post-fold-back
+      fixes: custom AABB (frustum-cull of displaced meshes), coarsest hold-last-good (boundary-cross
+      blank), and the "loads then unloads" was view-distance > loaded extent (→ 5 levels + matched
+      far/fog), not an unload bug (page is always resident when wanted). All gates green. The full
+      bug list + lessons live in STATUS (COMPONENT_INVENTORY retired into it). Remaining LOD-detail-
+      pop / "squareness" are TEST-RIG SCALE + CONTENT (M6/M7), not render — see below.
 
 > **Diagnosed, fixed ELSEWHERE (not M3):** the "blue squares / hard lines" the owner sees are
 > EXTREME DEM DATA — the `dem_v1` pack height field has ~450 m cliffs over 500 m; deep blue is
