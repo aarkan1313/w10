@@ -100,10 +100,10 @@ gated; trusted-metadata metrics are range/finite asserted.
 | **dominant_wavelength_m** | **computed** — peak band of the amp profile → its centre wavelength in metres (pixels × spacing_m) | `base_freq` | `1 / dominant_wavelength_m` |
 | (derived) | fixed ratios of base_freq (coherent freqs; S1 convention) | `ridge_freq`, `valley_freq` | ridge ≈ 2× base, valley ≈ 1.2× base (config) |
 | (derived) | warp lower-freq than features (S1 convention) | `warp_freq` | `1 / (k · dominant_wavelength_m)`, k≈2.7 (config) |
-| **ridge_linearity** (0..1) | on upper-elevation mask: structure-tensor eigenvalue ratio (λ₁≫λ₂ ⇒ linear/ridgey; λ₁≈λ₂ ⇒ blobby) | `ridge_strength` | clamped linear map → [0, ~1] |
-| **incision_depth** (m) | curvature-gated local relief: depth of valleys below surrounding ridgelines, in real metres | `valley_depth` | normalized by relief → [0, ~1] |
-| **anisotropy/flow** (0..1) | dominant-orientation coherence of the gradient field (directional vs blocky) | `warp_amount` | fraction of dominant_wavelength_m, scaled by flow score (warp in metres, ∝ feature size) |
-| **slope_bias** | median slope angle of the DEM | `slope_bias` | direct — **STORED in schema but NOT yet consumed** by the current `generate()`; documented, consumed in a later generator rev (no silent dead field, no silent generator change) |
+| **ridge_linearity** (0..1) | **computed** (WG9 ridge_density is dead-constant 0.100) — on upper-elevation mask: structure-tensor eigenvalue ratio (λ₁≫λ₂ ⇒ linear/ridgey; λ₁≈λ₂ ⇒ blobby) | `ridge_strength` | clamped linear map → [0, ~1] |
+| **incision_depth** (m) | **computed** (WG9 valley_density is dead-constant 0.100) — curvature-gated local relief: depth of valleys below surrounding ridgelines, in real metres | `valley_depth` | normalized by relief → [0, ~1] |
+| **anisotropy/flow** (0..1) | **computed** (metadata anisotropy_score too weak, 0.19–0.36) — dominant-orientation coherence of the gradient field | `warp_amount` | fraction of dominant_wavelength_m, scaled by flow score (warp in metres, ∝ feature size) |
+| **slope_bias** | **metadata** `mean_slope_deg` (vetted, clean separation 10.5°/1.6°/0.4°) | `slope_bias` | direct — **STORED in schema but NOT yet consumed** by the current `generate()`; documented, consumed in a later generator rev (no silent dead field, no silent generator change) |
 
 **Honest caveat (spec §4 of the parent):** which metrics best capture "looks like mountains" is the tuning
 part. v1 is a sensible starting set; renders + the owner's eye drive refinement; the schema is extensible.
