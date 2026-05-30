@@ -4,7 +4,16 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-30 (**M0–M4 DONE, all gates green** — cargo 115, fast 6/6, gpu 4/4, m3 6/6. M3 render layer rebuilt prove-one-thing-at-a-time + folded into the real classes (structurally done; bug list + lessons in STATUS). M4 Facts API DONE: drop-in `Wg10Facts` — `get_height` = clamp(base + pluggable edit-provider, bedrock, ceiling), sparse Jolt-ready `get_collision_field` (CPU/no-readback), circular-stamp edit seam (collidable), off-frame GPU `bake_collision_region`; visible==collision parity 0.0009 m. Added **Milestone 8** (VISIBLE editable terrain — the other half of the M4 seam). **NEXT: M5 — detail & masks.** The "squareness/blobby/LOD-pop" remaining are TEST-SCALE + CONTENT (M5–M7), not render bugs; the foundation is AAA-capable, the look is downstream.)
+Last updated: 2026-05-30 (**M0–M4 DONE; MAJOR PIVOT — height core being rebuilt.** Gates: cargo 115 · fast
+6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15. M0-M4 (toolchain, deterministic gen, GPU parity, render
+pipeline, Facts API) are real + done. **But an owner fly showed the terrain reads blobby/placed/tiling** —
+root-caused to `sample_kernel` reading DEMs as TILING textures (kernel = the whole height). A spectral fix
+was refuted by eye (spectrum discards phase=structure). After a full re-vision, the height core is being
+rebuilt as **parameter-driven warped-noise** (Phase 5 below). The OLD M5-detail/M6-materials/M7-erosion
+milestones are SUPERSEDED + re-sequenced into the new plan. Current truth: vision spec
+`docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md`, height-core spec `…/2026-05-30-worldgen-
+core-design.md`, `docs/plans/LOOSE_ENDS_LEDGER.md`, STATUS.md top. **NEXT: worldgen Slice 2 (distill DEMs →
+biome params).**)
 
 [history] M3 slice 8 (pre-reset) — seam + geomorph + continuity gate; superseded by the reset above when a real fly exposed the multi-level assembly was still broken.
 
@@ -248,200 +257,89 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 > rather than pure noise). M5–M7 below are the systems that MODULATE/REFINE how the kernels
 > combine — and are where the current "squareness / spiky / extreme" look gets fixed.
 
-## 🌟 NORTH-STAR RE-VISION (2026-05-30, supersedes the spectral pivot below)
+## ▶ THE FORWARD PLAN (re-sequenced 2026-05-30 after the worldgen pivot)
 
-The spectral kernel-DNA synthesis (the pivot directly below) was **REFUTED by the owner's eye** before any
-runtime rebuild: a real kernel hillshade looks amazing, but value-noise / gradient-noise / even the
-spectrally-PERFECT iFFT field all look like noise — **a power spectrum captures roughness but discards
-PHASE, and phase is where STRUCTURE (ridgelines/drainage) lives.** This forced a full step-back. The
-re-vision is in `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md` (READ IT — it's the
-current top-level picture). Summary:
-- **WorldGen10 = a terrain FRAMEWORK for any game** (Space Engineers planet / Diablo zone / SotF island),
-  adaptable via knobs. **Primary mode (build first): infinite + procedural, like No Man's Sky.** Handmade
-  areas + other modes (bounded/spherical) layer/knob onto the infinite core.
-- **Structure** (the thing the spectrum lacked) comes from NMS-style LOCAL deterministic structure-
-  approximating functions (domain warp, ridged/billow, analytic uplift), DEM-INFORMED params (not reduced
-  to a spectrum). + heavy **materials/dressing** (much of "amazing" is shading, not the heightfield).
-- **Erosion/hydro** resolves the infinite-vs-global-sim tension via the owner's insight: OFFLINE run real
-  erosion → analyze its effect → DISTILL a CHEAP LOCAL operator → apply online per-page in-budget
-  (offline-heavy → online-cheap, the recurring pattern). Erosion-LOOKING, infinite, parity-safe.
-- **Keep (proven):** the render pipeline, grammar, facts, relief_scale. The rebuild is the height CONTENT +
-  structure + materials.
-- **DEAD:** spectral synthesis (`tools/dem_pack/spectral.py` kept as a documented negative result).
-First concrete piece to design = owner's pick (structure core / materials / erosion-distillation research).
+> The M0-M4 milestones above are DONE + accurate (kept as history). Everything that WAS framed as
+> "M5 detail / M6 biomes+materials / M7 erosion" assumed the kernel-as-height architecture that's now
+> being replaced; that superseded detail lives in the dated specs + `LOOSE_ENDS_LEDGER.md` and is NOT
+> repeated here. This is the clean forward map. Current direction (owner-confirmed): **WorldGen10 is a
+> terrain FRAMEWORK, infinite-procedural-first (No Man's Sky reference), adaptable to any game via knobs.**
 
-## 🧬 [SUPERSEDED] FOUNDATIONAL PIVOT — Kernel-DNA synthesis (spectral; REFUTED by eye, see north-star above)
+Legend: `[x]` done · `[~]` in progress · `[ ]` not started. Each phase = its own brainstorm → spec →
+plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-judged; gates prove invariants.
 
-Owner flew the relief-scaled terrain → "blobby, placed, not a contiguous landmass; kernels just placed,
-not informing." ROOT CAUSE: `height::height`→`sample_kernel` reads kernel pixels as a TILING texture
-(`rem_euclid` every `footprint_m` ~50–220 km), cross-faded by grammar weight → no continuous shape, just
-repeating stamps. **Vision (owner): kernels are the SOURCE that INFORMS an infinite procedural generator
-(height/topology), then erosion + biomes/materials layer on top — kernels inform the whole stack, not get
-stamped.** Concrete approach (owner-chosen): **STATISTICAL DNA drives SYNTHESIS** — analyze each kernel into
-a spectral SIGNATURE (amp-per-octave), runtime SYNTHESIZES infinite continuous non-repeating noise from
-grammar-blended signatures (kernel pixels never sampled). **Spec:**
-`docs/superpowers/specs/2026-05-30-kernel-dna-synthesis-design.md`. This is a FOUNDATIONAL rebuild of the
-height core (replaces `sample_kernel`); M5–M7 (detail/biomes/erosion) sit ON it. 4 slices: offline spectral
-analysis+fidelity gate → Rust synth core → GPU parity + kill the 25 MB atlas → integrate+facts+perf+fly.
+### Phase 5 — Worldgen core rebuild (ACTIVE) — param-driven warped-noise height
 
-**Reconciliation:** relief_scale (the "shaded terrain at scale" Slice 1, DONE) STAYS (multiplies the synth
-field). Normals/lighting STILL APPLIES, sequenced AFTER the synth core (shade the real synthesized field).
-Mesh-density is ABSORBED (synth_scale + Slice 4 perf tuning set landform/mesh scale together). The
-scale-gap-vs-WG9 analysis below remains valid CONTEXT, but the tiling/footprint half is SUPERSEDED (no
-tiling exists after synthesis); the mesh-density + relief half lives on inside the synthesis milestone.
+Replaces `height::height`/`sample_kernel` (the tiling) with a parameter-driven warped-noise generator:
+distill real DEMs → per-biome structural PARAMS → grammar blends them → one warped-noise generator
+(domain warp + macro fBm landmass + ridged ridgelines + carved valleys) → infinite seamless terrain.
+Kernels = a DNA library, never sampled (no tiling). The "contiguous structured landmass" fix.
+Spec: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`.
 
-## ⚖️ SCALE GAP vs WG9 — the "get to AAA scale" analysis (2026-05-30) [tiling half SUPERSEDED by the pivot above]
+- [x] **Slice 1 — generator prototype (offline Python).** `worldgen_proto.py` + render images;
+      OWNER-ACCEPTED ("pretty good, a little noisy" — contiguous, structured, no grid/repeat;
+      non-repetition autocorr gate green).
+- [ ] **Slice 2 — biome distillation (offline Python).** Distill the 115 real DEMs → per-biome
+      structural param-sets (ridge_strength/valley_depth/warp/octave_amps/relief — STRUCTURAL metrics,
+      NOT a power spectrum). Render each biome from its distilled params; owner judges fidelity.
+- [ ] **Precondition before the RUST build:** close `LOOSE_ENDS_LEDGER.md` — **B1** (Wg10PagePool GPU-RID
+      leak: add Drop impl + fix 2 wrong comments), **B3** (hardened perf gate: sky scores nonblack=1.0 →
+      terrain-vs-sky + detail on/off), **B2** (never-black capacity-dependent → protect held coarse pages +
+      capacity-pressure gate). These are in the KEPT render pipeline + perf gate the rebuild sits on.
+- [ ] **Slice 3 — Rust generator core.** Port `generate` + `blend_biome_params` to `height.rs` (replace
+      `sample_kernel`); gates determinism/bounded/seam/non-repetition (fast, headless).
+- [ ] **Slice 4 — GPU parity + integrate.** Mirror `generate` in GLSL; REMOVE the 25 MB kernel atlas;
+      re-baseline `gpu_parity_check`; wire into render + facts (relief_scale, visible==collision hold);
+      hardened GPU-time perf gate.
+- [ ] **Slice 5 — scale tune + live blend + the owner FLY.** Dial scale toward the 1-10 m adaptable target;
+      confirm seamless biome transitions live; "Google-Maps contiguity" acceptance fly (where "a little
+      noisy" gets its honest judgment). Audit vs pillars; update living docs.
 
-The owner: "W9 had the scale we want down." Read WG9's ACTUAL scale config (READ-ONLY ref) and
-compared to WG10. The blobby/spiky look is mostly a **scale-config gap**, and it reframes M5–M7.
+### Phase 6 — Materials & surfacing (the "stops looking like a heightmap" layer)
 
-**WG9 ran a 3-TIER mesh stack** (each tier its own node), near→far:
-- **Local detail patches** (`terrain_detail_tier_policy.gd`): 256 m patch × 257 verts → **1 m vertex
-  spacing**, with per-family `detail_scale_m` = **22–62 m** amplitude. (The fine "you're standing on
-  real ground" tier.)
-- **Base chunks** (`terrain_settings.gd`): `CHUNK_SIZE_M=2048` × 129 verts → **16 m spacing**.
-- **Far clipmap** (`terrain_far_clipmap_node.gd`): `vertices_per_side=129`, `base_spacing_m=64` → 64 m+,
-  spacing doubling per level (the same clipmap principle WG10 uses).
-- **Per-family relief** (`relief_scale_m`): **190–640 m**. Region size 32768 m.
+After the height core looks right. Much of "looks AAA" is shading, not the heightfield (the current
+unshaded debug height-color is WHY today reads as a heightmap).
+- [ ] Analytic normals from the generated field → real lighting (replace the unshaded debug color).
+- [ ] Biome-driven materials (slope/height/biome → albedo + normal maps); swappable material packs.
+- [ ] Object scatter / dressing (rocks, vegetation) — NMS-style, much of the "alive" look. (Later sub-item.)
 
-**WG10 NOW** (one unified GPU clipmap — the deliberate anti-WG9-perf design):
-- `Wg10ClipmapRings`: `GRID_RES=64` verts/tile, level-0 span 8192 m → **128 m vertex spacing** (finest!).
-  `GRID_RES` is WG10's analogue of WG9's `vertices_per_side` (64 vs 129).
-- dem_v1 per-family relief ≈ **990–2765 m** (z-score DEM, ~4× WG9).
-- No fine detail tier yet (that's M5); detail amp I just set to 350 m (a coarse-mesh brute-force, wrong).
+### Phase 7 — Distilled erosion (Grand-Canyon-grade structure)
 
-**THE THREE SCALE GAPS (root of "blobby / spiky / extreme"):**
-1. **Mesh density: WG10 finest = 128 m vs WG9 near = 1–16 m → WG10 is 8–128× COARSER.** This is the
-   PRIMARY "blobby" cause — WG10's mesh physically cannot carry sub-128 m shape. **M5 shader detail
-   can't fix a 128 m mesh** (you'd paint detail the geometry can't hold — exactly the S1 octave-
-   aliasing we just hit). The fix is finer NEAR-field density.
-2. **Vertical relief: WG10 ≈ 990–2765 m vs WG9 190–640 m → WG10 ~4× TOO TALL.** The "extreme cliffs/
-   spiky" complaint, quantified. A pack rescaled to WG9-range relief (~200–600 m) reads believable.
-3. **Detail amplitude/model: WG9 = subtle 22–62 m on a 1 m mesh; WG10 = 350 m guess on a 128 m mesh.**
-   The right model is WG9's: fine near-mesh + MODEST detail, NOT huge detail on a coarse mesh.
+The headline "looks real, not just plausible" enhancement. The warped-noise core is PLAUSIBLE terrain,
+not real connected erosion (Grand Canyon = real-world history). The bridge (owner's insight): OFFLINE run
+real hydraulic erosion → distill a CHEAP LOCAL operator (analytic and/or learned) → apply online per-page
+(infinite + fast + parity-safe). A major milestone of its own. See `LOOSE_ENDS_LEDGER.md`.
+- [ ] River/drainage routing as facts (where water goes — the connected hydrology noise can't fake).
+- [ ] Offline erosion sim on samples → learn the carve operator (vs slope/flow/curvature).
+- [ ] Cheap online erosion operator, applied per-page, deterministic + parity-safe.
 
-**THE ARCHITECTURAL TENSION (do NOT just copy WG9's numbers):** WG9's 1–16 m near meshes at distance
-are LITERALLY what killed its perf (128 ms/chunk, 5 fps — the failure WG10 exists to avoid). The goal
-is **WG9's NEAR-FIELD density (1–16 m at the finest ring only) delivered through WG10's clipmap, which
-degrades to coarse far rings — without WG9's per-chunk-sync death.** WG10's clipmap is BUILT for this
-(fine ring near camera, coarse far, GPU pages, never-black, p99<6 ms proven). It is currently just
-CONFIGURED far too coarse. The levers, in order of impact:
-- **(a) Raise finest-ring density** (GRID_RES 64 → 128/256, OR add finer levels with smaller base_span
-  so the near ring reaches ~1–16 m spacing) — measured on the S4 hardened p99 gate (more near verts is
-  the real cost; the clipmap means only the NEAR ring pays it, far rings stay cheap).
-- **(b) Rescale pack relief to ~WG9 range** (~200–600 m) — a pack/data change (M7 / pack tuning), the
-  single biggest "spiky→believable" lever, cheap.
-- **(c) THEN M5 detail at WG9-modest amplitude** (~20–60 m) on the now-fine near mesh — detail that the
-  geometry can actually carry, the way WG9 did it.
+### Phase 8 — Framework modes (the adaptability payoff)
 
-**Roadmap implication:** the current M5 (shader detail) is NECESSARY but NOT SUFFICIENT for AAA scale —
-it must be paired with **finest-ring mesh-density tuning** (a config lever, partly the deferred M3
-"tune GRID_RES vs real assets" task) and **pack-relief rescaling** (M7 / data). Sequence to AAA look:
-finer near mesh (config) → saner relief (data) → modest M5 detail (shader) → M6 normals (hide remaining
-facets) → M7 erosion (carve cliffs). M5 alone on a 128 m mesh will keep looking blobby — which is
-exactly the S1 fly finding. This analysis is WHY.
+The framework-flex milestones — designed-for via knobs from day 1, built as games need them.
+- [ ] Bounded mode (Diablo-style zone): sample a finite region / lock a biome.
+- [ ] Island mode (SotF-style): a falloff/island-mask knob over the infinite field.
+- [ ] Spherical-planet mode (Space Engineers-style): feed sphere-surface coords to the SAME generator
+      (a coordinate-domain swap, not a rewrite — the param-driven design makes this cheap).
+- [ ] Handmade / authored-area blending: blend an authored param-set or heightfield into the field
+      (same blend mechanism as biome borders).
 
-**DECISION (2026-05-30, owner: "whatever you think, pillars, long-term fix"):** resolved via the four
-pillars. **Pillar 4 (no shortcuts):** finishing M5 shader-detail on a known-too-coarse 128 m mesh is
-polishing a broken substrate — rejected. **Pillar 2 (perf):** mesh density is the ONE scale lever that
-costs frame budget and is exactly where WG9 died, so it CANNOT be pushed without a TRUSTWORTHY perf
-gate — and we proved the current p99 method is GPU-insensitive (1.28× on a 90× load). Therefore the
-honest **hardened perf gate is the literal PREREQUISITE** for any scale work. **Long-term-best:** scale
-is deeply coupled (density ↔ perf ↔ relief ↔ detail-tier) and foundational, so it earns a real
-brainstorm → spec → plan pass (vs WG9's proven 3-tier stack), not ad-hoc knob-twiddling. **Sequence:**
-1. **Build the hardened perf gate** — true GPU time (RenderingDevice timestamps) + did-real-work asserts
-   at a representative multi-level FLY scale (not a close single-tile capture). Non-blocked (no visual
-   judgment); already mandated by the owner's "is profiling real?" callout; now also the scale prereq.
-2. **Brainstorm a unified "scale & density" milestone** — near-ring density target (~1–16 m), relief
-   rescale, how the M5 detail tier fits — designed coherently against WG9's 3-tier stack. **M5's
-   remaining slices (S2 LOD fade, S3 descriptor, S4 config) FOLD INTO this** as the near-mesh + modest-
-   detail tier; M5 is not abandoned, it's absorbed into the right-scoped scale design.
-3. M6 normals → M7 erosion + relief rescale.
-M5 S1 (the shader-detail seam + edit-safe/bounded/parity contracts) STAYS as proven foundation; the
-visibility fix (amp/freq/start-OFF) lets the owner confirm the seam works, then it's tuned at proper
-scale inside the scale milestone.
+### Phase 9 — Visible editable terrain (the other half of the M4 edit seam)
+
+M4 made edits COLLIDABLE but not VISIBLE (you fall into a hole you can't see). Make them appear in the
+rendered surface. Unchanged from the old "Milestone 8" plan; tracked, built when a game needs editing.
+- [ ] Edit store the render side can read (edit texture/SSBO/uniforms; shared, deterministic, parity).
+- [ ] Compose the edit delta into the generated height (page-gen or re-bake) → visible==collision on edits.
+- [ ] Live edit → bounded/async page refresh (never a hot-path stall — the WG9 rule).
+- [ ] Edit persistence (save/load) — optional; the M4 seam isolates the store, so saving is additive.
 
 ---
 
-## ▶ RE-SEQUENCED PLAN (2026-05-30) — the milestones M5–M7 below are SUPERSEDED by the worldgen rebuild
+## Deferred / tracked follow-ups (not blocking; revisit conditions in LOOSE_ENDS_LEDGER.md)
 
-The original M5 (detail) / M6 (biomes+materials) / M7 (erosion) milestones below assumed the kernel-as-height
-architecture, now being replaced. The CURRENT plan (spec: `docs/superpowers/specs/2026-05-30-worldgen-core-
-design.md`) re-sequences them:
-
-1. **WORLDGEN CORE (active)** — param-driven warped-noise height (replaces the tiling). Slices: S1 generator
-   prototype (DONE, owner-accepted) · **S2 distill DEMs → biome params (NEXT)** · [precondition: close
-   LOOSE_ENDS_LEDGER B1/B2/B3 + doc drift] · S3 Rust core · S4 GPU parity + kill atlas + integrate · S5 scale-
-   tune + live fly. This is the "contiguous structured landmass" fix — the old M5-detail goal, done right at
-   the source instead of as a render-time band-aid.
-2. **MATERIALS / surfacing** (was the look-half of M6) — normals + biome materials + dressing, AFTER the
-   height core looks good. Much of "looks AAA" is shading. Owner: not until the heightmap is good.
-3. **DISTILLED EROSION** (the real M7, Grand-Canyon-grade) — offline-learn real erosion → cheap local
-   operator → online. A big LATER milestone; the warped-noise core is plausible-not-eroded. See the LEDGER.
-4. **MODES** (bounded / spherical-planet / handmade-area blending) — the framework-flex milestones, designed-
-   for via knobs, built after the infinite core is good.
-5. **M8 visible editable terrain** — unchanged (still tracked below).
-
-The grammar (where-biomes-go), render pipeline, facts, relief_scale are KEPT. The original M5/M6/M7 text below
-is retained as HISTORY of the superseded plan.
-
----
-
-## [SUPERSEDED — see re-sequenced plan above] Milestone 5 — Detail & masks (GPU, render-only)
-
-- [ ] Detail/displacement layer (bounded, shader-only, edge-safe). [Fixes the "bare/blobby"
-      look — adds the high-frequency detail the raw kernels lack.]
-- [ ] Slope/curvature/debug + world-space masks.
-
-## Milestone 6 — Biomes & textures (data-driven)
-
-- [ ] Stable world-space biome/material masks driven by terrain-family rules.
-- [ ] Texture/material packs (swappable, like terrain packs). [**Fixes the coarse-mesh FACETS /
-      "diamonds" / hard cliff edges** — normal-mapped materials make coarse geometry read smooth,
-      the way every terrain renderer does it; also replaces the debug blue/yellow height coloring.]
-
-## Milestone 7 — Erosion & hydrology
-
-- [ ] River/pass routing facts.
-- [ ] Erosion/hydrology, integrated without breaking determinism/parity. [**Carves the extreme
-      DEM cliffs into believable slopes/drainage** — the data-level fix for the spiky height
-      field, complementing a saner pack relief scale.]
-
-## Milestone 8 — VISIBLE editable terrain (the other half of the M4 edit seam)
-
-The M4 Facts API already makes edits (meteor crater / shovel / laser pit) **collidable** —
-`Wg10Facts.apply_edit` dents `get_height`/`get_collision_field`, so a body falls into the hole. But
-the GPU renderer draws from its own height pages, which DON'T see the edit — so right now **you fall
-into a hole you can't see** (a documented, intentional M4 divergence). M8 closes that: make edits
-appear in the rendered surface.
-
-- [ ] **Edit store the render side can read.** The M4 edit provider is a CPU `delta(x,z)`; the GPU
-      needs the same edits in a form a compute/vertex shader can sample (e.g. an edit texture/SSBO,
-      or stamps uploaded as uniforms). Shared, deterministic, parity-preserving.
-- [ ] **Compose the edit delta into the height pages.** `height_page.glsl` adds the edit delta when
-      it generates a page (or a re-bake pass applies edits to resident pages) so the displaced
-      surface matches `get_height` (clamp + bedrock included) — closing the collidable-vs-visible
-      gap. Re-uses the M4 `bake_collision_region`/page path; the visible-vs-collision parity gate
-      then extends to cover EDITED cells (no longer an exception).
-- [ ] **Live edit → page refresh** (only the affected pages recompute; never a hot-path stall —
-      the WG9 rule still holds; refresh is bounded/async like normal page production).
-- [ ] **Edit persistence (save/load)** — optional sub-item; the M4 seam already isolates the edit
-      store, so saving it is additive. Defer until a game needs it.
-
-> Ordering note: M8 depends on the render pipeline (M3) + ideally materials (M6) so the dug surface
-> shades correctly. It's listed last because nothing yet CONSUMES visible edits — but it is a real,
-> tracked milestone (the owner wants meteor/shovel/laser long-term), NOT a forgotten footnote.
-
----
-
-## Pre-work follow-up (not blocking M0/M1 doc work)
-
-- [x] **Review OpenTopo kernel-extraction methodology** (done 2026-05-28,
-      conclusion in DESIGN §9): methodology sound, cache sufficient. Pack-build
-      follow-ups: mask NoData holes; improve family tagging (591/703
-      uncategorized).
-- [ ] **Async/background page production** (deferred pool-layer follow-up, tracked
-      from M3 slice 3): scheduler is async-ready; build the background producer
-      behind `Wg10PagePool::acquire_page` when synchronous N-per-frame computes blow
-      the frame budget. **Trigger:** heavy multi-pass pages — M5 (detail/normals),
-      M6 (biome masks), M7 (erosion/hydrology). Zero scheduler change required.
+- [x] **OpenTopo kernel-extraction methodology reviewed** (2026-05-28): sound, cache sufficient. Pack-build
+      follow-ups: mask NoData holes; improve family tagging.
+- [ ] **Async/background page production** — scheduler is async-ready; build the background producer behind
+      `Wg10PagePool::acquire_page` IF the rebuild's per-page worldgen cost (or distilled erosion) blows the
+      frame budget. Zero scheduler change required.
+- [ ] **`spectral.py`** — kept as a documented NEGATIVE RESULT (spectrum=roughness, discards phase=structure);
+      inert (nothing consumes it). Do not delete — it records the lesson.
