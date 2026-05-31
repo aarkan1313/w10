@@ -84,6 +84,17 @@ def test_chunk_seam_report_proves_height_and_corridor_continuity():
     assert min(float(row["corridor_match_frac"]) for row in rows) >= 0.90
 
 
+def test_visual_seam_report_matches_godot_edge_math():
+    payload = _small_payload()
+    rows = chunks.visual_seam_rows(payload)
+    assert len(rows) == 24
+    assert max(float(row["height_max_delta_m"]) for row in rows) <= 1e-6
+    assert max(float(row["normal_max_angle_deg"]) for row in rows) <= 0.01
+    assert max(float(row["slope_max_abs_delta"]) for row in rows) <= 1e-6
+    assert max(float(row["terrain_color_max_delta"]) for row in rows) <= 1e-6
+    assert max(int(row["corridor_edge_mismatch_count"]) for row in rows) == 0
+
+
 def test_variation_report_distinguishes_adjacent_chunks_and_seeds():
     payload = _small_payload()
     rows = chunks.variation_rows(payload)

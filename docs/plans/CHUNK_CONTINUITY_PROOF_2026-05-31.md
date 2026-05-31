@@ -29,6 +29,7 @@ replace the static review payload.
 - Tests: `tools/dem_pack/test_rough_world_chunks.py`
 - External report: `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`
 - Virtual-travel report: `D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`
+- Visual seam report: `D:\tmp\wg10_geography_engine\rough_world_chunks_visual_seams.{csv,md}`
 
 ## What It Proves
 
@@ -49,6 +50,11 @@ replace the static review payload.
 - The review scene uses one-sample aprons for chunk-edge normals, reducing visual shading seams at shared edges.
 - The corridor overlay now prefers the exported routed/route mask when present,
   instead of only the old low-height/passable-slope heuristic.
+- Offline visual seam audit mirrors the Godot review mesh's edge height, normal,
+  slope, default terrain-color, and corridor-edge math. Current 3x3 report:
+  height delta `0.0000 m`, normal max angle `0.0000 deg`, slope max delta
+  `0.000000`, terrain color max delta `0.000000`, corridor mismatches `0`
+  across all shared edges for both seeds.
 - Same world coordinate is independent of request origin: focused tests build the
   same chunk through two different origin/chunk-index requests and assert the
   height, apron, and corridor arrays match.
@@ -123,7 +129,7 @@ Last focused verification for the proof:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
-29 passed
+30 passed
 ```
 
 The focused chunk test file includes independent-window source, seam,
@@ -131,7 +137,7 @@ seed-variation, corridor-edge, and legacy diagnostic assertions; run by itself i
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py -q
-7 passed
+8 passed
 ```
 
 Godot import evidence:

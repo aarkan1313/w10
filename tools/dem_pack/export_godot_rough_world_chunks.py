@@ -40,6 +40,8 @@ REPORT_CSV = REPORT_DIR / "rough_world_chunks_3x3_seams.csv"
 REPORT_MD = REPORT_DIR / "rough_world_chunks_3x3_seams.md"
 TRAVEL_REPORT_CSV = REPORT_DIR / "rough_world_chunks_virtual_travel.csv"
 TRAVEL_REPORT_MD = REPORT_DIR / "rough_world_chunks_virtual_travel.md"
+VISUAL_SEAM_REPORT_CSV = REPORT_DIR / "rough_world_chunks_visual_seams.csv"
+VISUAL_SEAM_REPORT_MD = REPORT_DIR / "rough_world_chunks_visual_seams.md"
 
 GENERATOR_VERSION = "rough_world_chunks_v2_independent_windows"
 CHUNK_COUNT = 3
@@ -283,6 +285,16 @@ def _height_array(chunk: dict[str, object]) -> np.ndarray:
     return np.asarray(chunk["height"], dtype=np.float64).reshape((n, n))
 
 
+def _corridor_array(chunk: dict[str, object]) -> np.ndarray:
+    n = int(chunk["n"])
+    return np.asarray(chunk["corridor"], dtype=bool).reshape((n, n))
+
+
+def _apron_array(chunk: dict[str, object]) -> np.ndarray:
+    n = int(chunk["apron_n"])
+    return np.asarray(chunk["apron_height"], dtype=np.float64).reshape((n, n))
+
+
 def _corridor_mask(world_height: np.ndarray, world_span_m: float) -> np.ndarray:
     slopes = trav.slope_grid(world_height, scene_width_m=float(world_span_m), height_scale_m=trav.BASE_HEIGHT_SCALE_M)
     return (slopes <= trav.PASSABLE_SLOPE) & (world_height <= np.percentile(world_height, 55.0))
@@ -313,6 +325,131 @@ def _component_crossing_count(strip: np.ndarray, seam_index: int) -> tuple[int, 
     edge_labels = labels[:, seam]
     matched = int(np.count_nonzero(edge & np.isin(edge_labels, list(crossing))))
     return entering, matched
+
+
+def _apron_sample(apron: np.ndarray, x: int, z: int) -> float:
+    ax = int(np.clip(int(x) + 1, 0, apron.shape[1] - 1))
+    az = int(np.clip(int(z) + 1, 0, apron.shape[0] - 1))
+    return float(apron[az, ax])
+
+
+def _slope_at(apron: np.ndarray, x: int, z: int, cell_m: float, height_scale_m: float = trav.BASE_HEIGHT_SCALE_M) -> float:
+    hl = _apron_sample(apron, x - 1, z)
+    hr = _apron_sample(apron, x + 1, z)
+    hd = _apron_sample(apron, x, z - 1)
+    hu = _apron_sample(apron, x, z + 1)
+    dx = ((hr - hl) * float(height_scale_m)) / max(float(cell_m) * 2.0, 0.001)
+    dz = ((hu - hd) * float(height_scale_m)) / max(float(cell_m) * 2.0, 0.001)
+    return float(np.sqrt(dx * dx + dz * dz))
+
+
+def _normal_at(apron: np.ndarray, x: int, z: int, cell_m: float, height_scale_m: float = trav.BASE_HEIGHT_SCALE_M) -> np.ndarray:
+    hl = _apron_sample(apron, x - 1, z)
+    hr = _apron_sample(apron, x + 1, z)
+    hd = _apron_sample(apron, x, z - 1)
+    hu = _apron_sample(apron, x, z + 1)
+    x_vec = np.array([float(cell_m) * 2.0, (hr - hl) * float(height_scale_m), 0.0], dtype=np.float64)
+    z_vec = np.array([0.0, (hu - hd) * float(height_scale_m), float(cell_m) * 2.0], dtype=np.float64)
+    normal = np.cross(z_vec, x_vec)
+    return normal / max(float(np.linalg.norm(normal)), 1e-12)
+
+
+def _lerp_color(a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+    return a + (b - a) * float(np.clip(t, 0.0, 1.0))
+
+
+def _terrain_color_rgb(h: float) -> np.ndarray:
+    t = float(np.clip((float(h) + 1.0) * 0.5, 0.0, 1.0))
+    low = np.array([0.40, 0.48, 0.38], dtype=np.float64)
+    mid = np.array([0.62, 0.56, 0.40], dtype=np.float64)
+    high = np.array([0.74, 0.70, 0.58], dtype=np.float64)
+    crest = np.array([0.82, 0.79, 0.68], dtype=np.float64)
+    if t < 0.58:
+        return _lerp_color(low, mid, t / 0.58)
+    if t < 0.90:
+        return _lerp_color(mid, high, (t - 0.58) / 0.32)
+    return _lerp_color(high, crest, (t - 0.90) / 0.10)
+
+
+def visual_seam_rows(payload: dict[str, object], height_scale_m: float = trav.BASE_HEIGHT_SCALE_M) -> list[dict[str, object]]:
+    """Mirror Godot edge normal/slope/color math to estimate visible seam risk."""
+    chunk_count = int(payload["chunk_count"])
+    chunk_n = int(payload["chunk_n"])
+    rows: list[dict[str, object]] = []
+    for seed_world in payload["seeds"]:
+        seed = int(seed_world["seed"])
+        grid = _chunk_grid(seed_world, chunk_count)
+        for z in range(chunk_count):
+            for x in range(chunk_count - 1):
+                left = grid[z][x]
+                right = grid[z][x + 1]
+                rows.append(_visual_pair_row(seed, "x", f"{x},{z}", f"{x + 1},{z}", left, right, height_scale_m))
+        for z in range(chunk_count - 1):
+            for x in range(chunk_count):
+                top = grid[z][x]
+                bottom = grid[z + 1][x]
+                rows.append(_visual_pair_row(seed, "z", f"{x},{z}", f"{x},{z + 1}", top, bottom, height_scale_m))
+    return rows
+
+
+def _visual_pair_row(
+    seed: int,
+    axis: str,
+    a_label: str,
+    b_label: str,
+    a_chunk: dict[str, object],
+    b_chunk: dict[str, object],
+    height_scale_m: float,
+) -> dict[str, object]:
+    n = int(a_chunk["n"])
+    cell = float(a_chunk["span_m"]) / float(n - 1)
+    ah = _height_array(a_chunk)
+    bh = _height_array(b_chunk)
+    aa = _apron_array(a_chunk)
+    ba = _apron_array(b_chunk)
+    ac = _corridor_array(a_chunk)
+    bc = _corridor_array(b_chunk)
+
+    if axis == "x":
+        a_heights = ah[:, -1]
+        b_heights = bh[:, 0]
+        a_corridor = ac[:, -1]
+        b_corridor = bc[:, 0]
+        coords = [(n - 1, i, 0, i) for i in range(n)]
+    else:
+        a_heights = ah[-1, :]
+        b_heights = bh[0, :]
+        a_corridor = ac[-1, :]
+        b_corridor = bc[0, :]
+        coords = [(i, n - 1, i, 0) for i in range(n)]
+
+    normal_dots: list[float] = []
+    slope_deltas: list[float] = []
+    color_deltas: list[float] = []
+    for ax, az, bx, bz in coords:
+        an = _normal_at(aa, ax, az, cell, height_scale_m)
+        bn = _normal_at(ba, bx, bz, cell, height_scale_m)
+        normal_dots.append(float(np.clip(np.dot(an, bn), -1.0, 1.0)))
+        a_slope = _slope_at(aa, ax, az, cell, height_scale_m)
+        b_slope = _slope_at(ba, bx, bz, cell, height_scale_m)
+        slope_deltas.append(abs(a_slope - b_slope))
+        color_deltas.append(float(np.linalg.norm(_terrain_color_rgb(a_heights[len(slope_deltas) - 1]) - _terrain_color_rgb(b_heights[len(slope_deltas) - 1]))))
+
+    min_dot = min(normal_dots) if normal_dots else 1.0
+    return {
+        "kind": "visual_seam",
+        "seed": int(seed),
+        "axis": axis,
+        "a": a_label,
+        "b": b_label,
+        "height_max_abs_delta": float(np.max(np.abs(a_heights - b_heights))),
+        "height_max_delta_m": float(np.max(np.abs(a_heights - b_heights)) * float(height_scale_m)),
+        "normal_min_dot": float(min_dot),
+        "normal_max_angle_deg": float(np.degrees(np.arccos(np.clip(min_dot, -1.0, 1.0)))),
+        "slope_max_abs_delta": float(np.max(slope_deltas)) if slope_deltas else 0.0,
+        "terrain_color_max_delta": float(np.max(color_deltas)) if color_deltas else 0.0,
+        "corridor_edge_mismatch_count": int(np.count_nonzero(a_corridor != b_corridor)),
+    }
 
 
 def seam_rows(payload: dict[str, object]) -> list[dict[str, object]]:
@@ -518,12 +655,13 @@ def independent_window_diagnostic_rows(
 def write_reports(
     payload: dict[str, object],
     rows: list[dict[str, object]],
+    visual_rows: list[dict[str, object]],
     variation: list[dict[str, object]],
     independent_diagnostics: list[dict[str, object]],
     travel_summaries: list[dict[str, object]],
 ) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    csv_rows = rows + variation + independent_diagnostics + travel_summaries
+    csv_rows = rows + visual_rows + variation + independent_diagnostics + travel_summaries
     keys = sorted({key for row in csv_rows for key in row.keys()})
     with REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
@@ -546,6 +684,22 @@ def write_reports(
             f"| {row['seed']} | {row['axis']} | {row['a']} | {row['b']} | "
             f"{float(row['height_max_abs_delta']):.6f} | {row['corridor_entering_count']} | "
             f"{row['corridor_matched_count']} | {float(row['corridor_match_frac']):.3f} |"
+        )
+    lines += [
+        "",
+        "## Visual Seam Risk",
+        "",
+        "This mirrors the Godot review mesh's default-height, normal, slope, and terrain-color edge math.",
+        "",
+        "| seed | axis | a | b | height m | normal max deg | slope max delta | terrain color max delta | corridor mismatches |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in visual_rows:
+        lines.append(
+            f"| {row['seed']} | {row['axis']} | {row['a']} | {row['b']} | "
+            f"{float(row['height_max_delta_m']):.4f} | {float(row['normal_max_angle_deg']):.4f} | "
+            f"{float(row['slope_max_abs_delta']):.6f} | {float(row['terrain_color_max_delta']):.6f} | "
+            f"{row['corridor_edge_mismatch_count']} |"
         )
     lines += [
         "",
@@ -594,6 +748,29 @@ def write_reports(
         )
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
+    visual_keys = list(visual_rows[0].keys()) if visual_rows else []
+    with VISUAL_SEAM_REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=visual_keys)
+        writer.writeheader()
+        writer.writerows(visual_rows)
+    visual_lines = [
+        "# Rough-World Visual Seam Risk",
+        "",
+        "Offline mirror of the Godot review mesh's edge height, normal, slope, default terrain-color, and corridor-edge comparisons.",
+        "This is a gate-style risk probe; owner fly review remains the visual authority.",
+        "",
+        "| seed | axis | a | b | height m | normal max deg | slope max delta | terrain color max delta | corridor mismatches |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in visual_rows:
+        visual_lines.append(
+            f"| {row['seed']} | {row['axis']} | {row['a']} | {row['b']} | "
+            f"{float(row['height_max_delta_m']):.4f} | {float(row['normal_max_angle_deg']):.4f} | "
+            f"{float(row['slope_max_abs_delta']):.6f} | {float(row['terrain_color_max_delta']):.6f} | "
+            f"{row['corridor_edge_mismatch_count']} |"
+        )
+    VISUAL_SEAM_REPORT_MD.write_text("\n".join(visual_lines) + "\n", encoding="utf-8")
+
     travel_keys = list(travel_summaries[0].keys()) if travel_summaries else []
     with TRAVEL_REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=travel_keys)
@@ -623,18 +800,22 @@ def main() -> None:
     payload = build_payload()
     OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     rows = seam_rows(payload)
+    visual_rows = visual_seam_rows(payload)
     variation = variation_rows(payload)
     independent_diagnostics = independent_window_diagnostic_rows(seeds=(SEEDS[0],))
     travel_summaries = virtual_travel_summary_rows()
-    write_reports(payload, rows, variation, independent_diagnostics, travel_summaries)
+    write_reports(payload, rows, visual_rows, variation, independent_diagnostics, travel_summaries)
     max_seam = max(float(row["height_max_abs_delta"]) for row in rows)
     min_corridor = min(float(row["corridor_match_frac"]) for row in rows)
+    max_normal_angle = max(float(row["normal_max_angle_deg"]) for row in visual_rows)
     print(f"wrote {OUT}")
     print(f"wrote {REPORT_CSV}")
     print(f"wrote {REPORT_MD}")
     print(f"wrote {TRAVEL_REPORT_CSV}")
     print(f"wrote {TRAVEL_REPORT_MD}")
-    print(f"max seam delta={max_seam:.6f} min corridor match={min_corridor:.3f}")
+    print(f"wrote {VISUAL_SEAM_REPORT_CSV}")
+    print(f"wrote {VISUAL_SEAM_REPORT_MD}")
+    print(f"max seam delta={max_seam:.6f} min corridor match={min_corridor:.3f} max normal angle={max_normal_angle:.4f}")
 
 
 if __name__ == "__main__":

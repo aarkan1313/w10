@@ -195,7 +195,7 @@ Evidence written to `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{
 height max abs delta is **0.000000** across all seams; minimum structural corridor component match fraction is
 **0.917**; adjacent center/east chunks differ materially (`mean_abs_delta` **0.225** for seed 133, **0.385**
 for seed 211); center chunk changes across seeds (`mean_abs_delta` **0.396**). Focused tests including rough
-chunks, rough traversability, skeleton, and skeleton-window checks are **29 passed** (pytest cache warning only).
+chunks, rough traversability, skeleton, and skeleton-window checks are **30 passed** (pytest cache warning only).
 Godot `--import` exits 0 with no GDScript parse error (known PDB shortening warning; sandboxed editor-settings
 save warning only). A separate headless attempt to run the scene crashed Godot after a `user://logs` write
 failure, so do not cite headless scene-run as evidence; the owner/visible Windows fly scene remains the review
@@ -206,10 +206,14 @@ virtual-travel stress report (`D:\tmp\wg10_geography_engine\rough_world_chunks_v
 a wider **5x5 / 128 km** lattice from independent windows for both seeds: 40 seams per seed, height max
 **0.000000**, corridor min **0.971** for seed 133 and **1.000** for seed 211, adjacent median deltas
 **0.348/0.371**, and max adjacent corr **0.341/0.389**. This supports the infinite-world direction but is not a
-streaming/cache/player-travel proof. Next: owner visual review of the updated chunk scene, then review what a
-real infinite-in-all-directions/player travel version requires (window authority/cache, request-order
-independence, apron/stitching, route continuity beyond a bounded lattice, and streamed collision/material
-facts).
+streaming/cache/player-travel proof. A new offline visual seam report
+(`D:\tmp\wg10_geography_engine\rough_world_chunks_visual_seams.{csv,md}`) mirrors the Godot review mesh's edge
+height, normal, slope, default terrain-color, and corridor-edge math; current 3x3 report is zero across all
+shared edges for both seeds (`height_delta_m=0.0000`, `normal_max_angle_deg=0.0000`,
+`terrain_color_max_delta=0.000000`, corridor mismatches `0`). This reduces seam-risk before owner review but
+does not replace flying the scene. Next: owner visual review of the updated chunk scene, then review what a real
+infinite-in-all-directions/player travel version requires (window authority/cache, request-order independence,
+apron/stitching, route continuity beyond a bounded lattice, and streamed collision/material facts).
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
