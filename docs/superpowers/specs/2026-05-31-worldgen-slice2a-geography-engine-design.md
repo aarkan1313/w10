@@ -234,6 +234,15 @@ closes the seam-risk question for the review proof, not full terrain/gameplay ac
 freezes this keeper as `rough_highlands_keeper_v1` with exact fields, thresholds, conditioning, scale/relief
 policy, fixtures, and a golden contact-sheet hash. See
 `docs/superpowers/specs/2026-05-31-worldgen-rough-highlands-keeper-contract.md`.
+The current owner-review artifact before any port decision is the wider 5x5 static Godot travel scene
+`wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`, backed by
+`wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_5x5.json` and
+`tools/dem_pack/export_godot_rough_world_travel_review.py`. It keeps the same independent-window keeper over
+128 km of adjacent 25.6 km chunks, but at 65x65 vertices per chunk for flyable review scale. Current checks:
+80 shared seams, height max `0.000000`, corridor min `0.905`, no corridor edge mismatches, and Godot smoke
+`[wg10-rough-travel-review] status=pass chunks=25 seam_guides=40 seeds=2`. This is still offline/static review
+data; it exists to decide whether rough-highlands has enough travel-scale terrain/corridor quality to justify
+the Rust CPU skeleton-facts parity spike.
 
 ## 11. Port Gate
 

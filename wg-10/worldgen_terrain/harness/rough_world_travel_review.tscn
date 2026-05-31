@@ -1,0 +1,8 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://worldgen_terrain/harness/rough_world_chunks_review.gd" id="1"]
+
+[node name="RoughWorldTravelReview" type="Node3D"]
+script = ExtResource("1")
+data_path = "res://worldgen_terrain/generated/review/rough_world_chunks_travel_5x5.json"
+review_title = "WG10 rough-highlands 5x5 travel review"

@@ -38,6 +38,12 @@ replace the static review payload.
 - Virtual-travel report: `D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`
 - Visual seam report: `D:\tmp\wg10_geography_engine\rough_world_chunks_visual_seams.{csv,md}`
 - Static review sheet: `D:\tmp\wg10_geography_engine\rough_world_chunks_review_contact.png`
+- Wider travel-review exporter: `tools/dem_pack/export_godot_rough_world_travel_review.py`
+- Wider travel-review payload: `wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_5x5.json`
+- Wider travel-review scene: `wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`
+- Wider travel-review smoke check: `wg-10/worldgen_terrain/tests/rough_world_travel_review_check.gd`
+- Wider travel-review report: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5.{csv,md}`
+- Wider travel-review contact sheet: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_contact.png`
 
 ## What It Proves
 
@@ -82,6 +88,17 @@ replace the static review payload.
   whether the independent-window contract holds beyond the review scene:
   - seed 133: 40 seams, height max `0.000000`, corridor min `0.971`, adjacent median delta `0.3481`, max adjacent corr `0.3411`
   - seed 211: 40 seams, height max `0.000000`, corridor min `1.000`, adjacent median delta `0.3708`, max adjacent corr `0.3892`
+- A separate 5x5 Godot travel-review scene now renders the wider 128 km area for
+  owner terrain/travel judgement. It uses lower per-chunk mesh density (`65x65`
+  vertices) to keep the 25-chunk scene flyable as a review artifact.
+  - chunks: `5x5`, world span: `128.0 km`, chunk_n: `65`
+  - shared seam rows: `80`
+  - height max abs delta: `0.000000`
+  - corridor min match fraction: `0.905`
+  - normal max angle: `0.0000 deg`
+  - corridor edge mismatches: `0`
+  - adjacent pair median delta: `0.3591`
+  - adjacent max correlation: `0.4874`
 
 ## What It Does Not Prove
 
@@ -92,9 +109,10 @@ replace the static review payload.
 - It does not prove full owner terrain acceptance; only seam visibility in the
   bounded 3x3 review scene has been accepted.
 - It does not prove long-distance travel pacing. A 76.8 km-wide 3x3 proof is enough for seam review, not for travel-loop acceptance.
-- The 5x5 virtual-travel report is a non-rendered stress probe. It supports the
-  infinite-world direction, but it does not prove live streaming, cache eviction,
-  player-speed pacing, or visual desirability during travel.
+- The 5x5 virtual-travel report and 5x5 Godot travel-review scene support the
+  infinite-world direction and owner travel-scale review, but they do not prove
+  live streaming, cache eviction, player-speed pacing, or final visual
+  desirability during travel.
 - The contact sheet is top-down/static. It does not prove in-motion feel,
   oblique readability, or player-scale travel pacing.
 - It does not prove the legacy `geography_skeleton.compose_height` path is safe
@@ -146,6 +164,12 @@ With the bounded 3x3 seam read accepted, the next review should answer:
 
 Do not start a Rust/GLSL runtime port until those answers are accepted for the keeper.
 
+The current immediate review artifact for this decision is
+`wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`. Use it to judge
+whether the rough-highlands keeper holds together across 128 km of adjacent
+chunks, whether the routes/corridors feel legible enough, and whether the
+terrain has enough variation without exposing chunk structure.
+
 ## Verification
 
 Last focused verification for the proof:
@@ -153,6 +177,13 @@ Last focused verification for the proof:
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
 31 passed
+```
+
+Latest focused verification for the wider 5x5 travel-review artifact:
+
+```text
+python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_highlands_keeper_contract.py tools\dem_pack\test_geography_skeleton_windows.py -q
+22 passed
 ```
 
 The focused chunk test file includes independent-window source, seam,
@@ -175,6 +206,11 @@ Godot review-scene smoke evidence:
 ```text
 Godot --headless --path wg-10 --script res://worldgen_terrain/tests/rough_world_chunks_review_check.gd
 [wg10-rough-chunks-review] status=pass chunks=9 seam_guides=12 seeds=2
+```
+
+```text
+Godot --headless --path wg-10 --script res://worldgen_terrain/tests/rough_world_travel_review_check.gd
+[wg10-rough-travel-review] status=pass chunks=25 seam_guides=40 seeds=2
 ```
 
 Known caveat: a separate headless scene-run attempt crashed Godot after a

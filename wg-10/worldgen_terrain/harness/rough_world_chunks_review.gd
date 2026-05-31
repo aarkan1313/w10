@@ -1,6 +1,6 @@
 extends Node3D
 
-const DATA_PATH := "res://worldgen_terrain/generated/review/rough_world_chunks_3x3.json"
+const DEFAULT_DATA_PATH := "res://worldgen_terrain/generated/review/rough_world_chunks_3x3.json"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
 const BASE_HEIGHT_SCALE := 260.0
@@ -11,6 +11,9 @@ const OVERLAY_TERRAIN := 0
 const OVERLAY_SLOPE := 1
 const OVERLAY_CORRIDOR := 2
 const OVERLAY_COUNT := 3
+
+@export var data_path := DEFAULT_DATA_PATH
+@export var review_title := "WG10 rough-highlands chunk continuity review"
 
 var _camera: Camera3D
 var _hud: Label
@@ -63,9 +66,9 @@ func _build_hud() -> void:
 	layer.add_child(_hud)
 
 func _load_payload() -> bool:
-	var path := ProjectSettings.globalize_path(DATA_PATH)
+	var path := ProjectSettings.globalize_path(data_path)
 	if not FileAccess.file_exists(path):
-		push_error("rough_world_chunks_review: missing generated data at %s. Run tools/dem_pack/export_godot_rough_world_chunks.py" % DATA_PATH)
+		push_error("rough_world_chunks_review: missing generated data at %s. Run tools/dem_pack/export_godot_rough_world_chunks.py" % data_path)
 		return false
 	var text := FileAccess.get_file_as_string(path)
 	var parsed: Variant = JSON.parse_string(text)
@@ -391,10 +394,13 @@ func _process(_delta: float) -> void:
 	var seed_world: Dictionary = _seed_worlds[_seed_index]
 	var chunk_km := float(_payload.get("chunk_span_m", 0.0)) / 1000.0
 	var world_km := float(_payload.get("world_span_m", 0.0)) / 1000.0
-	_hud.text = "WG10 rough-highlands 3x3 chunk continuity review\n" \
+	var chunk_count := int(_payload.get("chunk_count", 3))
+	_hud.text = "%s\n" % review_title \
 		+ "T seed | P overlay | B seam guides | N next seam | F focus | G overview | +/- relief | R reset | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Seed: %s | chunks 3x3 @ %.1f km | world %.1f km | relief %.2fx | height %.0fm | %s | %s | seam guides %s | prototype, not runtime streaming" % [
+		+ "Seed: %s | chunks %dx%d @ %.1f km | world %.1f km | relief %.2fx | height %.0fm | %s | %s | seam guides %s | prototype, not runtime streaming" % [
 			seed_world.get("seed", "?"),
+			chunk_count,
+			chunk_count,
 			chunk_km,
 			world_km,
 			_relief,

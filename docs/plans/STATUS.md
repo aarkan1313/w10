@@ -235,9 +235,23 @@ shared edges for both seeds (`height_delta_m=0.0000`, `normal_max_angle_deg=0.00
 `terrain_color_max_delta=0.000000`, corridor mismatches `0`). This reduces seam-risk before owner review but
 does not replace flying the scene. Owner visual read on the opened scene:
 **"from what i can see seams are good visually"**. Treat this as seam-visibility acceptance for the bounded
-3x3 proof; terrain/gameplay quality and arbitrary infinite runtime acceptance remain open. Next: review what a
-real infinite-in-all-directions/player travel version requires (window authority/cache, request-order
-independence, apron/stitching, route continuity beyond a bounded lattice, and streamed collision/material facts).
+3x3 proof; terrain/gameplay quality and arbitrary infinite runtime acceptance remain open.
+
+**5x5 terrain/travel review scene:** added a wider static Godot review payload and scene:
+`tools/dem_pack/export_godot_rough_world_travel_review.py`,
+`wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_5x5.json`, and
+`wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`. It reuses the same rough-highlands
+independent-window contract over **5x5** chunks, **128 km** wide, at **65x65 vertices per chunk** so the owner
+can judge travel pacing and route/corridor feel beyond the tighter seam-review scene. Report:
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5.{csv,md}`; contact sheet:
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_contact.png`. Current metrics: **80** shared seams,
+height max **0.000000**, corridor min **0.905**, normal max **0.0000 deg**, corridor mismatches **0**, adjacent
+pair median delta **0.359**, and max adjacent corr **0.487**. Verification: focused Python checks are
+**22 passed** (pytest cache warning only); Godot smoke checks verify the 3x3 scene builds **9** chunk meshes /
+**12** seam guides and the 5x5 travel scene builds **25** chunk meshes / **40** seam guides. This is still
+offline/static review data, not streamed runtime terrain. Next: owner fly should decide whether this keeper's
+travel-scale terrain/corridor structure is good enough to start the Rust CPU skeleton-facts parity spike, or
+whether Slice 2A needs another offline terrain/process iteration first.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

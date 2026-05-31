@@ -1,5 +1,6 @@
 import numpy as np
 
+import export_godot_rough_world_travel_review as travel
 import export_godot_rough_world_chunks as chunks
 import render_rough_world_chunks_review as chunk_render
 
@@ -128,6 +129,23 @@ def test_virtual_travel_audit_extends_beyond_review_3x3():
         assert float(row["corridor_min_match_frac"]) >= 0.90
         assert float(row["adjacent_mean_abs_delta_min"]) > 0.02
         assert float(row["adjacent_corrcoef_max"]) < 0.98
+
+
+def test_godot_travel_review_payload_builds_wider_5x5_artifact():
+    payload = travel.build_payload()
+    assert payload["review_intent"] == "terrain_travel_pacing_not_runtime_streaming"
+    assert payload["chunk_count"] == 5
+    assert payload["chunk_n"] == 65
+    assert payload["world_span_m"] == 128_000.0
+    rows = travel.summary_rows(payload)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["seam_rows"] == 80
+    assert float(row["height_max_abs_delta"]) <= 2e-4
+    assert float(row["corridor_min_match_frac"]) >= 0.90
+    assert int(row["corridor_edge_mismatch_count"]) == 0
+    assert int(row["adjacent_pair_count"]) == 80
+    assert float(row["adjacent_corrcoef_max"]) < 0.98
 
 
 def test_independent_window_diagnostic_exposes_current_boundary():
