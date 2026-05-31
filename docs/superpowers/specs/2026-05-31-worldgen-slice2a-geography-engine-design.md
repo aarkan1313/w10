@@ -252,6 +252,15 @@ The scene cycles variants with `V` and writes
 dressing only, not Phase 6 surfacing. The port gate remains closed until the owner accepts a specific variant
 or asks for another offline shape iteration.
 
+Owner then corrected the distance target: the infinite-world review scene itself needs to show a **30x30**
+world at current scale, not just a smaller active window. The current distance-read artifact is
+`wg-10/worldgen_terrain/harness/rough_world_infinite_review.tscn`, backed by
+`wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json`. It renders a full
+30x30 / 768 km deterministic scene at 41x41 vertices per chunk, with the same variants and seed switching.
+Godot smoke evidence: `[wg10-rough-infinite-review] status=pass visible_chunks=900 seam_guides=1740 seeds=2`.
+This proves a large reviewable deterministic area, not runtime streaming/cache. The 5x5/65 scene remains the
+route/corridor-detail review because the 30x30 distance scene is deliberately coarser.
+
 ## 11. Port Gate
 
 Nothing from Slice 2A goes to Rust/GLSL until:

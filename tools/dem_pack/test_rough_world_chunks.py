@@ -176,6 +176,47 @@ def test_godot_travel_review_payload_builds_wider_5x5_artifact():
     assert float(row["adjacent_corrcoef_max"]) < 0.98
 
 
+def test_lattice_payload_contains_full_30x30_scene_with_matching_origin():
+    five = travel.build_payload()
+    lattice = travel.build_lattice_payload()
+    assert lattice["review_intent"] == "deterministic_infinite_distance_scene_not_runtime_streaming"
+    assert lattice["chunk_count"] == 30
+    assert lattice["active_window_count"] == 30
+    assert lattice["active_window_origin_x"] == 0
+    assert lattice["active_window_origin_z"] == 0
+    assert lattice["chunk_n"] == 41
+    assert lattice["close_review_chunk_n"] == 65
+    assert lattice["world_span_m"] == 768_000.0
+
+    five_by_origin = {
+        (chunk["world_origin_x_m"], chunk["world_origin_z_m"]): chunk
+        for chunk in five["seeds"][0]["chunks"]
+    }
+    lattice_by_origin = {
+        (chunk["world_origin_x_m"], chunk["world_origin_z_m"]): chunk
+        for chunk in lattice["seeds"][0]["chunks"]
+    }
+    for origin, five_chunk in five_by_origin.items():
+        lattice_chunk = lattice_by_origin[origin]
+        assert five_chunk["world_origin_x_m"] == lattice_chunk["world_origin_x_m"]
+        assert five_chunk["world_origin_z_m"] == lattice_chunk["world_origin_z_m"]
+        assert five_chunk["source"] == lattice_chunk["source"] == "independent_window"
+
+    rows = travel.summary_rows(lattice)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["active_window_count"] == 30
+    assert row["review_variant_count"] == 4
+    assert row["seam_rows"] == 3480
+    assert float(row["height_max_abs_delta"]) <= 2e-4
+    # The 30x30 distance scene is a coarse whole-world read; the 5x5/65 scene
+    # remains the route/corridor-detail gate. Exact corridor edge equality still
+    # must hold so the coarse review cannot reveal chunk borders.
+    assert int(row["corridor_edge_mismatch_count"]) == 0
+    assert int(row["adjacent_pair_count"]) == 3480
+    assert float(row["adjacent_corrcoef_max"]) < 0.98
+
+
 def test_independent_window_diagnostic_exposes_current_boundary():
     rows = chunks.independent_window_diagnostic_rows(seeds=(133,), chunk_n=33, coarse_n=64)
     assert len(rows) == 2

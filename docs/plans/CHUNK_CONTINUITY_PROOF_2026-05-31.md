@@ -50,6 +50,10 @@ replace the static review payload.
 - Wider travel-review report: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5.{csv,md}`
 - Wider travel-review contact sheet: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_contact.png`
 - Wider relief/dressing variant sheet: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_variants.png`
+- Full distance/infinite-world payload: `wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json`
+- Full distance/infinite-world scene: `wg-10/worldgen_terrain/harness/rough_world_infinite_review.tscn`
+- Full distance/infinite-world smoke check: `wg-10/worldgen_terrain/tests/rough_world_infinite_review_check.gd`
+- Full distance/infinite-world report: `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_lattice_30x30.{csv,md}`
 
 ## What It Proves
 
@@ -113,6 +117,19 @@ replace the static review payload.
   - `high_route_read`: 1.65x relief, route-read dressing
   The Godot scene cycles these with `V`; `+/-` nudges relief from the selected
   variant, and `R` resets to the variant default.
+- A full 30x30 distance/infinite-world scene now renders the whole review area,
+  not only a moving 5x5 window:
+  - chunks: `30x30`, world span: `768.0 km`, chunk_n: `41`
+  - visible chunks in-scene: `900`
+  - seam guides in-scene: `1740`
+  - shared seam rows across two seeds: `3480`
+  - height max abs delta: `0.000100`
+  - normal max angle: `0.0016 deg`
+  - corridor edge mismatches: `0`
+  - adjacent pair median delta: `0.3762`
+  - adjacent max correlation: `0.6704`
+  This is the distance/continuation read requested by the owner. The 5x5/65
+  scene remains the route/corridor-detail read.
 
 ## What It Does Not Prove
 
@@ -123,10 +140,14 @@ replace the static review payload.
 - It does not prove full owner terrain acceptance; only seam visibility in the
   bounded 3x3 review scene has been accepted.
 - It does not prove long-distance travel pacing. A 76.8 km-wide 3x3 proof is enough for seam review, not for travel-loop acceptance.
-- The 5x5 virtual-travel report, 5x5 Godot travel-review scene, and relief/
-  dressing variants support the infinite-world direction and owner travel-scale
-  review, but they do not prove live streaming, cache eviction, player-speed
-  pacing, production surfacing, or final visual desirability during travel.
+- The 5x5 virtual-travel report, 5x5 Godot travel-review scene, 30x30 full
+  distance scene, and relief/dressing variants support the infinite-world
+  direction and owner travel-scale review, but they do not prove live streaming,
+  cache eviction, player-speed pacing, production surfacing, or final visual
+  desirability during travel.
+- The 30x30 distance scene does not replace the 5x5 route/corridor-detail gate:
+  its coarser 41x41 chunk resolution keeps height/normal/corridor-edge seams
+  clean, but the older corridor-component match metric is weak at that scale.
 - The contact sheet is top-down/static. It does not prove in-motion feel,
   oblique readability, or player-scale travel pacing.
 - It does not prove the legacy `geography_skeleton.compose_height` path is safe
@@ -179,12 +200,11 @@ With the bounded 3x3 seam read accepted, the next review should answer:
 Do not start a Rust/GLSL runtime port until those answers are accepted for the keeper.
 
 The current immediate review artifact for this decision is
-`wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`. Use it to judge
-whether the rough-highlands keeper holds together across 128 km of adjacent
-chunks, whether the routes/corridors feel legible enough, and whether the
-terrain has enough variation without exposing chunk structure. Use `V` to compare
-the named relief/dressing variants before deciding whether the keeper is ready
-for a Rust CPU skeleton-facts parity spike.
+`wg-10/worldgen_terrain/harness/rough_world_infinite_review.tscn` for the
+30x30 / 768 km distance read, plus
+`wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn` for the 5x5
+route/detail read. Use `V` to compare the named relief/dressing variants before
+deciding whether the keeper is ready for a Rust CPU skeleton-facts parity spike.
 
 ## Verification
 
@@ -199,7 +219,7 @@ Latest focused verification for the wider 5x5 travel-review artifact:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_highlands_keeper_contract.py tools\dem_pack\test_geography_skeleton_windows.py -q
-23 passed
+24 passed
 ```
 
 The focused chunk test file includes independent-window source, seam,
@@ -231,6 +251,11 @@ Godot --headless --path wg-10 --script res://worldgen_terrain/tests/rough_world_
 
 The 5x5 smoke check also verifies the payload has four review variants and that
 cycling to the first dressed variant rebuilds the scene at 1.25x relief.
+
+```text
+Godot --headless --path wg-10 --script res://worldgen_terrain/tests/rough_world_infinite_review_check.gd
+[wg10-rough-infinite-review] status=pass visible_chunks=900 seam_guides=1740 seeds=2
+```
 
 Known caveat: a separate headless scene-run attempt crashed Godot after a
 `user://logs` write failure. Do not use that as terrain evidence. The visible

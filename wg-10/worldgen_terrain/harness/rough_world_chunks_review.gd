@@ -20,6 +20,7 @@ const DEFAULT_REVIEW_VARIANTS := [
 
 @export var data_path := DEFAULT_DATA_PATH
 @export var review_title := "WG10 rough-highlands chunk continuity review"
+@export var active_window_count := 0
 
 var _camera: Camera3D
 var _hud: Label
@@ -30,6 +31,8 @@ var _seed_worlds: Array = []
 var _review_variants: Array = []
 var _seed_index := 0
 var _variant_index := 0
+var _window_x := 0
+var _window_z := 0
 var _relief := 1.0
 var _dressing_style := "plain"
 var _overview := false
@@ -65,6 +68,7 @@ func _ready() -> void:
 	if not _load_payload():
 		return
 	_load_review_variants()
+	_load_active_window()
 	_apply_variant(0, false)
 	_build_chunks(true)
 
@@ -118,6 +122,44 @@ func _apply_variant(index: int, rebuild: bool = true) -> void:
 func _cycle_variant() -> void:
 	_apply_variant(_variant_index + 1)
 
+func _payload_chunk_count() -> int:
+	return int(_payload.get("chunk_count", 3))
+
+func _active_window_count() -> int:
+	var requested := active_window_count
+	if requested <= 0:
+		requested = int(_payload.get("active_window_count", 0))
+	var chunk_count := _payload_chunk_count()
+	if requested <= 0 or requested > chunk_count:
+		return chunk_count
+	return requested
+
+func _max_window_origin() -> int:
+	return max(_payload_chunk_count() - _active_window_count(), 0)
+
+func _load_active_window() -> void:
+	var max_origin := _max_window_origin()
+	_window_x = clampi(int(_payload.get("active_window_origin_x", 0)), 0, max_origin)
+	_window_z = clampi(int(_payload.get("active_window_origin_z", 0)), 0, max_origin)
+
+func _chunk_visible(chunk: Dictionary) -> bool:
+	var x := int(chunk.get("chunk_x", 0))
+	var z := int(chunk.get("chunk_z", 0))
+	var window_count := _active_window_count()
+	return x >= _window_x and x < _window_x + window_count and z >= _window_z and z < _window_z + window_count
+
+func _move_window(dx: int, dz: int) -> void:
+	var max_origin := _max_window_origin()
+	if max_origin <= 0:
+		return
+	var next_x := clampi(_window_x + dx, 0, max_origin)
+	var next_z := clampi(_window_z + dz, 0, max_origin)
+	if next_x == _window_x and next_z == _window_z:
+		return
+	_window_x = next_x
+	_window_z = next_z
+	_build_chunks(true)
+
 func _make_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
 	mat.vertex_color_use_as_albedo = true
@@ -153,6 +195,8 @@ func _build_chunks(reset_camera: bool = false) -> void:
 	var chunk_grid := _chunk_grid(seed_world)
 	for chunk_var in seed_world["chunks"]:
 		var chunk: Dictionary = chunk_var
+		if not _chunk_visible(chunk):
+			continue
 		var mesh_instance := MeshInstance3D.new()
 		mesh_instance.name = "Chunk_%s_%s" % [chunk.get("chunk_x", "?"), chunk.get("chunk_z", "?")]
 		mesh_instance.mesh = _make_mesh(chunk, corridor_height)
@@ -182,14 +226,14 @@ func _chunk_grid(seed_world: Dictionary) -> Array:
 func _build_seam_guides(chunk_grid: Array) -> void:
 	if _guides_root == null:
 		return
-	var chunk_count := int(_payload.get("chunk_count", 3))
-	for z in range(chunk_count):
-		for x in range(chunk_count - 1):
+	var window_count := _active_window_count()
+	for z in range(_window_z, _window_z + window_count):
+		for x in range(_window_x, _window_x + window_count - 1):
 			var chunk: Dictionary = chunk_grid[z][x]
 			if not chunk.is_empty():
 				_add_seam_guide(chunk, true)
-	for z in range(chunk_count - 1):
-		for x in range(chunk_count):
+	for z in range(_window_z, _window_z + window_count - 1):
+		for x in range(_window_x, _window_x + window_count):
 			var chunk: Dictionary = chunk_grid[z][x]
 			if not chunk.is_empty():
 				_add_seam_guide(chunk, false)
@@ -413,28 +457,49 @@ func _input(event: InputEvent) -> void:
 			KEY_P:
 				_overlay_mode = (_overlay_mode + 1) % OVERLAY_COUNT
 				_build_chunks()
+			KEY_RIGHT:
+				_move_window(1, 0)
+			KEY_LEFT:
+				_move_window(-1, 0)
+			KEY_DOWN:
+				_move_window(0, 1)
+			KEY_UP:
+				_move_window(0, -1)
 
 func _set_relief(value: float) -> void:
 	_relief = clampf(value, 0.35, 1.75)
 	_build_chunks()
 
 func _apply_camera_limits() -> void:
-	var span := float(_payload.get("world_span_m", 76800.0))
+	var span := _active_window_span_m()
 	_camera.move_speed = maxf(90.0, span * 0.040)
 	_camera.vertical_speed = maxf(70.0, span * 0.026)
-	_camera.far = maxf(2400.0, span * 2.3)
+	_camera.far = maxf(2400.0, float(_payload.get("world_span_m", span)) * 2.3)
+
+func _active_window_span_m() -> float:
+	return float(_active_window_count()) * float(_payload.get("chunk_span_m", 25600.0))
+
+func _active_window_center() -> Vector3:
+	var chunk_span := float(_payload.get("chunk_span_m", 25600.0))
+	var payload_count := float(_payload_chunk_count())
+	var window_count := float(_active_window_count())
+	var cx := (float(_window_x) - payload_count * 0.5 + window_count * 0.5) * chunk_span
+	var cz := (float(_window_z) - payload_count * 0.5 + window_count * 0.5) * chunk_span
+	return Vector3(cx, 0.0, cz)
 
 func _focus_camera() -> void:
 	_overview = false
 	_apply_camera_limits()
-	var span := float(_payload.get("world_span_m", 76800.0))
-	_camera.global_position = Vector3(0.0, maxf(220.0, span * 0.052 + _height_scale() * 0.30), span * 0.185)
+	var span := _active_window_span_m()
+	var center := _active_window_center()
+	_camera.global_position = center + Vector3(0.0, maxf(220.0, span * 0.052 + _height_scale() * 0.30), span * 0.185)
 	_camera.rotation_degrees = Vector3(-24.0, 0.0, 0.0)
 
 func _overview_camera() -> void:
 	_apply_camera_limits()
-	var span := float(_payload.get("world_span_m", 76800.0))
-	_camera.global_position = Vector3(0.0, span * 0.54, span * 0.58)
+	var span := _active_window_span_m()
+	var center := _active_window_center()
+	_camera.global_position = center + Vector3(0.0, span * 0.54, span * 0.58)
 	_camera.rotation_degrees = Vector3(-48.0, 0.0, 0.0)
 
 func _focus_next_seam() -> void:
@@ -476,13 +541,21 @@ func _process(_delta: float) -> void:
 	var chunk_km := float(_payload.get("chunk_span_m", 0.0)) / 1000.0
 	var world_km := float(_payload.get("world_span_m", 0.0)) / 1000.0
 	var chunk_count := int(_payload.get("chunk_count", 3))
+	var window_count := _active_window_count()
+	var window_label := "%dx%d" % [window_count, window_count]
+	var window_help := "arrows move window"
+	if window_count < chunk_count:
+		window_label += " @ %d,%d of %dx%d" % [_window_x, _window_z, chunk_count, chunk_count]
+	else:
+		window_help = "full lattice"
 	_hud.text = "%s\n" % review_title \
-		+ "T seed | V variant | P overlay | B seam guides | N next seam | F focus | G overview | +/- relief | R reset variant | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Seed: %s | chunks %dx%d @ %.1f km | world %.1f km | variant %s | relief %.2fx | height %.0fm | %s | dressing %s | %s | seam guides %s | prototype, not runtime streaming" % [
+		+ "T seed | V variant | P overlay | %s | B seam guides | N next seam | F focus | G overview | +/- relief | R reset variant | L flat | WASD/Space/C fly | Esc mouse\n" % window_help \
+		+ "Seed: %s | visible %s @ %.1f km | lattice %dx%d / %.1f km | variant %s | relief %.2fx | height %.0fm | %s | dressing %s | %s | seam guides %s | prototype, not runtime streaming" % [
 			seed_world.get("seed", "?"),
-			chunk_count,
-			chunk_count,
+			window_label,
 			chunk_km,
+			chunk_count,
+			chunk_count,
 			world_km,
 			_variant_label(),
 			_relief,

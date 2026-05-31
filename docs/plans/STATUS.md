@@ -264,6 +264,23 @@ streamed runtime terrain. Next: owner fly should compare the named variants and 
 good enough to start the Rust CPU skeleton-facts parity spike, or whether terrain shape needs another offline
 iteration before porting.
 
+**30x30 infinite-world distance scene:** per owner scale correction, the infinite review is now a full **30x30**
+scene, not a 5x5 visible window over a hidden lattice. New artifacts:
+`wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json`,
+`wg-10/worldgen_terrain/harness/rough_world_infinite_review.tscn`, and
+`wg-10/worldgen_terrain/tests/rough_world_infinite_review_check.gd`. The payload is **768 km** wide, **30x30**
+chunks, **41x41 vertices per chunk**, two seeds, and the same four relief/dressing variants. It is a
+distance/continuation review, not the close route-detail gate; the 5x5/65 scene remains the route/corridor
+detail review. Current 30x30 report:
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_lattice_30x30.{csv,md}`; height max seam delta
+**0.000100**, normal max **0.0016 deg**, corridor edge mismatches **0**, adjacent median delta **0.376**, max
+adjacent corr **0.670**. The older corridor-component match metric falls to **0.267** at this coarse distance
+resolution, so it is explicitly **not** used as the route acceptance gate for 30x30. Verification:
+`python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_highlands_keeper_contract.py tools\dem_pack\test_geography_skeleton_windows.py -q`
+is **24 passed** (pytest cache warning only); Godot smoke checks pass for 3x3, 5x5, and 30x30, with the 30x30
+scene instantiating **900** visible chunks and **1740** seam guides. This still does not implement runtime
+streaming/cache; it proves a large deterministic reviewable world area before the Rust/GLSL port gate.
+
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
 queries for skeleton fields, Python-vs-Rust fixtures, GPU world-coordinate sampling, cache/order independence,

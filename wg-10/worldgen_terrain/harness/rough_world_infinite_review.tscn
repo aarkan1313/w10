@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://worldgen_terrain/harness/rough_world_chunks_review.gd" id="1"]
+
+[node name="RoughWorldInfiniteReview" type="Node3D"]
+script = ExtResource("1")
+data_path = "res://worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json"
+review_title = "WG10 rough-highlands infinite-window review"
+active_window_count = 30
