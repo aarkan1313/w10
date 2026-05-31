@@ -1,7 +1,7 @@
 import numpy as np
 import keeper_v2 as v2
 
-def test_apron_blur_core_is_seam_identical_across_neighbors():
+def test_apron_blur_crop_returns_core_shape():
     rng = np.random.default_rng(0)
     world = rng.standard_normal((40, 80))
     apron = 6
