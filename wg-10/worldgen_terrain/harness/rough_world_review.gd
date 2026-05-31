@@ -25,9 +25,7 @@ func _ready() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.94, 0.91, 0.82)
 	env.ambient_light_energy = 1.65
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.68, 0.76, 0.84)
-	env.fog_density = 0.0018
+	env.fog_enabled = false
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
@@ -253,14 +251,14 @@ func _focus_camera() -> void:
 	_overview = false
 	_apply_camera_limits()
 	var span := _world_size()
-	_camera.global_position = Vector3(0.0, maxf(180.0, span * 0.055), span * 0.18)
-	_camera.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
+	_camera.global_position = Vector3(0.0, maxf(110.0, span * 0.040 + _height_scale() * 0.30), span * 0.115)
+	_camera.rotation_degrees = Vector3(-22.0, 0.0, 0.0)
 
 func _overview_camera() -> void:
 	_apply_camera_limits()
 	var span := _world_size()
-	_camera.global_position = Vector3(0.0, span * 0.72, span * 0.82)
-	_camera.rotation_degrees = Vector3(-50.0, 0.0, 0.0)
+	_camera.global_position = Vector3(0.0, span * 0.48, span * 0.55)
+	_camera.rotation_degrees = Vector3(-47.0, 0.0, 0.0)
 
 func _process(_delta: float) -> void:
 	if _hud == null or _items.is_empty():
@@ -270,7 +268,7 @@ func _process(_delta: float) -> void:
 	var source_km := float(item.get("span_km", 0.0))
 	var source_scene_ratio := source_km / maxf(scene_km, 0.001)
 	_hud.text = "WG10 rough-highlands generated-world review\n" \
-		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | </> scale | P slope | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | ,/. scale | P slope | L flat | WASD/Space/C fly | Esc mouse\n" \
 		+ "Selected: %s | %s | %.1f km source -> %.1f km scene | source/scene %.2fx | relief %.2fx | scale %.0fx | %s | lighting %s" % [
 			item.get("label", "?"),
 			item.get("kind", "?"),
@@ -280,5 +278,5 @@ func _process(_delta: float) -> void:
 			_relief,
 			_world_scale(),
 			"slope" if _slope_overlay else "terrain",
-			"flat" if _flat_lighting else "lit/no-shadow",
+			"flat" if _flat_lighting else "lit/no-shadow/no-fog",
 		]

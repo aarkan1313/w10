@@ -120,7 +120,7 @@ cards. It is superseded. The active review artifact is now
 larger 90 km world for each rough-highlands focus variant, then displays one generated world at a time in
 Godot so the owner can switch variants in-place from the same fly-camera view. Keys: `1-4` refs, `5-0` synth,
 `[`/`]` prev/next, `F` focus, `G` overview, `+/-` relief, `R` reset relief, `,/.` horizontal scale,
-`P` slope/traversability overlay, `L` flat lighting. Lighting was brightened and shadows are disabled for
+`P` slope/traversability overlay, `L` flat lighting. Lighting was brightened; shadows and fog are disabled for
 readability; `L` is a no-shadow/unshaded review fallback. Owner verdict on the first generated-world scene:
 the rough-highlands synth is promising, but the review scale was invalid for player-scale judgment because a
 90 km source world was squeezed into a 128-unit scene block. Scale is therefore now a first-class review
