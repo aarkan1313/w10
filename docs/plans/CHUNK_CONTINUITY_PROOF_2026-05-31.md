@@ -6,7 +6,12 @@ runtime architecture.
 
 ## Current Verdict
 
-Status: **offline independent-window proof built; owner visual acceptance pending**.
+Status: **offline independent-window proof built; owner visually accepted seams
+for the bounded review scene**.
+
+Owner seam verdict (2026-05-31): "from what i can see seams are good visually."
+Treat this as seam-continuity acceptance for the 3x3 review scene, not full
+terrain/gameplay acceptance and not production/runtime acceptance.
 
 The proof is good enough to review chunk-to-chunk terrain continuity in Godot:
 adjacent 25.6 km chunks are different terrain, share exact border heights, and
@@ -26,6 +31,7 @@ replace the static review payload.
 - Exporter: `tools/dem_pack/export_godot_rough_world_chunks.py`
 - Godot payload: `wg-10/worldgen_terrain/generated/review/rough_world_chunks_3x3.json`
 - Review scene: `wg-10/worldgen_terrain/harness/rough_world_chunks_review.tscn`
+- Godot scene smoke check: `wg-10/worldgen_terrain/tests/rough_world_chunks_review_check.gd`
 - Contact-sheet renderer: `tools/dem_pack/render_rough_world_chunks_review.py`
 - Tests: `tools/dem_pack/test_rough_world_chunks.py`
 - External report: `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`
@@ -43,9 +49,14 @@ replace the static review payload.
 - Review scene has default-off seam inspection aids: `B` toggles cyan seam
   guide lines, and `N` jumps the fly camera to the next shared border so the
   owner can inspect boundaries deliberately, then turn guides off for a natural read.
+- Godot scene smoke check instantiates the actual review scene and verifies
+  runtime payload/mesh construction: 9 chunk meshes, 12 seam guides, 2 seed
+  worlds, default-off seam guides, and `N`/next-seam focus enabling guides.
 - Static contact sheet renders both seeds in terrain, terrain+seam-guide,
   corridor-mask, and slope-band views from the same Godot payload. This helps
   quickly scan for repeated stamps and obvious border artifacts before flying.
+- Owner visual review of the opened Godot scene did not find visible seam
+  problems in the bounded 3x3 proof.
 - Adjacent chunks are not repeated copies. Reported mean absolute center/east chunk deltas:
   - seed 133: `0.2247`
   - seed 211: `0.3854`
@@ -78,7 +89,8 @@ replace the static review payload.
 - It does not prove arbitrary infinite travel, cache eviction, or authority-window
   handoff across many windows.
 - It does not prove full hydrology, gameplay navmesh quality, or route desirability.
-- It does not prove owner visual acceptance; the owner still needs to fly the scene.
+- It does not prove full owner terrain acceptance; only seam visibility in the
+  bounded 3x3 review scene has been accepted.
 - It does not prove long-distance travel pacing. A 76.8 km-wide 3x3 proof is enough for seam review, not for travel-loop acceptance.
 - The 5x5 virtual-travel report is a non-rendered stress probe. It supports the
   infinite-world direction, but it does not prove live streaming, cache eviction,
@@ -122,7 +134,7 @@ height/facts regardless of which page/window requested the sample.
 
 ## Infinite / Player-Travel Review
 
-If the owner accepts the bounded 3x3 visual read, the next review should answer:
+With the bounded 3x3 seam read accepted, the next review should answer:
 
 1. **Authority model:** which window owns a sample, how wide is the apron, and how are facts cropped?
 2. **Sampling contract:** can height, corridor facts, and material descriptors be sampled consistently by render, collision, and AI?
@@ -156,6 +168,13 @@ Godot import evidence:
 ```text
 Godot --headless --import --path wg-10
 exit 0, no GDScript parse errors
+```
+
+Godot review-scene smoke evidence:
+
+```text
+Godot --headless --path wg-10 --script res://worldgen_terrain/tests/rough_world_chunks_review_check.gd
+[wg10-rough-chunks-review] status=pass chunks=9 seam_guides=12 seeds=2
 ```
 
 Known caveat: a separate headless scene-run attempt crashed Godot after a

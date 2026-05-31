@@ -192,7 +192,7 @@ guide lines and `N` jumps to the next shared border. A static contact-sheet rend
 (`tools/dem_pack/render_rough_world_chunks_review.py`) writes
 `D:\tmp\wg10_geography_engine\rough_world_chunks_review_contact.png` for quick terrain/seam/corridor/slope
 inspection of both seeds. Important boundary: this is still **offline Python + static Godot JSON**, not a
-final infinite streaming/runtime architecture, owner acceptance, or Rust/GLSL port. Dedicated proof/audit report:
+final infinite streaming/runtime architecture, full terrain/gameplay acceptance, or Rust/GLSL port. Dedicated proof/audit report:
 `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
 
 Evidence written to `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`: shared-border
@@ -201,9 +201,11 @@ height max abs delta is **0.000000** across all seams; minimum structural corrid
 for seed 211); center chunk changes across seeds (`mean_abs_delta` **0.396**). Focused tests including rough
 chunks, rough traversability, skeleton, and skeleton-window checks are **31 passed** (pytest cache warning only).
 Godot `--import` exits 0 with no GDScript parse error (known PDB shortening warning; sandboxed editor-settings
-save warning only). A separate headless attempt to run the scene crashed Godot after a `user://logs` write
-failure, so do not cite headless scene-run as evidence; the owner/visible Windows fly scene remains the review
-gate. The seam report still includes the legacy isolated-window diagnostic proving why the old
+save warning only). New focused Godot scene smoke check
+`worldgen_terrain/tests/rough_world_chunks_review_check.gd` passes and verifies the actual review scene builds
+**9** chunk meshes, **12** seam guides, **2** seed worlds, default-off guides, and next-seam focus. The
+owner/visible Windows fly scene remains the review gate. The seam report still includes the legacy
+isolated-window diagnostic proving why the old
 `compose_height` review path cannot be used chunk-by-chunk: separate adjacent 25.6 km windows produce
 conditioned seam max deltas of **0.661** on x and **1.442** on z for seed 133. A new non-rendered
 virtual-travel stress report (`D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`) builds
@@ -215,9 +217,11 @@ streaming/cache/player-travel proof. A new offline visual seam report
 height, normal, slope, default terrain-color, and corridor-edge math; current 3x3 report is zero across all
 shared edges for both seeds (`height_delta_m=0.0000`, `normal_max_angle_deg=0.0000`,
 `terrain_color_max_delta=0.000000`, corridor mismatches `0`). This reduces seam-risk before owner review but
-does not replace flying the scene. Next: owner visual review of the updated chunk scene, then review what a real
-infinite-in-all-directions/player travel version requires (window authority/cache, request-order independence,
-apron/stitching, route continuity beyond a bounded lattice, and streamed collision/material facts).
+does not replace flying the scene. Owner visual read on the opened scene:
+**"from what i can see seams are good visually"**. Treat this as seam-visibility acceptance for the bounded
+3x3 proof; terrain/gameplay quality and arbitrary infinite runtime acceptance remain open. Next: review what a
+real infinite-in-all-directions/player travel version requires (window authority/cache, request-order
+independence, apron/stitching, route continuity beyond a bounded lattice, and streamed collision/material facts).
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

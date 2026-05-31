@@ -379,7 +379,9 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       all 3x3 shared edges for both seeds; this is gate evidence only, not owner acceptance. A static contact
       sheet (`rough_world_chunks_review_contact.png`) renders both seeds in terrain, seam-guide, corridor, and
       slope views for quick scan before flying.
-      Owner visual acceptance remains the blocking gate.
+      Owner visual seam verdict on the opened Godot scene: seams look good visually. Treat that as acceptance
+      of the bounded 3x3 seam-visibility proof only; full terrain/gameplay quality, live streaming/cache,
+      player-travel pacing, and Rust/GLSL runtime acceptance remain blocking gates before porting.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
