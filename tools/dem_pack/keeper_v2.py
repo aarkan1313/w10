@@ -7,6 +7,12 @@ import geography_engine as geo
 import geography_skeleton_windows as win
 import worldgen_proto as wg
 
+# Fixed, data-independent scale for the routed-surface gradient magnitude (replaces a per-window
+# global norm01). Routed-surface slope over a 25.6km chunk maxes around ~3.4e-4; 1/3.4e-4 ~= 2941
+# maps that typical max to ~1 before clipping, reproducing the prior [0,1] range without window stats.
+_SLOPE_NORM_SCALE: float = 2941.0
+
+
 def apron_blur_crop(field_with_apron: np.ndarray, apron_px: int, sigma: float, truncate: float = 4.0) -> np.ndarray:
     """Gaussian-blur an apron-padded window, then crop to the authoritative core (all axes).
 
@@ -60,9 +66,14 @@ def _regime_weights(facts, spec, p, apron_px):
     channel_axis = facts["channel_axis"]; crest_dist = facts["crest_dist"]; channel_dist = facts["channel_dist"]
     routed = facts["routed_surface"]
     gy, gx = np.gradient(routed, spacing, spacing)
-    slope = geo.norm01(np.sqrt(gx * gx + gy * gy))
-    basin_seed = geo.norm01(1.0 - uplift)
-    drainage_density = geo.norm01(apron_blur_crop_full(tributary, apron_px, 2.8))
+    # SEAM-EXACTNESS: these three normalizations must be DATA-INDEPENDENT. geo.norm01 uses a
+    # per-window global min/max (a.min()/ptp) which differs between adjacent windows, breaking the
+    # shared-border bit-identity that the apron design guarantees. Use fixed clip/affine instead.
+    # slope: routed-surface gradient magnitude (tiny, ~<=3.4e-4 over a chunk); a fixed scale maps the
+    # typical max to ~1 and clips, preserving the prior [0,1] dynamic range without reading window stats.
+    slope = np.clip(np.sqrt(gx * gx + gy * gy) * _SLOPE_NORM_SCALE, 0.0, 1.0)
+    basin_seed = np.clip(1.0 - uplift, 0.0, 1.0)              # uplift is already ~[0,1]
+    drainage_density = np.clip(apron_blur_crop_full(tributary, apron_px, 2.8), 0.0, 1.0)  # blurred tributary already ~[0,1]
     crest_near = np.exp(-crest_dist / max(span * 0.105, 1.0))
     channel_near = np.exp(-channel_dist / max(span * 0.032, 1.0))
     basin = geo.smoothstep(0.42, 0.78, basin_seed) * (1.0 - 0.45 * crest_near)

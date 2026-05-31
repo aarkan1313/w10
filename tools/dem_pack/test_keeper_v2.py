@@ -60,3 +60,16 @@ def test_v2_params_defaults_present_and_overridable():
     import dataclasses
     p2 = dataclasses.replace(p, relief_amplitude=2.0)
     assert p2.relief_amplitude == 2.0 and p.relief_amplitude != 2.0
+
+def test_v2_adjacent_window_seams_are_exact():
+    # Two adjacent chunks (x and x+1) built INDEPENDENTLY must share their border column exactly,
+    # like B does. Mirrors export_godot_rough_world_chunks adjacency.
+    p = v2.KeeperV2Params()
+    spec = ex._window_spec(129, ex.CHUNK_SPAN_M)
+    ox, oz = ex.WORLD_ORIGIN_X_M, ex.WORLD_ORIGIN_Z_M
+    wa = win.build_skeleton_window(ox, oz, 133, spec)
+    wb = win.build_skeleton_window(ox + ex.CHUNK_SPAN_M, oz, 133, spec)
+    a = v2.compose_windowed_height_v2(wa, 133, spec, p)
+    b = v2.compose_windowed_height_v2(wb, 133, spec, p)
+    border_delta = float(np.max(np.abs(a[:, -1] - b[:, 0])))
+    assert border_delta == 0.0, f"v2 broke seams: max border delta {border_delta}"
