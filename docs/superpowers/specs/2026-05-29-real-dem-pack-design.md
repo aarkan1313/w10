@@ -6,6 +6,12 @@
 **Builds on:** M1 pack/grammar/height + M2 GPU formula+parity (all consume `worldgen10.terrain_pack.v1` unchanged)
 **Followed by:** M3 render pipeline (consumes the real pack's GPU height pages)
 
+> **ERRATUM (2026-05-31):** this historical spec incorrectly paired `normalized_height.npy`
+> z-score kernels with `relief_m = height_range_m`. Validated source audit shows the old CPU/GPU path
+> over-amplifies peak-to-peak relief by the z-score span (3.97–11.16×, median 5.56× in the shipped gate
+> pack). If normalized kernels are used again, metres conversion is `z × height_std_m`, or the kernels must
+> be rebaked to a documented bounded range before multiplying by a range scalar.
+
 ---
 
 ## 0. Framing
@@ -141,13 +147,17 @@ read-only.
   (M2 `FamilyKernel`). Multiple DEM kernels of the same terrain type become
   distinct family ids (e.g. `badlands__grand_canyon`, `badlands__death_valley`),
   preserving variety. The family id is the kernel_id (already unique).
-- **`relief_m`** = the kernel's `height_range_m` (real elevation span, metres).
+- **`relief_m` historical note:** this spec originally used the kernel's
+  `height_range_m` here. That is wrong for `normalized_height.npy` z-score kernels;
+  use `height_std_m` for z-score-to-metres conversion, or rebake the kernel to a
+  documented bounded distribution before applying a range scalar.
 - **`footprint_m`** = `approx_sample_spacing_m × sample_px` (the kernel's true
-  ground extent, ~50 km for 512 px × ~98 m). A pack constant
-  `footprint_scale` (default 1.0) lets M3 retune to game-scale without a rebuild.
-  **Decision: physically-true footprint now; visually tuned in M3.**
-- **`.npy` choice:** `normalized_height.npy` (per-kernel normalized, matches the
-  height layer's `relief_m`-scaling convention + the synthetic kernels).
+  ground extent). The shipped gate pack is not uniformly ~50 km; it is ~37.7–222.6 km
+  (median ~194.3 km). A pack-time `footprint_scale` exists, but it is not a live
+  runtime scale solution.
+- **`.npy` choice:** `normalized_height.npy` (per-kernel z-score normalized). It does
+  not match `height_range_m` scaling by construction; the conversion scalar must be
+  documented and gated if this path is used again.
 - **Palettes (exactly 3 families):** group family ids by terrain TYPE (the
   approved `family`); within each type, sort ids lexicographically (deterministic)
   and chunk into palettes of 3. **Remainder rule (fixed, single):** if a type's

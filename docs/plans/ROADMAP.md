@@ -372,6 +372,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       `anisotropy` is not dead but should not be the sole `warp_amount` driver, while the current `vrm_7px`
       implementation is effectively dead at this normalization/scale. Reports live in
       `D:\tmp\wg10_geography_engine\geography_metric_schema_audit_*`.
+      Validated code-audit precondition: if any `normalized_height.npy` kernel or residual layer survives into
+      the new stack, its metres contract must be explicit. Z-score kernels use `height_std_m` (or a rebaked
+      documented range), not old `relief_m=height_range_m`; the old gate pack over-amplifies ptp relief by
+      3.97-11.16x (median 5.56x).
 - [ ] **Slice 2C — gradient/noise feasibility gate (offline + small parity spike).** Only after 2A passes:
       design analytic value+gradient noise with one fade convention across Python/Rust/GLSL. This is the
       prerequisite for IQ/Jordan/Runevision-style slope filters. It is not a free two-line edit.
@@ -382,16 +386,24 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
 - [ ] **Slice 3 — Rust generator core, accepted geography stack only.** Port the owner-accepted Phase-5
       stack to `height.rs` and replace `sample_kernel`. If the accepted offline result depends on a coarse
       regime/drainage skeleton, design that data model first instead of flattening it into ad-hoc noise.
-      Do not include gradient filters unless 2C is green. Gates: determinism, boundedness, seam,
-      non-repetition, Python-vs-Rust sample parity, and a regression render sheet matching the accepted
-      offline look.
+      Do not include gradient filters unless 2C is green. Do not inherit the old DEM-pack z-score/range bug;
+      either remove kernel sampling from the runtime path or gate the correct z-score-to-metres conversion.
+      Gates: determinism, boundedness, seam, non-repetition, Python-vs-Rust sample parity, and a regression
+      render sheet matching the accepted offline look. These become a real Phase-5 gate suite before the port
+      is considered done; current `fast/gpu/m3` gates only prove the kept M0-M4/render foundation.
 - [ ] **Slice 4 — GPU parity + integrate.** Mirror the accepted Rust generator in GLSL; remove the 25 MB
       kernel atlas from the render path; re-baseline GPU parity; wire render + facts so visible==collision
       still holds; run the hardened GPU-time perf gate.
-- [ ] **Slice 5 — live scale tune + owner fly.** Tune scale toward the adaptable 1-10 m near-field target
-      without losing flight-scale coherence. Confirm seamless biome transitions live. Owner acceptance bar:
-      "Google Maps contiguity" with no chunks/squares/lines/repetition and enough structure to stop reading
-      as uniform noise. Audit the result against all four pillars before moving to Phase 6.
+- [ ] **Slice 5 — live scale tune + owner fly.** Separate two scale knobs and gate both. First, the
+      generator/content knob: horizontal landform density is allowed to change the feel dramatically (the
+      same 90 km source block at ~6 km vs ~26 km reads like a different place), so final games need this
+      tunable. Second, the runtime-resolution knob: current `BASE_SPAN=8192`, `PAGE_PX=256`, 2^L spans, and
+      shader detail frequency are still coupled; reaching a true 1-10 m near-field needs per-level
+      span/page-px/detail-frequency policy instead of one global cascade. Tune this without losing
+      flight-scale coherence. Confirm seamless biome transitions live. Owner acceptance bar: "Google Maps
+      contiguity" with no chunks/squares/lines/repetition and enough structure to stop reading as uniform
+      noise, plus traversable valleys/passes/ramps through high relief. Audit the result against all four
+      pillars before moving to Phase 6.
 
 ### Phase 6 — Materials & surfacing (AAA read, not height cheating)
 

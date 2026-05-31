@@ -23,6 +23,13 @@ Last updated: 2026-05-29 (M2 era). **⚠️ PARTIALLY SUPERSEDED 2026-05-30 — 
 > knobs — see the vision spec. This DESIGN doc will be rewritten to fold in the new core once the rebuild
 > lands; until then, treat §2.1/§3 as historical and the two 2026-05-30 specs as the height-core truth.
 
+> **ERRATUM (2026-05-31):** the historical DEM-pack contract in §3 was wrong for `normalized_height.npy`.
+> Those arrays are z-score fields (std≈1), so metres conversion is `z × height_std_m` unless the data is
+> rebaked to a documented bounded range. The old `sample × relief_m` path used `height_range_m`, which
+> over-amplifies peak-to-peak relief by the z-score span (validated median 5.56×, range 3.97–11.16× in the
+> shipped gate pack). Do not copy the old `relief_m=height_range_m` contract into Phase 5 or any future
+> kernel-detail layer.
+
 ---
 
 ## 1. What this is
@@ -188,14 +195,17 @@ interfaces. Key design points:
   rainforest, desert, volcanic, wetland, temperate, tundra), 6–13 each. One kernel
   per family in the grammar; grammar groups families into 3-family palettes by
   terrain type (unchanged `FAMILIES_PER_PALETTE = 3`).
-- **`relief_m`** = `height_range_m` from the kernel's own stats (real elevation span
-  of that DEM, ~990–2765 m). **`footprint_m`** = `approx_sample_spacing_m × sample_px`
-  (real ground footprint, ~50 km). A `footprint_scale` knob exists for visual tuning
-  at M3 — not yet tuned; the renderer does not exist yet.
+- **`relief_m` historical note:** this section originally defined `relief_m` as
+  `height_range_m`; that is wrong for `normalized_height.npy` z-score kernels. Correct
+  z-score metres conversion is `height_std_m` (or a rebaked documented range).
+  **`footprint_m`** = `approx_sample_spacing_m × sample_px` (real ground footprint;
+  the shipped gate pack is ~37.7–222.6 km, median ~194.3 km). A `footprint_scale`
+  knob exists in tooling but was never made a live runtime scale solution.
 - **Kernel normalization:** kernels are **Z-SCORE normalized** (mean 0, std 1) per
-  WG9 dem_factory. Height output legitimately goes negative and can exceed `relief_m`
-  — this is NOT a bug; the generator uses `relief_m` as amplitude and the Z-score
-  distribution spans roughly ±3σ. Do not assume height is in [0,1].
+  WG9 dem_factory. Height output legitimately goes negative, but multiplying z-score
+  samples by full `height_range_m` is the 2026-05-31 B4 bug. Use `height_std_m` or
+  rebake/renormalize to a documented range before converting to metres. Do not assume
+  height is in [0,1].
 - **Build-time spike filter:** `build_pack.py` drops any kernel whose normalized
   Z-score exceeds `MAX_ABS_ZSCORE=12` (corrupt spike pixels, not real terrain — e.g.
   Mekong delta z=44, Sahel Chad z=14, South Georgia z=12 were dropped; those would

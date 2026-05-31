@@ -50,6 +50,20 @@ after the editor was closed; `cargo test` isolated target **121 passed / 0 faile
 deliberately tight pool budget. B3's hardened perf gate also passed with terrain-vs-sky and detail-on/off
 checks active (`GPU p99=0.082ms`, `terrain_frac_min=1.000`, `detail_delta=0.53739`).
 
+**Validated code-path audit addendum (2026-05-31):** treat the latest whole-project audit as leads, not as
+visual truth. Locally verified: the OLD `dem_v1` kernels-as-height path multiplies z-score kernels by
+`height_range_m` in CPU and both GLSL height paths. The shipped arrays have std≈1 and peak-to-peak z spans
+**3.97–11.16** (median **5.56**), exactly matching WG9 `height_range_m / height_std_m`; correct metres for
+`normalized_height.npy` are therefore `z × height_std_m` unless the kernels are rebaked to a documented bounded
+range. This bug does **not** directly judge the current Python skeleton review scene, but it must be fixed or
+explicitly bypassed before any Rust/GLSL port or kernel-detail layer copies the old `relief_m` contract. Also
+verified: the gate pack contains **24** kernel files, every palette is `[A,B,A]`, and footprint/page-scale
+mismatch is larger than the pasted audit stated: actual `footprint_m` is **37.7–222.6 km** (median **194.3
+km**) against the current **8.192 km** level-0 page. Runtime scale remains a separate engineering issue:
+`BASE_SPAN`, `PAGE_PX`, 2^L level spans, and shader detail frequency are still coupled. The review scene's
+6–26 km horizontal scale control is a useful **content/landform-density** knob, not a substitute for the future
+per-level runtime scale rework.
+
 **Slice 2A render probes:** Batch 1 (`D:\tmp\wg10_structure_ab\`) was rejected by owner eye: all variants
 looked basically the same, meaning stronger warp/ridge/noise variants still changed texture more than
 geography. Batch 2 / matrix (`D:\tmp\wg10_structure_matrix\`) found the least-bad cell as **basins + ranges /

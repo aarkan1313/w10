@@ -12,6 +12,10 @@ repetition"; kernels become a distilled DNA library, not sampled pixels.
 > Living docs (DESIGN/ROADMAP/STATUS) + HANDOFF stay current and point here. Memory:
 > `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`. Loose ends tracked in
 > `docs/plans/LOOSE_ENDS_LEDGER.md` (B1/B2/B3 + doc drift close BEFORE the first runtime build, Slice 3).
+> 2026-05-31 code-audit addendum: the old DEM-pack `normalized_height.npy × relief_m(height_range_m)`
+> contract is invalid for z-score kernels and must not be copied into this rebuild. If a kernel/residual
+> layer survives as material/detail, convert z-score to metres with `height_std_m` or rebake to a documented
+> range and gate the contract.
 
 ---
 
@@ -81,6 +85,9 @@ generate(p, b):                                  # b = blended BiomeParams
   blobs); inverted-ridged → connected valleys (the structure pure noise lacks).
 - **Scale = config knobs (the 1-10m adaptable target):** `BASE_FREQ`, `WARP_FREQ`, `RIDGE_FREQ`,
   `VALLEY_FREQ`, `N` are config — dial ~1km features down to 1-10m near-field detail per game.
+  Keep this distinct from runtime clipmap resolution: the current render stack still couples
+  `BASE_SPAN`, `PAGE_PX`, 2^L spans, and shader detail frequency. Phase 5 can expose landform/content
+  scale as a creative knob, but Slice 5 must still design the per-level runtime scale policy.
 - **Parity + perf:** `value_noise` (parity-proven primitive) summed/warped/ridged — deterministic, CPU==GPU,
   cheap (N+few noise evals/sample). No atlas, no pixel sampling — GPU gets simpler/cheaper than today. The
   hardened GPU-time gate measures it.
@@ -89,7 +96,7 @@ generate(p, b):                                  # b = blended BiomeParams
 
 ```
 BiomeParams {
-  relief_m,                 # characteristic elevation range
+  relief_m,                 # characteristic elevation/range target for this generator, not the old z-score scalar
   octave_amps[N],           # relative amplitude per octave (roughness AMPLITUDE only)
   ridge_strength,           # mountainous/ridged 0..1
   valley_depth,             # drainage incision
@@ -103,7 +110,9 @@ Distillation (offline, Python): per biome family, measure STRUCTURAL metrics fro
 power spectrum (the dead end): ridge_strength ← connected-linear-ridge vs scattered-bump stats;
 valley_depth ← drainage-incision stats; octave_amps ← multi-scale amplitude (spectrum-LIKE but only the
 roughness amplitude, PAIRED with the structural params the spectrum lacked — that's the fix); warp_amount/
-slope_bias ← anisotropy/slope-distribution stats; relief_m ← real elevation range.
+slope_bias ← anisotropy/slope-distribution stats; relief_m ← chosen generator relief target. If this is derived
+from DEM z-score kernels, use `height_std_m` or a documented rebake; do not reuse the old
+`normalized_height.npy × height_range_m` contract.
 
 **Pillar-4 principle:** structural descriptors driving structure-GENERATING machinery (ridged noise, warp,
 carving) — not statistics driving plain noise (the refuted spectral path). **Honest:** which metrics best

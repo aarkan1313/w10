@@ -20,6 +20,13 @@ independent reviews, every claim re-verified against source + re-run gates).
 | **B2** | Never-black "hold-last-good" can show stale terrain (page-A geometry + page-B pixels) under pool eviction; guarantee is capacity-dependent, not structural | HIGH | **FIX-NOW** | The render pipeline is the KEPT foundation; a non-structural never-black is a latent corruption the rebuild sits on. Fix = protect held coarse pages + re-validate held RID + capacity-pressure gate. |
 | **B3** | Hardened perf gate hole: 100%-sky frame scores `nonblack=1.0` (sky is bright); detail not on/off-tested | MEDIUM | **FIX-NOW** | This is MY gate, built to honor "is profiling real?" — and it has the exact hole that rule forbids. The rebuild will lean on this gate to measure worldgen perf; it must be trustworthy first. Fix = terrain-vs-sky nonblack + detail on/off assert. |
 
+### Added 2026-05-31 (validated code-path audit; not a visual verdict)
+
+| ID | Item | Severity | Decision | Why |
+|----|------|----------|----------|-----|
+| **B4** | OLD `dem_v1` kernels-as-height over-amplify peak-to-peak relief by the z-score span: median **5.56×**, range **3.97–11.16×**. Verified against source: `height.rs`, `height_field.glsl`, and `height_page.glsl` all do z-score `sample × relief_m`; the shipped `.npy` arrays have std≈1 and ptp exactly equal to WG9 `height_range_m / height_std_m`. Correct metres for `normalized_height.npy` = `z × height_std_m` (or rebake to a documented bounded range), not `z × height_range_m`. | HIGH | **FIX-NOW-or-FOLD-IN** | This is a code/metadata contract bug in the old DEM-pack height path, not a visual finding about the current Python skeleton review scene. It distorts old-engine A/Bs, can exceed the ±8 km render AABB at `RELIEF_SCALE=0.25`, and would re-infect any Rust/GLSL port or kernel-detail layer that copies the `relief_m=height_range_m` contract. Fix/document before Slice 3 or before using kernels as runtime detail. Also verified: shipped gate pack has only **24** kernel files and every palette is `[A,B,A]`. |
+| **B5** | Runtime scale is locked to one 2^L clipmap cascade (`BASE_SPAN=8192`, `PAGE_PX=256`, one shader detail-frequency curve). The Godot review scene's 6 km vs 26 km span proves horizontal content scale is valuable as a creative knob, but it is not the same thing as near-field runtime resolution. | HIGH | **FOLD-IN** | Keep **landform/content scale** as an explicit generator knob because the same terrain density can feel like a different place at different spans. Separately, Slice 5 needs a real runtime scale rework: per-level span/page-px/detail-frequency policy, plus gates, so 1–10 m near-field detail does not drag the whole hierarchy or break flight-scale coherence. |
+
 ## DOC DRIFT (from FINDINGS) — ✅ MOSTLY DONE in the 2026-05-30 doc-reconciliation pass
 
 | ID | Item | Status |
@@ -56,6 +63,7 @@ independent reviews, every claim re-verified against source + re-run gates).
 | **Handmade / authored-area blending** | Layers onto the infinite procedural base. | After the infinite core. |
 | **M8 visible editable terrain** (M4 edit seam's other half) | Edits are collidable-not-visible; tracked since M4. | After render/worldgen settled. |
 | **Async/background page production** | Deferred since M3; caching solved the spike. Trigger = heavy multi-pass pages. | If the rebuild's per-page worldgen cost blows budget. |
+| **Kernel family tagging — 665 `uncategorized` (2026-05-31)** | Full auto-tag NOT reliably achievable: single-hillshade classification is confident-but-not-accurate (the rubric picks a catch-all; v1 → badlands/rainforest 47%, v2 → mountain 64%; passes disagree 470/631). Stats-from-metadata tagging is dead (3/40 visual agreement). **Trustworthy result = 161 cross-run-consensus tags + 34 bathymetry exclusions** (`D:\tmp\wg10_relief_audit\kernel_tags_consolidated.csv`, additive-only, fills `uncategorized`). 470 contested → human review. | When the grammar actually needs more than the 130+161 families — then human-review the contested CSV (both guesses + span included) OR adopt a COARSER taxonomy (badlands↔mountain↔temperate↔rainforest aren't separable from one hillshade at mixed scale). |
 
 ## THE NEW PRIORITY (owner-confirmed)
 **WORLDGEN / height-field core is the ONLY active priority.** Bar = parity-or-better than WG9.
@@ -92,3 +100,8 @@ KEPT clipmap/parity architecture. See memory `worldgen10-wg9-height-recipe` + `w
   **fast 6/6 · gpu 4/4 · m3 9/9 · cargo 121**.
 (Owner may choose to fold some of these INTO the structure rebuild instead of before — triage pending the
 research outcome.)
+- **NEW 2026-05-31 (validated code-path audit):** **B4** (old dem_v1 z-score/range contract bug) and **B5**
+  (content-scale knob vs runtime scale-cascade rework) added above. Source NOT changed. B4 is a Slice-3/
+  kernel-detail contract risk and old-engine A/B distortion; B5 is folded into Phase 5 scale work. Kernel-
+  tagging result (161 consensus tags + 34 bathymetry exclusions) parked in TABLED. Raw audit artifacts remain
+  in `D:\tmp\wg10_relief_audit\`; do not treat them as repo truth without re-validation.
