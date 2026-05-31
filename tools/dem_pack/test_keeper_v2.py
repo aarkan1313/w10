@@ -57,7 +57,7 @@ def test_v2_params_defaults_present_and_overridable():
     for name in ("softmax_temp", "relief_amplitude", "incision_gain",
                  "range_texture_gain", "badland_gain", "fine_gain",
                  "blur_radius_m", "remap_center", "remap_scale", "weight_blur_m",
-                 "slope_norm_scale"):
+                 "slope_norm_scale", "post_tanh_gain", "final_blur_mix"):
         assert hasattr(p, name)
     import dataclasses
     p2 = dataclasses.replace(p, relief_amplitude=3.0)
@@ -84,3 +84,15 @@ def test_v2_has_real_relief_not_flat_everywhere():
     slopes = trav.slope_grid(h, scene_width_m=trav.BASE_WORLD_SIZE_M*200.0,
                              height_scale_m=trav.BASE_HEIGHT_SCALE_M)
     assert float(np.percentile(slopes, 90.0)) >= trav.MIN_STRUCTURAL_SLOPE_P90
+
+def test_v2_post_tanh_gain_increases_relief_without_saturating():
+    import dataclasses
+    w, spec = _window()
+    base = v2.KeeperV2Params()
+    hi = dataclasses.replace(base, post_tanh_gain=1.8)
+    h_base = v2.compose_windowed_height_v2(w, 133, spec, base)
+    h_hi = v2.compose_windowed_height_v2(w, 133, spec, hi)
+    # post-tanh gain must measurably raise ptp (unlike relief_amplitude which saturates)
+    assert np.ptp(h_hi) > np.ptp(h_base) * 1.5
+    for name in ("post_tanh_gain", "final_blur_mix"):
+        assert hasattr(base, name)

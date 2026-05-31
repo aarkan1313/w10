@@ -43,6 +43,8 @@ class KeeperV2Params:
     remap_center: float = 0.0           # affine remap (replaces znorm); tune to match A's tone
     remap_scale: float = 1.0
     slope_norm_scale: float = 2941.0    # routed-surface slope -> ~[0,1] without per-window stats (seam-safe; see Task 5)
+    post_tanh_gain: float = 1.0         # vertical gain applied AFTER tanh (raises peaks without saturating; >1 = more rugged toward A)
+    final_blur_mix: float = 0.28        # how much of the final shaping blur to mix in (0 = keep all fine detail, higher = smoother); A-like detail wants this LOW
 
 
 def apron_blur_crop_full(field_full: np.ndarray, apron_px: int, sigma: float, truncate: float = 4.0) -> np.ndarray:
@@ -119,9 +121,11 @@ def compose_windowed_height_v2(window, seed, spec, p):
     height = height - 0.06 * (badlands_w + foothill_w + 0.35*plateau_w) * tributary_cut
     height = height * p.relief_amplitude
     height = np.tanh(height * 0.72)
+    height = height * p.post_tanh_gain          # post-tanh: raises peaks beyond the tanh ceiling, does not saturate
     sigma_final = max(p.blur_radius_m / spacing, 0.1)
-    height = 0.72*height + 0.28*apron_blur_crop_full(height, apron_px, sigma_final)
-    height = apron_blur_crop_full(height, apron_px, max(0.32*sigma_final/0.95, 0.1))
+    mix = float(np.clip(p.final_blur_mix, 0.0, 1.0))
+    if mix > 0.0:
+        height = (1.0 - mix) * height + mix * apron_blur_crop_full(height, apron_px, sigma_final)
     height = affine_remap(height, p.remap_center, p.remap_scale)
     core = win._core_slice(spec)
     return np.ascontiguousarray(height[core, core])
