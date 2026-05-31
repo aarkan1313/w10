@@ -358,6 +358,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       - empirically test spline-of-noise control curves before promoting splines to the pack schema.
       Current partial groundwork: the cheap metric comparator now covers the rough-highlands skeleton-focus
       variants as well as the older v5 candidates, but this is a diagnostic report, not Slice 2B completion.
+      A schema audit over the approved WG9 kernels now verifies live metric spread:
+      `anisotropy` is not dead but should not be the sole `warp_amount` driver, while the current `vrm_7px`
+      implementation is effectively dead at this normalization/scale. Reports live in
+      `D:\tmp\wg10_geography_engine\geography_metric_schema_audit_*`.
 - [ ] **Slice 2C — gradient/noise feasibility gate (offline + small parity spike).** Only after 2A passes:
       design analytic value+gradient noise with one fade convention across Python/Rust/GLSL. This is the
       prerequisite for IQ/Jordan/Runevision-style slope filters. It is not a free two-line edit.
@@ -414,7 +418,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       De-risk in offline images first. This is a new subsystem, not current clipmap reuse.
       Current non-visual groundwork is captured in the Slice 2A spec port gate: world-anchored skeleton
       windows, apron/stitching, facts queries for skeleton fields, Python-vs-Rust fixtures, GPU sampling, and
-      cache/order-independence gates are required before any Rust/GLSL port.
+      cache/order-independence gates are required before any Rust/GLSL port. An offline Python spike now proves
+      the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts and bounded
+      adjacent-window seams (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
 - [ ] **Offline learning is allowed only as a parameter/distillation tool by default.** Learn transfer curves
       or coefficients for analytic operators before considering a runtime neural/stencil path. A page-stencil
       or CNN runtime breaks pure `f(x,z)` and needs apron, seam, parity, and collision plans before it can

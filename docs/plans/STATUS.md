@@ -136,6 +136,29 @@ queries for skeleton fields, Python-vs-Rust fixtures, GPU world-coordinate sampl
 and parity/perf/visible==collision gates. This is documentation of the required subsystem boundary only; no
 Rust/GLSL port has started.
 
+**Phase-7B-lite window seam spike:** added offline Python proof code in
+`tools/dem_pack/geography_skeleton_windows.py` plus report writer
+`tools/dem_pack/analyze_geography_skeleton_windows.py`. It builds fixed world-anchored coarse skeleton windows
+with aprons, routes accumulation inside the extended window, crops authoritative core facts, and exposes
+uplift/routed-surface/discharge/tributary/channel-axis plus saturated distance-to-crest/channel facts. Evidence:
+`python -m pytest tools\dem_pack\test_geography_engine.py tools\dem_pack\test_geography_skeleton.py
+tools\dem_pack\test_geography_skeleton_windows.py tools\dem_pack\test_worldgen_proto.py -q` is **30 passed**
+(pytest cache warning only). Seam report written to
+`D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`. This proves the windowing shape and a
+bounded seam strategy for sampled skeleton facts; it does **not** prove owner-accepted terrain, full hydrology,
+or a Rust/GLSL implementation.
+
+**Slice 2B metric/schema audit groundwork:** added
+`tools/dem_pack/analyze_geography_metric_schema.py` to measure approved WG9 kernels with the existing
+distillation metrics plus the newer cheap geomorphometric diagnostics. Reports:
+`D:\tmp\wg10_geography_engine\geography_metric_schema_audit_kernels.csv`,
+`D:\tmp\wg10_geography_engine\geography_metric_schema_audit_families.{csv,md}`, and
+`D:\tmp\wg10_geography_engine\geography_metric_schema_audit_summary.md`. Findings from the generated summary:
+`anisotropy` family medians span **0.314123-0.788793**, so it is **not dead**, but overlap means it should be
+a secondary/context metric rather than the sole `warp_amount` driver; current `vrm_7px` reports zero-range at
+this normalization/scale and should not be promoted as-is. Also fixed `biome_distill._structure_tensor_coherence`
+to avoid divide-by-zero warnings while preserving the intended zero-coherence fallback.
+
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
 `docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**

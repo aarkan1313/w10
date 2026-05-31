@@ -80,7 +80,9 @@ def _structure_tensor_coherence(z):
     l1 = 0.5 * (tr + disc)
     l2 = 0.5 * (tr - disc)
     denom = l1 + l2
-    coh = np.where(denom > 1e-12, (l1 - l2) / denom, 0.0)
+    coh = np.zeros_like(denom, dtype=np.float64)
+    mask = denom > 1e-12
+    coh[mask] = (l1[mask] - l2[mask]) / denom[mask]
     return float(np.clip(coh.mean(), 0.0, 1.0))
 
 

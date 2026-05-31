@@ -261,3 +261,11 @@ Minimum design before Rust/GLSL work:
   parity, visible==collision parity, and the existing no-black/perf gates.
 
 This is the minimum bar for pulling Phase 7B forward. It is intentionally a subsystem, not a shader tweak.
+
+**Current non-visual spike:** `tools/dem_pack/geography_skeleton_windows.py` proves the first subsystem piece
+offline: fixed world-anchored windows with aprons, routed accumulation inside the extended window, cropped
+authoritative core facts, and bounded adjacent-window seams for uplift, routed surface, discharge,
+tributaries, channel axis, and saturated distance facts. The report writer
+`tools/dem_pack/analyze_geography_skeleton_windows.py` emits
+`D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`. This is only a Python feasibility
+gate; it does not start the Rust/GLSL port and does not remove the owner visual acceptance gate.
