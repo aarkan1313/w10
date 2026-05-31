@@ -23,3 +23,11 @@ def test_apron_blur_exact_overlap_matches():
     overlap_a = a_core[:, 20:40]   # shared core band cols [40,60)
     overlap_b = b_core[:, 0:20]
     assert np.allclose(overlap_a, overlap_b, atol=1e-9)
+
+def test_affine_remap_is_data_independent_and_shared_border_safe():
+    a = np.array([[0.0, 0.5, 1.0]])
+    b = np.array([[1.0, -0.5, -1.0]])   # shares value 1.0 with a[:, -1] vs b[:, 0]
+    ra = v2.affine_remap(a, center=0.0, scale=0.5)
+    rb = v2.affine_remap(b, center=0.0, scale=0.5)
+    assert ra[0, 2] == rb[0, 0]          # shared 1.0 maps identically (no per-array min/max)
+    assert np.allclose(ra, (a - 0.0) * 0.5)

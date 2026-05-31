@@ -18,3 +18,8 @@ def apron_blur_crop(field_with_apron: np.ndarray, apron_px: int, sigma: float, t
     blurred = gaussian_filter(np.asarray(field_with_apron, dtype=np.float64), sigma=float(sigma),
                               mode="nearest", truncate=float(truncate))
     return blurred[a:-a, a:-a] if a > 0 else blurred
+
+def affine_remap(field: np.ndarray, center: float, scale: float) -> np.ndarray:
+    """Data-independent remap (replaces znorm). Same (center,scale) every window => shared
+    borders stay bit-identical. center/scale are tunable constants, NOT per-array statistics."""
+    return (np.asarray(field, dtype=np.float64) - float(center)) * float(scale)
