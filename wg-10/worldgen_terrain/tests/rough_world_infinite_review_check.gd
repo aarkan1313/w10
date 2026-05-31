@@ -53,25 +53,25 @@ func _run() -> int:
 	else:
 		if guides.visible:
 			errs.append("seam guides should be default-off")
-		if guides.get_child_count() != EXPECTED_SEAM_GUIDES:
-			errs.append("seam guides=%d, expected %d" % [guides.get_child_count(), EXPECTED_SEAM_GUIDES])
-	if seam_targets.size() != EXPECTED_SEAM_GUIDES:
-		errs.append("seam targets=%d, expected %d" % [seam_targets.size(), EXPECTED_SEAM_GUIDES])
+		if guides.get_child_count() != 0:
+			errs.append("default seam guides=%d, expected lazy 0" % guides.get_child_count())
+	if seam_targets.size() != 0:
+		errs.append("default seam targets=%d, expected lazy 0" % seam_targets.size())
 
 	if errs.is_empty():
-		scene.call("_move_window", 1, 0)
+		scene.call("_focus_next_seam")
 		await process_frame
 		chunks = scene.get_node_or_null("Chunks")
 		guides = scene.get_node_or_null("SeamGuides")
 		seam_targets = scene.get("_seam_targets")
-		if int(scene.get("_window_x")) != 0 or int(scene.get("_window_z")) != 0:
-			errs.append("full scene window moved to %d,%d, expected 0,0" % [int(scene.get("_window_x")), int(scene.get("_window_z"))])
 		if chunks == null or chunks.get_child_count() != EXPECTED_VISIBLE_CHUNKS:
 			errs.append("moved visible chunk count invalid")
-		if guides == null or guides.get_child_count() != EXPECTED_SEAM_GUIDES:
-			errs.append("moved seam guide count invalid")
+		if guides == null or not guides.visible:
+			errs.append("next-seam focus did not enable seam guides")
+		elif guides.get_child_count() != EXPECTED_SEAM_GUIDES:
+			errs.append("lazy seam guides=%d, expected %d" % [guides.get_child_count(), EXPECTED_SEAM_GUIDES])
 		if seam_targets.size() != EXPECTED_SEAM_GUIDES:
-			errs.append("moved seam target count invalid")
+			errs.append("lazy seam targets=%d, expected %d" % [seam_targets.size(), EXPECTED_SEAM_GUIDES])
 
 	scene.queue_free()
 	await process_frame

@@ -258,8 +258,10 @@ world at current scale, not just a smaller active window. The current distance-r
 `wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json`. It renders a full
 30x30 / 768 km deterministic scene at 41x41 vertices per chunk, with the same variants and seed switching.
 Godot smoke evidence: `[wg10-rough-infinite-review] status=pass visible_chunks=900 seam_guides=1740 seeds=2`.
-This proves a large reviewable deterministic area, not runtime streaming/cache. The 5x5/65 scene remains the
-route/corridor-detail review because the 30x30 distance scene is deliberately coarser.
+This proves a large reviewable deterministic area, not runtime streaming/cache. The first owner open looked
+like blue/fog or remote lag, so the initial camera now explicitly aims at the terrain center and seam guides are
+created lazily instead of as 1740 hidden startup meshes. The 5x5/65 scene remains the route/corridor-detail
+review because the 30x30 distance scene is deliberately coarser.
 
 ## 11. Port Gate
 

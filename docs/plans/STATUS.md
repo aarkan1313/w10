@@ -278,8 +278,11 @@ adjacent corr **0.670**. The older corridor-component match metric falls to **0.
 resolution, so it is explicitly **not** used as the route acceptance gate for 30x30. Verification:
 `python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_highlands_keeper_contract.py tools\dem_pack\test_geography_skeleton_windows.py -q`
 is **24 passed** (pytest cache warning only); Godot smoke checks pass for 3x3, 5x5, and 30x30, with the 30x30
-scene instantiating **900** visible chunks and **1740** seam guides. This still does not implement runtime
-streaming/cache; it proves a large deterministic reviewable world area before the Rust/GLSL port gate.
+scene instantiating **900** visible chunks and lazily building **1740** seam guides only when seam focus/guide
+inspection is requested. After the first owner open reported only blue/fog or possible remote lag, the review
+camera was changed to explicitly `look_at` the terrain center and seam guides were made lazy so the initial
+30x30 frame is lighter and framed toward terrain. This still does not implement runtime streaming/cache; it
+proves a large deterministic reviewable world area before the Rust/GLSL port gate.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

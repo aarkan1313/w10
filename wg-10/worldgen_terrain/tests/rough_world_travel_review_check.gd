@@ -57,10 +57,10 @@ func _run() -> int:
 	else:
 		if guides.visible:
 			errs.append("seam guides should be default-off")
-		if guides.get_child_count() != EXPECTED_SEAM_GUIDES:
-			errs.append("seam guides=%d, expected %d" % [guides.get_child_count(), EXPECTED_SEAM_GUIDES])
-	if seam_targets.size() != EXPECTED_SEAM_GUIDES:
-		errs.append("seam targets=%d, expected %d" % [seam_targets.size(), EXPECTED_SEAM_GUIDES])
+		if guides.get_child_count() != 0:
+			errs.append("default seam guides=%d, expected lazy 0" % guides.get_child_count())
+	if seam_targets.size() != 0:
+		errs.append("default seam targets=%d, expected lazy 0" % seam_targets.size())
 
 	if errs.is_empty():
 		scene.call("_cycle_variant")
@@ -74,6 +74,16 @@ func _run() -> int:
 			errs.append("variant dressing=%s, expected review_biome" % str(scene.get("_dressing_style")))
 		if chunks == null or chunks.get_child_count() != EXPECTED_CHUNKS:
 			errs.append("variant rebuild chunk count invalid")
+		scene.call("_focus_next_seam")
+		await process_frame
+		guides = scene.get_node_or_null("SeamGuides")
+		seam_targets = scene.get("_seam_targets")
+		if guides == null or not guides.visible:
+			errs.append("next-seam focus did not enable seam guides")
+		elif guides.get_child_count() != EXPECTED_SEAM_GUIDES:
+			errs.append("lazy seam guides=%d, expected %d" % [guides.get_child_count(), EXPECTED_SEAM_GUIDES])
+		if seam_targets.size() != EXPECTED_SEAM_GUIDES:
+			errs.append("lazy seam targets=%d, expected %d" % [seam_targets.size(), EXPECTED_SEAM_GUIDES])
 
 	scene.queue_free()
 	await process_frame

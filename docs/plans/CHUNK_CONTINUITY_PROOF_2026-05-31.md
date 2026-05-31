@@ -121,7 +121,7 @@ replace the static review payload.
   not only a moving 5x5 window:
   - chunks: `30x30`, world span: `768.0 km`, chunk_n: `41`
   - visible chunks in-scene: `900`
-  - seam guides in-scene: `1740`
+  - seam guides in-scene: `1740`, built lazily only when guide/seam focus is requested
   - shared seam rows across two seeds: `3480`
   - height max abs delta: `0.000100`
   - normal max angle: `0.0016 deg`
@@ -129,7 +129,9 @@ replace the static review payload.
   - adjacent pair median delta: `0.3762`
   - adjacent max correlation: `0.6704`
   This is the distance/continuation read requested by the owner. The 5x5/65
-  scene remains the route/corridor-detail read.
+  scene remains the route/corridor-detail read. The initial 30x30 camera now
+  explicitly looks at the terrain center, after the first owner open looked like
+  blue/fog or possible remote lag.
 
 ## What It Does Not Prove
 

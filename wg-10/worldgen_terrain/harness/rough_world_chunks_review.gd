@@ -38,6 +38,7 @@ var _dressing_style := "plain"
 var _overview := false
 var _flat_lighting := false
 var _show_seam_guides := false
+var _seam_guides_built := false
 var _seam_focus_index := -1
 var _overlay_mode := OVERLAY_TERRAIN
 var _seam_targets: Array[Dictionary] = []
@@ -189,6 +190,7 @@ func _build_chunks(reset_camera: bool = false) -> void:
 	_guides_root.visible = _show_seam_guides
 	add_child(_guides_root)
 	_seam_targets.clear()
+	_seam_guides_built = false
 
 	var seed_world: Dictionary = _seed_worlds[_seed_index]
 	var corridor_height := _height_percentile(seed_world["height"], 0.55)
@@ -202,10 +204,20 @@ func _build_chunks(reset_camera: bool = false) -> void:
 		mesh_instance.mesh = _make_mesh(chunk, corridor_height)
 		mesh_instance.material_override = _make_material()
 		_chunks_root.add_child(mesh_instance)
-	_build_seam_guides(chunk_grid)
+	if _show_seam_guides:
+		_build_seam_guides(chunk_grid)
 
 	if reset_camera:
 		_focus_camera()
+
+func _ensure_seam_guides() -> void:
+	if _seam_guides_built:
+		return
+	if _seed_worlds.is_empty() or _guides_root == null:
+		return
+	var seed_world: Dictionary = _seed_worlds[_seed_index]
+	var chunk_grid := _chunk_grid(seed_world)
+	_build_seam_guides(chunk_grid)
 
 func _chunk_grid(seed_world: Dictionary) -> Array:
 	var chunk_count := int(_payload.get("chunk_count", 3))
@@ -226,6 +238,9 @@ func _chunk_grid(seed_world: Dictionary) -> Array:
 func _build_seam_guides(chunk_grid: Array) -> void:
 	if _guides_root == null:
 		return
+	_seam_targets.clear()
+	for child in _guides_root.get_children():
+		child.queue_free()
 	var window_count := _active_window_count()
 	for z in range(_window_z, _window_z + window_count):
 		for x in range(_window_x, _window_x + window_count - 1):
@@ -237,6 +252,7 @@ func _build_seam_guides(chunk_grid: Array) -> void:
 			var chunk: Dictionary = chunk_grid[z][x]
 			if not chunk.is_empty():
 				_add_seam_guide(chunk, false)
+	_seam_guides_built = true
 
 func _make_guide_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -451,6 +467,8 @@ func _input(event: InputEvent) -> void:
 			KEY_B:
 				_show_seam_guides = not _show_seam_guides
 				if _guides_root != null:
+					if _show_seam_guides:
+						_ensure_seam_guides()
 					_guides_root.visible = _show_seam_guides
 			KEY_N:
 				_focus_next_seam()
@@ -492,19 +510,21 @@ func _focus_camera() -> void:
 	_apply_camera_limits()
 	var span := _active_window_span_m()
 	var center := _active_window_center()
-	_camera.global_position = center + Vector3(0.0, maxf(220.0, span * 0.052 + _height_scale() * 0.30), span * 0.185)
-	_camera.rotation_degrees = Vector3(-24.0, 0.0, 0.0)
+	_camera.global_position = center + Vector3(0.0, maxf(220.0, span * 0.030 + _height_scale() * 0.80), span * 0.090)
+	_camera.look_at(center, Vector3.UP)
 
 func _overview_camera() -> void:
 	_apply_camera_limits()
 	var span := _active_window_span_m()
 	var center := _active_window_center()
-	_camera.global_position = center + Vector3(0.0, span * 0.54, span * 0.58)
-	_camera.rotation_degrees = Vector3(-48.0, 0.0, 0.0)
+	_camera.global_position = center + Vector3(0.0, span * 0.30, span * 0.36)
+	_camera.look_at(center, Vector3.UP)
 
 func _focus_next_seam() -> void:
 	if _seam_targets.is_empty():
-		return
+		_ensure_seam_guides()
+		if _seam_targets.is_empty():
+			return
 	_show_seam_guides = true
 	if _guides_root != null:
 		_guides_root.visible = true
