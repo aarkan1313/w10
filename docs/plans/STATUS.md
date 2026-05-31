@@ -148,6 +148,24 @@ tools\dem_pack\test_geography_skeleton_windows.py tools\dem_pack\test_worldgen_p
 bounded seam strategy for sampled skeleton facts; it does **not** prove owner-accepted terrain, full hydrology,
 or a Rust/GLSL implementation.
 
+**Phase 7B runtime design:** added
+`docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`. It defines the future
+subsystem boundary: deterministic world-keyed windows, extended/apron routing, authoritative core facts,
+saturated distance facts, cache semantics, Facts/collision/render parity, and the slice order for a future
+Rust/GLSL port. This is design-ready groundwork only; do not implement it until Phase 5 accepts a specific
+keeper that actually requires routed skeleton facts.
+
+**Phase 6 surfacing design:** added
+`docs/superpowers/specs/2026-05-31-worldgen-phase6-surfacing-design.md`. It reframes the old normals/materials
+work for the post-pivot roadmap: one shared `SurfaceDescriptor`, analytic normals first, data-driven material
+packs, deterministic scatter/dressing, and parity/perf/seam gates. This is also design-ready only; no Phase 6
+implementation until Phase 5 has an owner-accepted live height core.
+
+**Phase 7A local filter design:** added
+`docs/superpowers/specs/2026-05-31-worldgen-phase7a-local-erosion-filters-design.md`. It defines local erosion/
+gully/detail filters as bounded polish over an accepted height/descriptor path, distinct from Phase 7B
+connected drainage. It is blocked on Phase 5/6 acceptance and the analytic gradient feasibility gate.
+
 **Slice 2B metric/schema audit groundwork:** added
 `tools/dem_pack/analyze_geography_metric_schema.py` to measure approved WG9 kernels with the existing
 distillation metrics plus the newer cheap geomorphometric diagnostics. Reports:

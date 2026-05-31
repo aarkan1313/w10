@@ -269,3 +269,6 @@ tributaries, channel axis, and saturated distance facts. The report writer
 `tools/dem_pack/analyze_geography_skeleton_windows.py` emits
 `D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`. This is only a Python feasibility
 gate; it does not start the Rust/GLSL port and does not remove the owner visual acceptance gate.
+
+Standalone runtime design spec:
+`docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`.

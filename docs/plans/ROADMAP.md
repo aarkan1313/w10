@@ -386,7 +386,9 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
 ### Phase 6 — Materials & surfacing (AAA read, not height cheating)
 
 Start after Phase 5 has an owner-accepted live height core. Do not wait for perfect hydrology before making
-the system look like terrain; AAA read comes from height + normals + materials + dressing together.
+the system look like terrain; AAA read comes from height + normals + materials + dressing together. Current
+design spec: `docs/superpowers/specs/2026-05-31-worldgen-phase6-surfacing-design.md`. It is design-ready
+only; implementation remains blocked until Phase 5 accepts a live height core.
 - [ ] Analytic normals from the generated field (or a parity-safe sampled derivative path) → real lighting;
       retire the unshaded debug height color as the review surface.
 - [ ] Biome material packs: slope/height/curvature/biome → albedo, roughness, normal detail; swappable via
@@ -408,6 +410,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       - prototype Runevision/Phacelle-style slope-aligned gully filtering as a filter over the accepted height
         field, with clear warnings that gullies can dead-end and are not hydrology;
       - port only if CPU/GPU order, hash-grid pivots, gradients, and perf are gated.
+      Current design spec: `docs/superpowers/specs/2026-05-31-worldgen-phase7a-local-erosion-filters-design.md`.
+      It is design-ready only; implementation remains blocked on Phase 5/6 acceptance and the analytic
+      gradient feasibility gate.
 - [ ] **Phase 7B — true connected drainage milestone / pull-forward escape hatch.** If Phase 5 cannot hit
       the 85%-class geography read without real routed structure, pull this before the Rust port. Design a
       world-anchored deterministic coarse drainage field:
@@ -421,6 +426,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       cache/order-independence gates are required before any Rust/GLSL port. An offline Python spike now proves
       the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts and bounded
       adjacent-window seams (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
+      Runtime design spec:
+      `docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`. It is design-ready
+      only; implementation is still blocked on Phase 5 keeper acceptance.
 - [ ] **Offline learning is allowed only as a parameter/distillation tool by default.** Learn transfer curves
       or coefficients for analytic operators before considering a runtime neural/stencil path. A page-stencil
       or CNN runtime breaks pure `f(x,z)` and needs apron, seam, parity, and collision plans before it can
