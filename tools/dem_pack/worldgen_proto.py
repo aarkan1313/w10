@@ -163,12 +163,107 @@ def cellular_edges(wx, wz, freq, seed=0, sharpness=2.0):
     return 1.0 - np.clip(gap * float(sharpness), 0.0, 1.0)
 
 
+def range_spine_field(wx, wz, cell_size=65000.0, width=7000.0, seed=0, neighborhood=2):
+    """World-anchored procedural range spines, high near long deterministic line segments.
+
+    This is deliberately a different organizing primitive than fBm/ridged noise. It is still local-ish:
+    each point only checks deterministic line segments in nearby coarse cells. Used for render-first
+    experiments, not accepted runtime architecture yet.
+    """
+    gx = np.floor(wx / cell_size).astype(np.int64)
+    gz = np.floor(wz / cell_size).astype(np.int64)
+    out = np.zeros_like(wx, dtype=np.float64)
+    for dz in range(-neighborhood, neighborhood + 1):
+        for dx in range(-neighborhood, neighborhood + 1):
+            cx = gx + dx
+            cz = gz + dz
+            jitter_x = (_hash2(cx, cz, seed + 1) - 0.5) * 0.65
+            jitter_z = (_hash2(cx, cz, seed + 2) - 0.5) * 0.65
+            center_x = (cx.astype(np.float64) + 0.5 + jitter_x) * cell_size
+            center_z = (cz.astype(np.float64) + 0.5 + jitter_z) * cell_size
+            angle = _hash2(cx, cz, seed + 3) * np.pi * 2.0
+            length = cell_size * (1.15 + 0.75 * _hash2(cx, cz, seed + 4))
+            vx = np.cos(angle) * length
+            vz = np.sin(angle) * length
+            x0 = center_x - vx * 0.5
+            z0 = center_z - vz * 0.5
+            denom = vx * vx + vz * vz + 1e-9
+            t = np.clip(((wx - x0) * vx + (wz - z0) * vz) / denom, 0.0, 1.0)
+            px = x0 + t * vx
+            pz = z0 + t * vz
+            d = np.sqrt((wx - px) * (wx - px) + (wz - pz) * (wz - pz))
+            out = np.maximum(out, np.exp(-((d / float(width)) ** 2)))
+    return np.clip(out, 0.0, 1.0)
+
+
+def fault_block_field(wx, wz, cell_size=80000.0, width=9000.0, seed=0, neighborhood=2):
+    """Broad signed fault bands. Produces blocky uplift/subsidence unlike isotropic fBm."""
+    gx = np.floor(wx / cell_size).astype(np.int64)
+    gz = np.floor(wz / cell_size).astype(np.int64)
+    out = np.zeros_like(wx, dtype=np.float64)
+    norm = 0.0
+    for dz in range(-neighborhood, neighborhood + 1):
+        for dx in range(-neighborhood, neighborhood + 1):
+            cx = gx + dx
+            cz = gz + dz
+            center_x = (cx.astype(np.float64) + 0.5 + (_hash2(cx, cz, seed + 10) - 0.5) * 0.45) * cell_size
+            center_z = (cz.astype(np.float64) + 0.5 + (_hash2(cx, cz, seed + 11) - 0.5) * 0.45) * cell_size
+            angle = _hash2(cx, cz, seed + 12) * np.pi * 2.0
+            nx = -np.sin(angle)
+            nz = np.cos(angle)
+            signed = (wx - center_x) * nx + (wz - center_z) * nz
+            amp = (_hash2(cx, cz, seed + 13) * 2.0 - 1.0)
+            influence = np.exp(-((signed / (cell_size * 0.55)) ** 2))
+            out += amp * np.tanh(signed / float(width)) * influence
+            norm += 1.0
+    return np.clip(out / max(norm * 0.22, 1e-9), -1.0, 1.0)
+
+
+def flow_accumulation_channels(z, power=0.45):
+    """Offline flow accumulation on a rendered grid. Returns [0,1] branch/channel mask.
+
+    This is intentionally not a cheap local per-page operator. It is here to answer a research question:
+    if connected drainage is what the owner misses, does even a crude flow pass immediately read more real?
+    If yes, true world-anchored coarse flow belongs in the roadmap instead of more local noise tuning.
+    """
+    h = np.asarray(z, dtype=np.float64)
+    rows, cols = h.shape
+    acc = np.ones_like(h, dtype=np.float64)
+    order = np.argsort(-h.ravel())
+    for idx in order:
+        y = int(idx // cols)
+        x = int(idx - y * cols)
+        best_y = y
+        best_x = x
+        best_h = h[y, x]
+        for oy in (-1, 0, 1):
+            for ox in (-1, 0, 1):
+                if ox == 0 and oy == 0:
+                    continue
+                ny = y + oy
+                nx = x + ox
+                if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+                    continue
+                if h[ny, nx] < best_h:
+                    best_h = h[ny, nx]
+                    best_y = ny
+                    best_x = nx
+        if best_y != y or best_x != x:
+            acc[best_y, best_x] += acc[y, x]
+    ch = np.log1p(acc)
+    ch = ch / (float(ch.max()) + 1e-9)
+    return np.power(ch, float(power))
+
+
 STRUCTURE_VARIANTS = (
     "baseline",
     "recursive_warp",
     "multifractal_ridges",
     "ridge_valley_coupled",
     "cellular_valleys",
+    "range_spines",
+    "fault_blocks",
+    "flow_carved_ranges",
 )
 
 
@@ -236,5 +331,23 @@ def generate_variant(wx, wz, params, seed=0, variant="baseline"):
         channels = np.maximum(valley_net, cells * 0.85)
         h = h + params["ridge_strength"] * upland * ridges
         h = h - params["valley_depth"] * (0.20 + 0.90 * upland) * channels
+    elif variant == "range_spines":
+        broad = range_spine_field(wx, wz, cell_size=76000.0, width=21000.0, seed=seed + 400)
+        sharp = range_spine_field(wx, wz, cell_size=76000.0, width=6500.0, seed=seed + 400)
+        ridges = ridged_multifractal(w_x, w_z, params["ridge_freq"] * 0.60, 4, seed + 100, gain=0.58)
+        h = h * 0.45 + params["ridge_strength"] * (0.95 * broad + 0.55 * sharp + 0.25 * ridges)
+        h = h - params["valley_depth"] * 0.35 * ridged_multifractal(w_x, w_z, params["valley_freq"] * 0.45, 4, seed + 200)
+    elif variant == "fault_blocks":
+        faults = fault_block_field(wx, wz, cell_size=90000.0, width=9000.0, seed=seed + 500)
+        broad = range_spine_field(wx, wz, cell_size=85000.0, width=24000.0, seed=seed + 510)
+        sharp = range_spine_field(wx, wz, cell_size=85000.0, width=7500.0, seed=seed + 510)
+        h = h * 0.40 + 0.55 * faults + params["ridge_strength"] * (0.65 * broad + 0.35 * sharp)
+        h = h - params["valley_depth"] * 0.45 * ridged_multifractal(w_x, w_z, params["valley_freq"] * 0.50, 4, seed + 200)
+    elif variant == "flow_carved_ranges":
+        broad = range_spine_field(wx, wz, cell_size=80000.0, width=23000.0, seed=seed + 600)
+        sharp = range_spine_field(wx, wz, cell_size=80000.0, width=7500.0, seed=seed + 600)
+        base = h * 0.38 + params["ridge_strength"] * (0.80 * broad + 0.45 * sharp)
+        channels = flow_accumulation_channels(base)
+        h = base - (0.25 + params["valley_depth"] * 0.95) * channels
 
     return h * params["relief_m"]

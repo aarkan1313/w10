@@ -58,7 +58,14 @@ weird line/scaffold artifacts; real WG9/DEM reference kernels make the gap obvio
 geography is not an averaged set of per-biome statistics; it is a nuanced mix of landform regimes and local
 histories. Next algorithm direction is now explicit in ROADMAP Phase 5: hierarchical landform composition
 with coarse regions/regimes, irregular ridge/drainage skeletons, and per-region process/detail, judged against
-real DEM contact sheets before any runtime port.
+real DEM contact sheets before any runtime port. Current owner preference from the v5 geography-engine sheet:
+the **far bottom-right synthetic panel (`badlands_mix`) is the best so far**; next probe should focus around
+that parameter neighborhood rather than broad unrelated variants. Follow-up probes added an oblique
+scene-read render plus metric reports. The scene probe makes the current best candidates look more
+scene-plausible than the forensic hillshade alone, but the metric pass confirms the 45 km synth is still
+too smooth vs references: synthesized local relief/highpass/slope are far below real DEM rows. Next
+improvement target is therefore not more broad parameter search; it is richer close-scale process/detail tied
+to the accepted badlands/range structural frame.
 
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:

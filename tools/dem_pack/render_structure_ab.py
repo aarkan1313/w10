@@ -23,7 +23,8 @@ sys.path.insert(0, HERE)
 import worldgen_proto as wg  # noqa: E402
 from render_worldgen import BADLANDS, MOUNTAIN, PLAINS, hillshade  # noqa: E402
 
-OUT_DEFAULT = r"D:\tmp\wg10_structure_ab"
+OUT_DEFAULT = r"D:\tmp\wg10_structure_ab2"
+DEFAULT_VARIANTS = ["baseline", "range_spines", "fault_blocks", "flow_carved_ranges"]
 PARAMS = {
     "mountain": MOUNTAIN,
     "plains": PLAINS,
@@ -39,6 +40,9 @@ LABELS = {
     "multifractal_ridges": "multifractal ridges",
     "ridge_valley_coupled": "ridge+valley coupled",
     "cellular_valleys": "cellular valleys",
+    "range_spines": "range spines",
+    "fault_blocks": "fault blocks",
+    "flow_carved_ranges": "flow-carved ranges",
 }
 
 
@@ -102,7 +106,7 @@ def main() -> None:
     ap.add_argument("--size", type=int, default=512)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--families", nargs="*", default=["mountain", "plains", "badlands"])
-    ap.add_argument("--variants", nargs="*", default=list(wg.STRUCTURE_VARIANTS))
+    ap.add_argument("--variants", nargs="*", default=DEFAULT_VARIANTS)
     args = ap.parse_args()
 
     unknown_families = [f for f in args.families if f not in PARAMS]

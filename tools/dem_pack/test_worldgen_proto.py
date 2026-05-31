@@ -69,6 +69,19 @@ def test_ridged_multifractal_and_cellular_edges_are_bounded_nonflat():
         assert float(np.ptp(field)) > 0.1
 
 
+def test_range_fault_and_flow_structure_fields_are_bounded_nonflat():
+    wx, wz = _grid(48, span=120000.0)
+    spines = wg.range_spine_field(wx, wz, seed=8)
+    faults = wg.fault_block_field(wx, wz, seed=9)
+    channels = wg.flow_accumulation_channels(wg.fbm(wx, wz, base_freq=1.0/30000.0, octaves=4, seed=10))
+    assert spines.min() >= -0.0001 and spines.max() <= 1.0001
+    assert faults.min() >= -1.0001 and faults.max() <= 1.0001
+    assert channels.min() >= -0.0001 and channels.max() <= 1.0001
+    assert float(np.ptp(spines)) > 0.1
+    assert float(np.ptp(faults)) > 0.1
+    assert float(np.ptp(channels)) > 0.1
+
+
 MOUNTAIN = {
     "relief_m": 1200.0,
     "octave_amps": [1.0, 0.5, 0.25, 0.12, 0.06, 0.03],
