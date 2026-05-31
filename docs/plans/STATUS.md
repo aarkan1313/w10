@@ -5,6 +5,13 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ CURRENT (2026-05-31):** Phase 5, building **Tier-3 guaranteed traversability** to unblock the Rust port.
+> Tier-3 detection + verify-first no-op BUILT + seam-safe (18 offline tests green, `tools/dem_pack/
+> traverse_corridor.py` + keeper_v2); the **carve is blocked** on a seam-stitched connected-corridor fact (the
+> Phase 7B pull-forward) — cross-seam join already works, only edge-spanning missing. NEXT: spec connected-
+> corridor routing → build → carve → owner review. Full current state is the "fork-resolution session update"
+> section below + ROADMAP "▶ YOU ARE HERE" box. (The 2026-05-30 handoff pointer just below is older history.)
+
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
 > point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now
 > gate-verified after an editor-closed rebuild: **cargo 121 passed**, **fast 6/6**, **gpu 4/4**, **m3 9/9**.

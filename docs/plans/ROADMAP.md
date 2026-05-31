@@ -4,18 +4,23 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-30 (**M0–M4 DONE; MAJOR PIVOT — height core being rebuilt.** Latest verified gates:
-cargo 121 · fast 6/6 · gpu 4/4 · m3 9/9 · dem_pack pytest 22. M0-M4 (toolchain, deterministic gen, GPU
-parity, render pipeline, Facts API) are real + done. **But owner image/fly review showed the old height
-content reads blobby/placed/tiling/noisy rather than real geography.** Root causes already rejected:
-`sample_kernel` tiled DEMs as the whole height; spectral synthesis preserved roughness but discarded
-phase/structure; scalar warped-noise tuning changed texture more than geography. Phase 5 is now realigned
-as an **85%-target geography-engine prototype**: hierarchical landform regimes, irregular ridge/drainage
-skeletons, DEM-reference contact sheets, and explicit red/yellow/green expectation gates before any Rust/GLSL
-port. The OLD M5-detail/M6-materials/M7-erosion milestones are SUPERSEDED + re-sequenced into the new plan.
-Current truth: vision spec `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md`, height-core
-spec `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`, `docs/plans/LOOSE_ENDS_LEDGER.md`,
-STATUS.md top. **NEXT: Slice 2A geography-engine prototype, offline/render-first, with real DEM references.**)
+Last updated: 2026-05-31 (**Phase 5 ACTIVE — see the "▶ YOU ARE HERE" box under the Phase 5 header for the
+plain-language current state.** Short version: M0–M4 DONE (engine machinery; gates cargo 121 · fast 6/6 · gpu
+4/4 · m3 9/9 · dem_pack pytest 22). Phases 6–9 NOT started (gated on Phase 5). Phase 5 = prove the terrain
+CONTENT offline before the Rust port; the geography engine + a frozen keeper exist; the keeper fork was
+resolved into A/B/`keeper_v2` selectable variants; the real quality bar became guaranteed **traversability**
+(**Tier-3**, current work). Tier-3 detection + verify-first no-op are BUILT + seam-safe (18 offline tests
+green); the **carve is blocked** on a seam-stitched connected-corridor fact = the **Phase 7B pull-forward**
+(planned escape hatch, not a detour). NEXT: spec connected-corridor routing → build offline → carve → owner
+review → unblock Slice 3 (Rust port). Truth sources: STATUS.md top, LEDGER B7/B8, Tier-3 spec
+`docs/superpowers/specs/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md`.
+
+[history] 2026-05-30 (**M0–M4 DONE; MAJOR PIVOT — height core being rebuilt.** Owner image/fly review showed
+the old height content read blobby/placed/tiling/noisy; root causes rejected: `sample_kernel` tiled DEMs as
+the whole height, spectral synthesis discarded phase/structure, scalar warped-noise tuning changed texture not
+geography. Phase 5 realigned as an 85%-target geography-engine prototype before any Rust/GLSL port; old
+M5/M6/M7 milestones superseded + re-sequenced. Specs: `…/2026-05-30-worldgen10-north-star-vision.md`,
+`…/2026-05-30-worldgen-core-design.md`.))
 
 [history] M3 slice 8 (pre-reset) — seam + geomorph + continuity gate; superseded by the reset above when a real fly exposed the multi-level assembly was still broken.
 
@@ -271,6 +276,24 @@ Legend: `[x]` done · `[~]` in progress · `[ ]` not started. Each phase = its o
 plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-judged; gates prove invariants.
 
 ### Phase 5 — Worldgen core rebuild (ACTIVE) — 85%-target geography engine
+
+> **▶ YOU ARE HERE (2026-05-31) — Phase 5, working to unblock the Rust port (Slice 3).** Plain-language state:
+> - **Milestones 0–4 are DONE** (engine machinery: toolchain, CPU worldgen, GPU parity, render pipeline, Facts
+>   API). Phases 6–9 have NOT started — they're all gated on Phase 5 accepting a live height core.
+> - **Phase 5 is about the terrain CONTENT** (what the height *looks like*), proven offline in Python before any
+>   Rust/GLSL port. Slices 1–2A built the geography engine; **Slice 2A-close froze a keeper** (`keeper_v1`).
+> - **The keeper fork (B7):** "rough_highlands" turned out to name 3 different formulas; we built **`keeper_v2`**
+>   (best-of-both, seam-exact) and kept A/B/v2 as selectable variants.
+> - **The real quality bar = traversability (B8):** owner direction shifted to "guarantee you can cross a
+>   barrier region." That's **Tier-3** (current active work, offline Python).
+> - **Tier-3 status:** detection + verify-first no-op BUILT + seam-safe (18 tests green). The **carve is BLOCKED**
+>   — proven that a connected route needs a seam-stitched **connected-corridor fact**, which is the **Phase 7B
+>   pull-forward** (see Phase 7B below — the roadmap explicitly allows pulling it into Phase 5 when traversability
+>   demands it; this is that trigger, not a detour). The cross-seam-JOIN half already works; only edge-spanning
+>   is missing → tractable.
+> - **NEXT:** spec the connected-corridor routing (edge-spanning + seam-join) → build offline → local seam-exact
+>   carve → owner review → only THEN unblock Slice 3 (Rust port). Detail: Slice 3 block below, `STATUS.md` top,
+>   LEDGER B7/B8, specs `…/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md` (§1.2 = the finding).
 
 Replaces `height::height`/`sample_kernel` (the tiling) with a deterministic generator, but the target is no
 longer "better warped noise." The target is an **85%-class geography read**: at normal game/fly-camera
