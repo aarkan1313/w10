@@ -373,8 +373,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       deltas of 0.661 on x and 1.442 on z for seed 133, so a real infinite implementation must remove
       window-local normalization/authority before porting. A wider non-rendered virtual-travel audit now builds
       a 5x5 / 128 km lattice from independent windows for both seeds; 40 seams per seed have height max 0.0,
-      corridor min 0.971/1.000, and adjacent max corr 0.341/0.389. This supports the infinite-world direction
-      but does not replace a live streaming/cache/player-travel review. A visual seam audit now mirrors the
+      corridor min 0.971/1.000, and adjacent max corr 0.341/0.389. This supports the M3-backed streaming
+      direction but does not replace a live streaming/cache/player-travel review. A visual seam audit now mirrors the
       Godot review mesh's edge normal/slope/default-color/corridor math and reports zero discontinuity across
       all 3x3 shared edges for both seeds; this is gate evidence only, not owner acceptance. A static contact
       sheet (`rough_world_chunks_review_contact.png`) renders both seeds in terrain, seam-guide, corridor, and
@@ -382,6 +382,11 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       Owner visual seam verdict on the opened Godot scene: seams look good visually. Treat that as acceptance
       of the bounded 3x3 seam-visibility proof only; full terrain/gameplay quality, live streaming/cache,
       player-travel pacing, and Rust/GLSL runtime acceptance remain blocking gates before porting.
+      Follow-up correction: the 30x30 static JSON scene is now only a bounded distance proxy
+      (`rough_world_distance_proxy.tscn`), not an infinite-world proof. Do not expand static super-windows as
+      the roadmap path. The real next implementation target is an M3-backed rough-highlands streaming spike:
+      a deterministic world-coordinate provider feeding the existing page/streamer/cache shape, with gates for
+      cache-order independence, seams, seed/version determinism, route continuity, no-black, and perf.
 - [x] **Slice 2A-close - candidate keeper freeze / implementation bridge.** The rough-highlands keeper is now
       frozen as `rough_highlands_keeper_v1` rather than only review scripts. Contract:
       `docs/superpowers/specs/2026-05-31-worldgen-rough-highlands-keeper-contract.md`. Fixture/export/tests:
@@ -392,6 +397,14 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       reproducible contact-sheet hash. This closes the roadmap-adherence gap between "owner likes the
       direction / seams look good" and "there is a precise implementation target." It still does **not** open
       the Rust/GPU port gate; full terrain/gameplay travel acceptance remains open.
+      **⚠ DRIFT (2026-05-31):** the frozen formula (`_compose_windowed_height`, call it B) does NOT reproduce
+      the shape the owner actually approved on the 90 km `rough_world_review.tscn` scene (`compose_height`, call
+      it A). Verified on identical world coords: `corr(A,B) = +0.13` and B relief = 35% of A — B is a different,
+      much flatter terrain, only loosely related to A. B is a legitimate seam-safe rewrite (A's per-window
+      `_condition()` normalization broke seams), but "owner accepted the direction/seams" silently hardened into
+      the frozen *formula* B without re-validating it against A. So "owner likes the direction" must NOT be read
+      as "owner approved this height formula." Resolve before Slice 3 (see the Slice 3 block + memory
+      `worldgen10-keeper-formula-fork`).
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
@@ -423,7 +436,20 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       cargo 121, fast 6/6, gpu 4/4, m3 9/9 after an editor-closed rebuild. These are in the KEPT
       render/perf foundation and the rebuild sits on them: pool RID cleanup, structural never-black under
       capacity pressure, and terrain-vs-sky/detail-on-off perf gate.
-- [ ] **Slice 3 — Rust generator core, accepted geography stack only.** Port the owner-accepted Phase-5
+- [ ] **Slice 3 — Rust generator core, accepted geography stack only. ⛔ BLOCKED on a final owner-accepted
+      stack (fork acted on; now also gated on Tier-3 traversability).**
+      The A/B drift (frozen `keeper_v1` = formula B ≠ owner-approved formula A; `corr(A,B)=+0.13`, B 35% of A's
+      relief) has been ACTED ON (2026-05-31): `keeper_v2` (best-of-both: A's regimes on B's seam-safe substrate)
+      is BUILT + seam-exact + committed (`tools/dem_pack/keeper_v2.py`, 23 tests); an A|B|v2 in-place switcher
+      scene + a Tier-1 traversability gate are committed. Owner direction shifted from "pick one keeper" to
+      **keep all three as selectable variants AND pursue guaranteed regime-aware traversability** (Tier-3) as
+      the real quality bar — v2 is the current traversability front-runner (the only variant with a crossing
+      corridor at play scales; A is too spiky, no crossing route). So the single port target is not yet frozen:
+      it depends on the Tier-3 guaranteed-traversability outcome (brainstormed design approved, spec pending —
+      memory `worldgen10-tier3-guaranteed-traversability`). Do not port any keeper as-is until that lands and
+      the owner accepts a final stack. (Memory `worldgen10-keeper-formula-fork`, `worldgen10-too-flat-decomposition`.)
+
+      Once unblocked: port the owner-accepted Phase-5
       stack to `height.rs` and replace `sample_kernel`. If the accepted offline result depends on a coarse
       regime/drainage skeleton, design that data model first instead of flattening it into ad-hoc noise.
       Do not include gradient filters unless 2C is green. Do not inherit the old DEM-pack z-score/range bug;
@@ -524,6 +550,15 @@ rendered surface. Unchanged from the old "Milestone 8" plan; tracked, built when
 - [ ] Compose the edit delta into the generated height (page-gen or re-bake) → visible==collision on edits.
 - [ ] Live edit → bounded/async page refresh (never a hot-path stall — the WG9 rule).
 - [ ] Edit persistence (save/load) — optional; the M4 seam isolates the store, so saving is additive.
+
+### After Phase 9 — see `docs/plans/POST_ROADMAP.md`
+
+The forward plan above ends at Phase 9. What comes after — edit-physics/voxel-edit loop, ecosystem & vegetation
+rendering, water & hydrography, authored-area composition, and the productization capstone (Phases 10–14), plus
+a revisit-conditioned Horizon backlog — is designed in `docs/plans/POST_ROADMAP.md`, with per-phase spec sheets
+in `docs/superpowers/specs/2026-05-31-worldgen-phase{10,11,12,13}-*.md`. All design-direction only; every phase
+is gated behind owner acceptance of the phases it depends on, and the hard blocker for the whole tail is still
+an owner-accepted Phase 5 keeper.
 
 ---
 

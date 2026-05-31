@@ -57,6 +57,56 @@ against the frozen fixture. Decision: no more broad visual combo search; next wo
 travel/terrain review or Rust CPU skeleton-facts parity against the frozen contract when the owner greenlights
 porting.
 
+**⚠ KEEPER FORMULA FORK (2026-05-31) — BLOCKS Slice 3.** "rough_highlands" now names three different height
+formulas, and the one the owner approved by eye is NOT the one that was frozen. **A — approved look:**
+`geography_skeleton.compose_height` (rough_anchor), the 6-regime softmax-blend generator behind
+`rough_world_review.tscn` (the 90 km scene the owner liked). **B — frozen keeper:**
+`export_godot_rough_world_chunks._compose_windowed_height` (`rough_highlands_keeper_v1`), a from-scratch
+seam-safe rewrite — hard masks, no softmax regimes, no post-tanh smoothing, a *different* skeleton generator
+(`geography_skeleton_windows`). **C — streaming spike:** `height_page_rough.glsl`, a closed-form GLSL
+approximation of B. Verified on identical world coords (seed 133, rough_anchor, 129²): `corr(A,B) = +0.13`
+(weakly related, NOT an inversion) and **B relief = 35% of A** (much flatter). So B is a genuinely different,
+much flatter terrain only loosely related to the approved A; "owner accepted the direction + seams" silently
+hardened into the frozen *formula* B and no one re-validated that B reproduces A's shape. B exists for a real
+reason — A's per-window `_condition()` percentile normalization breaks seams — but the honest fix was to keep
+A's structure and drop only that normalization, not rewrite the terrain. **Resolution path:** (1) cheap owner
+gate — an honest A-vs-B side-by-side at matched coords + fly scale (rendered:
+`D:\tmp\wg10_geography_engine\ab_keeper_compare_{topdown,oblique}.png`); (2) if B is rejected, rebuild B to
+reproduce A's regime-softmax structure while staying seam-safe (`rough_highlands_keeper_v2`). Slice 3 must not
+port anything until this is resolved — porting the keeper today means porting a terrain the owner never
+approved. **The rendered A-vs-B is NOT a clear win for either:** A has more fine relief amplitude (B is 35% of
+A's relief) but reads as fairly uniform "rough everywhere"; B is flatter but the oblique view reads as
+*better-organized* macro landforms (distinct peaks, broad valleys). So this is a genuine owner-eye trade
+(ruggedness vs. organization), not an obvious regression — do not assume B loses. Full trace + reproducible
+check: memory `worldgen10-keeper-formula-fork`.
+
+**Fork-resolution session update (2026-05-31, later):** the fork analysis above stands; what changed is we
+acted on it. (Note: "v2" here = the NEW `rough_highlands_keeper_v2` best-of-both generator, NOT the older
+2026-05-30 "Skeleton v2" 7B-lite checkpoint elsewhere in this doc.)
+- **`keeper_v2` BUILT** (`tools/dem_pack/keeper_v2.py`, committed `c56f30e..46b0481`, 8 TDD tasks, suite
+  **23 passed**): A's 6-regime softmax structure composed on B's seam-safe windowed substrate. Seam-exactness
+  **gated and bit-exact (border delta 0.0)** — the apron-cropped-blur + fixed-affine-remap design holds. Two
+  real bugs caught in review: a too-loose blur reach guard (would silently break seams) and three global
+  `geo.norm01` calls (did break seams, 0.0118 → fixed to 0.0). All knobs tunable (pillar 1), incl. seam-safe
+  realism knobs `post_tanh_gain` + `final_blur_mix` (amplitude can't push realism via the pre-tanh
+  `relief_amplitude` alone — it saturates; `post_tanh_gain` raises peaks linearly instead).
+- **A | B | v2 in-place switcher scene** (`rough_world_abv_review.tscn`, committed `77396bc`): flip the three
+  formulas at matched coords / same camera (keys 1/2/3). `rough_world_review.gd` `DATA_PATH` → `@export
+  data_path` + initial-select clamp (backward-compatible; existing 6-item scene unaffected). Owner reviewed:
+  all three "look good for what they are."
+- **Tier-1 traversability gate** (`report_abv_traversability.py`, committed `482b1d5`): runs the analyzer over
+  A|B|v2. Verdict confirms the owner's eye — **A is too spiky for a play area** (blocked @25×, slope_p90 1.42,
+  **no crossing corridor at any scale**); **v2 is the most traversable** (only one reaching "candidate" with a
+  WENS-crossing low-corridor at play scales). B sits between, also no crossing corridor.
+- **Owner direction (supersedes "pick A or B or v2"):** keep ALL THREE as selectable variants (pillar 1), and
+  pursue **guaranteed regime-aware traversability** as the real quality bar. Tiers: Tier-1 measure/gate DONE;
+  Tier-2 bias knobs (later); **Tier-3 = guaranteed routes through barrier regions** (the true target) —
+  brainstormed to an approved design (verify-then-carve, regime-aware, seam-safe, offline→online), spec-write
+  paused pending this doc alignment. Design: memory `worldgen10-tier3-guaranteed-traversability`.
+- **Fork status:** no longer "unresolved/pick one" — it's "three kept variants + v2 is the traversability
+  front-runner; the real next decision is guaranteed-traversability (Tier-3), not picking a single keeper."
+  Slice 3 (Rust port) stays blocked until an owner-accepted final stack exists.
+
 **B-bug closeout state:** B1/B2/B3 are now closed for the rebuild precondition. Evidence: Rust DLL rebuilt
 after the editor was closed; `cargo test` isolated target **121 passed / 0 failed**; `fast` **6/6**; `gpu`
 **4/4**; `m3` **9/9**. The new B2 capacity-pressure gate passed non-vacuously
@@ -227,8 +277,8 @@ conditioned seam max deltas of **0.661** on x and **1.442** on z for seed 133. A
 virtual-travel stress report (`D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`) builds
 a wider **5x5 / 128 km** lattice from independent windows for both seeds: 40 seams per seed, height max
 **0.000000**, corridor min **0.971** for seed 133 and **1.000** for seed 211, adjacent median deltas
-**0.348/0.371**, and max adjacent corr **0.341/0.389**. This supports the infinite-world direction but is not a
-streaming/cache/player-travel proof. A new offline visual seam report
+**0.348/0.371**, and max adjacent corr **0.341/0.389**. This supports the M3-backed streaming direction but is
+not a streaming/cache/player-travel proof. A new offline visual seam report
 (`D:\tmp\wg10_geography_engine\rough_world_chunks_visual_seams.{csv,md}`) mirrors the Godot review mesh's edge
 height, normal, slope, default terrain-color, and corridor-edge math; current 3x3 report is zero across all
 shared edges for both seeds (`height_delta_m=0.0000`, `normal_max_angle_deg=0.0000`,
@@ -264,25 +314,55 @@ streamed runtime terrain. Next: owner fly should compare the named variants and 
 good enough to start the Rust CPU skeleton-facts parity spike, or whether terrain shape needs another offline
 iteration before porting.
 
-**30x30 infinite-world distance scene:** per owner scale correction, the infinite review is now a full **30x30**
-scene, not a 5x5 visible window over a hidden lattice. New artifacts:
+**30x30 bounded distance proxy:** per owner scale correction, the long-distance review shows a full **30x30**
+area, not a 5x5 visible window over a hidden lattice. This artifact has been demoted from any "infinite"
+claim: it is a bounded static proxy for scale/readability only. New artifacts:
 `wg-10/worldgen_terrain/generated/review/rough_world_chunks_travel_lattice_30x30.json`,
-`wg-10/worldgen_terrain/harness/rough_world_infinite_review.tscn`, and
-`wg-10/worldgen_terrain/tests/rough_world_infinite_review_check.gd`. The payload is **768 km** wide, **30x30**
-chunks, **41x41 vertices per chunk**, two seeds, and the same four relief/dressing variants. It is a
-distance/continuation review, not the close route-detail gate; the 5x5/65 scene remains the route/corridor
-detail review. Current 30x30 report:
+`wg-10/worldgen_terrain/harness/rough_world_distance_proxy.tscn`, and
+`wg-10/worldgen_terrain/tests/rough_world_distance_proxy_check.gd`. The payload is **768 km** wide, **30x30**
+chunks, **41x41 vertices per chunk**, two seeds, and the same relief/dressing variants, but the scene defaults
+to the keeper baseline (`current_plain`, 1.00x relief). It is a distance/continuation review, not the close
+route-detail gate; the 5x5/65 scene remains the route/corridor detail review. Current 30x30 report:
 `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_lattice_30x30.{csv,md}`; height max seam delta
 **0.000100**, normal max **0.0016 deg**, corridor edge mismatches **0**, adjacent median delta **0.376**, max
 adjacent corr **0.670**. The older corridor-component match metric falls to **0.267** at this coarse distance
 resolution, so it is explicitly **not** used as the route acceptance gate for 30x30. Verification:
 `python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_highlands_keeper_contract.py tools\dem_pack\test_geography_skeleton_windows.py -q`
-is **24 passed** (pytest cache warning only); Godot smoke checks pass for 3x3, 5x5, and 30x30, with the 30x30
-scene instantiating **900** visible chunks and lazily building **1740** seam guides only when seam focus/guide
-inspection is requested. After the first owner open reported only blue/fog or possible remote lag, the review
-camera was changed to explicitly `look_at` the terrain center and seam guides were made lazy so the initial
-30x30 frame is lighter and framed toward terrain. This still does not implement runtime streaming/cache; it
-proves a large deterministic reviewable world area before the Rust/GLSL port gate.
+is **24 passed** (pytest cache warning only); Godot smoke checks pass for 3x3, 5x5, and 30x30. The first
+30x30 scene drew **900** live chunks and was owner-reported as laggy and visually still the same scale. That
+was a review-scene design error: fitting a larger world into the same viewport hides scale, and 900 static
+MeshInstances is not how the runtime should stream. The distance-proxy scene now opens as one decimated
+full-lattice overview mesh, while `F`/`N` switches into a centered **7x7** detail/seam window (**49** live
+chunks, **84** lazy seam guides). Latest distance-proxy smoke evidence:
+`[wg10-rough-distance-proxy] status=pass overview_meshes=1 detail_chunks=49 seam_guides=84 seeds=2`.
+Use Godot 4.6's explicit `--scene` launch flag for visible review; passing the `.tscn` positionally fell back
+to the missing main-scene path in this setup. This still does not implement runtime streaming/cache; it proves
+a large deterministic reviewable world area only. The next real "infinite" work must build on the M3
+streamer/page/cache architecture with a deterministic rough-highlands provider, not on larger static JSON.
+
+**M3-backed rough-highlands streaming spike (2026-05-31):** this is the first scene with BOTH real
+streaming AND rough-highlands-style height — built on M3, not a static JSON bake. Files:
+`wg-10/worldgen_terrain/shaders/height_page_rough.glsl` (new), `…/harness/rough_world_streaming_review.tscn`
++ `.gd` (new), `…/tests/rough_world_streaming_review_check.gd` (new). The new GLSL is a drop-in for
+`height_page.glsl`'s producer seam: a **closed-form per-texel `height_at(x,z)`** (recursive domain warp +
+ridged-multifractal uplift + broad low band + masked detail, in absolute world metres) that approximates the
+rough_highlands keeper's LOCAL STRUCTURE using the same worldgen_proto primitives. It KEEPS the dem_v1 atlas
+bindings 3..8 (declared + kept-live) so the UNCHANGED Rust producer (`page_compute::compute_page_cached`)
+binds them against the shader's uniform set — **zero Rust change, no editor-closed rebuild**; the pool reuses
+the dem_v1 pack with the atlas loaded-but-unread. Verified: headless `--import` exits 0 (no GLSL/GDScript
+parse error); the windowed streaming gate passes —
+`[wg10-rough-streaming] status=pass frames=60 fallback_fired=true provider=rough` — proving the rough GLSL
+compiles to SPIR-V, the kept bindings match the Rust uniform set, pages are produced by world coord + stream
+ahead in the travel direction, never-black holds (non-vacuous fallback), bounded work/budget, stream-ahead
+converges to the finest level, and the provider is deterministic.
+**HONEST SCOPE (keeper contract §9 / north-star):** this is the keeper's local-structure approximation
+streamed live — relief + ridges + broad valleys (it directly addresses the "too flat" read with real
+mid-scale ridged structure, not just a relief multiplier). It is **NOT** the routed/windowed keeper (no carved
+connected corridors — that needs the apron + flow-accumulation + EDT that cannot run per-texel, and is the
+later Phase 7B runtime subsystem, still blocked on owner acceptance), and **NOT** yet Rust CPU / GPU parity
+(the prototype is GPU-only; CPU-facts parity comes with the real Slice-3 port). Passed gate != owner
+acceptance — owner must fly `rough_world_streaming_review.tscn` (windowed) and judge whether it reads
+large/infinite at the right scale before this direction is accepted.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
