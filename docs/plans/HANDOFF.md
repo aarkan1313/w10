@@ -14,6 +14,27 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
+Updated: 2026-05-31 (**KEEPER-FORK + TRAVERSABILITY ADDENDUM — latest.** `STATUS.md` "fork-resolution session
+update" is the authority; this is the pointer. Three things happened on top of the audit addendum below:
+1. **The keeper fork was found + acted on.** "rough_highlands" named THREE different height formulas: **A** =
+   `geography_skeleton.compose_height` (the owner-approved 90 km look), **B** = the frozen
+   `rough_highlands_keeper_v1` (`_compose_windowed_height`, a seam-safe rewrite), **C** = the streaming-spike
+   GLSL (approximates B). Verified `corr(A,B)=+0.13`, B relief = 35% of A — B is a different, flatter terrain
+   only loosely related to the approved A. So `keeper_v1` was NOT the approved look.
+2. **`keeper_v2` was BUILT** (`tools/dem_pack/keeper_v2.py`, committed, 23 tests): best-of-both — A's 6-regime
+   softmax structure on B's seam-safe windowed substrate, **seams bit-exact (delta 0.0)**, all knobs tunable.
+   Plus an **A|B|v2 in-place switcher scene** (`rough_world_abv_review.tscn`, keys 1/2/3) and a **Tier-1
+   traversability gate** (`report_abv_traversability.py`). Owner reviewed all three: A reads most rugged but is
+   **too spiky for play** (no crossing route at any scale); v2 is the **most traversable**.
+3. **Direction shifted** from "pick one keeper" to **keep all three as selectable variants (pillar 1) + pursue
+   GUARANTEED REGIME-AWARE TRAVERSABILITY** as the real quality bar. Tier-1 (measure/gate) DONE; **Tier-3
+   (guaranteed routes through barrier regions — verify-then-carve, regime-aware, seam-safe, offline→online) is
+   the next target: design brainstormed + owner-approved, spec-write PAUSED.**
+**NEXT for a fresh session:** resume Tier-3 — write the spec (`worldgen10-tier3-guaranteed-traversability`
+memory has the full approved design) → writing-plans → build offline Python first. Slice 3 (Rust port) stays
+blocked until a final owner-accepted stack exists post-Tier-3. Living docs (STATUS fork-resolution update,
+ROADMAP Slice 3, LEDGER B7/B8) are aligned to this as of commit `e6a2931`.)
+
 Updated: 2026-05-31 (**AUDIT ADDENDUM:** `STATUS.md` top is now the authority for the rough-highlands
 keeper. Since the 2026-05-30 pivot, Slice 2A pulled 7B-lite forward, owner selected `SYN rough highlands` as
 the current best family, the Godot 25.6 km review setup is the active scale/corridor review harness, and the
