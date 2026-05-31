@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
@@ -23,3 +24,16 @@ def affine_remap(field: np.ndarray, center: float, scale: float) -> np.ndarray:
     """Data-independent remap (replaces znorm). Same (center,scale) every window => shared
     borders stay bit-identical. center/scale are tunable constants, NOT per-array statistics."""
     return (np.asarray(field, dtype=np.float64) - float(center)) * float(scale)
+
+@dataclass(frozen=True)
+class KeeperV2Params:
+    softmax_temp: float = 0.36          # A's regime softmax temperature
+    relief_amplitude: float = 1.0       # overall vertical gain (default ~A relative; tune by eye)
+    incision_gain: float = 1.0
+    range_texture_gain: float = 0.32
+    badland_gain: float = 0.28
+    fine_gain: float = 0.10
+    blur_radius_m: float = 950.0        # final shaping blur
+    weight_blur_m: float = 1700.0       # smooth_weights blur radius
+    remap_center: float = 0.0           # affine remap (replaces znorm); tune to match A's tone
+    remap_scale: float = 1.0

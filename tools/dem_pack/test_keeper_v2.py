@@ -31,3 +31,13 @@ def test_affine_remap_is_data_independent_and_shared_border_safe():
     rb = v2.affine_remap(b, center=0.0, scale=0.5)
     assert ra[0, 2] == rb[0, 0]          # shared 1.0 maps identically (no per-array min/max)
     assert np.allclose(ra, (a - 0.0) * 0.5)
+
+def test_v2_params_defaults_present_and_overridable():
+    p = v2.KeeperV2Params()
+    for name in ("softmax_temp", "relief_amplitude", "incision_gain",
+                 "range_texture_gain", "badland_gain", "fine_gain",
+                 "blur_radius_m", "remap_center", "remap_scale", "weight_blur_m"):
+        assert hasattr(p, name)
+    import dataclasses
+    p2 = dataclasses.replace(p, relief_amplitude=2.0)
+    assert p2.relief_amplitude == 2.0 and p.relief_amplitude != 2.0
