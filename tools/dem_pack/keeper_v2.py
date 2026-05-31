@@ -89,7 +89,9 @@ def _regime_weights(facts, spec, p, apron_px):
     return weights, slope, basin, range_core, plateau, channel_axis
 
 
-def compose_windowed_height_v2(window, seed, spec, p):
+def compose_windowed_height_v2_full(window, seed, spec, p):
+    """Apron-padded composed height (pre-crop). Tier-3 detects/carves on this, then crops to core.
+    Identical math to compose_windowed_height_v2 up to the final core crop."""
     apron_px = int(round(float(spec.apron_m) / float(spec.spacing_m)))
     span = float(spec.core_span_m); spacing = float(spec.spacing_m)
     facts = {k: np.asarray(window[k], dtype=np.float64) for k in
@@ -127,5 +129,10 @@ def compose_windowed_height_v2(window, seed, spec, p):
     if mix > 0.0:
         height = (1.0 - mix) * height + mix * apron_blur_crop_full(height, apron_px, sigma_final)
     height = affine_remap(height, p.remap_center, p.remap_scale)
+    return height
+
+
+def compose_windowed_height_v2(window, seed, spec, p):
+    height = compose_windowed_height_v2_full(window, seed, spec, p)
     core = win._core_slice(spec)
     return np.ascontiguousarray(height[core, core])

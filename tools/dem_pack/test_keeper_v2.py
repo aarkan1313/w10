@@ -96,3 +96,12 @@ def test_v2_post_tanh_gain_increases_relief_without_saturating():
     assert np.ptp(h_hi) > np.ptp(h_base) * 1.5
     for name in ("post_tanh_gain", "final_blur_mix"):
         assert hasattr(base, name)
+
+def test_compose_full_core_matches_public_and_is_padded():
+    w, spec = _window()
+    p = v2.KeeperV2Params()
+    full = v2.compose_windowed_height_v2_full(w, 133, spec, p)
+    core = v2.compose_windowed_height_v2(w, 133, spec, p)
+    cs = win._core_slice(spec)
+    assert full.shape == w["uplift"].shape          # apron-padded (385x385 at this spec)
+    assert np.array_equal(full[cs, cs], core)        # crop of full == public output

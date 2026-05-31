@@ -445,9 +445,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       **keep all three as selectable variants AND pursue guaranteed regime-aware traversability** (Tier-3) as
       the real quality bar — v2 is the current traversability front-runner (the only variant with a crossing
       corridor at play scales; A is too spiky, no crossing route). So the single port target is not yet frozen:
-      it depends on the Tier-3 guaranteed-traversability outcome (brainstormed design approved, spec pending —
-      memory `worldgen10-tier3-guaranteed-traversability`). Do not port any keeper as-is until that lands and
-      the owner accepts a final stack. (Memory `worldgen10-keeper-formula-fork`, `worldgen10-too-flat-decomposition`.)
+      it depends on the Tier-3 guaranteed-traversability outcome (design approved; **spec written**:
+      `docs/superpowers/specs/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md`; next = writing-plans
+      → offline Python build; memory `worldgen10-tier3-guaranteed-traversability`). Do not port any keeper as-is
+      until that lands and the owner accepts a final stack. (Memory `worldgen10-keeper-formula-fork`, `worldgen10-too-flat-decomposition`.)
 
       Once unblocked: port the owner-accepted Phase-5
       stack to `height.rs` and replace `sample_kernel`. If the accepted offline result depends on a coarse

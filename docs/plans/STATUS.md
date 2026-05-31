@@ -101,8 +101,21 @@ acted on it. (Note: "v2" here = the NEW `rough_highlands_keeper_v2` best-of-both
 - **Owner direction (supersedes "pick A or B or v2"):** keep ALL THREE as selectable variants (pillar 1), and
   pursue **guaranteed regime-aware traversability** as the real quality bar. Tiers: Tier-1 measure/gate DONE;
   Tier-2 bias knobs (later); **Tier-3 = guaranteed routes through barrier regions** (the true target) —
-  brainstormed to an approved design (verify-then-carve, regime-aware, seam-safe, offline→online), spec-write
-  paused pending this doc alignment. Design: memory `worldgen10-tier3-guaranteed-traversability`.
+  brainstormed to an approved design, spec + plan written
+  (`docs/superpowers/specs/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md`,
+  `docs/superpowers/plans/2026-05-31-tier3-guaranteed-traversability.md`), and offline-Python build STARTED.
+  **BUILD FINDING (2026-05-31, spec §1.2):** barrier detection + the verify-first no-op are built and
+  **seam-safe** (`tools/dem_pack/traverse_corridor.py`, 9 tests green; keeper_v2 9 green). But the **carve is
+  blocked**: a globally-routed least-cost-path carve CANNOT be seam-exact (adjacent windows route differently →
+  border delta 0.62 ≠ 0, proven), and no purely-local seam-exact operator guarantees a *connected* crossing
+  (both prototyped + rejected with data). The seam-exact connected carve depends on a cross-seam-stitched
+  **connected-corridor fact = the unbuilt connectivity half of Phase 7B**. The module is honest: real barriers
+  are reported `carve_pending` (never falsely "resolved", never a seam-breaking carve). Also measured: barriers
+  are span×relief-dependent, NOT regime-weight (caps ~0.32); 25.6 km/260 m default has no slope-wall, small
+  spans + high relief do. Memory: `worldgen10-tier3-seam-exact-carve`, `worldgen10-tier3-barrier-measurements`,
+  `worldgen10-tier3-guaranteed-traversability`. **Next decision (owner, pillar-judged):** (i) pull Phase 7B
+  connected seam-joined corridor forward, then carve along it; (ii) scope guarantee to channel-where-available;
+  or (iii) Tier-2 param-bias instead of carve.
 - **Fork status:** no longer "unresolved/pick one" — it's "three kept variants + v2 is the traversability
   front-runner; the real next decision is guaranteed-traversability (Tier-3), not picking a single keeper."
   Slice 3 (Rust port) stays blocked until an owner-accepted final stack exists.

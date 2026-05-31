@@ -28,12 +28,26 @@ update" is the authority; this is the pointer. Three things happened on top of t
    **too spiky for play** (no crossing route at any scale); v2 is the **most traversable**.
 3. **Direction shifted** from "pick one keeper" to **keep all three as selectable variants (pillar 1) + pursue
    GUARANTEED REGIME-AWARE TRAVERSABILITY** as the real quality bar. Tier-1 (measure/gate) DONE; **Tier-3
-   (guaranteed routes through barrier regions — verify-then-carve, regime-aware, seam-safe, offline→online) is
-   the next target: design brainstormed + owner-approved, spec-write PAUSED.**
-**NEXT for a fresh session:** resume Tier-3 — write the spec (`worldgen10-tier3-guaranteed-traversability`
-memory has the full approved design) → writing-plans → build offline Python first. Slice 3 (Rust port) stays
-blocked until a final owner-accepted stack exists post-Tier-3. Living docs (STATUS fork-resolution update,
-ROADMAP Slice 3, LEDGER B7/B8) are aligned to this as of commit `e6a2931`.)
+   (guaranteed routes through barrier regions) — spec + plan written, build STARTED, foundation done, CARVE
+   blocked on a connected-corridor fact.** Spec: `…/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md`
+   (§1.2 = the build finding). Plan: `…/plans/2026-05-31-tier3-guaranteed-traversability.md` (top banner).
+**TIER-3 STATE (2026-05-31, where a fresh session picks up):**
+- **Built + seam-safe + 18 tests green** (`tools/dem_pack/traverse_corridor.py` 9 + `test_keeper_v2.py` 9):
+  barrier detection (height-derived, scale/relief-aware), deterministic least-cost crossing, verify-first
+  no-op, the non-vacuous guarantee check (`crossing_holds = not needs_route_core`). Keeper got a pure
+  `compose_windowed_height_v2_full` extract.
+- **CARVE BLOCKED (proven w/ data, spec §1.2):** a global least-cost-path carve can't be seam-exact (border
+  delta 0.62≠0); local seam-exact operators don't guarantee a connected crossing; channel-anchored is
+  seam-exact but incomplete. Module is HONEST — real barriers → `carve_pending`, never falsely resolved.
+- **DIRECTION CHOSEN (owner "I trust you" → pillars): build the 7B connected corridor, de-risked first.** The
+  scary part is already solved — cross-seam JOIN works (`adjacent_corridor_continuity` match_frac=1.00) and
+  `_flow_accumulation_mfd` gives connected seam-joined drainage. Only gap = the drainage doesn't span the
+  window edge-to-edge. So next is TRACTABLE.
+**NEXT for a fresh session:** spec the **connected-corridor routing** (edge-spanning + seam-join, deterministic,
+world-anchored — extend the proven seam-joined drainage into a spanning corridor) → build offline → then the
+local seam-exact carve along it. Memory: `worldgen10-tier3-seam-exact-carve` (the finding + de-risk),
+`worldgen10-tier3-barrier-measurements` (fixtures), `worldgen10-tier3-guaranteed-traversability` (design).
+Nothing committed. Slice 3 (Rust port) stays blocked until a final owner-accepted stack exists post-Tier-3.)
 
 Updated: 2026-05-31 (**AUDIT ADDENDUM:** `STATUS.md` top is now the authority for the rough-highlands
 keeper. Since the 2026-05-30 pivot, Slice 2A pulled 7B-lite forward, owner selected `SYN rough highlands` as
