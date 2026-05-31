@@ -179,30 +179,32 @@ knob is real, but slope/passability alone is not a sufficient acceptance signal.
 whether the 25.6 km-scale world has enough interesting traversable routes, passes, shelves, and valley/fan
 corridors under owner visual review.
 
-**Bounded adjacent-chunk proof (AFK goal in progress):** added offline exporter
+**Adjacent-chunk proof (AFK goal in progress):** added offline exporter
 `tools/dem_pack/export_godot_rough_world_chunks.py`, generated
 `wg-10/worldgen_terrain/generated/review/rough_world_chunks_3x3.json`, and added a flyable Godot review scene
 `wg-10/worldgen_terrain/harness/rough_world_chunks_review.tscn`. This proof uses the current `rough_anchor`
 keeper family over a 3x3 set of **25.6 km** chunks, with two deterministic seeds (`133`, `211`) and a `T`
-seed switch in-scene. Important boundary: this is a **bounded authoritative 3x3 super-window split into
-chunks**, not a final infinite streaming/runtime architecture. It proves that adjacent chunks can be different
-parts of one seeded world and can share exact borders in the review artifact; it does not yet prove arbitrary
-unbounded generation from independent runtime windows. Dedicated proof/audit report:
+seed switch in-scene. The latest payload is now `rough_world_chunks_v2_independent_windows`: each chunk is
+generated from its own deterministic world-coordinate skeleton window with a **25.6 km apron** at **200 m**
+spacing, then cropped to the 25.6 km core. The review scene's corridor overlay now prefers the exported
+structural route/corridor mask. Important boundary: this is still **offline Python + static Godot JSON**, not a
+final infinite streaming/runtime architecture, owner acceptance, or Rust/GLSL port. Dedicated proof/audit report:
 `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
 
 Evidence written to `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`: shared-border
-height max abs delta is **0.000000** across all seams; minimum low-corridor match fraction is **0.951**;
-adjacent center/east chunks differ materially (`mean_abs_delta` **0.966** for seed 133, **0.526** for seed
-211); center chunk changes across seeds (`mean_abs_delta` **0.638**). Focused tests including rough chunks,
-rough traversability, skeleton, and skeleton-window checks are **26 passed** (pytest cache warning only).
+height max abs delta is **0.000000** across all seams; minimum structural corridor component match fraction is
+**0.917**; adjacent center/east chunks differ materially (`mean_abs_delta` **0.225** for seed 133, **0.385**
+for seed 211); center chunk changes across seeds (`mean_abs_delta` **0.396**). Focused tests including rough
+chunks, rough traversability, skeleton, and skeleton-window checks are **27 passed** (pytest cache warning only).
 Godot `--import` exits 0 with no GDScript parse error (known PDB shortening warning; sandboxed editor-settings
 save warning only). A separate headless attempt to run the scene crashed Godot after a `user://logs` write
 failure, so do not cite headless scene-run as evidence; the owner/visible Windows fly scene remains the review
-gate. The seam report now also includes an independent-window diagnostic proving why the current keeper cannot
-yet be generated chunk-by-chunk: separate adjacent 25.6 km windows produce conditioned seam max deltas of
-**0.661** on x and **1.442** on z for seed 133. Next: open the chunk scene for owner review, then review what a real infinite-in-all-directions/player
-travel version requires (fixed world-coordinate generation contract, window authority, apron/stitching,
-streaming/cache, and route continuity beyond the bounded 3x3).
+gate. The seam report still includes the legacy isolated-window diagnostic proving why the old
+`compose_height` review path cannot be used chunk-by-chunk: separate adjacent 25.6 km windows produce
+conditioned seam max deltas of **0.661** on x and **1.442** on z for seed 133. Next: open the updated chunk
+scene for owner review, then review what a real infinite-in-all-directions/player travel version requires
+(fixed world-coordinate generation contract, window authority/cache, apron/stitching, authority-boundary route
+continuity beyond the 3x3, and streamed collision/material facts).
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

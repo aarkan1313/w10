@@ -112,6 +112,7 @@ func _make_mesh(chunk: Dictionary, corridor_height: float) -> ArrayMesh:
 	var apron_n := int(chunk["apron_n"])
 	var heights: Array = chunk["height"]
 	var apron: Array = chunk["apron_height"]
+	var corridors: Array = chunk.get("corridor", [])
 	var span := float(chunk["span_m"])
 	var origin_x := float(chunk["display_origin_x_m"])
 	var origin_z := float(chunk["display_origin_z_m"])
@@ -126,12 +127,13 @@ func _make_mesh(chunk: Dictionary, corridor_height: float) -> ArrayMesh:
 		for x in range(n):
 			var i := z * n + x
 			var h := float(heights[i])
+			var structural_corridor := corridors.size() == heights.size() and int(corridors[i]) != 0
 			var px := origin_x + float(x) / float(n - 1) * span
 			var pz := origin_z + float(z) / float(n - 1) * span
 			var slope := _slope_at(apron, apron_n, x, z, cell, height_scale)
 			verts.append(Vector3(px, h * height_scale, pz))
 			normals.append(_normal_at(apron, apron_n, x, z, cell, height_scale))
-			colors.append(_terrain_color(h, slope, corridor_height))
+			colors.append(_terrain_color(h, slope, corridor_height, structural_corridor))
 
 	for z in range(n - 1):
 		for x in range(n - 1):
@@ -183,7 +185,7 @@ func _height_percentile(heights: Array, pct: float) -> float:
 	var idx := clampi(int(round((float(sorted.size()) - 1.0) * pct)), 0, sorted.size() - 1)
 	return float(sorted[idx])
 
-func _terrain_color(h: float, slope: float, corridor_height: float) -> Color:
+func _terrain_color(h: float, slope: float, corridor_height: float, structural_corridor: bool) -> Color:
 	if _overlay_mode == OVERLAY_SLOPE:
 		if slope < EASY_SLOPE:
 			return Color(0.18, 0.62, 0.28)
@@ -193,7 +195,7 @@ func _terrain_color(h: float, slope: float, corridor_height: float) -> Color:
 			return Color(0.92, 0.40, 0.18)
 		return Color(0.70, 0.13, 0.12)
 	if _overlay_mode == OVERLAY_CORRIDOR:
-		var is_low_corridor := h <= corridor_height and slope <= PASSABLE_SLOPE
+		var is_low_corridor := structural_corridor or (h <= corridor_height and slope <= PASSABLE_SLOPE)
 		if is_low_corridor:
 			return Color(0.08, 0.72, 0.88)
 		if slope <= EASY_SLOPE:

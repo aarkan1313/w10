@@ -1,10 +1,11 @@
-r"""Export a bounded adjacent-chunk rough-highlands world for Godot review.
+r"""Export adjacent rough-highlands chunks for Godot review.
 
 This is a render-first proof artifact, not a Rust/GLSL runtime port. It builds
-one authoritative world-coordinate 3x3 super-window, conditions it once, then
-splits it into adjacent 25.6 km chunks with one-sample aprons for seam-stable
-normals. The bounded proof demonstrates that adjacent chunks can be different
-parts of the same seeded world while sharing exact border samples.
+each 25.6 km chunk from its own deterministic world-coordinate skeleton window,
+crops an authoritative core, and stores one-sample height/corridor aprons for
+seam-stable review. The legacy rough keeper's isolated-window diagnostic stays
+in the report because it explains why the earlier super-window split was not a
+true infinite-window contract.
 
 Run:
     python tools/dem_pack/export_godot_rough_world_chunks.py
@@ -22,9 +23,13 @@ from pathlib import Path
 from typing import Iterable
 
 import numpy as np
+from scipy.ndimage import label
 
 import analyze_rough_world_traversability as trav
+import geography_engine as geo
 import geography_skeleton as skel
+import geography_skeleton_windows as win
+import worldgen_proto as wg
 from export_godot_rough_world_review import _condition
 from render_geography_skeleton_focus import FOCUS
 
@@ -34,41 +39,95 @@ REPORT_DIR = Path("D:/tmp/wg10_geography_engine")
 REPORT_CSV = REPORT_DIR / "rough_world_chunks_3x3_seams.csv"
 REPORT_MD = REPORT_DIR / "rough_world_chunks_3x3_seams.md"
 
-GENERATOR_VERSION = "rough_world_chunks_v1_superwindow"
+GENERATOR_VERSION = "rough_world_chunks_v2_independent_windows"
 CHUNK_COUNT = 3
 CHUNK_N = 129
 CHUNK_SPAN_M = 25_600.0
+WINDOW_APRON_M = 25_600.0
 WORLD_ORIGIN_X_M = 60_000.0
 WORLD_ORIGIN_Z_M = 36_000.0
 SEEDS = (133, 211)
 SCENARIO = next(scenario for scenario in FOCUS if scenario.key == "rough_anchor")
 
 
-def _world_grid(origin_x_m: float, origin_z_m: float, chunk_count: int, chunk_n: int, chunk_span_m: float) -> tuple[np.ndarray, np.ndarray]:
-    super_n = int(chunk_count) * (int(chunk_n) - 1) + 1
+def _window_spec(chunk_n: int, chunk_span_m: float, apron_m: float = WINDOW_APRON_M) -> win.SkeletonWindowSpec:
     spacing = float(chunk_span_m) / float(int(chunk_n) - 1)
-    xs = float(origin_x_m) + np.arange(super_n, dtype=np.float64) * spacing
-    zs = float(origin_z_m) + np.arange(super_n, dtype=np.float64) * spacing
-    return np.meshgrid(xs, zs)
+    return win.SkeletonWindowSpec(
+        core_span_m=float(chunk_span_m),
+        apron_m=float(apron_m),
+        spacing_m=spacing,
+    )
 
 
-def _build_conditioned_world(
+def _compose_windowed_height(window: dict[str, object], seed: int, spec: win.SkeletonWindowSpec) -> tuple[np.ndarray, np.ndarray]:
+    """Compose review height from world-window facts without per-window normalization.
+
+    The routed skeleton supplies the organizing facts; world-coordinate noise is
+    only local material. The transform is fixed, so the same seed+coordinate
+    yields the same height regardless of which chunk requested it.
+    """
+    wx = np.asarray(window["wx"], dtype=np.float64)
+    wz = np.asarray(window["wz"], dtype=np.float64)
+    core = float(spec.core_span_m)
+    uplift = np.asarray(window["uplift"], dtype=np.float64)
+    discharge = np.asarray(window["discharge"], dtype=np.float64)
+    tributary = np.asarray(window["tributary"], dtype=np.float64)
+    channel_axis = np.asarray(window["channel_axis"], dtype=np.float64)
+    crest_dist = np.asarray(window["crest_dist"], dtype=np.float64)
+    channel_dist = np.asarray(window["channel_dist"], dtype=np.float64)
+
+    mat_x, mat_z = wg.recursive_domain_warp(
+        wx,
+        wz,
+        warp_amount=core * 0.055,
+        warp_freq=1.0 / (core * 0.82),
+        seed=int(seed) + 12000,
+        steps=2,
+        decay=0.54,
+        freq_mul=1.85,
+    )
+    ridge_detail = wg.ridged_multifractal(mat_x, mat_z, 1.0 / (core * 0.155), 5, int(seed) + 12010, gain=0.54)
+    shoulder_detail = wg.ridged_multifractal(mat_x, mat_z, 1.0 / (core * 0.34), 4, int(seed) + 12020, gain=0.58)
+    route_texture = wg.ridged_multifractal(mat_x, mat_z, 1.0 / (core * 0.42), 5, int(seed) + 12025, gain=0.57)
+    small_detail = wg.fbm(mat_x, mat_z, 1.0 / (core * 0.080), 4, int(seed) + 12030, gain=0.50)
+
+    crest_near = 1.0 - geo.smoothstep(core * 0.055, core * 0.34, crest_dist)
+    channel_near = 1.0 - geo.smoothstep(core * 0.025, core * 0.14, channel_dist)
+    route_axis = geo.smoothstep(0.50, 0.76, route_texture)
+    routed_cut = np.clip(0.58 * geo.smoothstep(0.13, 0.62, channel_axis) + 0.30 * channel_near + 0.12 * tributary, 0.0, 1.0)
+    routed_cut = np.maximum(routed_cut, 0.62 * route_axis)
+    wet_floor = np.clip(0.64 * channel_axis + 0.36 * geo.smoothstep(0.14, 0.54, discharge), 0.0, 1.0)
+    wet_floor = np.maximum(wet_floor, 0.55 * route_axis)
+    highland_mask = geo.smoothstep(0.36, 0.78, uplift)
+
+    height = (
+        1.52 * (uplift - 0.46)
+        + 0.34 * crest_near * (0.45 + 0.55 * highland_mask)
+        + 0.22 * shoulder_detail * highland_mask
+        + 0.14 * ridge_detail * (0.35 + 0.65 * highland_mask)
+        + 0.065 * small_detail * (1.0 - 0.58 * wet_floor)
+    )
+    height -= routed_cut * (0.52 + 0.42 * highland_mask)
+    height -= 0.18 * route_axis * (0.70 + 0.30 * highland_mask)
+    height -= 0.18 * wet_floor * (1.0 - highland_mask)
+    height += 0.09 * (ridge_detail - 0.50) * (1.0 - routed_cut)
+    height = np.tanh(height * 1.18)
+
+    corridor = win.corridor_mask(
+        {
+            "channel_axis": channel_axis,
+            "channel_dist": channel_dist,
+        },
+        spec,
+        channel_axis_threshold=0.16,
+        channel_distance_m=float(spec.spacing_m) * 6.0,
+    )
+    corridor = np.asarray(corridor, dtype=bool) | (route_axis >= 0.22)
+    return height.astype(np.float64), np.asarray(corridor, dtype=bool)
+
+
+def _build_independent_chunk(
     seed: int,
-    *,
-    chunk_count: int = CHUNK_COUNT,
-    chunk_n: int = CHUNK_N,
-    chunk_span_m: float = CHUNK_SPAN_M,
-    origin_x_m: float = WORLD_ORIGIN_X_M,
-    origin_z_m: float = WORLD_ORIGIN_Z_M,
-    coarse_n: int = 176,
-) -> tuple[np.ndarray, dict[str, float]]:
-    wx, wz = _world_grid(origin_x_m, origin_z_m, chunk_count, chunk_n, chunk_span_m)
-    result = skel.compose_height(wx, wz, seed=int(seed), scenario=SCENARIO, coarse_n=coarse_n)
-    return _condition(np.asarray(result["height"], dtype=np.float64))
-
-
-def _chunk_from_world(
-    conditioned: np.ndarray,
     *,
     chunk_x: int,
     chunk_z: int,
@@ -78,15 +137,22 @@ def _chunk_from_world(
     world_origin_x_m: float,
     world_origin_z_m: float,
 ) -> dict[str, object]:
-    step = int(chunk_n) - 1
-    x0 = int(chunk_x) * step
-    z0 = int(chunk_z) * step
-    core = conditioned[z0 : z0 + chunk_n, x0 : x0 + chunk_n]
-    padded = np.pad(conditioned, 1, mode="edge")
-    apron = padded[z0 : z0 + chunk_n + 2, x0 : x0 + chunk_n + 2]
+    spec = _window_spec(chunk_n, chunk_span_m)
+    chunk_world_x = float(world_origin_x_m) + float(chunk_x) * float(chunk_span_m)
+    chunk_world_z = float(world_origin_z_m) + float(chunk_z) * float(chunk_span_m)
+    window = win.build_skeleton_window(chunk_world_x, chunk_world_z, int(seed), spec)
+    full_height, full_corridor = _compose_windowed_height(window, int(seed), spec)
+    core_slice = win._core_slice(spec)
+    start = int(core_slice.start)
+    stop = int(core_slice.stop)
+    core = full_height[start:stop, start:stop]
+    corridor = full_corridor[start:stop, start:stop]
+    apron = full_height[start - 1 : stop + 1, start - 1 : stop + 1]
+    corridor_apron = full_corridor[start - 1 : stop + 1, start - 1 : stop + 1]
     display_origin_x = (float(chunk_x) - float(chunk_count) * 0.5) * float(chunk_span_m)
     display_origin_z = (float(chunk_z) - float(chunk_count) * 0.5) * float(chunk_span_m)
     return {
+        "source": "independent_window",
         "chunk_x": int(chunk_x),
         "chunk_z": int(chunk_z),
         "key": f"{chunk_x}_{chunk_z}",
@@ -94,13 +160,27 @@ def _chunk_from_world(
         "n": int(chunk_n),
         "apron_n": int(chunk_n) + 2,
         "span_m": float(chunk_span_m),
-        "world_origin_x_m": float(world_origin_x_m) + float(chunk_x) * float(chunk_span_m),
-        "world_origin_z_m": float(world_origin_z_m) + float(chunk_z) * float(chunk_span_m),
+        "world_origin_x_m": chunk_world_x,
+        "world_origin_z_m": chunk_world_z,
         "display_origin_x_m": display_origin_x,
         "display_origin_z_m": display_origin_z,
         "height": np.round(core, 4).astype(float).ravel().tolist(),
         "apron_height": np.round(apron, 4).astype(float).ravel().tolist(),
+        "corridor": corridor.astype(int).ravel().tolist(),
+        "apron_corridor": corridor_apron.astype(int).ravel().tolist(),
     }
+
+
+def _stitch_grid(chunks: list[dict[str, object]], chunk_count: int, chunk_n: int, field: str) -> np.ndarray:
+    step = int(chunk_n) - 1
+    world_n = int(chunk_count) * step + 1
+    out = np.zeros((world_n, world_n), dtype=np.float64)
+    for chunk in chunks:
+        x = int(chunk["chunk_x"])
+        z = int(chunk["chunk_z"])
+        arr = np.asarray(chunk[field], dtype=np.float64).reshape((chunk_n, chunk_n))
+        out[z * step : z * step + chunk_n, x * step : x * step + chunk_n] = arr
+    return out
 
 
 def build_seed_world(
@@ -113,18 +193,12 @@ def build_seed_world(
     origin_z_m: float = WORLD_ORIGIN_Z_M,
     coarse_n: int = 176,
 ) -> dict[str, object]:
-    conditioned, stats = _build_conditioned_world(
-        seed,
-        chunk_count=chunk_count,
-        chunk_n=chunk_n,
-        chunk_span_m=chunk_span_m,
-        origin_x_m=origin_x_m,
-        origin_z_m=origin_z_m,
-        coarse_n=coarse_n,
-    )
+    # Kept for the previous test/export call shape; the independent-window path
+    # derives spacing directly from chunk_n and chunk_span_m.
+    _ = coarse_n
     chunks = [
-        _chunk_from_world(
-            conditioned,
+        _build_independent_chunk(
+            int(seed),
             chunk_x=x,
             chunk_z=z,
             chunk_count=chunk_count,
@@ -136,10 +210,19 @@ def build_seed_world(
         for z in range(chunk_count)
         for x in range(chunk_count)
     ]
+    conditioned = _stitch_grid(chunks, int(chunk_count), int(chunk_n), "height")
+    corridor = _stitch_grid(chunks, int(chunk_count), int(chunk_n), "corridor")
+    stats = {
+        "min": float(np.min(conditioned)),
+        "max": float(np.max(conditioned)),
+        "mean": float(np.mean(conditioned)),
+        "std": float(np.std(conditioned)),
+    }
     return {
         "seed": int(seed),
         "label": f"seed {seed}",
         "height": np.round(conditioned, 4).astype(float).ravel().tolist(),
+        "corridor": corridor.astype(int).ravel().tolist(),
         "world_n": int(conditioned.shape[0]),
         "stats": stats,
         "chunks": chunks,
@@ -176,6 +259,8 @@ def build_payload(
         "chunk_count": int(chunk_count),
         "chunk_n": int(chunk_n),
         "chunk_span_m": float(chunk_span_m),
+        "window_apron_m": float(WINDOW_APRON_M),
+        "window_spacing_m": float(chunk_span_m) / float(int(chunk_n) - 1),
         "world_span_m": float(chunk_count) * float(chunk_span_m),
         "world_origin_x_m": float(origin_x_m),
         "world_origin_z_m": float(origin_z_m),
@@ -201,16 +286,31 @@ def _corridor_mask(world_height: np.ndarray, world_span_m: float) -> np.ndarray:
     return (slopes <= trav.PASSABLE_SLOPE) & (world_height <= np.percentile(world_height, 55.0))
 
 
-def _edge_match_count(source_edge: np.ndarray, target_band: np.ndarray, row_tolerance: int = 2) -> int:
-    matches = 0
-    for row, enters in enumerate(np.asarray(source_edge, dtype=bool)):
-        if not enters:
-            continue
-        lo = max(0, row - row_tolerance)
-        hi = min(target_band.shape[0], row + row_tolerance + 1)
-        if bool(np.any(target_band[lo:hi, :])):
-            matches += 1
-    return matches
+def _world_corridor(seed_world: dict[str, object], chunk_count: int, chunk_n: int) -> np.ndarray:
+    world_n = int(seed_world["world_n"])
+    if "corridor" in seed_world:
+        return np.asarray(seed_world["corridor"], dtype=bool).reshape((world_n, world_n))
+    world_height = np.asarray(seed_world["height"], dtype=np.float64).reshape((world_n, world_n))
+    return _corridor_mask(world_height, float(chunk_count) * float(CHUNK_SPAN_M))
+
+
+def _component_crossing_count(strip: np.ndarray, seam_index: int) -> tuple[int, int]:
+    """Count seam corridor samples whose component reaches both chunk interiors."""
+    mask = np.asarray(strip, dtype=bool)
+    seam = int(seam_index)
+    edge = mask[:, seam]
+    entering = int(np.count_nonzero(edge))
+    if entering == 0:
+        return 0, 0
+    labels, _ = label(mask, structure=np.ones((3, 3), dtype=np.int8))
+    left_labels = set(np.unique(labels[:, :seam][labels[:, :seam] > 0]).astype(int).tolist())
+    right_labels = set(np.unique(labels[:, seam + 1 :][labels[:, seam + 1 :] > 0]).astype(int).tolist())
+    crossing = left_labels & right_labels
+    if not crossing:
+        return entering, 0
+    edge_labels = labels[:, seam]
+    matched = int(np.count_nonzero(edge & np.isin(edge_labels, list(crossing))))
+    return entering, matched
 
 
 def seam_rows(payload: dict[str, object]) -> list[dict[str, object]]:
@@ -221,18 +321,14 @@ def seam_rows(payload: dict[str, object]) -> list[dict[str, object]]:
     for seed_world in payload["seeds"]:
         seed = int(seed_world["seed"])
         grid = _chunk_grid(seed_world, chunk_count)
-        world_n = int(seed_world["world_n"])
-        world_height = np.asarray(seed_world["height"], dtype=np.float64).reshape((world_n, world_n))
-        corridors = _corridor_mask(world_height, float(payload["world_span_m"]))
+        corridors = _world_corridor(seed_world, chunk_count, chunk_n)
         for z in range(chunk_count):
             for x in range(chunk_count - 1):
                 left = _height_array(grid[z][x])
                 right = _height_array(grid[z][x + 1])
                 boundary = (x + 1) * step
-                edge = corridors[z * step : z * step + chunk_n, boundary]
-                target = corridors[z * step : z * step + chunk_n, boundary + 1 : boundary + 4]
-                matched = _edge_match_count(edge, target)
-                entering = int(np.count_nonzero(edge))
+                strip = corridors[z * step : z * step + chunk_n, x * step : (x + 2) * step + 1]
+                entering, matched = _component_crossing_count(strip, step)
                 rows.append({
                     "seed": seed,
                     "axis": "x",
@@ -248,10 +344,8 @@ def seam_rows(payload: dict[str, object]) -> list[dict[str, object]]:
                 top = _height_array(grid[z][x])
                 bottom = _height_array(grid[z + 1][x])
                 boundary = (z + 1) * step
-                edge = corridors[boundary, x * step : x * step + chunk_n]
-                target = corridors[boundary + 1 : boundary + 4, x * step : x * step + chunk_n].T
-                matched = _edge_match_count(edge, target)
-                entering = int(np.count_nonzero(edge))
+                strip = corridors[z * step : (z + 2) * step + 1, x * step : x * step + chunk_n].T
+                entering, matched = _component_crossing_count(strip, step)
                 rows.append({
                     "seed": seed,
                     "axis": "z",
@@ -352,7 +446,8 @@ def write_reports(
         "# Rough-World 3x3 Chunk Seam Report",
         "",
         f"Generator: `{payload['generator_version']}`; scenario: `{payload['scenario_key']}`; chunk span: {float(payload['chunk_span_m'])/1000.0:.1f} km.",
-        "This is a bounded review export: one authoritative world-coordinate super-window split into chunks, not a runtime streaming port.",
+        f"Window authority: each chunk is generated from its own world-coordinate skeleton window with {float(payload['window_apron_m'])/1000.0:.1f} km aprons at {float(payload['window_spacing_m']):.1f} m spacing.",
+        "This is still an offline/Godot proof artifact, not a Rust/GLSL runtime streaming port.",
         "",
         "## Seams",
         "",
@@ -381,8 +476,8 @@ def write_reports(
         "",
         "## Independent Window Diagnostic",
         "",
-        "This intentionally runs the current rough-highlands keeper as separate adjacent 25.6 km windows.",
-        "Nonzero seam deltas here are why the proof uses one authoritative 3x3 super-window today.",
+        "This intentionally runs the legacy rough-highlands keeper path as separate adjacent 25.6 km windows.",
+        "Nonzero seam deltas here are why the old path could not be used as the independent-window contract.",
         "",
         "| seed | axis | raw max | raw mean | conditioned max | conditioned mean |",
         "|---:|---:|---:|---:|---:|---:|",

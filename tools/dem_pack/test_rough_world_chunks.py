@@ -17,9 +17,12 @@ def test_chunk_payload_is_deterministic_and_seed_variable():
     a = _small_payload()
     b = _small_payload()
     assert a["generator_version"] == chunks.GENERATOR_VERSION
+    assert a["generator_version"].endswith("independent_windows")
     assert a["chunk_count"] == 3
     assert a["chunk_span_m"] == 25_600.0
+    assert a["window_apron_m"] == 25_600.0
     assert np.allclose(a["seeds"][0]["height"], b["seeds"][0]["height"])
+    assert np.allclose(a["seeds"][0]["corridor"], b["seeds"][0]["corridor"])
 
     first = np.asarray(a["seeds"][0]["height"], dtype=np.float64)
     second = np.asarray(a["seeds"][1]["height"], dtype=np.float64)
@@ -32,11 +35,17 @@ def test_adjacent_chunks_are_different_but_share_exact_edges():
     center = chunks._height_array(grid[1][1])
     east = chunks._height_array(grid[1][2])
     south = chunks._height_array(grid[2][1])
+    center_corridor = np.asarray(grid[1][1]["corridor"], dtype=np.float64).reshape(center.shape)
+    east_corridor = np.asarray(grid[1][2]["corridor"], dtype=np.float64).reshape(east.shape)
+    south_corridor = np.asarray(grid[2][1]["corridor"], dtype=np.float64).reshape(south.shape)
 
+    assert grid[1][1]["source"] == "independent_window"
     assert not np.allclose(center, east)
     assert not np.allclose(center, south)
     assert np.allclose(center[:, -1], east[:, 0])
     assert np.allclose(center[-1, :], south[0, :])
+    assert np.allclose(center_corridor[:, -1], east_corridor[:, 0])
+    assert np.allclose(center_corridor[-1, :], south_corridor[0, :])
 
 
 def test_chunk_seam_report_proves_height_and_corridor_continuity():

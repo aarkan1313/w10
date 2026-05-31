@@ -358,14 +358,17 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       around the 25.6 km reference span. The same policy probe is now flyable in the Godot review scene.
       Current k=0 read: ~6.4 km blocked, ~12.8 km old-passability
       candidate but structural `thin`, and ~19.2-25.6 km structural candidates. This is still not a visual gate.
-      AFK continuity proof now adds a bounded 3x3 generated-world review:
+      AFK continuity proof now adds a 3x3 generated-world review:
       `tools/dem_pack/export_godot_rough_world_chunks.py` exports two seeded 3x3 sets of adjacent 25.6 km
       chunks to `rough_world_chunks_3x3.json`, and `rough_world_chunks_review.tscn` lets the owner fly across
-      those chunk borders. Current non-visual evidence: exact shared-border height continuity and minimum
-      low-corridor seam match fraction 0.951. This is still a bounded authoritative super-window split into
-      chunks, not a final arbitrary infinite streaming architecture. Proof report:
+      those chunk borders. The current payload is `rough_world_chunks_v2_independent_windows`: each chunk is
+      generated from its own deterministic world-coordinate skeleton window with a 25.6 km apron, then cropped
+      to the authoritative core; a fixed route/corridor mask is exported for visual review. Current
+      non-visual evidence: exact shared-border height continuity and minimum structural-corridor component
+      match fraction 0.917. This is still offline Python + static Godot JSON, not a final arbitrary infinite
+      streaming architecture or Rust/GLSL port. Proof report:
       `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`. The report now quantifies the independent-window
-      failure case for the current keeper: separate adjacent 25.6 km windows produce conditioned seam max
+      failure case for the legacy keeper path: separate adjacent 25.6 km windows produce conditioned seam max
       deltas of 0.661 on x and 1.442 on z for seed 133, so a real infinite implementation must remove
       window-local normalization/authority before porting.
       Owner visual acceptance remains the blocking gate.
@@ -468,10 +471,10 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts, bounded
       adjacent-window seams, and coarse corridor continuity across neighboring window edges
       (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
-      The bounded 3x3 chunk review is the next bridge: if owner accepts it visually, review the true
-      infinite/player-travel version before any port. That review must cover independent world windows,
-      apron authority, seed/version determinism, cache eviction, route continuity beyond 3x3, and gameplay
-      pacing at travel speeds.
+      The 3x3 chunk review is the next bridge: if owner accepts it visually, review the true
+      infinite/player-travel version before any port. That review must cover a real authority-window cache,
+      independent requests across authority boundaries, seed/version determinism, cache eviction, route
+      continuity beyond 3x3, and gameplay pacing at travel speeds.
       Runtime design spec:
       `docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`. It is design-ready
       only; implementation is still blocked on Phase 5 keeper acceptance.

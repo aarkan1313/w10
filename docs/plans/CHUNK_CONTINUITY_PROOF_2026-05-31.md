@@ -6,18 +6,20 @@ runtime architecture.
 
 ## Current Verdict
 
-Status: **bounded proof built; owner visual acceptance pending**.
+Status: **offline independent-window proof built; owner visual acceptance pending**.
 
 The proof is good enough to review chunk-to-chunk terrain continuity in Godot:
 adjacent 25.6 km chunks are different terrain, share exact border heights, and
-carry low-corridor masks across seams well enough for a first visual pass.
+carry structural route/corridor masks across seams well enough for a first visual pass.
 
 It is **not** yet proof of arbitrary infinite generation in all directions. The
-current rough-highlands generator still has window/span-local steps, so the safe
-bounded proof exports one authoritative 3x3 world-coordinate super-window and
-splits it into chunks. That is the correct review artifact, but the future
-runtime needs world-window authority and apron semantics before independent
-streamed windows can replace it.
+current review path is still offline Python, and the Godot scene loads a static
+JSON artifact. The latest proof now generates each 25.6 km chunk from its own
+deterministic world-coordinate skeleton window with a 25.6 km apron, then crops
+the authoritative core. That is a better shape than the previous 3x3
+super-window split, but the future runtime still needs a real window/cache
+authority, fact sampling contract, and Rust/GLSL port before streamed chunks can
+replace the static review payload.
 
 ## Artifacts
 
@@ -30,38 +32,52 @@ streamed windows can replace it.
 ## What It Proves
 
 - Deterministic bounded export from seed + world origin + chunk span + generator version.
+- Chunks are tagged `source=independent_window`: each chunk is built from its own
+  world-coordinate skeleton window, not by slicing one stretched height export.
 - Two visible seed examples: `133` and `211`, switchable in-scene with `T`.
 - A 3x3 layout of adjacent 25.6 km chunks.
 - Adjacent chunks are not repeated copies. Reported mean absolute center/east chunk deltas:
-  - seed 133: `0.9658`
-  - seed 211: `0.5257`
+  - seed 133: `0.2247`
+  - seed 211: `0.3854`
 - Different seeds produce materially different worlds. Center chunk seed-pair mean absolute delta:
-  - `133 -> 211`: `0.6383`
+  - `133 -> 211`: `0.3959`
 - Shared chunk-border height deltas are exact in the generated payload:
   - max abs height delta: `0.000000`
-- Corridor continuity is non-vacuous and mostly continuous:
-  - minimum low-corridor seam match fraction: `0.951`
+- Corridor continuity is non-vacuous and mostly continuous by connected-component seam check:
+  - minimum structural-corridor seam match fraction: `0.917`
 - The review scene uses one-sample aprons for chunk-edge normals, reducing visual shading seams at shared edges.
+- The corridor overlay now prefers the exported routed/route mask when present,
+  instead of only the old low-height/passable-slope heuristic.
 
 ## What It Does Not Prove
 
 - It does not prove the final Rust/GLSL runtime.
-- It does not prove arbitrary chunk windows can be generated independently today.
+- It does not prove arbitrary infinite travel, cache eviction, or authority-window
+  handoff across many windows.
 - It does not prove full hydrology, gameplay navmesh quality, or route desirability.
 - It does not prove owner visual acceptance; the owner still needs to fly the scene.
 - It does not prove long-distance travel pacing. A 76.8 km-wide 3x3 proof is enough for seam review, not for travel-loop acceptance.
+- It does not prove the legacy `geography_skeleton.compose_height` path is safe
+  when run as isolated 25.6 km windows; that diagnostic still fails and is kept
+  in the report on purpose.
 
 ## Why The Boundary Exists
 
-The current rough-highlands path is seeded and world-coordinate aware, but it still
-uses window/span-local operations in the review generator path. Examples include
-coarse skeleton span selection, local normalization, and final review conditioning.
-If each 25.6 km chunk were generated independently through that path, edges would
-not be a reliable proof. The current exporter avoids that by generating an
-authoritative 3x3 world first, then splitting it into chunks.
+The legacy rough-highlands path is seeded and world-coordinate aware, but it still
+uses window/span-local operations in the earlier review generator path. Examples
+include coarse skeleton span selection, local normalization, and final review
+conditioning. If each 25.6 km chunk is generated independently through that path,
+edges are not reliable.
+
+The current exporter avoids that specific failure by using the Phase 7B-lite
+world-window facts (`geography_skeleton_windows.py`) and a fixed
+world-coordinate height/corridor composition with no per-window normalization.
+The routed skeleton supplies broad uplift/channel facts; deterministic
+world-coordinate route texture is also carved into height and exported as the
+structural corridor mask so visible routes are a seed+coordinate function.
 
 This is now quantified in the report's independent-window diagnostic. Running
-the current keeper as separate adjacent 25.6 km windows produces nonzero seam
+the legacy keeper as separate adjacent 25.6 km windows produces nonzero seam
 deltas:
 
 - seed 133, x-neighbor: conditioned max delta `0.6614`, mean delta `0.2275`
@@ -95,11 +111,11 @@ Last focused verification for the proof:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
-26 passed
+27 passed
 ```
 
-The focused chunk test file now has an additional independent-window diagnostic
-assertion; run by itself it reports:
+The focused chunk test file includes independent-window source, seam,
+seed-variation, corridor-edge, and legacy diagnostic assertions; run by itself it reports:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py -q
