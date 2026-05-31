@@ -4,16 +4,18 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
-Last updated: 2026-05-30 (**M0–M4 DONE; MAJOR PIVOT — height core being rebuilt.** Gates: cargo 115 · fast
-6/6 · gpu 4/4 · m3 8/8 · dem_pack pytest 15. M0-M4 (toolchain, deterministic gen, GPU parity, render
-pipeline, Facts API) are real + done. **But an owner fly showed the terrain reads blobby/placed/tiling** —
-root-caused to `sample_kernel` reading DEMs as TILING textures (kernel = the whole height). A spectral fix
-was refuted by eye (spectrum discards phase=structure). After a full re-vision, the height core is being
-rebuilt as **parameter-driven warped-noise** (Phase 5 below). The OLD M5-detail/M6-materials/M7-erosion
-milestones are SUPERSEDED + re-sequenced into the new plan. Current truth: vision spec
-`docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md`, height-core spec `…/2026-05-30-worldgen-
-core-design.md`, `docs/plans/LOOSE_ENDS_LEDGER.md`, STATUS.md top. **NEXT: worldgen Slice 2 (distill DEMs →
-biome params).**)
+Last updated: 2026-05-30 (**M0–M4 DONE; MAJOR PIVOT — height core being rebuilt.** Latest verified gates:
+cargo 121 · fast 6/6 · gpu 4/4 · m3 9/9 · dem_pack pytest 22. M0-M4 (toolchain, deterministic gen, GPU
+parity, render pipeline, Facts API) are real + done. **But owner image/fly review showed the old height
+content reads blobby/placed/tiling/noisy rather than real geography.** Root causes already rejected:
+`sample_kernel` tiled DEMs as the whole height; spectral synthesis preserved roughness but discarded
+phase/structure; scalar warped-noise tuning changed texture more than geography. Phase 5 is now realigned
+as an **85%-target geography-engine prototype**: hierarchical landform regimes, irregular ridge/drainage
+skeletons, DEM-reference contact sheets, and explicit red/yellow/green expectation gates before any Rust/GLSL
+port. The OLD M5-detail/M6-materials/M7-erosion milestones are SUPERSEDED + re-sequenced into the new plan.
+Current truth: vision spec `docs/superpowers/specs/2026-05-30-worldgen10-north-star-vision.md`, height-core
+spec `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`, `docs/plans/LOOSE_ENDS_LEDGER.md`,
+STATUS.md top. **NEXT: Slice 2A geography-engine prototype, offline/render-first, with real DEM references.**)
 
 [history] M3 slice 8 (pre-reset) — seam + geomorph + continuity gate; superseded by the reset above when a real fly exposed the multi-level assembly was still broken.
 
@@ -268,18 +270,42 @@ shallow-to-bedrock / unlimited caves). Built as SLICES (CPU first, GPU bulk last
 Legend: `[x]` done · `[~]` in progress · `[ ]` not started. Each phase = its own brainstorm → spec →
 plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-judged; gates prove invariants.
 
-### Phase 5 — Worldgen core rebuild (ACTIVE) — structure-first local height
+### Phase 5 — Worldgen core rebuild (ACTIVE) — 85%-target geography engine
 
-Replaces `height::height`/`sample_kernel` (the tiling) with a local deterministic generator. The structure
-research changed the order: **do not port the current Slice-2 tuned output to Rust yet.** The distillation
-tooling is useful, but the current generator basis still reads as "same noise" to the owner. Phase 5 now
-uses the research in a stricter order: first improve the structure basis in offline images, then refine the
-metric/schema, then port only the owner-accepted local stack.
+Replaces `height::height`/`sample_kernel` (the tiling) with a deterministic generator, but the target is no
+longer "better warped noise." The target is an **85%-class geography read**: at normal game/fly-camera
+distances the terrain should read as plausible real geography, with connected ridges, basins, valleys,
+drainage-shaped corridors, and local variation that follows landform history. It is not expected to be
+indistinguishable from a real USGS DEM under expert GIS inspection.
+
+The structure research and the owner's matrix review changed the order: **do not port the current Slice-2
+tuned output to Rust yet.** The distillation tooling is useful, but the current generator basis still reads
+as "same noise" to the owner. Phase 5 now uses a stricter geography-engine order: prove a hierarchical
+landform/regime prototype in offline images, use real DEM kernels as side-by-side references, then refine the
+metric/schema, then port only the owner-accepted stack.
 
 Hard line from the research: local `f(x,z)` can make terrain read as coherent and drainage-shaped, but it
 cannot produce globally-correct hydrology. True river/discharge connectivity is Phase 7B, not a promise of
-Phase 5. Phase 5's job is the AAA foundation: seamless, fast, tunable, parity-safe terrain that reads as a
-contiguous landmass under flight.
+Phase 5. However, if Phase 5 cannot produce a convincing offline geography sheet without a coarse routed
+field, **pull the Phase 7B drainage-skeleton design forward before any Rust port** rather than shipping a
+local-noise compromise. Phase 5's job is the AAA foundation: seamless, fast, tunable, parity-safe terrain
+that reads as a contiguous landmass under flight.
+
+**85% expectation contract:**
+- **Green / on track:** a generated sheet has at least one patch the owner reads as real geography, not
+  "nice noise"; basins/ranges/valleys/ridges have recognizable logic; no visible straight scaffolding,
+  cells, chunks, or repeated stamps; 200 km, 40 km, and close crops all hold together; reference DEM kernels
+  are shown beside synth output.
+- **Yellow / uncertain:** stills improve but another scale breaks; ridges exist but drainage is decorative;
+  biomes differ but transitions feel averaged or pasted.
+- **Red / realign:** combo sheets all look basically the same; the best result is only "least bad"; weird
+  procedural lines/cells/masks are visible; the argument becomes "with tuning this might work."
+
+**Measurement stack for every accepted offline step:** owner image verdict first, then cheap objective
+sanity metrics against real kernels: local relief ratio at multiple windows, slope distribution moments,
+curvature-sign balance, ridge/valley spacing, patch-size distribution, drainage/channel spacing where a
+network exists, and non-repetition / no-straight-line artifact checks. Metrics guide tuning; they do not
+override the owner's visual rejection.
 
 Spec baseline: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`.
 Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
@@ -290,34 +316,45 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       Current metrics fixed some dead knobs, but the generator basis still lacks enough structure. Do not
       continue scalar tuning as if this slice is on track; treat it as a useful parameter pipeline waiting
       for a better basis.
-- [ ] **Slice 2A — structure-basis salvage (offline Python, render-first).** Upgrade `worldgen_proto.py`
-      before any runtime work:
-      - hybrid/ridged multifractal weighting (`weight *= signal`) to kill uniform roughness;
-      - stronger 2-level recursive warp in the 0.3x-1.0x macro-wavelength range;
-      - ridge/uplift-coupled valley carving instead of subtracting an independent ridged field;
-      - optional low-cost Worley/cellular belts/flow-edges as a separate A/B branch.
-      Render current proto vs new proto vs real DEM hillshade for mountain, badlands, glacial, and one flat
-      family. Owner eye decides whether the local stack is worth porting.
+- [ ] **Slice 2A — geography-engine prototype (offline Python, render-first).** Replace "try all noise
+      combos" with a hierarchical landform composition prototype before any runtime work:
+      - explicit coarse landform regimes: basin floor, alluvial fan, foothill, range core, plateau, badlands,
+        plain/grassland, and optional glacial/karst families;
+      - irregular ridge/uplift skeletons and basin/range frames that cannot reveal straight segment,
+        Voronoi-cell, or mask artifacts in the final height;
+      - drainage-shaped corridors routed over the coarse field where feasible; if this needs a true
+        world-anchored flow/discharge layer, stop and pull Phase 7B design forward;
+      - per-regime process/detail: smoother basin fill, fan aprons, rough range cores, incised badlands,
+        foothill transition zones, and close-scale detail that follows the coarse structure;
+      - DEM-reference contact sheets every run: real kernels beside synth for 200 km, 40 km, and close crops.
+      Owner eye decides whether the geography read is worth continuing. A "least bad" sheet is not enough.
+- [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
+      stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
+      components inside the geography engine, but they are not the milestone by themselves. They must serve
+      the landform/regime hierarchy and pass the same reference-sheet bar.
 - [ ] **Slice 2B — metric/schema correction (offline Python).** Keep the distillation pipeline, but replace
       the weak metric assumptions:
       - verify actual per-family variance of live `anisotropy`; if clustered, stop using it as the primary
         `warp_amount` driver;
       - add cheap geomorphometric metrics that should vary: hypsometric integral/curve moments, slope
-        moments, curvature-sign stats, VRM/roughness-at-slope, windowed relief ratio;
+        moments, curvature-sign stats, VRM/roughness-at-slope, windowed relief ratio, patch-size/regime
+        proportions, and ridge/valley spacing;
       - defer expensive flow-routed metrics (drainage density, slope-area theta, TWI) until there is a
         network/drainage primitive for them to tune;
       - empirically test spline-of-noise control curves before promoting splines to the pack schema.
 - [ ] **Slice 2C — gradient/noise feasibility gate (offline + small parity spike).** Only after 2A passes:
       design analytic value+gradient noise with one fade convention across Python/Rust/GLSL. This is the
       prerequisite for IQ/Jordan/Runevision-style slope filters. It is not a free two-line edit.
-- [ ] **Precondition before the RUST build:** close `LOOSE_ENDS_LEDGER.md` **B1/B2/B3**. These are in the
-      KEPT render/perf foundation and the rebuild sits on them: pool RID cleanup, structural never-black under
+- [x] **Precondition before the RUST build:** close `LOOSE_ENDS_LEDGER.md` **B1/B2/B3**. DONE + verified:
+      cargo 121, fast 6/6, gpu 4/4, m3 9/9 after an editor-closed rebuild. These are in the KEPT
+      render/perf foundation and the rebuild sits on them: pool RID cleanup, structural never-black under
       capacity pressure, and terrain-vs-sky/detail-on-off perf gate.
-- [ ] **Slice 3 — Rust generator core, accepted-local-stack only.** Port the owner-accepted Phase-5 local
-      stack to `height.rs` and replace `sample_kernel`. Start with the parity-clean subset from 2A
-      (multifractal + recursive warp + coupled valleys, plus any accepted Worley term). Do not include
-      gradient filters unless 2C is green. Gates: determinism, boundedness, seam, non-repetition, Python-vs-
-      Rust sample parity.
+- [ ] **Slice 3 — Rust generator core, accepted geography stack only.** Port the owner-accepted Phase-5
+      stack to `height.rs` and replace `sample_kernel`. If the accepted offline result depends on a coarse
+      regime/drainage skeleton, design that data model first instead of flattening it into ad-hoc noise.
+      Do not include gradient filters unless 2C is green. Gates: determinism, boundedness, seam,
+      non-repetition, Python-vs-Rust sample parity, and a regression render sheet matching the accepted
+      offline look.
 - [ ] **Slice 4 — GPU parity + integrate.** Mirror the accepted Rust generator in GLSL; remove the 25 MB
       kernel atlas from the render path; re-baseline GPU parity; wire render + facts so visible==collision
       still holds; run the hardened GPU-time perf gate.
@@ -351,8 +388,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       - prototype Runevision/Phacelle-style slope-aligned gully filtering as a filter over the accepted height
         field, with clear warnings that gullies can dead-end and are not hydrology;
       - port only if CPU/GPU order, hash-grid pivots, gradients, and perf are gated.
-- [ ] **Phase 7B — true connected drainage milestone.** If the owner still wants real river/canyon
-      connectivity, design a world-anchored deterministic coarse drainage field:
+- [ ] **Phase 7B — true connected drainage milestone / pull-forward escape hatch.** If Phase 5 cannot hit
+      the 85%-class geography read without real routed structure, pull this before the Rust port. Design a
+      world-anchored deterministic coarse drainage field:
       - fixed seed/world-anchored flow windows, never camera-relative;
       - deterministic routing/accumulation and seam/stitch strategy;
       - fine pages sample discharge/distance-to-channel and apply local incision;

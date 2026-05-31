@@ -8,26 +8,40 @@ point — see DESIGN §7.3.)
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
 > point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now
 > gate-verified after an editor-closed rebuild: **cargo 121 passed**, **fast 6/6**, **gpu 4/4**, **m3 9/9**.
-> `main` remains ahead of `origin/main` and unpushed.
+> `origin/main` is synced through the B-bug closeout + first Slice 2A probe. Current coarse-structure matrix
+> and landform-regime work is local research/probe state until accepted or explicitly committed. Roadmap
+> Phase 5 is now realigned around an 85%-target geography-engine prototype before any Rust/GLSL port.
 
 ---
 
-## CURRENT DIRECTION: Worldgen Core rebuild (param-driven warped-noise) — Slice 2 PAUSED for a structure rethink
+## CURRENT DIRECTION: Worldgen Core rebuild — 85%-target geography engine
 
-Spec: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`. After the spectral approach was refuted
-by eye, the owner steered a new height-core architecture: distill real DEMs → per-biome structural PARAMS →
-grammar blends them → one warped-noise GENERATOR (domain warp + macro fBm landmass + ridged ridgelines +
-inverted-ridged valley carving) makes infinite seamless terrain. Kernels never sampled (DNA library, no
-tiling). Targets "Google-Maps-explore" contiguity. Keeps render/grammar/facts/relief_scale. Full context:
-memory `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`; loose ends in `LOOSE_ENDS_LEDGER.md`.
+Spec baseline: `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`. Current roadmap realignment:
+the goal is no longer "find a better warped-noise combo." The goal is an **85%-class geography read**: at
+normal game/fly-camera distances, terrain should read as plausible real geography with coherent basins,
+ranges, ridges, drainage-shaped corridors, and local variation that follows landform history. It is not a
+promise to be indistinguishable from real USGS DEMs under expert GIS inspection. Kernels are still kept as a
+real-world DNA/reference library, not sampled as tiling height textures. Keeps render/grammar/facts/
+relief_scale. Full context: memory `worldgen10-north-star-vision`, `worldgen10-wg9-height-recipe`; loose
+ends in `LOOSE_ENDS_LEDGER.md`.
 
-**Roadmap update from structure audit:** `STRUCTURE_AUDIT_EXTRACT.md` has been folded into ROADMAP Phase 5.
-Current next work is **Slice 2A structure-basis salvage** (offline Python, render-first): multifractal
-weighting, stronger recursive warp, ridge/uplift-coupled valleys, and optional Worley/cellular structure
-A/Bs. Slice 2B then fixes the metric/schema set (HI, slope moments, curvature signs, VRM, windowed relief;
-audit `anisotropy`). No Rust/GLSL port until an owner-accepted offline image set exists and B1/B2/B3 are
-closed. True connected drainage is now explicitly Phase 7B (world-anchored coarse flow), not a promise of
-the local height generator.
+**Roadmap update from structure audit + owner review:** `STRUCTURE_AUDIT_EXTRACT.md` has been folded into
+ROADMAP Phase 5, then realigned after the owner judged the broad combo/matrix sheets: the least-bad
+basin/range/flow/fine-detail cell was still **not great**. Current next work is **Slice 2A geography-engine
+prototype** (offline Python, render-first): explicit landform regimes, irregular ridge/uplift skeletons,
+drainage-shaped corridors over coarse fields where feasible, per-regime process/detail, and DEM-reference
+contact sheets at 200 km, 40 km, and close crop. Multifractal/warp/Worley ideas are allowed only as
+components inside that hierarchy, not as the milestone by themselves. Slice 2B then fixes the metric/schema
+set (HI, slope moments, curvature signs, VRM, windowed relief, patch/regime proportions, ridge/valley
+spacing; audit `anisotropy`). No Rust/GLSL port until an owner-accepted offline image set exists. If an
+85%-class sheet requires real routed coarse drainage, pull ROADMAP Phase 7B forward before the Rust port.
+
+**Expectation gates for the 85% target:** Green means at least one generated patch reads as real geography,
+not "nice noise"; basins/ranges/valleys/ridges have recognizable logic; there are no visible straight
+scaffolds, cells, chunks, or repeated stamps; and the same candidate holds at 200 km, 40 km, and close crop
+beside real DEM references. Yellow means the stills improve but another scale breaks, or ridges exist while
+drainage remains decorative. Red means sheets still look basically the same, the best result is only
+"least bad," or weird procedural lines/masks remain visible.
 
 **B-bug closeout state:** B1/B2/B3 are now closed for the rebuild precondition. Evidence: Rust DLL rebuilt
 after the editor was closed; `cargo test` isolated target **121 passed / 0 failed**; `fast` **6/6**; `gpu`
@@ -36,12 +50,15 @@ after the editor was closed; `cargo test` isolated target **121 passed / 0 faile
 deliberately tight pool budget. B3's hardened perf gate also passed with terrain-vs-sky and detail-on/off
 checks active (`GPU p99=0.082ms`, `terrain_frac_min=1.000`, `detail_delta=0.53739`).
 
-**Slice 2A first render batch:** `tools/dem_pack/render_structure_ab.py` now renders baseline vs four
-structure-basis candidates (`recursive_warp`, `multifractal_ridges`, `ridge_valley_coupled`,
-`cellular_valleys`) using the same seeds/views. Review sheets are in `D:\tmp\wg10_structure_ab\`:
-mountain/plains/badlands at 200 km + 20 km, plus a mountain→plains transition strip. Tests:
-`python -m pytest tools\dem_pack -q` = **45 passed**. **Owner verdict pending** — these are not accepted
-terrain until image review.
+**Slice 2A render probes:** Batch 1 (`D:\tmp\wg10_structure_ab\`) was rejected by owner eye: all variants
+looked basically the same, meaning stronger warp/ridge/noise variants still changed texture more than
+geography. Batch 2 / matrix (`D:\tmp\wg10_structure_matrix\`) found the least-bad cell as **basins + ranges /
+flow + fine detail**, but owner verdict remains **not great**. The current landform-regime probe also shows
+weird line/scaffold artifacts; real WG9/DEM reference kernels make the gap obvious. Key conclusion: real
+geography is not an averaged set of per-biome statistics; it is a nuanced mix of landform regimes and local
+histories. Next algorithm direction is now explicit in ROADMAP Phase 5: hierarchical landform composition
+with coarse regions/regimes, irregular ridge/drainage skeletons, and per-region process/detail, judged against
+real DEM contact sheets before any runtime port.
 
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
@@ -69,9 +86,9 @@ before more param-tuning** (candidate directions: stronger domain warp, ridged-m
 owner's standing "distilled-erosion" idea — offline-run real erosion → learn a cheap LOCAL operator → apply
 online; tracked in the ledger as the big enhancement). **The distillation tooling + the metric fixes are KEPT**
 (they're the param-extraction half and they work); what's under research is the GENERATOR's structure stage.
-**NEXT:** execute ROADMAP Slice 2A (structure-basis salvage). The B1/B2/B3 FIX-NOW work is closed and
+**NEXT:** execute ROADMAP Slice 2A (geography-engine prototype). The B1/B2/B3 FIX-NOW work is closed and
 verified, so the distillation tooling remains kept, but scalar tuning is not the next move until the
-generator basis can pass the owner's structure read.
+landform/regime hierarchy can pass the owner's structure read against real DEM references.
 
 **Slice 1 — generator prototype (OFFLINE, render-first): ACCEPTED by owner eye (2026-05-30).**
 `tools/dem_pack/worldgen_proto.py` (`value_noise`/`fbm`/`ridged_fbm`/`domain_warp`/`generate`) + 7 tests
@@ -87,8 +104,9 @@ toolkit over de-noised variants — "hard to know until it's in a live scene." *
 noise judgment deferred to the live-scene fly.** Honest framing (owner-confirmed): warped noise = PLAUSIBLE
 terrain, NOT real connected erosion (Grand-Canyon look = real-world history); **distilled-erosion is a big
 LATER roadmap enhancement** (ledger), not needed for the foundation. This old "NEXT: Slice 2 distill real
-DEMs" note is superseded by the structure audit above: Slice 2 tooling is built/kept, and the next accepted
-step is Slice 2A structure-basis salvage. (Precondition before the RUST build, Slice 3: ledger B1/B2/B3 is now closed.)
+DEMs" note is superseded by the structure audit and roadmap realignment above: Slice 2 tooling is built/kept,
+and the next accepted step is Slice 2A geography-engine prototype. (Precondition before the RUST build,
+Slice 3: ledger B1/B2/B3 is now closed.)
 
 [below: prior milestone status — M5/shaded-scale/synthesis — partly superseded by the worldgen rebuild; see
 the LOOSE_ENDS_LEDGER for what's KEEP / FOLD-IN / TABLED.]
