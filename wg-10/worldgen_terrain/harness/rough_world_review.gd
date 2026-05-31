@@ -6,6 +6,13 @@ const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 const BASE_WORLD_SIZE := 128.0
 const BASE_HEIGHT_SCALE := 260.0
 const SCALE_PRESETS := [10.0, 25.0, 50.0, 100.0, 150.0, 200.0]
+const EASY_SLOPE := 0.12
+const PASSABLE_SLOPE := 0.28
+const STEEP_SLOPE := 0.45
+const OVERLAY_TERRAIN := 0
+const OVERLAY_SLOPE := 1
+const OVERLAY_CORRIDOR := 2
+const OVERLAY_COUNT := 3
 
 var _camera: Camera3D
 var _hud: Label
@@ -16,7 +23,7 @@ var _relief := 1.0
 var _scale_index := 5
 var _overview := false
 var _flat_lighting := false
-var _slope_overlay := false
+var _overlay_mode := OVERLAY_TERRAIN
 
 func _ready() -> void:
 	var env := Environment.new()
@@ -117,6 +124,7 @@ func _make_mesh(item: Dictionary) -> ArrayMesh:
 	var colors := PackedColorArray()
 	var idx := PackedInt32Array()
 	var cell := world_size / float(n - 1)
+	var corridor_height := _height_percentile(heights, 0.55)
 
 	for z in range(n):
 		for x in range(n):
@@ -126,7 +134,7 @@ func _make_mesh(item: Dictionary) -> ArrayMesh:
 			var pz := (float(z) / float(n - 1) - 0.5) * world_size
 			verts.append(Vector3(px, h * height_scale, pz))
 			normals.append(_normal_at(heights, n, x, z, cell, height_scale))
-			colors.append(_terrain_color(h, str(item.get("kind", "")), _slope_at(heights, n, x, z, cell, height_scale)))
+			colors.append(_terrain_color(h, str(item.get("kind", "")), _slope_at(heights, n, x, z, cell, height_scale), corridor_height))
 
 	for z in range(n - 1):
 		for x in range(n - 1):
@@ -170,15 +178,34 @@ func _slope_at(heights: Array, n: int, x: int, z: int, cell: float, height_scale
 	var dz := ((hu - hd) * height_scale) / maxf(cell * 2.0, 0.001)
 	return sqrt(dx * dx + dz * dz)
 
-func _terrain_color(h: float, kind: String, slope: float) -> Color:
-	if _slope_overlay:
-		if slope < 0.12:
+func _height_percentile(heights: Array, pct: float) -> float:
+	if heights.is_empty():
+		return 0.0
+	var sorted := heights.duplicate()
+	sorted.sort()
+	var idx := clampi(int(round((float(sorted.size()) - 1.0) * pct)), 0, sorted.size() - 1)
+	return float(sorted[idx])
+
+func _terrain_color(h: float, kind: String, slope: float, corridor_height: float) -> Color:
+	if _overlay_mode == OVERLAY_SLOPE:
+		if slope < EASY_SLOPE:
 			return Color(0.18, 0.62, 0.28)
-		if slope < 0.28:
+		if slope < PASSABLE_SLOPE:
 			return Color(0.86, 0.72, 0.22)
-		if slope < 0.45:
+		if slope < STEEP_SLOPE:
 			return Color(0.92, 0.40, 0.18)
 		return Color(0.70, 0.13, 0.12)
+	if _overlay_mode == OVERLAY_CORRIDOR:
+		var is_low_corridor := h <= corridor_height and slope <= PASSABLE_SLOPE
+		if is_low_corridor:
+			return Color(0.08, 0.72, 0.88)
+		if slope <= EASY_SLOPE:
+			return Color(0.24, 0.70, 0.32)
+		if slope <= PASSABLE_SLOPE:
+			return Color(0.80, 0.78, 0.24)
+		if slope <= STEEP_SLOPE:
+			return Color(0.88, 0.46, 0.16)
+		return Color(0.52, 0.10, 0.10)
 	var t: float = clampf((h + 1.0) * 0.5, 0.0, 1.0)
 	var low := Color(0.40, 0.48, 0.38)
 	var mid := Color(0.62, 0.56, 0.40)
@@ -224,7 +251,7 @@ func _input(event: InputEvent) -> void:
 				_flat_lighting = not _flat_lighting
 				_terrain.material_override = _make_material()
 			KEY_P:
-				_slope_overlay = not _slope_overlay
+				_overlay_mode = (_overlay_mode + 1) % OVERLAY_COUNT
 				_rebuild_current_mesh()
 			KEY_COMMA:
 				_set_scale_index(_scale_index - 1)
@@ -260,6 +287,15 @@ func _overview_camera() -> void:
 	_camera.global_position = Vector3(0.0, span * 0.48, span * 0.55)
 	_camera.rotation_degrees = Vector3(-47.0, 0.0, 0.0)
 
+func _overlay_label() -> String:
+	match _overlay_mode:
+		OVERLAY_SLOPE:
+			return "slope"
+		OVERLAY_CORRIDOR:
+			return "corridor"
+		_:
+			return "terrain"
+
 func _process(_delta: float) -> void:
 	if _hud == null or _items.is_empty():
 		return
@@ -268,7 +304,7 @@ func _process(_delta: float) -> void:
 	var source_km := float(item.get("span_km", 0.0))
 	var source_scene_ratio := source_km / maxf(scene_km, 0.001)
 	_hud.text = "WG10 rough-highlands generated-world review\n" \
-		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | ,/. scale | P slope | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | ,/. scale | P overlay | L flat | WASD/Space/C fly | Esc mouse\n" \
 		+ "Selected: %s | %s | %.1f km source -> %.1f km scene | source/scene %.2fx | relief %.2fx | scale %.0fx | %s | lighting %s" % [
 			item.get("label", "?"),
 			item.get("kind", "?"),
@@ -277,6 +313,6 @@ func _process(_delta: float) -> void:
 			source_scene_ratio,
 			_relief,
 			_world_scale(),
-			"slope" if _slope_overlay else "terrain",
+			_overlay_label(),
 			"flat" if _flat_lighting else "lit/no-shadow/no-fog",
 		]

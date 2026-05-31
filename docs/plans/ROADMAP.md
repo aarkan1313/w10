@@ -343,15 +343,16 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       First scene review separated two facts: the rough-highlands shape is promising, but the old 128-unit
       block compressed 90 km so aggressively that it could not answer player-scale/traversability questions.
       The review scene now defaults to the owner-preferred 200x horizontal expansion, about a 25.6 km scene
-      block, and exposes 10/25/50/100/150/200x presets, independent relief, and a slope overlay. Treat scale
+      block, and exposes 10/25/50/100/150/200x presets, independent relief, and a terrain/slope/corridor
+      overlay cycle. Treat scale
       as a required generator/runtime knob, not a baked constant: different games may want different landform
       density, and "too big" can be as bad as "too small" for player pacing.
       Owner scale/traversal rule: tall mountains and high relief are allowed; the required production quality
       is traversable structure, not flattened terrain. Validate valley floors, passes, ramps, shelves,
       basin/fan corridors, and route continuity as explicit acceptance signals.
       Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
-      a traversability/scale audit over the rough-world review mesh, and a clean Godot import for the
-      scale/no-fog/default-25km review harness. The audit confirms scale sensitivity but is not a visual gate:
+      a traversability/scale audit over the rough-world review mesh, a corridor overlay for low-passable route
+      review, and a clean Godot import for the scale/no-fog/default-25km review harness. The audit confirms scale sensitivity but is not a visual gate:
       ~6.4 km fragments routes, ~12.8 km connects, and ~25.6 km is a plausible current review default.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
