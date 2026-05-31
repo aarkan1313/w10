@@ -187,7 +187,8 @@ keeper family over a 3x3 set of **25.6 km** chunks, with two deterministic seeds
 seed switch in-scene. Important boundary: this is a **bounded authoritative 3x3 super-window split into
 chunks**, not a final infinite streaming/runtime architecture. It proves that adjacent chunks can be different
 parts of one seeded world and can share exact borders in the review artifact; it does not yet prove arbitrary
-unbounded generation from independent runtime windows.
+unbounded generation from independent runtime windows. Dedicated proof/audit report:
+`docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
 
 Evidence written to `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`: shared-border
 height max abs delta is **0.000000** across all seams; minimum low-corridor match fraction is **0.951**;

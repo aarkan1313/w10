@@ -363,7 +363,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       chunks to `rough_world_chunks_3x3.json`, and `rough_world_chunks_review.tscn` lets the owner fly across
       those chunk borders. Current non-visual evidence: exact shared-border height continuity and minimum
       low-corridor seam match fraction 0.951. This is still a bounded authoritative super-window split into
-      chunks, not a final arbitrary infinite streaming architecture.
+      chunks, not a final arbitrary infinite streaming architecture. Proof report:
+      `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
