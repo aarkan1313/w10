@@ -1,6 +1,8 @@
 extends Node3D
 
-const DATA_PATH := "res://worldgen_terrain/generated/review/rough_world_3d.json"
+# Default payload (the FOCUS-variant single-window review). Overridable per-scene via @export
+# so the same switcher can drive other item payloads (e.g. the A|B|v2 keeper comparison).
+@export var data_path := "res://worldgen_terrain/generated/review/rough_world_3d.json"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
 const BASE_WORLD_SIZE := 128.0
@@ -59,7 +61,9 @@ func _ready() -> void:
 	_terrain.material_override = _make_material()
 	add_child(_terrain)
 
-	_select(4, true)
+	# Default to item 4 (the owner-preferred FOCUS variant in the 6-item payload) but clamp to the
+	# payload size so smaller payloads (e.g. the 3-item A|B|v2 switcher) don't index out of bounds.
+	_select(clampi(4, 0, _items.size() - 1), true)
 
 func _build_hud() -> void:
 	var layer := CanvasLayer.new()
@@ -70,9 +74,9 @@ func _build_hud() -> void:
 	layer.add_child(_hud)
 
 func _load_items() -> bool:
-	var path := ProjectSettings.globalize_path(DATA_PATH)
+	var path := ProjectSettings.globalize_path(data_path)
 	if not FileAccess.file_exists(path):
-		push_error("rough_world_review: missing generated data at %s. Run tools/dem_pack/export_godot_rough_world_review.py" % DATA_PATH)
+		push_error("rough_world_review: missing generated data at %s. Run the matching export_godot_rough_world_*.py" % data_path)
 		return false
 	var text := FileAccess.get_file_as_string(path)
 	var parsed: Variant = JSON.parse_string(text)
