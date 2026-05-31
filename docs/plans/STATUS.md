@@ -160,16 +160,21 @@ offline/static generated review data, not a Rust/GLSL terrain port and not Phase
 visual acceptance of the stack is still pending.
 
 **Rough-world traversability/scale audit:** added `tools/dem_pack/analyze_rough_world_traversability.py`
-with focused tests (`test_rough_world_traversability.py`, **4 passed**, pytest cache warning only). It reads
-the same conditioned `rough_world_3d.json` mesh used by the review scene and writes
+with focused tests (`test_rough_world_traversability.py`, now **6 passed**, pytest cache warning only). It
+reads the same conditioned `rough_world_3d.json` mesh used by the review scene and writes
 `D:\tmp\wg10_geography_engine\rough_world_traversability_scale.{csv,md}`. This is a slope/connectivity
-heuristic, not a gameplay navmesh and not visual acceptance. Initial result matches the owner scale read:
-at ~6.4 km scene span, all synth variants are **blocked** by connected-component fragmentation despite
-~41-48% passable pixels; at ~12.8 km they become connected candidates; at the current ~25.6 km default,
-all synth variants are connected candidates with ~97-99% passable coverage and whole-block crossing
-components. Interpretation: the horizontal content/landform-density knob is real and should remain explicit.
-The next quality question is not global flattening; it is whether the 25.6 km-scale world has enough
-interesting traversable routes, passes, shelves, and valley/fan corridors under owner visual review.
+heuristic, not a gameplay navmesh and not visual acceptance. The external scale audit was validated with one
+correction: the scene's current `k=0` relief policy keeps vertical scale fixed while X/Z scale changes, so
+slopes fall exactly as 1/span; the low-passable corridor component is large and touches two edges, but does
+not currently cross opposite edges. The report now includes a relief exponent probe (`k=0`, `0.5`, `1.0`) and
+a stricter structural-corridor grade. `k=1` is the slope-invariant control around the 25.6 km reference span,
+not a runtime decision. The new grade keeps the legacy passability label for comparison but rejects flat or
+diffuse passability; a flat field is no longer allowed to score structural `candidate`. Current k=0 result:
+~6.4 km remains blocked, ~12.8 km is only structural `thin` even though the old passability grade says
+candidate, and ~19.2-25.6 km are structural candidates. Interpretation: the horizontal content/landform-density
+knob is real, but slope/passability alone is not a sufficient acceptance signal. The next quality question is
+whether the 25.6 km-scale world has enough interesting traversable routes, passes, shelves, and valley/fan
+corridors under owner visual review.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
@@ -185,9 +190,12 @@ uplift/routed-surface/discharge/tributary/channel-axis plus saturated distance-t
 `python -m pytest tools\dem_pack\test_geography_engine.py tools\dem_pack\test_geography_skeleton.py
 tools\dem_pack\test_geography_skeleton_windows.py tools\dem_pack\test_worldgen_proto.py -q` is **30 passed**
 (pytest cache warning only). Seam report written to
-`D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`. This proves the windowing shape and a
-bounded seam strategy for sampled skeleton facts; it does **not** prove owner-accepted terrain, full hydrology,
-or a Rust/GLSL implementation.
+`D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`. The report/tests now also include a
+coarse routed-corridor continuity check: if a channel-derived corridor mask enters a window edge, the adjacent
+window must continue it within a small seam band. Current focused evidence is **14 passed** for the rough
+traversability + skeleton-window tests, and default window reports show corridor match fraction 1.0 for the
+sampled seeds/origins. This proves the windowing shape and a bounded seam strategy for sampled skeleton facts;
+it does **not** prove owner-accepted terrain, full hydrology, or a Rust/GLSL implementation.
 
 **Phase 7B runtime design:** added
 `docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`. It defines the future

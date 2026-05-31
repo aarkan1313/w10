@@ -47,6 +47,14 @@ def test_adjacent_window_seams_are_bounded_for_local_facts():
         assert deltas["channel_axis"] < 0.220
 
 
+def test_routed_corridors_continue_across_adjacent_window_edges():
+    spec = _small_spec()
+    for axis in ("x", "z"):
+        continuity = win.adjacent_corridor_continuity(seed=213, spec=spec, axis=axis)
+        assert continuity["corridor_entering_count"] > 0
+        assert continuity["corridor_match_frac"] >= 0.90
+
+
 def test_distance_fact_seams_are_scaled_not_pixel_artifacts():
     spec = _small_spec()
     deltas = win.adjacent_seam_deltas(seed=214, spec=spec, axis="x")
@@ -77,3 +85,4 @@ def test_default_window_seam_report_is_within_current_phase7b_thresholds():
         assert float(row["channel_axis"]) < 0.050
         assert float(row["crest_dist_core_frac"]) < 0.001
         assert float(row["channel_dist_core_frac"]) < 0.001
+        assert float(row["corridor_match_frac"]) >= 0.90

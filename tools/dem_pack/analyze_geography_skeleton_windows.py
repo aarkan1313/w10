@@ -28,6 +28,7 @@ def seam_rows(
         for origin_x, origin_z in origins:
             for axis in ("x", "z"):
                 deltas = win.adjacent_seam_deltas(seed=seed, spec=spec, origin_x=origin_x, origin_z=origin_z, axis=axis)
+                corridor = win.adjacent_corridor_continuity(seed=seed, spec=spec, origin_x=origin_x, origin_z=origin_z, axis=axis)
                 row: dict[str, float | int | str] = {
                     "seed": seed,
                     "origin_x": origin_x,
@@ -38,6 +39,10 @@ def seam_rows(
                     row[field] = round(float(value), 6)
                 row["crest_dist_core_frac"] = round(float(deltas["crest_dist"]) / float(spec.core_span_m), 6)
                 row["channel_dist_core_frac"] = round(float(deltas["channel_dist"]) / float(spec.core_span_m), 6)
+                row["corridor_entering_count"] = int(corridor["corridor_entering_count"])
+                row["corridor_matched_count"] = int(corridor["corridor_matched_count"])
+                row["corridor_unmatched_count"] = int(corridor["corridor_unmatched_count"])
+                row["corridor_match_frac"] = round(float(corridor["corridor_match_frac"]), 6)
                 rows.append(row)
     return rows
 

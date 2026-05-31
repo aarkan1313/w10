@@ -148,6 +148,76 @@ def core_facts(window: dict[str, np.ndarray | float | tuple[float, float]], spec
     return {field: np.asarray(window[field])[core, core] for field in FACT_FIELDS}
 
 
+def corridor_mask(
+    facts: dict[str, np.ndarray],
+    spec: SkeletonWindowSpec = SkeletonWindowSpec(),
+    channel_axis_threshold: float = 0.22,
+    channel_distance_m: float | None = None,
+) -> np.ndarray:
+    """Return a coarse routed-corridor mask from window facts.
+
+    This is a seam/review heuristic, not a final gameplay route map. It follows
+    the same world-anchored channel facts that a future runtime fine page would
+    sample.
+    """
+    distance_m = float(channel_distance_m) if channel_distance_m is not None else float(spec.spacing_m) * 2.0
+    return (np.asarray(facts["channel_axis"]) >= float(channel_axis_threshold)) | (np.asarray(facts["channel_dist"]) <= distance_m)
+
+
+def _edge_match_count(source_edge: np.ndarray, target_band: np.ndarray, row_tolerance: int) -> int:
+    source = np.asarray(source_edge, dtype=bool)
+    target = np.asarray(target_band, dtype=bool)
+    matches = 0
+    for row, enters in enumerate(source):
+        if not enters:
+            continue
+        lo = max(0, row - int(row_tolerance))
+        hi = min(target.shape[0], row + int(row_tolerance) + 1)
+        if bool(np.any(target[lo:hi, :])):
+            matches += 1
+    return matches
+
+
+def adjacent_corridor_continuity(
+    seed: int,
+    spec: SkeletonWindowSpec = SkeletonWindowSpec(),
+    origin_x: float = 0.0,
+    origin_z: float = 0.0,
+    axis: str = "x",
+    band_px: int = 2,
+    row_tolerance_px: int = 1,
+) -> dict[str, float | int]:
+    """Measure whether routed corridors entering a seam continue in the neighbor."""
+    if axis not in ("x", "z"):
+        raise ValueError("axis must be 'x' or 'z'")
+    a = core_facts(build_skeleton_window(origin_x, origin_z, seed, spec), spec)
+    if axis == "x":
+        b = core_facts(build_skeleton_window(origin_x + spec.core_span_m, origin_z, seed, spec), spec)
+        ma = corridor_mask(a, spec)
+        mb = corridor_mask(b, spec)
+        a_edge = ma[:, -1]
+        b_edge = mb[:, 0]
+        a_matches = _edge_match_count(a_edge, mb[:, : band_px + 1], row_tolerance_px)
+        b_matches = _edge_match_count(b_edge, ma[:, -band_px - 1 :], row_tolerance_px)
+    else:
+        b = core_facts(build_skeleton_window(origin_x, origin_z + spec.core_span_m, seed, spec), spec)
+        ma = corridor_mask(a, spec).T
+        mb = corridor_mask(b, spec).T
+        a_edge = ma[:, -1]
+        b_edge = mb[:, 0]
+        a_matches = _edge_match_count(a_edge, mb[:, : band_px + 1], row_tolerance_px)
+        b_matches = _edge_match_count(b_edge, ma[:, -band_px - 1 :], row_tolerance_px)
+    entering = int(np.count_nonzero(a_edge) + np.count_nonzero(b_edge))
+    matched = int(a_matches + b_matches)
+    unmatched = int(max(0, entering - matched))
+    return {
+        "corridor_entering_count": entering,
+        "corridor_matched_count": matched,
+        "corridor_unmatched_count": unmatched,
+        "corridor_match_frac": float(matched / entering) if entering else 1.0,
+    }
+
+
 def adjacent_seam_deltas(
     seed: int,
     spec: SkeletonWindowSpec = SkeletonWindowSpec(),

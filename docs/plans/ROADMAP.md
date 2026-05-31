@@ -352,8 +352,11 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       basin/fan corridors, and route continuity as explicit acceptance signals.
       Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
       a traversability/scale audit over the rough-world review mesh, a corridor overlay for low-passable route
-      review, and a clean Godot import for the scale/no-fog/default-25km review harness. The audit confirms scale sensitivity but is not a visual gate:
-      ~6.4 km fragments routes, ~12.8 km connects, and ~25.6 km is a plausible current review default.
+      review, and a clean Godot import for the scale/no-fog/default-25km review harness. The audit now separates
+      legacy passability from structural corridor quality and adds relief-policy probes: `k=0` is today's
+      fixed-height scene behavior where slope falls as 1/span, while `k=1` is a slope-invariant review control
+      around the 25.6 km reference span. Current k=0 read: ~6.4 km blocked, ~12.8 km old-passability
+      candidate but structural `thin`, and ~19.2-25.6 km structural candidates. This is still not a visual gate.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
@@ -451,8 +454,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       Current non-visual groundwork is captured in the Slice 2A spec port gate: world-anchored skeleton
       windows, apron/stitching, facts queries for skeleton fields, Python-vs-Rust fixtures, GPU sampling, and
       cache/order-independence gates are required before any Rust/GLSL port. An offline Python spike now proves
-      the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts and bounded
-      adjacent-window seams (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
+      the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts, bounded
+      adjacent-window seams, and coarse corridor continuity across neighboring window edges
+      (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
       Runtime design spec:
       `docs/superpowers/specs/2026-05-31-worldgen-phase7b-drainage-skeleton-design.md`. It is design-ready
       only; implementation is still blocked on Phase 5 keeper acceptance.
