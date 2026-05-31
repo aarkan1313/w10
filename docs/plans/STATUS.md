@@ -188,7 +188,10 @@ seed switch in-scene. The latest payload is now `rough_world_chunks_v2_independe
 generated from its own deterministic world-coordinate skeleton window with a **25.6 km apron** at **200 m**
 spacing, then cropped to the 25.6 km core. The review scene's corridor overlay now prefers the exported
 structural route/corridor mask, and the scene now has default-off seam inspection aids: `B` toggles cyan seam
-guide lines and `N` jumps to the next shared border. Important boundary: this is still **offline Python + static Godot JSON**, not a
+guide lines and `N` jumps to the next shared border. A static contact-sheet renderer
+(`tools/dem_pack/render_rough_world_chunks_review.py`) writes
+`D:\tmp\wg10_geography_engine\rough_world_chunks_review_contact.png` for quick terrain/seam/corridor/slope
+inspection of both seeds. Important boundary: this is still **offline Python + static Godot JSON**, not a
 final infinite streaming/runtime architecture, owner acceptance, or Rust/GLSL port. Dedicated proof/audit report:
 `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
 
@@ -196,7 +199,7 @@ Evidence written to `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{
 height max abs delta is **0.000000** across all seams; minimum structural corridor component match fraction is
 **0.917**; adjacent center/east chunks differ materially (`mean_abs_delta` **0.225** for seed 133, **0.385**
 for seed 211); center chunk changes across seeds (`mean_abs_delta` **0.396**). Focused tests including rough
-chunks, rough traversability, skeleton, and skeleton-window checks are **30 passed** (pytest cache warning only).
+chunks, rough traversability, skeleton, and skeleton-window checks are **31 passed** (pytest cache warning only).
 Godot `--import` exits 0 with no GDScript parse error (known PDB shortening warning; sandboxed editor-settings
 save warning only). A separate headless attempt to run the scene crashed Godot after a `user://logs` write
 failure, so do not cite headless scene-run as evidence; the owner/visible Windows fly scene remains the review

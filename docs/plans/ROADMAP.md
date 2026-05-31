@@ -376,7 +376,9 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       corridor min 0.971/1.000, and adjacent max corr 0.341/0.389. This supports the infinite-world direction
       but does not replace a live streaming/cache/player-travel review. A visual seam audit now mirrors the
       Godot review mesh's edge normal/slope/default-color/corridor math and reports zero discontinuity across
-      all 3x3 shared edges for both seeds; this is gate evidence only, not owner acceptance.
+      all 3x3 shared edges for both seeds; this is gate evidence only, not owner acceptance. A static contact
+      sheet (`rough_world_chunks_review_contact.png`) renders both seeds in terrain, seam-guide, corridor, and
+      slope views for quick scan before flying.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as

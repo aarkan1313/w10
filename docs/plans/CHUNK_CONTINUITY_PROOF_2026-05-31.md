@@ -26,10 +26,12 @@ replace the static review payload.
 - Exporter: `tools/dem_pack/export_godot_rough_world_chunks.py`
 - Godot payload: `wg-10/worldgen_terrain/generated/review/rough_world_chunks_3x3.json`
 - Review scene: `wg-10/worldgen_terrain/harness/rough_world_chunks_review.tscn`
+- Contact-sheet renderer: `tools/dem_pack/render_rough_world_chunks_review.py`
 - Tests: `tools/dem_pack/test_rough_world_chunks.py`
 - External report: `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`
 - Virtual-travel report: `D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`
 - Visual seam report: `D:\tmp\wg10_geography_engine\rough_world_chunks_visual_seams.{csv,md}`
+- Static review sheet: `D:\tmp\wg10_geography_engine\rough_world_chunks_review_contact.png`
 
 ## What It Proves
 
@@ -41,6 +43,9 @@ replace the static review payload.
 - Review scene has default-off seam inspection aids: `B` toggles cyan seam
   guide lines, and `N` jumps the fly camera to the next shared border so the
   owner can inspect boundaries deliberately, then turn guides off for a natural read.
+- Static contact sheet renders both seeds in terrain, terrain+seam-guide,
+  corridor-mask, and slope-band views from the same Godot payload. This helps
+  quickly scan for repeated stamps and obvious border artifacts before flying.
 - Adjacent chunks are not repeated copies. Reported mean absolute center/east chunk deltas:
   - seed 133: `0.2247`
   - seed 211: `0.3854`
@@ -78,6 +83,8 @@ replace the static review payload.
 - The 5x5 virtual-travel report is a non-rendered stress probe. It supports the
   infinite-world direction, but it does not prove live streaming, cache eviction,
   player-speed pacing, or visual desirability during travel.
+- The contact sheet is top-down/static. It does not prove in-motion feel,
+  oblique readability, or player-scale travel pacing.
 - It does not prove the legacy `geography_skeleton.compose_height` path is safe
   when run as isolated 25.6 km windows; that diagnostic still fails and is kept
   in the report on purpose.
@@ -133,7 +140,7 @@ Last focused verification for the proof:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
-30 passed
+31 passed
 ```
 
 The focused chunk test file includes independent-window source, seam,
@@ -141,7 +148,7 @@ seed-variation, corridor-edge, and legacy diagnostic assertions; run by itself i
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py -q
-8 passed
+9 passed
 ```
 
 Godot import evidence:

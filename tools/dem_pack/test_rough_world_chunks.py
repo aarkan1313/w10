@@ -1,6 +1,7 @@
 import numpy as np
 
 import export_godot_rough_world_chunks as chunks
+import render_rough_world_chunks_review as chunk_render
 
 
 def _small_payload():
@@ -93,6 +94,16 @@ def test_visual_seam_report_matches_godot_edge_math():
     assert max(float(row["slope_max_abs_delta"]) for row in rows) <= 1e-6
     assert max(float(row["terrain_color_max_delta"]) for row in rows) <= 1e-6
     assert max(int(row["corridor_edge_mismatch_count"]) for row in rows) == 0
+
+
+def test_chunk_contact_sheet_renderer_builds_expected_panels():
+    payload = _small_payload()
+    panels = chunk_render.panels_for_payload(payload, panel_px=96)
+    assert len(panels) == 8
+    for panel in panels:
+        assert panel.size == (96, 96)
+    sheet = chunk_render.contact_sheet(panels, cols=4, gutter=4)
+    assert sheet.size == (404, 204)
 
 
 def test_variation_report_distinguishes_adjacent_chunks_and_seeds():
