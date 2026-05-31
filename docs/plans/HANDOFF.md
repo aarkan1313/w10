@@ -14,7 +14,15 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-30 (**MAJOR PIVOT — the height CORE is being rebuilt; M5/M6/M7 as originally framed are
+Updated: 2026-05-31 (**AUDIT ADDENDUM:** `STATUS.md` top is now the authority for the rough-highlands
+keeper. Since the 2026-05-30 pivot, Slice 2A pulled 7B-lite forward, owner selected `SYN rough highlands` as
+the current best family, the Godot 25.6 km review setup is the active scale/corridor review harness, and the
+3x3 adjacent-chunk proof has owner seam-visibility acceptance. `rough_highlands_keeper_v1` now freezes the
+candidate implementation contract with fixtures and a golden contact-sheet hash. This is not full
+terrain/gameplay acceptance and not a Rust/GLSL port greenlight. Next decision: owner travel/terrain review
+versus starting the Rust CPU skeleton-facts parity port when the port gate is opened.)
+
+Prior major-pivot baseline, 2026-05-30 (**MAJOR PIVOT — the height CORE is being rebuilt; M5/M6/M7 as originally framed are
 superseded.** M0–M4 (toolchain, deterministic gen, GPU parity, render pipeline, Facts API) DONE; latest
 verified gates: cargo 121 · fast 6/6 · gpu 4/4 · **m3 9/9**. **What changed:** an
 owner fly showed the terrain reads "blobby/placed/not a contiguous landmass." Root-caused: `sample_kernel`

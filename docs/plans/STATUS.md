@@ -43,6 +43,20 @@ beside real DEM references. Yellow means the stills improve but another scale br
 drainage remains decorative. Red means sheets still look basically the same, the best result is only
 "least bad," or weird procedural lines/masks remain visible.
 
+**Roadmap adherence audit (2026-05-31):** the current work is aligned with Phase 5 Slice 2A and the Phase 7B
+pull-forward escape hatch, but it does **not** yet satisfy the roadmap's runtime port gate. What is real: the
+owner selected the rough-highlands skeleton family as the current best direction; the 25.6 km Godot review
+harness is usable for scale/corridor review; the adjacent 3x3 chunk proof now has deterministic seed variation,
+independent world-window chunk generation, exact/near-exact fixture height seams, visual seam audit, Godot
+scene smoke coverage, and owner seam-visibility acceptance. The spec-to-implementation bridge is now frozen as
+`rough_highlands_keeper_v1`: contract spec, deterministic sample fixture, golden contact-sheet hash, fact
+boundaries, scale/relief policy, and fixture regression tests. What is still missing before a Rust/GLSL port:
+owner terrain/travel acceptance beyond seam visibility, a decision on whether the private `route_texture`
+corridor branch becomes a public fact or is replaced, and then a Rust CPU skeleton-facts implementation plan
+against the frozen fixture. Decision: no more broad visual combo search; next work is either final owner
+travel/terrain review or Rust CPU skeleton-facts parity against the frozen contract when the owner greenlights
+porting.
+
 **B-bug closeout state:** B1/B2/B3 are now closed for the rebuild precondition. Evidence: Rust DLL rebuilt
 after the editor was closed; `cargo test` isolated target **121 passed / 0 failed**; `fast` **6/6**; `gpu`
 **4/4**; `m3` **9/9**. The new B2 capacity-pressure gate passed non-vacuously
@@ -97,7 +111,7 @@ Owner review: **"looks pretty good tbh, we are getting better"**. Treat this as 
 checkpoint: skeleton-first is now the active direction, and the next iteration should fix flow artifacts/scale
 blending instead of returning to broad noise-combo tuning.
 
-**7B-lite skeleton v2 checkpoint (pending owner verdict):** implemented in the same offline Python prototype.
+**7B-lite skeleton v2 checkpoint:** implemented in the same offline Python prototype.
 Changes vs v1: coarse routing now uses multiple-flow accumulation instead of single-neighbor D8 integer
 routing; primary channels and tributaries are separated; basin/fan floors damp incision more than badlands,
 foothills, and range cores; scenarios now change process weights/widths/smoothing rather than only contrast.
@@ -123,7 +137,9 @@ offline. Outputs: `D:\tmp\wg10_geography_engine\geography_skeleton_rough_focus_2
 focused tests **21 passed** (pytest cache warning only). Initial engineering read: the pass is correctly
 narrowed around the owner-selected family; `rough_anchor`, `rough_broad_crests`, and `rough_sharp_front` are
 the useful neighborhood. The offline oblique scene probe supports the terrain read, but its own faceted
-painter-renderer is only a review aid, not a Godot/runtime visual gate. Owner verdict is still pending.
+painter-renderer is only a review aid, not a Godot/runtime visual gate. This pass fed the later Godot
+generated-world review scene; the owner keep signal is on the Godot scene setup and rough-highlands direction,
+not a final Phase 5 terrain acceptance.
 
 **Godot generated-world review scene:** the first Godot tile-comparison scene was rejected by owner eye as
 gross, and correctly so: it independently normalized tiny tiles and made the DEM refs read as blown-out cliff
@@ -228,6 +244,16 @@ depends on routed structure: world-anchored coarse skeleton windows, seam/apron 
 queries for skeleton fields, Python-vs-Rust fixtures, GPU world-coordinate sampling, cache/order independence,
 and parity/perf/visible==collision gates. This is documentation of the required subsystem boundary only; no
 Rust/GLSL port has started.
+
+**Spec-to-implementation bridge (Slice 2A-close):** `rough_highlands_keeper_v1` is now a frozen candidate
+contract, not just review code. Artifacts:
+`docs/superpowers/specs/2026-05-31-worldgen-rough-highlands-keeper-contract.md`,
+`tools/dem_pack/export_rough_highlands_keeper_contract.py`,
+`tools/dem_pack/fixtures/rough_highlands_keeper_v1.json`, and
+`tools/dem_pack/test_rough_highlands_keeper_contract.py`. The fixture locks fixed sample points, normalized
+height/review metres, corridor booleans, skeleton facts, seam/variation/virtual-travel summaries, and a
+reproducible contact-sheet SHA-256. First implementation target, when/if porting is greenlit: Rust CPU
+skeleton-facts core with Python fixture parity. GPU mirroring comes after CPU facts and seam gates.
 
 **Phase-7B-lite window seam spike:** added offline Python proof code in
 `tools/dem_pack/geography_skeleton_windows.py` plus report writer

@@ -332,7 +332,7 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       - DEM-reference contact sheets every run: real kernels beside synth for 200 km, 40 km, and close crops.
       Owner eye decides whether the geography read is worth continuing. A "least bad" sheet is not enough.
       Current checkpoint: skeleton-first v1 was owner-reviewed as **Yellow+ / keep** ("looks pretty good tbh,
-      we are getting better"). Skeleton v2 is rendered and pending owner verdict; it swaps D8-only routing for
+      we are getting better"). Skeleton v2 swapped D8-only routing for
       coarse multiple-flow accumulation, separates primary/tributary fields, damps basin/fan incision, and
       makes scenarios alter process weights/widths/smoothing. Owner selected **`SYN rough highlands`** as
       "great"; keep v2 offline and focus the next image work around that process family. Still no Rust/GLSL
@@ -382,6 +382,16 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       Owner visual seam verdict on the opened Godot scene: seams look good visually. Treat that as acceptance
       of the bounded 3x3 seam-visibility proof only; full terrain/gameplay quality, live streaming/cache,
       player-travel pacing, and Rust/GLSL runtime acceptance remain blocking gates before porting.
+- [x] **Slice 2A-close - candidate keeper freeze / implementation bridge.** The rough-highlands keeper is now
+      frozen as `rough_highlands_keeper_v1` rather than only review scripts. Contract:
+      `docs/superpowers/specs/2026-05-31-worldgen-rough-highlands-keeper-contract.md`. Fixture/export/tests:
+      `tools/dem_pack/export_rough_highlands_keeper_contract.py`,
+      `tools/dem_pack/fixtures/rough_highlands_keeper_v1.json`, and
+      `tools/dem_pack/test_rough_highlands_keeper_contract.py`. It freezes generator version, skeleton facts,
+      thresholds, conditioning, scale/relief policy, corridor mask, deterministic sample fixtures, and a
+      reproducible contact-sheet hash. This closes the roadmap-adherence gap between "owner likes the
+      direction / seams look good" and "there is a precise implementation target." It still does **not** open
+      the Rust/GPU port gate; full terrain/gameplay travel acceptance remains open.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
@@ -418,9 +428,12 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       regime/drainage skeleton, design that data model first instead of flattening it into ad-hoc noise.
       Do not include gradient filters unless 2C is green. Do not inherit the old DEM-pack z-score/range bug;
       either remove kernel sampling from the runtime path or gate the correct z-score-to-metres conversion.
-      Gates: determinism, boundedness, seam, non-repetition, Python-vs-Rust sample parity, and a regression
-      render sheet matching the accepted offline look. These become a real Phase-5 gate suite before the port
-      is considered done; current `fast/gpu/m3` gates only prove the kept M0-M4/render foundation.
+      First target should be Rust CPU skeleton facts + composed-height samples against
+      `rough_highlands_keeper_v1`, not GPU first. Gates: determinism, boundedness, seam, non-repetition,
+      committed Python-vs-Rust sample parity fixtures,
+      and a committed/reproducible regression render sheet matching the accepted offline look. These become a
+      real Phase-5 gate suite before the port is considered done; current `fast/gpu/m3` gates only prove the
+      kept M0-M4/render foundation.
 - [ ] **Slice 4 — GPU parity + integrate.** Mirror the accepted Rust generator in GLSL; remove the 25 MB
       kernel atlas from the render path; re-baseline GPU parity; wire render + facts so visible==collision
       still holds; run the hardened GPU-time perf gate.
@@ -481,8 +494,8 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       the first piece: fixed world-anchored routed skeleton windows with apron-cropped core facts, bounded
       adjacent-window seams, and coarse corridor continuity across neighboring window edges
       (`geography_skeleton_windows.py`, `geography_skeleton_window_seams.{csv,md}`).
-      The 3x3 chunk review is the next bridge: if owner accepts it visually, review the true
-      infinite/player-travel version before any port. That review must cover a real authority-window cache,
+      The 3x3 chunk review has now been owner-accepted for seam visibility. The next bridge is reviewing the
+      true infinite/player-travel version before any port. That review must cover a real authority-window cache,
       independent requests across authority boundaries, seed/version determinism, cache eviction, route
       continuity beyond 3x3, and gameplay pacing at travel speeds.
       Runtime design spec:

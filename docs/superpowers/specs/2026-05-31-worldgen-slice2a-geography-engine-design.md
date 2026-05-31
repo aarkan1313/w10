@@ -2,7 +2,8 @@
 
 **Date:** 2026-05-31
 **Milestone:** Worldgen core rebuild, Phase 5 / Slice 2A.
-**Status:** owner-approved direction, prototype / owner review pending.
+**Status:** owner-approved direction; rough-highlands is the current keeper family, bounded chunk seams are
+owner-accepted, port gate still closed.
 **Parent:** `docs/plans/ROADMAP.md` Phase 5, `STRUCTURE_AUDIT_EXTRACT.md`, and
 `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`.
 
@@ -227,6 +228,12 @@ That focus pass is now rendered as `geography_skeleton_rough_focus_*`. The activ
 generated-world switcher `rough_world_review.tscn`, which displays one larger generated 90 km world at a time
 from the same camera view. It has no-shadow review lighting plus a flat-light toggle, deterministic export
 contract tests, and skeleton-rough metric reports. It is a review harness only; the port gate remains closed.
+The adjacent-chunk proof then exported a 3x3 set of 25.6 km rough-highlands chunks from independent
+world-coordinate skeleton windows; the owner accepted seam visibility in that bounded scene. That acceptance
+closes the seam-risk question for the review proof, not full terrain/gameplay acceptance. Slice 2A-close now
+freezes this keeper as `rough_highlands_keeper_v1` with exact fields, thresholds, conditioning, scale/relief
+policy, fixtures, and a golden contact-sheet hash. See
+`docs/superpowers/specs/2026-05-31-worldgen-rough-highlands-keeper-contract.md`.
 
 ## 11. Port Gate
 
@@ -235,6 +242,8 @@ Nothing from Slice 2A goes to Rust/GLSL until:
 - owner accepts a specific offline image set,
 - the accepted algorithm is documented in ROADMAP/STATUS,
 - focused Python tests pass,
+- deterministic Python fixtures and golden/reproducible render sheets exist for the accepted keeper
+  (`rough_highlands_keeper_v1` supplies the current candidate set),
 - and any coarse skeleton/drainage state needed by the algorithm has a parity/facts/render story.
 
 ### 11.1 Required 7B-Lite Port Story If The Keeper Uses Routed Structure

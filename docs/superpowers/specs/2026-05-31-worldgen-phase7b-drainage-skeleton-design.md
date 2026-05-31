@@ -37,13 +37,20 @@ Offline evidence exists, but it is not enough for runtime acceptance:
 - `tools/dem_pack/geography_skeleton_windows.py`: non-visual window seam spike.
 - `tools/dem_pack/analyze_geography_skeleton_windows.py`: emits
   `D:\tmp\wg10_geography_engine\geography_skeleton_window_seams.{csv,md}`.
+- `tools/dem_pack/export_godot_rough_world_chunks.py`: bounded 3x3 rough-highlands chunk proof using
+  independent world-coordinate skeleton windows, 25.6 km aprons, exact height seams, and exported corridor
+  masks.
+- `tools/dem_pack/fixtures/rough_highlands_keeper_v1.json`: frozen candidate keeper fixture with fixed sample
+  points, skeleton facts, seam/variation summaries, and a reproducible contact-sheet hash.
 - Tests: `tools/dem_pack/test_geography_skeleton_windows.py` proves fixed world-origin keys, deterministic
   window fields, apron-cropped core facts, and bounded adjacent-window seams for sampled facts.
+- Owner visual seam verdict on the opened chunk review scene: seams look good visually.
 
-What this proves: the windowed field model is plausible and can be gated.
+What this proves: the windowed field model is plausible, can be gated, and can support a bounded seam-clean
+review scene.
 
 What this does not prove: owner-accepted terrain, exact global river networks, Rust parity, GPU parity,
-performance, or visible/collision parity.
+performance, live streaming/cache behavior, travel pacing, or visible/collision parity.
 
 ## 4. Data Model
 

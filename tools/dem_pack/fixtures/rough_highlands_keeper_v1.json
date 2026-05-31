@@ -1,0 +1,369 @@
+{
+  "chunk_contract_summary": {
+    "seams": {
+      "corridor_min_match_frac": 0.916667,
+      "height_max_abs_delta": 0.0001,
+      "rows": 24
+    },
+    "variation": [
+      {
+        "a": "1,1",
+        "b": "2,1",
+        "corrcoef": 0.331596,
+        "kind": "adjacent_chunk",
+        "mean_abs_delta": 0.24137,
+        "seed": "133"
+      },
+      {
+        "a": "1,1",
+        "b": "2,1",
+        "corrcoef": 0.202023,
+        "kind": "adjacent_chunk",
+        "mean_abs_delta": 0.359477,
+        "seed": "211"
+      },
+      {
+        "a": "center",
+        "b": "center",
+        "corrcoef": -0.027734,
+        "kind": "seed_pair",
+        "mean_abs_delta": 0.397945,
+        "seed": "133->211"
+      }
+    ],
+    "virtual_travel": [
+      {
+        "adjacent_corrcoef_max": 0.465523,
+        "adjacent_mean_abs_delta_median": 0.339945,
+        "chunk_count": 5,
+        "corridor_min_match_frac": 0.916667,
+        "height_max_abs_delta": 0.0001,
+        "seams_count": 40,
+        "seed": 133,
+        "world_span_km": 128.0
+      },
+      {
+        "adjacent_corrcoef_max": 0.341872,
+        "adjacent_mean_abs_delta_median": 0.359893,
+        "chunk_count": 5,
+        "corridor_min_match_frac": 0.964286,
+        "height_max_abs_delta": 0.0001,
+        "seams_count": 40,
+        "seed": 211,
+        "world_span_km": 128.0
+      }
+    ],
+    "visual_seams": {
+      "corridor_edge_mismatch_count": 0,
+      "height_max_delta_m": 0.026,
+      "normal_max_angle_deg": 0.002079,
+      "rows": 24,
+      "slope_max_abs_delta": 3.3e-05,
+      "terrain_color_max_delta": 2e-05
+    }
+  },
+  "constants": {
+    "chunk_span_m": 25600.0,
+    "fixture_chunk_n": 33,
+    "fixture_spacing_m": 800.0,
+    "review_chunk_n": 129,
+    "review_height_scale_m": 260.0,
+    "review_relief_policy": "k0_fixed_vertical_relief_for_chunk_scene",
+    "seeds": [
+      133,
+      211
+    ],
+    "window_apron_m": 25600.0,
+    "world_origin_x_m": 60000.0,
+    "world_origin_z_m": 36000.0
+  },
+  "facts_contract": {
+    "authoritative_window_rule": "sample from world-anchored core window; apron is for routing/smoothing/normals, not an owner of neighboring core samples",
+    "height_private_material_fields": [
+      "ridge_detail",
+      "shoulder_detail",
+      "route_texture",
+      "small_detail"
+    ],
+    "public_runtime_candidates": [
+      "uplift",
+      "routed_surface",
+      "discharge",
+      "tributary",
+      "channel_axis",
+      "crest_dist",
+      "channel_dist"
+    ],
+    "review_only_overlays": [
+      "terrain_color",
+      "slope_bands",
+      "seam_guides"
+    ]
+  },
+  "generator_version": "rough_world_chunks_v2_independent_windows",
+  "golden_review_contact_sheet": {
+    "cols": 4,
+    "gutter": 4,
+    "panel_px": 96,
+    "png_sha256": "c1276a051617b67f97e8eda1b5a0271be9dafe61a038e1af8421d858a8e671d1",
+    "renderer": "render_rough_world_chunks_review.contact_sheet",
+    "size_px": [
+      404,
+      204
+    ]
+  },
+  "height_composition_contract": {
+    "corridor_mask": {
+      "channel_axis_threshold": 0.16,
+      "channel_distance_spacing_mul": 6.0,
+      "route_axis_threshold": 0.22
+    },
+    "domain_warp": {
+      "decay": 0.54,
+      "freq_mul": 1.85,
+      "seed_offset": 12000,
+      "steps": 2,
+      "warp_amount_core_frac": 0.055,
+      "warp_freq_core_frac": 0.82
+    },
+    "height_terms": {
+      "crest_near_highland": 0.34,
+      "final_tanh_gain": 1.18,
+      "ridge_detail_highland": 0.14,
+      "ridge_detail_unrouted": 0.09,
+      "route_axis_depth": [
+        0.18,
+        0.7,
+        0.3
+      ],
+      "routed_cut_depth": [
+        0.52,
+        0.42
+      ],
+      "shoulder_detail_highland": 0.22,
+      "small_detail_not_wet_floor": 0.065,
+      "uplift_minus_0_46": 1.52,
+      "wet_floor_lowland_depth": 0.18
+    },
+    "masks": {
+      "channel_near_smoothstep_m_core_frac": [
+        0.025,
+        0.14
+      ],
+      "crest_near_smoothstep_m_core_frac": [
+        0.055,
+        0.34
+      ],
+      "highland_mask_uplift_smoothstep": [
+        0.36,
+        0.78
+      ],
+      "route_axis_smoothstep": [
+        0.5,
+        0.76
+      ],
+      "routed_cut_channel_axis_smoothstep": [
+        0.13,
+        0.62
+      ],
+      "routed_cut_weights": {
+        "channel_axis": 0.58,
+        "channel_near": 0.3,
+        "tributary": 0.12
+      },
+      "wet_floor_discharge_smoothstep": [
+        0.14,
+        0.54
+      ],
+      "wet_floor_weights": {
+        "channel_axis": 0.64,
+        "discharge": 0.36
+      }
+    },
+    "material_fields": {
+      "ridge_detail": {
+        "freq_core_frac": 0.155,
+        "gain": 0.54,
+        "octaves": 5,
+        "seed_offset": 12010
+      },
+      "route_texture": {
+        "freq_core_frac": 0.42,
+        "gain": 0.57,
+        "octaves": 5,
+        "seed_offset": 12025
+      },
+      "shoulder_detail": {
+        "freq_core_frac": 0.34,
+        "gain": 0.58,
+        "octaves": 4,
+        "seed_offset": 12020
+      },
+      "small_detail": {
+        "freq_core_frac": 0.08,
+        "gain": 0.5,
+        "octaves": 4,
+        "seed_offset": 12030
+      }
+    }
+  },
+  "keeper_id": "rough_highlands_keeper_v1",
+  "sample_points": [
+    {
+      "chunk_x": 1,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.295374,
+        "channel_dist": 0.0,
+        "crest_dist": 17408.0,
+        "discharge": 0.302914,
+        "routed_surface": 0.041394,
+        "tributary": 0.464525,
+        "uplift": 0.223931
+      },
+      "grid_x": 0,
+      "grid_z": 0,
+      "height_m_review": -164.6867,
+      "height_normalized": -0.63341,
+      "seed": 133,
+      "world_x_m": 85600.0,
+      "world_z_m": 61600.0
+    },
+    {
+      "chunk_x": 1,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.018295,
+        "channel_dist": 3200.0,
+        "crest_dist": 16000.0,
+        "discharge": 0.160182,
+        "routed_surface": 0.012843,
+        "tributary": 0.065339,
+        "uplift": 0.176745
+      },
+      "grid_x": 8,
+      "grid_z": 12,
+      "height_m_review": -126.5731,
+      "height_normalized": -0.48682,
+      "seed": 133,
+      "world_x_m": 92000.0,
+      "world_z_m": 71200.0
+    },
+    {
+      "chunk_x": 1,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.043287,
+        "channel_dist": 2262.7417,
+        "crest_dist": 13023.056477,
+        "discharge": 0.189057,
+        "routed_surface": 0.055313,
+        "tributary": 0.125111,
+        "uplift": 0.20101
+      },
+      "grid_x": 16,
+      "grid_z": 16,
+      "height_m_review": -116.7115,
+      "height_normalized": -0.44889,
+      "seed": 133,
+      "world_x_m": 98400.0,
+      "world_z_m": 74400.0
+    },
+    {
+      "chunk_x": 1,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.029462,
+        "channel_dist": 2884.44102,
+        "crest_dist": 15758.172483,
+        "discharge": 0.186229,
+        "routed_surface": 0.049641,
+        "tributary": 0.081095,
+        "uplift": 0.227024
+      },
+      "grid_x": 31,
+      "grid_z": 16,
+      "height_m_review": -93.1958,
+      "height_normalized": -0.358445,
+      "seed": 133,
+      "world_x_m": 110400.0,
+      "world_z_m": 74400.0
+    },
+    {
+      "chunk_x": 2,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.027096,
+        "channel_dist": 2529.822128,
+        "crest_dist": 16099.689438,
+        "discharge": 0.169831,
+        "routed_surface": 0.052296,
+        "tributary": 0.093298,
+        "uplift": 0.227665
+      },
+      "grid_x": 0,
+      "grid_z": 16,
+      "height_m_review": -100.4532,
+      "height_normalized": -0.386358,
+      "seed": 133,
+      "world_x_m": 111200.0,
+      "world_z_m": 74400.0
+    },
+    {
+      "chunk_x": 1,
+      "chunk_z": 1,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.023204,
+        "channel_dist": 3394.11255,
+        "crest_dist": 10430.723848,
+        "discharge": 0.172341,
+        "routed_surface": 0.229326,
+        "tributary": 0.077419,
+        "uplift": 0.435185
+      },
+      "grid_x": 16,
+      "grid_z": 16,
+      "height_m_review": -9.2128,
+      "height_normalized": -0.035434,
+      "seed": 211,
+      "world_x_m": 98400.0,
+      "world_z_m": 74400.0
+    },
+    {
+      "chunk_x": 1,
+      "chunk_z": 2,
+      "corridor": true,
+      "facts": {
+        "channel_axis": 0.087198,
+        "channel_dist": 1788.854382,
+        "crest_dist": 5824.087911,
+        "discharge": 0.209792,
+        "routed_surface": 0.085122,
+        "tributary": 0.227557,
+        "uplift": 0.328947
+      },
+      "grid_x": 20,
+      "grid_z": 4,
+      "height_m_review": -88.3011,
+      "height_normalized": -0.339619,
+      "seed": 211,
+      "world_x_m": 101600.0,
+      "world_z_m": 90400.0
+    }
+  ],
+  "scenario_key": "rough_anchor",
+  "scenario_label": "rough anchor",
+  "schema_version": 1,
+  "source_modules": {
+    "height_contract": "tools/dem_pack/export_godot_rough_world_chunks.py::_compose_windowed_height",
+    "review_scene": "wg-10/worldgen_terrain/harness/rough_world_chunks_review.tscn",
+    "skeleton_window": "tools/dem_pack/geography_skeleton_windows.py"
+  },
+  "status": "candidate_contract_owner_direction_and_seams_accepted_not_runtime_port"
+}
