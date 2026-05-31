@@ -3,8 +3,9 @@ extends Node3D
 const DATA_PATH := "res://worldgen_terrain/generated/review/rough_world_3d.json"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
-const WORLD_SIZE := 128.0
-const HEIGHT_SCALE := 13.0
+const BASE_WORLD_SIZE := 128.0
+const BASE_HEIGHT_SCALE := 260.0
+const SCALE_PRESETS := [10.0, 25.0, 50.0, 100.0, 150.0, 200.0]
 
 var _camera: Camera3D
 var _hud: Label
@@ -12,8 +13,10 @@ var _terrain: MeshInstance3D
 var _items: Array = []
 var _selected := 4
 var _relief := 1.0
+var _scale_index := 3
 var _overview := false
 var _flat_lighting := false
+var _slope_overlay := false
 
 func _ready() -> void:
 	var env := Environment.new()
@@ -36,10 +39,7 @@ func _ready() -> void:
 	_camera = load(FLY_CAMERA).new()
 	_camera.name = "ReviewCamera"
 	_camera.environment = env
-	_camera.move_speed = 18.0
-	_camera.sprint_mult = 3.0
-	_camera.vertical_speed = 15.0
-	_camera.far = 360.0
+	_camera.sprint_mult = 4.0
 	add_child(_camera)
 
 	_build_hud()
@@ -94,25 +94,41 @@ func _select(index: int, reset_camera: bool = false) -> void:
 	if reset_camera:
 		_focus_camera()
 
+func _world_scale() -> float:
+	return float(SCALE_PRESETS[_scale_index])
+
+func _world_size() -> float:
+	return BASE_WORLD_SIZE * _world_scale()
+
+func _height_scale() -> float:
+	return BASE_HEIGHT_SCALE * _relief
+
+func _apply_camera_limits() -> void:
+	var span := _world_size()
+	_camera.move_speed = maxf(55.0, span * 0.035)
+	_camera.vertical_speed = maxf(45.0, span * 0.025)
+	_camera.far = maxf(1200.0, span * 2.2)
+
 func _make_mesh(item: Dictionary) -> ArrayMesh:
 	var n := int(item["n"])
 	var heights: Array = item["height"]
-	var height_scale := HEIGHT_SCALE * _relief
+	var world_size := _world_size()
+	var height_scale := _height_scale()
 	var verts := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var idx := PackedInt32Array()
-	var cell := WORLD_SIZE / float(n - 1)
+	var cell := world_size / float(n - 1)
 
 	for z in range(n):
 		for x in range(n):
 			var i := z * n + x
 			var h := float(heights[i])
-			var px := (float(x) / float(n - 1) - 0.5) * WORLD_SIZE
-			var pz := (float(z) / float(n - 1) - 0.5) * WORLD_SIZE
+			var px := (float(x) / float(n - 1) - 0.5) * world_size
+			var pz := (float(z) / float(n - 1) - 0.5) * world_size
 			verts.append(Vector3(px, h * height_scale, pz))
 			normals.append(_normal_at(heights, n, x, z, cell, height_scale))
-			colors.append(_terrain_color(h, str(item.get("kind", ""))))
+			colors.append(_terrain_color(h, str(item.get("kind", "")), _slope_at(heights, n, x, z, cell, height_scale)))
 
 	for z in range(n - 1):
 		for x in range(n - 1):
@@ -147,7 +163,24 @@ func _normal_at(heights: Array, n: int, x: int, z: int, cell: float, height_scal
 	var z_vec := Vector3(0.0, (hu - hd) * height_scale, cell * 2.0)
 	return z_vec.cross(x_vec).normalized()
 
-func _terrain_color(h: float, kind: String) -> Color:
+func _slope_at(heights: Array, n: int, x: int, z: int, cell: float, height_scale: float) -> float:
+	var hl := _height_at(heights, n, x - 1, z)
+	var hr := _height_at(heights, n, x + 1, z)
+	var hd := _height_at(heights, n, x, z - 1)
+	var hu := _height_at(heights, n, x, z + 1)
+	var dx := ((hr - hl) * height_scale) / maxf(cell * 2.0, 0.001)
+	var dz := ((hu - hd) * height_scale) / maxf(cell * 2.0, 0.001)
+	return sqrt(dx * dx + dz * dz)
+
+func _terrain_color(h: float, kind: String, slope: float) -> Color:
+	if _slope_overlay:
+		if slope < 0.12:
+			return Color(0.18, 0.62, 0.28)
+		if slope < 0.28:
+			return Color(0.86, 0.72, 0.22)
+		if slope < 0.45:
+			return Color(0.92, 0.40, 0.18)
+		return Color(0.70, 0.13, 0.12)
 	var t: float = clampf((h + 1.0) * 0.5, 0.0, 1.0)
 	var low := Color(0.40, 0.48, 0.38)
 	var mid := Color(0.62, 0.56, 0.40)
@@ -192,31 +225,60 @@ func _input(event: InputEvent) -> void:
 			KEY_L:
 				_flat_lighting = not _flat_lighting
 				_terrain.material_override = _make_material()
+			KEY_P:
+				_slope_overlay = not _slope_overlay
+				_rebuild_current_mesh()
+			KEY_COMMA:
+				_set_scale_index(_scale_index - 1)
+			KEY_PERIOD:
+				_set_scale_index(_scale_index + 1)
 
 func _set_relief(value: float) -> void:
 	_relief = clampf(value, 0.35, 1.75)
+	_rebuild_current_mesh()
+
+func _set_scale_index(value: int) -> void:
+	_scale_index = clampi(value, 0, SCALE_PRESETS.size() - 1)
+	_rebuild_current_mesh()
+	if _overview:
+		_overview_camera()
+	else:
+		_focus_camera()
+
+func _rebuild_current_mesh() -> void:
 	if _items.size() > 0:
 		_terrain.mesh = _make_mesh(_items[_selected])
 
 func _focus_camera() -> void:
 	_overview = false
-	_camera.global_position = Vector3(0.0, 18.0, 52.0)
-	_camera.rotation_degrees = Vector3(-23.0, 0.0, 0.0)
+	_apply_camera_limits()
+	var span := _world_size()
+	_camera.global_position = Vector3(0.0, maxf(180.0, span * 0.055), span * 0.18)
+	_camera.rotation_degrees = Vector3(-18.0, 0.0, 0.0)
 
 func _overview_camera() -> void:
-	_camera.global_position = Vector3(0.0, 94.0, 92.0)
+	_apply_camera_limits()
+	var span := _world_size()
+	_camera.global_position = Vector3(0.0, span * 0.72, span * 0.82)
 	_camera.rotation_degrees = Vector3(-50.0, 0.0, 0.0)
 
 func _process(_delta: float) -> void:
 	if _hud == null or _items.is_empty():
 		return
 	var item: Dictionary = _items[_selected]
+	var scene_km := _world_size() / 1000.0
+	var source_km := float(item.get("span_km", 0.0))
+	var source_scene_ratio := source_km / maxf(scene_km, 0.001)
 	_hud.text = "WG10 rough-highlands generated-world review\n" \
-		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Selected: %s | %s | %.1f km source | relief %.2fx | lighting %s" % [
+		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | </> scale | P slope | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "Selected: %s | %s | %.1f km source -> %.1f km scene | source/scene %.2fx | relief %.2fx | scale %.0fx | %s | lighting %s" % [
 			item.get("label", "?"),
 			item.get("kind", "?"),
-			float(item.get("span_km", 0.0)),
+			source_km,
+			scene_km,
+			source_scene_ratio,
 			_relief,
+			_world_scale(),
+			"slope" if _slope_overlay else "terrain",
 			"flat" if _flat_lighting else "lit/no-shadow",
 		]

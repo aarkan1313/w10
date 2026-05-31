@@ -340,8 +340,15 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       rough-highlands focus pass with 200 km, 45 km, debug, and oblique scene-read sheets. This focus pass is
       now rendered. A Godot generated-world review scene (`rough_world_review.tscn`) supersedes the rejected
       tiny-tile comparison and lets the owner switch 90 km generated worlds in-place for scale/detail review.
+      First scene review separated two facts: the rough-highlands shape is promising, but the old 128-unit
+      block compressed 90 km so aggressively that it could not answer player-scale/traversability questions.
+      The review scene now defaults to a 100x horizontal expansion and exposes 10/25/50/100/150/200x presets,
+      independent relief, and a slope overlay. Treat scale as a required generator/runtime knob, not a baked
+      constant: different games may want different landform density, and "too big" can be as bad as "too
+      small" for player pacing.
       Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
-      and a clean Godot import; owner visual acceptance remains the blocking gate.
+      and an earlier clean Godot import; the scale-control harness edit still needs an editor-closed import
+      rerun for a clean native-extension log. Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve

@@ -119,12 +119,22 @@ cards. It is superseded. The active review artifact is now
 `tools/dem_pack/export_godot_rough_world_review.py`. It uses the current Python skeleton generator to export a
 larger 90 km world for each rough-highlands focus variant, then displays one generated world at a time in
 Godot so the owner can switch variants in-place from the same fly-camera view. Keys: `1-4` refs, `5-0` synth,
-`[`/`]` prev/next, `F` focus, `G` overview, `+/-` relief, `L` flat lighting. Lighting was brightened and
-shadows are disabled for readability; `L` is a no-shadow/unshaded review fallback. Non-visual evidence:
-generated JSON was rebuilt; `python -m pytest tools\dem_pack\test_geography_engine.py
-tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_worldgen_proto.py -q` is **23 passed** (pytest
-cache warning only); Godot `--import` parses cleanly (only the known PDB shortening warning). The metrics pass
-now also writes rough-skeleton reports:
+`[`/`]` prev/next, `F` focus, `G` overview, `+/-` relief, `R` reset relief, `,/.` horizontal scale,
+`P` slope/traversability overlay, `L` flat lighting. Lighting was brightened and shadows are disabled for
+readability; `L` is a no-shadow/unshaded review fallback. Owner verdict on the first generated-world scene:
+the rough-highlands synth is promising, but the review scale was invalid for player-scale judgment because a
+90 km source world was squeezed into a 128-unit scene block. Scale is therefore now a first-class review
+knob: default is a 100x horizontal expansion (12.8 km scene width if 1 Godot unit = 1 m), with 10/25/50/100/
+150/200x presets and independent relief. This does not declare the terrain production-ready; it separates
+shape-quality review from game-scale/traversability review. Next owner pass should judge the same variants at
+100x+ with `P` enabled to see whether playable corridors/slopes can be made plausible without losing the
+real-geography read. Non-visual evidence from the generated-world scene build: generated JSON was rebuilt;
+`python -m pytest tools\dem_pack\test_geography_engine.py tools\dem_pack\test_geography_skeleton.py
+tools\dem_pack\test_worldgen_proto.py -q` is **23 passed** (pytest cache warning only). The later scale-control
+harness edit passes `git diff --check`; Godot `--import` exits 0 with no GDScript parse error, but the current
+attempt reported the native `wg10_terrain.dll` copy/load error while another Godot process may have the
+extension loaded, so an editor-closed clean import log is still outstanding. The metrics pass now also writes
+rough-skeleton reports:
 `D:\tmp\wg10_geography_engine\geography_metrics_skeleton_rough_200km.{csv,md}` and
 `D:\tmp\wg10_geography_engine\geography_metrics_skeleton_rough_45km_close.{csv,md}`. This is still
 offline/static generated review data, not a Rust/GLSL terrain port and not Phase 7B runtime drainage. Owner
