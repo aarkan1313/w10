@@ -1,7 +1,10 @@
 import numpy as np
 
+import compare_geography_metrics as metrics
+import export_godot_rough_world_review as rough_export
 import geography_skeleton as skel
 import geography_engine as geo
+from render_geography_skeleton_focus import FOCUS as ROUGH_FOCUS
 
 
 def test_skeleton_coarse_fields_are_deterministic_and_nonflat():
@@ -70,3 +73,49 @@ def test_skeleton_scenarios_change_process_weights_not_only_height_contrast():
     assert float(np.mean(fan[1])) > float(np.mean(badlands[1]))
     assert float(np.mean(badlands[5])) > float(np.mean(fan[5]))
     assert float(np.mean(filled[0])) > float(np.mean(fan[0]))
+
+
+def test_rough_focus_metrics_are_finite_for_every_variant():
+    rows = metrics.synth_rows_skeleton_rough(45000.0, 80, 45000.0 / 79.0, coarse_n=64)
+    assert len(rows) == len(ROUGH_FOCUS)
+    assert {row["source"] for row in rows} == {scenario.key for scenario in ROUGH_FOCUS}
+    numeric_keys = (
+        "hypsometric_integral",
+        "ptp_z",
+        "relief_2km",
+        "relief_10km",
+        "relief_ratio_2_10",
+        "slope_mean",
+        "slope_p95",
+        "slope_std",
+        "slope_skew",
+        "vrm_7px",
+        "curv_abs_mean",
+        "ridge_spacing_m",
+        "valley_spacing_m",
+        "highpass_std",
+        "straight_score",
+        "basin_prop",
+        "fan_prop",
+        "foothill_prop",
+        "plateau_prop",
+        "range_prop",
+        "badlands_prop",
+        "regime_entropy",
+    )
+    for row in rows:
+        for key in numeric_keys:
+            assert np.isfinite(float(row[key]))
+        assert 0.0 <= float(row["straight_score"]) <= 1.0
+
+
+def test_rough_world_export_item_contract_is_bounded_and_finite():
+    z = np.linspace(-3.0, 4.0, 48 * 48, dtype=np.float64).reshape((48, 48))
+    item = rough_export._item("unit", "Unit", "synth", z, 90000.0, "test")
+    h = np.asarray(item["height"], dtype=np.float64)
+    assert item["n"] == rough_export.N
+    assert len(h) == rough_export.N * rough_export.N
+    assert np.all(np.isfinite(h))
+    assert float(np.min(h)) >= -1.0
+    assert float(np.max(h)) <= 1.0
+    assert item["stats"]["source_ptp"] > 0.0

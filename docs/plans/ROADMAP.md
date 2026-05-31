@@ -336,7 +336,12 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       coarse multiple-flow accumulation, separates primary/tributary fields, damps basin/fan incision, and
       makes scenarios alter process weights/widths/smoothing. Owner selected **`SYN rough highlands`** as
       "great"; keep v2 offline and focus the next image work around that process family. Still no Rust/GLSL
-      port until the accepted stack has an explicit parity/facts/render story.
+      port until the accepted stack has an explicit parity/facts/render story. Next immediate step: a narrow
+      rough-highlands focus pass with 200 km, 45 km, debug, and oblique scene-read sheets. This focus pass is
+      now rendered. A Godot generated-world review scene (`rough_world_review.tscn`) supersedes the rejected
+      tiny-tile comparison and lets the owner switch 90 km generated worlds in-place for scale/detail review.
+      Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
+      and a clean Godot import; owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
@@ -351,6 +356,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       - defer expensive flow-routed metrics (drainage density, slope-area theta, TWI) until there is a
         network/drainage primitive for them to tune;
       - empirically test spline-of-noise control curves before promoting splines to the pack schema.
+      Current partial groundwork: the cheap metric comparator now covers the rough-highlands skeleton-focus
+      variants as well as the older v5 candidates, but this is a diagnostic report, not Slice 2B completion.
 - [ ] **Slice 2C — gradient/noise feasibility gate (offline + small parity spike).** Only after 2A passes:
       design analytic value+gradient noise with one fade convention across Python/Rust/GLSL. This is the
       prerequisite for IQ/Jordan/Runevision-style slope filters. It is not a free two-line edit.
@@ -405,6 +412,9 @@ upstream area, hence a coarse/global field. Phase 7 is split so we do not confus
       - fine pages sample discharge/distance-to-channel and apply local incision;
       - CPU/facts/collision story defined up front.
       De-risk in offline images first. This is a new subsystem, not current clipmap reuse.
+      Current non-visual groundwork is captured in the Slice 2A spec port gate: world-anchored skeleton
+      windows, apron/stitching, facts queries for skeleton fields, Python-vs-Rust fixtures, GPU sampling, and
+      cache/order-independence gates are required before any Rust/GLSL port.
 - [ ] **Offline learning is allowed only as a parameter/distillation tool by default.** Learn transfer curves
       or coefficients for analytic operators before considering a runtime neural/stencil path. A page-stencil
       or CNN runtime breaks pure `f(x,z)` and needs apron, seam, parity, and collision plans before it can

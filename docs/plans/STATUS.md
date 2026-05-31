@@ -97,6 +97,45 @@ Skeleton v2 keeper/current-best panel and focus the next image work around that 
 the bounded Skeleton v2 offline goal, but it is not a Rust/GLSL port greenlight or full Phase-7B runtime
 architecture acceptance.
 
+**Next Slice 2A action:** run a narrow rough-highlands focus pass instead of a broad matrix. Keep it offline:
+render `rough_highlands` plus process-neighbor variants at 200 km, 45 km, and an oblique scene-read view;
+check whether the keeper still reads well outside the forensic hillshade sheet; then update this section with
+the owner verdict before any port discussion.
+
+**Rough-highlands focus pass:** renderer added at `tools/dem_pack/render_geography_skeleton_focus.py` and run
+offline. Outputs: `D:\tmp\wg10_geography_engine\geography_skeleton_rough_focus_200km.png`,
+`D:\tmp\wg10_geography_engine\geography_skeleton_rough_focus_45km_close.png`,
+`D:\tmp\wg10_geography_engine\geography_skeleton_rough_focus_scene.png`, plus debug/notes files. Evidence:
+focused tests **21 passed** (pytest cache warning only). Initial engineering read: the pass is correctly
+narrowed around the owner-selected family; `rough_anchor`, `rough_broad_crests`, and `rough_sharp_front` are
+the useful neighborhood. The offline oblique scene probe supports the terrain read, but its own faceted
+painter-renderer is only a review aid, not a Godot/runtime visual gate. Owner verdict is still pending.
+
+**Godot generated-world review scene:** the first Godot tile-comparison scene was rejected by owner eye as
+gross, and correctly so: it independently normalized tiny tiles and made the DEM refs read as blown-out cliff
+cards. It is superseded. The active review artifact is now
+`wg-10/worldgen_terrain/harness/rough_world_review.tscn`, backed by
+`wg-10/worldgen_terrain/generated/review/rough_world_3d.json` from
+`tools/dem_pack/export_godot_rough_world_review.py`. It uses the current Python skeleton generator to export a
+larger 90 km world for each rough-highlands focus variant, then displays one generated world at a time in
+Godot so the owner can switch variants in-place from the same fly-camera view. Keys: `1-4` refs, `5-0` synth,
+`[`/`]` prev/next, `F` focus, `G` overview, `+/-` relief, `L` flat lighting. Lighting was brightened and
+shadows are disabled for readability; `L` is a no-shadow/unshaded review fallback. Non-visual evidence:
+generated JSON was rebuilt; `python -m pytest tools\dem_pack\test_geography_engine.py
+tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_worldgen_proto.py -q` is **23 passed** (pytest
+cache warning only); Godot `--import` parses cleanly (only the known PDB shortening warning). The metrics pass
+now also writes rough-skeleton reports:
+`D:\tmp\wg10_geography_engine\geography_metrics_skeleton_rough_200km.{csv,md}` and
+`D:\tmp\wg10_geography_engine\geography_metrics_skeleton_rough_45km_close.{csv,md}`. This is still
+offline/static generated review data, not a Rust/GLSL terrain port and not Phase 7B runtime drainage. Owner
+visual acceptance of the stack is still pending.
+
+**Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
+depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
+queries for skeleton fields, Python-vs-Rust fixtures, GPU world-coordinate sampling, cache/order independence,
+and parity/perf/visible==collision gates. This is documentation of the required subsystem boundary only; no
+Rust/GLSL port has started.
+
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
 `docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**

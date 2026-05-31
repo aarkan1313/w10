@@ -221,7 +221,12 @@ rejection.
 Current prototype state: v2 has completed the artifact/process pass in offline Python and generated
 `geography_skeleton_v2_*` contact/debug sheets. Owner selected `SYN rough highlands` as the current best
 Skeleton v2 panel. The port gate remains closed until this keeper is turned into an explicitly accepted stack
-with a parity/facts/render story.
+with a parity/facts/render story. The next prototype slice is a narrow rough-highlands focus pass: render the
+keeper plus process-neighbor variants in top-down and oblique scene-read views, then record the owner verdict.
+That focus pass is now rendered as `geography_skeleton_rough_focus_*`. The active review harness is the Godot
+generated-world switcher `rough_world_review.tscn`, which displays one larger generated 90 km world at a time
+from the same camera view. It has no-shadow review lighting plus a flat-light toggle, deterministic export
+contract tests, and skeleton-rough metric reports. It is a review harness only; the port gate remains closed.
 
 ## 11. Port Gate
 
@@ -231,3 +236,28 @@ Nothing from Slice 2A goes to Rust/GLSL until:
 - the accepted algorithm is documented in ROADMAP/STATUS,
 - focused Python tests pass,
 - and any coarse skeleton/drainage state needed by the algorithm has a parity/facts/render story.
+
+### 11.1 Required 7B-Lite Port Story If The Keeper Uses Routed Structure
+
+If the accepted keeper depends on the 7B-lite skeleton, the runtime port must preserve the skeleton as a
+first-class deterministic field. Do not flatten it into local ad-hoc noise.
+
+Minimum design before Rust/GLSL work:
+
+- **World anchoring:** coarse skeleton windows are keyed by absolute world coordinates and seed, never by
+  camera position or page identity.
+- **Window seams:** neighboring coarse windows share enough apron/overlap that uplift, discharge,
+  distance-to-channel, and derived regimes are continuous when sampled by fine pages.
+- **Authoritative facts seam:** CPU/facts/collision can query the same skeleton facts used by render pages:
+  uplift, discharge/accumulation proxy, channel distance, crest distance, and regime weights.
+- **Python reference parity:** the accepted Python prototype becomes the reference for deterministic sample
+  fixtures. Rust must match reference values at fixed world points before GPU work starts.
+- **GPU sampling story:** page generation samples skeleton facts by world coordinate, then applies local
+  material/detail. No render page owns or mutates global drainage state.
+- **Cache/storage story:** if flow windows are too expensive to recompute per page, cache them behind a
+  deterministic key. Cache misses may be async later, but the generated result must be independent of load
+  order.
+- **Validation gates:** determinism, cross-window seam continuity, Python-vs-Rust sample parity, CPU-vs-GPU
+  parity, visible==collision parity, and the existing no-black/perf gates.
+
+This is the minimum bar for pulling Phase 7B forward. It is intentionally a subsystem, not a shader tweak.
