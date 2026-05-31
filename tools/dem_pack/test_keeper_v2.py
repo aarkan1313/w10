@@ -1,5 +1,24 @@
 import numpy as np
 import keeper_v2 as v2
+import geography_skeleton_windows as win
+import export_godot_rough_world_chunks as ex
+
+
+def _window():
+    spec = ex._window_spec(129, ex.CHUNK_SPAN_M)
+    w = win.build_skeleton_window(ex.WORLD_ORIGIN_X_M, ex.WORLD_ORIGIN_Z_M, 133, spec)
+    return w, spec
+
+
+def test_v2_compose_is_finite_bounded_nonflat_deterministic():
+    w, spec = _window()
+    p = v2.KeeperV2Params()
+    h1 = v2.compose_windowed_height_v2(w, 133, spec, p)
+    h2 = v2.compose_windowed_height_v2(w, 133, spec, p)
+    assert h1.shape[0] == h1.shape[1]
+    assert np.all(np.isfinite(h1))
+    assert np.ptp(h1) > 0.05
+    assert np.allclose(h1, h2)
 
 def test_apron_blur_crop_returns_core_shape():
     rng = np.random.default_rng(0)
