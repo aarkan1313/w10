@@ -65,7 +65,23 @@ scene-read render plus metric reports. The scene probe makes the current best ca
 scene-plausible than the forensic hillshade alone, but the metric pass confirms the 45 km synth is still
 too smooth vs references: synthesized local relief/highpass/slope are far below real DEM rows. Next
 improvement target is therefore not more broad parameter search; it is richer close-scale process/detail tied
-to the accepted badlands/range structural frame.
+to the accepted badlands/range structural frame. Independent review agreed this is **Yellow and plateauing**:
+the current "hierarchy" is still mostly weighted blends of shared global noise fields, and drainage is still
+decorative. Decision: **pull 7B-lite forward inside Slice 2A as an offline proof**. Next prototype should
+build a coarse world-anchored uplift/ridge skeleton first, route flow on that skeleton, derive regimes from
+crest distance / accumulation / slope breaks, and carve channels causally before adding noise as material.
+
+**7B-lite skeleton v1 checkpoint:** implemented as offline Python in `tools/dem_pack/geography_skeleton.py`
+with renderer/tests beside the earlier geography-engine probes. It builds a coarse uplift/ridge skeleton,
+routes coarse flow, derives range/foothill/basin/fan/badlands weights from skeleton facts, carves channels
+from discharge, then adds local material. Evidence: focused dem_pack tests **19 passed** (pytest cache warning
+only); rendered contact/debug sheets to `D:\tmp\wg10_geography_engine\geography_skeleton_v1_200km.png`,
+`D:\tmp\wg10_geography_engine\geography_skeleton_v1_45km_close.png`, and matching `_debug.png` files. Initial
+engineering read: this is structurally different from v5 and has more connected, causal drainage, but it is
+not final-green; the 45 km view still shows coarse routed-channel artifacts and variants remain too similar.
+Owner review: **"looks pretty good tbh, we are getting better"**. Treat this as a **Yellow+ / keep**
+checkpoint: skeleton-first is now the active direction, and the next iteration should fix flow artifacts/scale
+blending instead of returning to broad noise-combo tuning.
 
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:

@@ -77,6 +77,38 @@ The important shift is that noise becomes material inside regimes, not the organ
 not average mountain plus average plain. A range core, foothill, fan, and basin floor have different process
 rules and blend spatially.
 
+**Current correction after v5 review:** the first geography-engine implementation did not fully satisfy this
+principle. It still built regime heights from the same shared global noise fields and alpha-blended them, so
+it behaved like one field with spatially-varying contrast. That is a useful yellow result, but it is
+plateauing. Slice 2A now pulls a **7B-lite offline proof** forward: build a coarse world-anchored skeleton
+first, route flow on that skeleton, derive regimes from the skeleton, carve height from accumulated flow, and
+add noise last as regime material.
+
+### 4.1 7B-Lite Skeleton-First Prototype
+
+The next prototype tests whether routed structure is the missing mid-scale process:
+
+```text
+coarse world grid, fixed in world coordinates
+  -> uplift / ridge skeleton
+  -> coarse flow routing and accumulation
+  -> distance-to-crest, distance-to-channel, slope breaks, drainage density
+  -> derived regimes:
+       range core = high uplift + near crest
+       foothill   = mid distance from crest / slope apron
+       basin      = low routed elevation / far from crest
+       fan        = channel exit + slope break + basin edge
+       badlands   = high drainage density on erodible plateau/basin edge
+  -> height:
+       base uplift/fill
+       causal incision from accumulated flow
+       local per-regime material/detail
+```
+
+This remains offline Python only. If the 7B-lite sheet is a clear improvement, the runtime implication is a
+real subsystem: fixed flow windows, stitching, storage/reproducibility, and CPU/facts/collision semantics. Do
+not port by flattening the skeleton back into ad-hoc local noise.
+
 ## 5. Structural Frame Requirements
 
 The coarse frame must create recognizable geography:
@@ -148,6 +180,8 @@ Do not show only debug masks as proof. The final hillshade is the acceptance ima
 - The explanation depends on "with tuning this might work."
 - A coarse routed drainage/skeleton field appears necessary. In that case, pull ROADMAP Phase 7B forward
   before Rust/GLSL work.
+- The skeleton-first proof also fails at 45 km; that means the 85% target needs a deeper terrain-process
+  rethink, not another blended-noise tuning pass.
 
 ## 9. Objective Metrics
 
@@ -171,10 +205,12 @@ rejection.
    experiments as local evidence until intentionally committed or discarded.
 2. **Geography v0.** Build a clean offline generator path with regime maps, irregular range/basin skeleton,
    coarse drainage/corridors, per-regime shaping, and DEM-reference contact sheets.
-3. **Artifact pass.** Add a debug sheet and remove visible straight-line/cell/mask artifacts. If this cannot
-   be done locally, stop and design the coarse drainage/skeleton data model.
-4. **Metrics pass.** Add focused metrics for relief/slope/curvature/spacing and line artifacts.
-5. **Owner review.** Open the sheet in Windows. Owner decides green/yellow/red.
+3. **7B-lite skeleton proof.** Build a coarse world-anchored uplift/ridge skeleton, route flow, derive
+   regimes, carve channels, and render the same sheets against v5.
+4. **Artifact pass.** Remove grid/raster/line artifacts from the skeleton and flow fields. If D8 routing is
+   used, it must be on a coarse world grid and smoothed/vectorized before sampling by the final render grid.
+5. **Metrics pass.** Add focused metrics for relief/slope/curvature/spacing and line artifacts.
+6. **Owner review.** Open the sheet in Windows. Owner decides green/yellow/red.
 
 ## 11. Port Gate
 
@@ -184,4 +220,3 @@ Nothing from Slice 2A goes to Rust/GLSL until:
 - the accepted algorithm is documented in ROADMAP/STATUS,
 - focused Python tests pass,
 - and any coarse skeleton/drainage state needed by the algorithm has a parity/facts/render story.
-

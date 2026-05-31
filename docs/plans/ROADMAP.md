@@ -322,8 +322,11 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
         plain/grassland, and optional glacial/karst families;
       - irregular ridge/uplift skeletons and basin/range frames that cannot reveal straight segment,
         Voronoi-cell, or mask artifacts in the final height;
-      - drainage-shaped corridors routed over the coarse field where feasible; if this needs a true
-        world-anchored flow/discharge layer, stop and pull Phase 7B design forward;
+      - **7B-lite pull-forward (offline proof):** build a coarse world-anchored uplift/ridge skeleton, route
+        flow on that coarse skeleton, derive regimes from crest distance / flow accumulation / slope breaks,
+        and carve channels causally into the height. This is still Python/render-first only; if it wins, the
+        runtime version becomes a real Phase-7B subsystem with fixed flow windows, stitching, and facts/
+        collision design.
       - per-regime process/detail: smoother basin fill, fan aprons, rough range cores, incised badlands,
         foothill transition zones, and close-scale detail that follows the coarse structure;
       - DEM-reference contact sheets every run: real kernels beside synth for 200 km, 40 km, and close crops.
