@@ -296,9 +296,53 @@ def variation_rows(payload: dict[str, object]) -> list[dict[str, object]]:
     return rows
 
 
-def write_reports(payload: dict[str, object], rows: list[dict[str, object]], variation: list[dict[str, object]]) -> None:
+def independent_window_diagnostic_rows(
+    seeds: Iterable[int] = (133,),
+    *,
+    chunk_n: int = 49,
+    chunk_span_m: float = CHUNK_SPAN_M,
+    origin_x_m: float = WORLD_ORIGIN_X_M,
+    origin_z_m: float = WORLD_ORIGIN_Z_M,
+    coarse_n: int = 64,
+) -> list[dict[str, object]]:
+    """Show why the current keeper is not yet safe as independent runtime windows."""
+    rows: list[dict[str, object]] = []
+    for seed in seeds:
+        wx_a, wz_a = skel.geo.grid(chunk_n, chunk_span_m, ox=origin_x_m, oz=origin_z_m)
+        wx_b, wz_b = skel.geo.grid(chunk_n, chunk_span_m, ox=origin_x_m + chunk_span_m, oz=origin_z_m)
+        wx_c, wz_c = skel.geo.grid(chunk_n, chunk_span_m, ox=origin_x_m, oz=origin_z_m + chunk_span_m)
+        raw_a = np.asarray(skel.compose_height(wx_a, wz_a, seed=int(seed), scenario=SCENARIO, coarse_n=coarse_n)["height"], dtype=np.float64)
+        raw_b = np.asarray(skel.compose_height(wx_b, wz_b, seed=int(seed), scenario=SCENARIO, coarse_n=coarse_n)["height"], dtype=np.float64)
+        raw_c = np.asarray(skel.compose_height(wx_c, wz_c, seed=int(seed), scenario=SCENARIO, coarse_n=coarse_n)["height"], dtype=np.float64)
+        cond_a, _ = _condition(raw_a)
+        cond_b, _ = _condition(raw_b)
+        cond_c, _ = _condition(raw_c)
+        pairs = (
+            ("x", raw_a[:, -1], raw_b[:, 0], cond_a[:, -1], cond_b[:, 0]),
+            ("z", raw_a[-1, :], raw_c[0, :], cond_a[-1, :], cond_c[0, :]),
+        )
+        for axis, raw_left, raw_right, cond_left, cond_right in pairs:
+            rows.append({
+                "kind": "independent_window_diagnostic",
+                "seed": int(seed),
+                "axis": axis,
+                "chunk_n": int(chunk_n),
+                "raw_height_max_abs_delta": float(np.max(np.abs(raw_left - raw_right))),
+                "raw_height_mean_abs_delta": float(np.mean(np.abs(raw_left - raw_right))),
+                "conditioned_height_max_abs_delta": float(np.max(np.abs(cond_left - cond_right))),
+                "conditioned_height_mean_abs_delta": float(np.mean(np.abs(cond_left - cond_right))),
+            })
+    return rows
+
+
+def write_reports(
+    payload: dict[str, object],
+    rows: list[dict[str, object]],
+    variation: list[dict[str, object]],
+    independent_diagnostics: list[dict[str, object]],
+) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    csv_rows = rows + variation
+    csv_rows = rows + variation + independent_diagnostics
     keys = sorted({key for row in csv_rows for key in row.keys()})
     with REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
@@ -333,6 +377,22 @@ def write_reports(payload: dict[str, object], rows: list[dict[str, object]], var
             f"| {row['kind']} | {row['seed']} | {row['a']} | {row['b']} | "
             f"{float(row['mean_abs_delta']):.4f} | {float(row['corrcoef']):.4f} |"
         )
+    lines += [
+        "",
+        "## Independent Window Diagnostic",
+        "",
+        "This intentionally runs the current rough-highlands keeper as separate adjacent 25.6 km windows.",
+        "Nonzero seam deltas here are why the proof uses one authoritative 3x3 super-window today.",
+        "",
+        "| seed | axis | raw max | raw mean | conditioned max | conditioned mean |",
+        "|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in independent_diagnostics:
+        lines.append(
+            f"| {row['seed']} | {row['axis']} | {float(row['raw_height_max_abs_delta']):.4f} | "
+            f"{float(row['raw_height_mean_abs_delta']):.4f} | {float(row['conditioned_height_max_abs_delta']):.4f} | "
+            f"{float(row['conditioned_height_mean_abs_delta']):.4f} |"
+        )
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -342,7 +402,8 @@ def main() -> None:
     OUT.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
     rows = seam_rows(payload)
     variation = variation_rows(payload)
-    write_reports(payload, rows, variation)
+    independent_diagnostics = independent_window_diagnostic_rows(seeds=(SEEDS[0],))
+    write_reports(payload, rows, variation, independent_diagnostics)
     max_seam = max(float(row["height_max_abs_delta"]) for row in rows)
     min_corridor = min(float(row["corridor_match_frac"]) for row in rows)
     print(f"wrote {OUT}")

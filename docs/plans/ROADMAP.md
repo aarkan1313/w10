@@ -364,7 +364,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       those chunk borders. Current non-visual evidence: exact shared-border height continuity and minimum
       low-corridor seam match fraction 0.951. This is still a bounded authoritative super-window split into
       chunks, not a final arbitrary infinite streaming architecture. Proof report:
-      `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
+      `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`. The report now quantifies the independent-window
+      failure case for the current keeper: separate adjacent 25.6 km windows produce conditioned seam max
+      deltas of 0.661 on x and 1.442 on z for seed 133, so a real infinite implementation must remove
+      window-local normalization/authority before porting.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as

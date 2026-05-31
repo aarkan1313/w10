@@ -55,3 +55,12 @@ def test_variation_report_distinguishes_adjacent_chunks_and_seeds():
         assert np.isfinite(float(row["mean_abs_delta"]))
         assert float(row["mean_abs_delta"]) > 0.02
         assert -1.0 <= float(row["corrcoef"]) <= 1.0
+
+
+def test_independent_window_diagnostic_exposes_current_boundary():
+    rows = chunks.independent_window_diagnostic_rows(seeds=(133,), chunk_n=33, coarse_n=64)
+    assert len(rows) == 2
+    for row in rows:
+        assert row["kind"] == "independent_window_diagnostic"
+        assert float(row["conditioned_height_max_abs_delta"]) > 0.10
+        assert float(row["conditioned_height_mean_abs_delta"]) > 0.03

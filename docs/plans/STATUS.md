@@ -198,7 +198,9 @@ rough traversability, skeleton, and skeleton-window checks are **26 passed** (py
 Godot `--import` exits 0 with no GDScript parse error (known PDB shortening warning; sandboxed editor-settings
 save warning only). A separate headless attempt to run the scene crashed Godot after a `user://logs` write
 failure, so do not cite headless scene-run as evidence; the owner/visible Windows fly scene remains the review
-gate. Next: open the chunk scene for owner review, then review what a real infinite-in-all-directions/player
+gate. The seam report now also includes an independent-window diagnostic proving why the current keeper cannot
+yet be generated chunk-by-chunk: separate adjacent 25.6 km windows produce conditioned seam max deltas of
+**0.661** on x and **1.442** on z for seed 133. Next: open the chunk scene for owner review, then review what a real infinite-in-all-directions/player
 travel version requires (fixed world-coordinate generation contract, window authority, apron/stitching,
 streaming/cache, and route continuity beyond the bounded 3x3).
 

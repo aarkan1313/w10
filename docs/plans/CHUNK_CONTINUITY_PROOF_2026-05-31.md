@@ -60,6 +60,17 @@ If each 25.6 km chunk were generated independently through that path, edges woul
 not be a reliable proof. The current exporter avoids that by generating an
 authoritative 3x3 world first, then splitting it into chunks.
 
+This is now quantified in the report's independent-window diagnostic. Running
+the current keeper as separate adjacent 25.6 km windows produces nonzero seam
+deltas:
+
+- seed 133, x-neighbor: conditioned max delta `0.6614`, mean delta `0.2275`
+- seed 133, z-neighbor: conditioned max delta `1.4417`, mean delta `1.0738`
+
+Those numbers are not acceptable as a chunk seam. They are the reason the current
+proof should be read as a bounded super-window review artifact, not as the final
+infinite-window contract.
+
 For a true infinite-in-all-directions implementation, the generator must be
 defined over deterministic world windows with aprons and a clear authority rule:
 same seed + same world coordinate + same generator version must produce the same
@@ -85,6 +96,14 @@ Last focused verification for the proof:
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
 26 passed
+```
+
+The focused chunk test file now has an additional independent-window diagnostic
+assertion; run by itself it reports:
+
+```text
+python -m pytest tools\dem_pack\test_rough_world_chunks.py -q
+5 passed
 ```
 
 Godot import evidence:
