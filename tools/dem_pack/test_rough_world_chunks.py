@@ -48,6 +48,34 @@ def test_adjacent_chunks_are_different_but_share_exact_edges():
     assert np.allclose(center_corridor[-1, :], south_corridor[0, :])
 
 
+def test_same_world_coordinate_is_independent_of_request_origin():
+    a = chunks._build_independent_chunk(
+        133,
+        chunk_x=1,
+        chunk_z=2,
+        chunk_count=3,
+        chunk_n=33,
+        chunk_span_m=25_600.0,
+        world_origin_x_m=60_000.0,
+        world_origin_z_m=36_000.0,
+    )
+    b = chunks._build_independent_chunk(
+        133,
+        chunk_x=0,
+        chunk_z=0,
+        chunk_count=5,
+        chunk_n=33,
+        chunk_span_m=25_600.0,
+        world_origin_x_m=85_600.0,
+        world_origin_z_m=87_200.0,
+    )
+    assert a["world_origin_x_m"] == b["world_origin_x_m"]
+    assert a["world_origin_z_m"] == b["world_origin_z_m"]
+    assert np.allclose(a["height"], b["height"])
+    assert np.allclose(a["apron_height"], b["apron_height"])
+    assert np.allclose(a["corridor"], b["corridor"])
+
+
 def test_chunk_seam_report_proves_height_and_corridor_continuity():
     payload = _small_payload()
     rows = chunks.seam_rows(payload)
@@ -64,6 +92,20 @@ def test_variation_report_distinguishes_adjacent_chunks_and_seeds():
         assert np.isfinite(float(row["mean_abs_delta"]))
         assert float(row["mean_abs_delta"]) > 0.02
         assert -1.0 <= float(row["corrcoef"]) <= 1.0
+
+
+def test_virtual_travel_audit_extends_beyond_review_3x3():
+    rows = chunks.virtual_travel_summary_rows(seeds=(133, 211), chunk_count=5, chunk_n=33)
+    assert len(rows) == 2
+    for row in rows:
+        assert row["kind"] == "virtual_travel_summary"
+        assert row["chunk_count"] == 5
+        assert row["world_span_km"] == 128.0
+        assert row["seams_count"] == 40
+        assert float(row["height_max_abs_delta"]) <= 2e-4
+        assert float(row["corridor_min_match_frac"]) >= 0.90
+        assert float(row["adjacent_mean_abs_delta_min"]) > 0.02
+        assert float(row["adjacent_corrcoef_max"]) < 0.98
 
 
 def test_independent_window_diagnostic_exposes_current_boundary():

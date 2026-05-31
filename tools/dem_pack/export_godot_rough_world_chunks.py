@@ -38,6 +38,8 @@ OUT = Path("wg-10/worldgen_terrain/generated/review/rough_world_chunks_3x3.json"
 REPORT_DIR = Path("D:/tmp/wg10_geography_engine")
 REPORT_CSV = REPORT_DIR / "rough_world_chunks_3x3_seams.csv"
 REPORT_MD = REPORT_DIR / "rough_world_chunks_3x3_seams.md"
+TRAVEL_REPORT_CSV = REPORT_DIR / "rough_world_chunks_virtual_travel.csv"
+TRAVEL_REPORT_MD = REPORT_DIR / "rough_world_chunks_virtual_travel.md"
 
 GENERATOR_VERSION = "rough_world_chunks_v2_independent_windows"
 CHUNK_COUNT = 3
@@ -390,6 +392,90 @@ def variation_rows(payload: dict[str, object]) -> list[dict[str, object]]:
     return rows
 
 
+def adjacent_pair_variation_rows(payload: dict[str, object]) -> list[dict[str, object]]:
+    chunk_count = int(payload["chunk_count"])
+    rows: list[dict[str, object]] = []
+    for seed_world in payload["seeds"]:
+        seed = int(seed_world["seed"])
+        grid = _chunk_grid(seed_world, chunk_count)
+        for z in range(chunk_count):
+            for x in range(chunk_count - 1):
+                a = _height_array(grid[z][x])
+                b = _height_array(grid[z][x + 1])
+                rows.append({
+                    "kind": "adjacent_pair",
+                    "seed": seed,
+                    "axis": "x",
+                    "a": f"{x},{z}",
+                    "b": f"{x + 1},{z}",
+                    "mean_abs_delta": float(np.mean(np.abs(a - b))),
+                    "corrcoef": float(np.corrcoef(a.ravel(), b.ravel())[0, 1]),
+                })
+        for z in range(chunk_count - 1):
+            for x in range(chunk_count):
+                a = _height_array(grid[z][x])
+                b = _height_array(grid[z + 1][x])
+                rows.append({
+                    "kind": "adjacent_pair",
+                    "seed": seed,
+                    "axis": "z",
+                    "a": f"{x},{z}",
+                    "b": f"{x},{z + 1}",
+                    "mean_abs_delta": float(np.mean(np.abs(a - b))),
+                    "corrcoef": float(np.corrcoef(a.ravel(), b.ravel())[0, 1]),
+                })
+    return rows
+
+
+def virtual_travel_summary_rows(
+    seeds: Iterable[int] = SEEDS,
+    *,
+    chunk_count: int = 5,
+    chunk_n: int = 65,
+    chunk_span_m: float = CHUNK_SPAN_M,
+    origin_x_m: float = WORLD_ORIGIN_X_M - 2.0 * CHUNK_SPAN_M,
+    origin_z_m: float = WORLD_ORIGIN_Z_M - 2.0 * CHUNK_SPAN_M,
+) -> list[dict[str, object]]:
+    """Stress the independent-window contract across a wider bounded travel lattice."""
+    payload = build_payload(
+        seeds=seeds,
+        chunk_count=chunk_count,
+        chunk_n=chunk_n,
+        chunk_span_m=chunk_span_m,
+        origin_x_m=origin_x_m,
+        origin_z_m=origin_z_m,
+    )
+    seam_by_seed: dict[int, list[dict[str, object]]] = {}
+    for row in seam_rows(payload):
+        seam_by_seed.setdefault(int(row["seed"]), []).append(row)
+    variation_by_seed: dict[int, list[dict[str, object]]] = {}
+    for row in adjacent_pair_variation_rows(payload):
+        variation_by_seed.setdefault(int(row["seed"]), []).append(row)
+
+    summaries: list[dict[str, object]] = []
+    for seed in [int(s) for s in seeds]:
+        seams = seam_by_seed.get(seed, [])
+        variations = variation_by_seed.get(seed, [])
+        mean_deltas = np.asarray([float(row["mean_abs_delta"]) for row in variations], dtype=np.float64)
+        corrcoefs = np.asarray([float(row["corrcoef"]) for row in variations], dtype=np.float64)
+        summaries.append({
+            "kind": "virtual_travel_summary",
+            "seed": seed,
+            "chunk_count": int(chunk_count),
+            "chunk_n": int(chunk_n),
+            "world_span_km": float(chunk_count) * float(chunk_span_m) / 1000.0,
+            "seams_count": len(seams),
+            "height_max_abs_delta": max(float(row["height_max_abs_delta"]) for row in seams) if seams else 0.0,
+            "corridor_min_match_frac": min(float(row["corridor_match_frac"]) for row in seams) if seams else 1.0,
+            "corridor_entering_count": sum(int(row["corridor_entering_count"]) for row in seams),
+            "adjacent_pair_count": len(variations),
+            "adjacent_mean_abs_delta_min": float(np.min(mean_deltas)) if mean_deltas.size else 0.0,
+            "adjacent_mean_abs_delta_median": float(np.median(mean_deltas)) if mean_deltas.size else 0.0,
+            "adjacent_corrcoef_max": float(np.max(corrcoefs)) if corrcoefs.size else 0.0,
+        })
+    return summaries
+
+
 def independent_window_diagnostic_rows(
     seeds: Iterable[int] = (133,),
     *,
@@ -434,9 +520,10 @@ def write_reports(
     rows: list[dict[str, object]],
     variation: list[dict[str, object]],
     independent_diagnostics: list[dict[str, object]],
+    travel_summaries: list[dict[str, object]],
 ) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
-    csv_rows = rows + variation + independent_diagnostics
+    csv_rows = rows + variation + independent_diagnostics + travel_summaries
     keys = sorted({key for row in csv_rows for key in row.keys()})
     with REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=keys)
@@ -488,7 +575,47 @@ def write_reports(
             f"{float(row['raw_height_mean_abs_delta']):.4f} | {float(row['conditioned_height_max_abs_delta']):.4f} | "
             f"{float(row['conditioned_height_mean_abs_delta']):.4f} |"
         )
+    lines += [
+        "",
+        "## Virtual Travel Summary",
+        "",
+        "This builds a wider 5x5 lattice from independent world windows at lower report resolution.",
+        "It is a bounded stress probe for movement in all directions, not a streaming runtime.",
+        "",
+        "| seed | chunks | span km | seams | height max | corridor min | adjacent min delta | adjacent median delta | adjacent max corr |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in travel_summaries:
+        lines.append(
+            f"| {row['seed']} | {row['chunk_count']}x{row['chunk_count']} | {float(row['world_span_km']):.1f} | "
+            f"{row['seams_count']} | {float(row['height_max_abs_delta']):.6f} | "
+            f"{float(row['corridor_min_match_frac']):.3f} | {float(row['adjacent_mean_abs_delta_min']):.4f} | "
+            f"{float(row['adjacent_mean_abs_delta_median']):.4f} | {float(row['adjacent_corrcoef_max']):.4f} |"
+        )
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    travel_keys = list(travel_summaries[0].keys()) if travel_summaries else []
+    with TRAVEL_REPORT_CSV.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=travel_keys)
+        writer.writeheader()
+        writer.writerows(travel_summaries)
+    travel_lines = [
+        "# Rough-World Virtual Travel Summary",
+        "",
+        "Bounded stress probe over independently generated chunks. This supports the infinite-world direction, but it is not a runtime streaming/cache proof.",
+        "",
+        "| seed | chunks | span km | seams | height max | corridor min | corridor entering | adjacent pairs | adjacent min delta | adjacent median delta | adjacent max corr |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for row in travel_summaries:
+        travel_lines.append(
+            f"| {row['seed']} | {row['chunk_count']}x{row['chunk_count']} | {float(row['world_span_km']):.1f} | "
+            f"{row['seams_count']} | {float(row['height_max_abs_delta']):.6f} | "
+            f"{float(row['corridor_min_match_frac']):.3f} | {row['corridor_entering_count']} | "
+            f"{row['adjacent_pair_count']} | {float(row['adjacent_mean_abs_delta_min']):.4f} | "
+            f"{float(row['adjacent_mean_abs_delta_median']):.4f} | {float(row['adjacent_corrcoef_max']):.4f} |"
+        )
+    TRAVEL_REPORT_MD.write_text("\n".join(travel_lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:
@@ -498,12 +625,15 @@ def main() -> None:
     rows = seam_rows(payload)
     variation = variation_rows(payload)
     independent_diagnostics = independent_window_diagnostic_rows(seeds=(SEEDS[0],))
-    write_reports(payload, rows, variation, independent_diagnostics)
+    travel_summaries = virtual_travel_summary_rows()
+    write_reports(payload, rows, variation, independent_diagnostics, travel_summaries)
     max_seam = max(float(row["height_max_abs_delta"]) for row in rows)
     min_corridor = min(float(row["corridor_match_frac"]) for row in rows)
     print(f"wrote {OUT}")
     print(f"wrote {REPORT_CSV}")
     print(f"wrote {REPORT_MD}")
+    print(f"wrote {TRAVEL_REPORT_CSV}")
+    print(f"wrote {TRAVEL_REPORT_MD}")
     print(f"max seam delta={max_seam:.6f} min corridor match={min_corridor:.3f}")
 
 

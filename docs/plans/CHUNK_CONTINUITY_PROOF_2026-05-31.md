@@ -28,6 +28,7 @@ replace the static review payload.
 - Review scene: `wg-10/worldgen_terrain/harness/rough_world_chunks_review.tscn`
 - Tests: `tools/dem_pack/test_rough_world_chunks.py`
 - External report: `D:\tmp\wg10_geography_engine\rough_world_chunks_3x3_seams.{csv,md}`
+- Virtual-travel report: `D:\tmp\wg10_geography_engine\rough_world_chunks_virtual_travel.{csv,md}`
 
 ## What It Proves
 
@@ -48,6 +49,14 @@ replace the static review payload.
 - The review scene uses one-sample aprons for chunk-edge normals, reducing visual shading seams at shared edges.
 - The corridor overlay now prefers the exported routed/route mask when present,
   instead of only the old low-height/passable-slope heuristic.
+- Same world coordinate is independent of request origin: focused tests build the
+  same chunk through two different origin/chunk-index requests and assert the
+  height, apron, and corridor arrays match.
+- A wider 5x5 virtual-travel stress probe now builds independently generated
+  chunks over 128 km for both seeds. It is not rendered in Godot, but it checks
+  whether the independent-window contract holds beyond the review scene:
+  - seed 133: 40 seams, height max `0.000000`, corridor min `0.971`, adjacent median delta `0.3481`, max adjacent corr `0.3411`
+  - seed 211: 40 seams, height max `0.000000`, corridor min `1.000`, adjacent median delta `0.3708`, max adjacent corr `0.3892`
 
 ## What It Does Not Prove
 
@@ -57,6 +66,9 @@ replace the static review payload.
 - It does not prove full hydrology, gameplay navmesh quality, or route desirability.
 - It does not prove owner visual acceptance; the owner still needs to fly the scene.
 - It does not prove long-distance travel pacing. A 76.8 km-wide 3x3 proof is enough for seam review, not for travel-loop acceptance.
+- The 5x5 virtual-travel report is a non-rendered stress probe. It supports the
+  infinite-world direction, but it does not prove live streaming, cache eviction,
+  player-speed pacing, or visual desirability during travel.
 - It does not prove the legacy `geography_skeleton.compose_height` path is safe
   when run as isolated 25.6 km windows; that diagnostic still fails and is kept
   in the report on purpose.
@@ -111,7 +123,7 @@ Last focused verification for the proof:
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py tools\dem_pack\test_rough_world_traversability.py tools\dem_pack\test_geography_skeleton.py tools\dem_pack\test_geography_skeleton_windows.py -q
-27 passed
+29 passed
 ```
 
 The focused chunk test file includes independent-window source, seam,
@@ -119,7 +131,7 @@ seed-variation, corridor-edge, and legacy diagnostic assertions; run by itself i
 
 ```text
 python -m pytest tools\dem_pack\test_rough_world_chunks.py -q
-5 passed
+7 passed
 ```
 
 Godot import evidence:
