@@ -13,7 +13,7 @@ var _terrain: MeshInstance3D
 var _items: Array = []
 var _selected := 4
 var _relief := 1.0
-var _scale_index := 3
+var _scale_index := 5
 var _overview := false
 var _flat_lighting := false
 var _slope_overlay := false

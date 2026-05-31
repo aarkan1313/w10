@@ -342,13 +342,16 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       tiny-tile comparison and lets the owner switch 90 km generated worlds in-place for scale/detail review.
       First scene review separated two facts: the rough-highlands shape is promising, but the old 128-unit
       block compressed 90 km so aggressively that it could not answer player-scale/traversability questions.
-      The review scene now defaults to a 100x horizontal expansion and exposes 10/25/50/100/150/200x presets,
-      independent relief, and a slope overlay. Treat scale as a required generator/runtime knob, not a baked
-      constant: different games may want different landform density, and "too big" can be as bad as "too
-      small" for player pacing.
+      The review scene now defaults to the owner-preferred 200x horizontal expansion, about a 25.6 km scene
+      block, and exposes 10/25/50/100/150/200x presets, independent relief, and a slope overlay. Treat scale
+      as a required generator/runtime knob, not a baked constant: different games may want different landform
+      density, and "too big" can be as bad as "too small" for player pacing.
+      Owner scale/traversal rule: tall mountains and high relief are allowed; the required production quality
+      is traversable structure, not flattened terrain. Validate valley floors, passes, ramps, shelves,
+      basin/fan corridors, and route continuity as explicit acceptance signals.
       Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
-      and an earlier clean Godot import; the scale-control harness edit still needs an editor-closed import
-      rerun for a clean native-extension log. Owner visual acceptance remains the blocking gate.
+      and a clean Godot import for the scale/no-fog/default-25km review harness. Owner visual acceptance
+      remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
