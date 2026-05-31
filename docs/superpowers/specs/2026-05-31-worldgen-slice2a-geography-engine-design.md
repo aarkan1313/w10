@@ -244,8 +244,13 @@ The current owner-review artifact before any port decision is the wider 5x5 stat
 data; it exists to decide whether rough-highlands has enough travel-scale terrain/corridor quality to justify
 the Rust CPU skeleton-facts parity spike. Owner first read is yellow/keep: the 5x5 scene seems good for
 continuity/travel scale, but may be too flat / under-elevated, and the lack of biome/material dressing makes the
-terrain-quality read uncertain. Do one more offline review pass that separates relief envelope from dressing
-before treating this as a port greenlight.
+terrain-quality read uncertain. The current follow-up review pass keeps the same chunk/seam samples and adds
+four named scene variants for owner comparison: `current_plain` (1.00x/plain), `medium_dressed`
+(1.25x/review biome), `high_dressed` (1.50x/review biome), and `high_route_read` (1.65x/route-read dressing).
+The scene cycles variants with `V` and writes
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_variants.png` for quick scan. This is review
+dressing only, not Phase 6 surfacing. The port gate remains closed until the owner accepts a specific variant
+or asks for another offline shape iteration.
 
 ## 11. Port Gate
 

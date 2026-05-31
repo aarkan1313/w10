@@ -244,16 +244,25 @@ does not replace flying the scene. Owner visual read on the opened scene:
 independent-window contract over **5x5** chunks, **128 km** wide, at **65x65 vertices per chunk** so the owner
 can judge travel pacing and route/corridor feel beyond the tighter seam-review scene. Report:
 `D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5.{csv,md}`; contact sheet:
-`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_contact.png`. Current metrics: **80** shared seams,
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_contact.png`; variant sheet:
+`D:\tmp\wg10_geography_engine\rough_world_chunks_travel_5x5_variants.png`. Current metrics: **80** shared seams,
 height max **0.000000**, corridor min **0.905**, normal max **0.0000 deg**, corridor mismatches **0**, adjacent
-pair median delta **0.359**, and max adjacent corr **0.487**. Verification: focused Python checks are
-**22 passed** (pytest cache warning only); Godot smoke checks verify the 3x3 scene builds **9** chunk meshes /
-**12** seam guides and the 5x5 travel scene builds **25** chunk meshes / **40** seam guides. This is still
-offline/static review data, not streamed runtime terrain. Owner first read on the opened 5x5 scene: **"seems
-good"**, but it may be too flat / not enough elevation, with the caveat that the current scene is untextured and
-has no biomes/materials. Treat this as a yellow keep signal for continuity/travel scale, not final terrain
-acceptance. Next: run one offline review pass that separates **relief envelope** from **surface/biome dressing**
-before deciding whether to start the Rust CPU skeleton-facts parity spike or iterate terrain shape again.
+pair median delta **0.359**, and max adjacent corr **0.487**. Owner first read on the opened 5x5 scene:
+**"seems good"**, but it may be too flat / not enough elevation, with the caveat that the current scene is
+untextured and has no biomes/materials. Treat this as a yellow keep signal for continuity/travel scale, not
+final terrain acceptance.
+
+**5x5 relief/dressing review pass (in progress):** the 5x5 payload now carries four review variants:
+`current_plain` (1.00x/plain), `medium_dressed` (1.25x/review biome), `high_dressed` (1.50x/review biome),
+and `high_route_read` (1.65x/route-read dressing). The Godot scene adds `V` to cycle variants; `+/-` still
+nudges relief, `R` resets to the selected variant, and `P`/`B`/`N` still cover overlay, seam guides, and
+seam focus. This is review dressing only, not Phase 6 surfacing. Verification: focused Python checks are
+**23 passed** (pytest cache warning only); Godot smoke checks verify the 3x3 scene still builds **9** chunk
+meshes / **12** seam guides with fallback variants, and the 5x5 travel scene builds **25** chunk meshes /
+**40** seam guides while cycling to the 1.25x dressed variant. This is still offline/static review data, not
+streamed runtime terrain. Next: owner fly should compare the named variants and decide whether the keeper is
+good enough to start the Rust CPU skeleton-facts parity spike, or whether terrain shape needs another offline
+iteration before porting.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

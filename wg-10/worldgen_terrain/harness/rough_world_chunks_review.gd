@@ -11,6 +11,12 @@ const OVERLAY_TERRAIN := 0
 const OVERLAY_SLOPE := 1
 const OVERLAY_CORRIDOR := 2
 const OVERLAY_COUNT := 3
+const DEFAULT_REVIEW_VARIANTS := [
+	{"id": "current_plain", "label": "current relief / plain", "relief": 1.0, "dressing": "plain"},
+	{"id": "medium_dressed", "label": "medium relief / dressed", "relief": 1.25, "dressing": "review_biome"},
+	{"id": "high_dressed", "label": "high relief / dressed", "relief": 1.50, "dressing": "review_biome"},
+	{"id": "high_route_read", "label": "high relief / route-read", "relief": 1.65, "dressing": "review_route"},
+]
 
 @export var data_path := DEFAULT_DATA_PATH
 @export var review_title := "WG10 rough-highlands chunk continuity review"
@@ -21,8 +27,11 @@ var _chunks_root: Node3D
 var _guides_root: Node3D
 var _payload: Dictionary = {}
 var _seed_worlds: Array = []
+var _review_variants: Array = []
 var _seed_index := 0
+var _variant_index := 0
 var _relief := 1.0
+var _dressing_style := "plain"
 var _overview := false
 var _flat_lighting := false
 var _show_seam_guides := false
@@ -55,6 +64,8 @@ func _ready() -> void:
 	_build_hud()
 	if not _load_payload():
 		return
+	_load_review_variants()
+	_apply_variant(0, false)
 	_build_chunks(true)
 
 func _build_hud() -> void:
@@ -78,6 +89,34 @@ func _load_payload() -> bool:
 	_payload = parsed
 	_seed_worlds = _payload["seeds"]
 	return not _seed_worlds.is_empty()
+
+func _load_review_variants() -> void:
+	_review_variants.clear()
+	var payload_variants: Array = _payload.get("review_variants", [])
+	var source: Array = payload_variants if not payload_variants.is_empty() else DEFAULT_REVIEW_VARIANTS
+	for item in source:
+		if typeof(item) == TYPE_DICTIONARY:
+			_review_variants.append(item)
+	if _review_variants.is_empty():
+		_review_variants.append(DEFAULT_REVIEW_VARIANTS[0])
+
+func _current_variant() -> Dictionary:
+	if _review_variants.is_empty():
+		return DEFAULT_REVIEW_VARIANTS[0]
+	return _review_variants[clampi(_variant_index, 0, _review_variants.size() - 1)]
+
+func _apply_variant(index: int, rebuild: bool = true) -> void:
+	if _review_variants.is_empty():
+		_load_review_variants()
+	_variant_index = posmod(index, _review_variants.size())
+	var variant := _current_variant()
+	_relief = clampf(float(variant.get("relief", 1.0)), 0.35, 1.95)
+	_dressing_style = str(variant.get("dressing", "plain"))
+	if rebuild:
+		_build_chunks()
+
+func _cycle_variant() -> void:
+	_apply_variant(_variant_index + 1)
 
 func _make_material() -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -297,6 +336,11 @@ func _terrain_color(h: float, slope: float, corridor_height: float, structural_c
 		if slope <= STEEP_SLOPE:
 			return Color(0.88, 0.46, 0.16)
 		return Color(0.52, 0.10, 0.10)
+	if _dressing_style == "review_biome" or _dressing_style == "review_route":
+		return _review_dressed_color(h, slope, structural_corridor)
+	return _plain_terrain_color(h)
+
+func _plain_terrain_color(h: float) -> Color:
 	var t: float = clampf((h + 1.0) * 0.5, 0.0, 1.0)
 	var low := Color(0.40, 0.48, 0.38)
 	var mid := Color(0.62, 0.56, 0.40)
@@ -307,6 +351,33 @@ func _terrain_color(h: float, slope: float, corridor_height: float, structural_c
 	if t < 0.90:
 		return mid.lerp(high, (t - 0.58) / 0.32)
 	return high.lerp(crest, (t - 0.90) / 0.10)
+
+func _review_dressed_color(h: float, slope: float, structural_corridor: bool) -> Color:
+	var t: float = clampf((h + 1.0) * 0.5, 0.0, 1.0)
+	var valley := Color(0.16, 0.34, 0.27)
+	var grass := Color(0.30, 0.46, 0.26)
+	var dry := Color(0.55, 0.48, 0.33)
+	var rock := Color(0.46, 0.45, 0.41)
+	var snow := Color(0.82, 0.84, 0.78)
+	var base := valley
+	if t < 0.35:
+		base = valley.lerp(grass, t / 0.35)
+	elif t < 0.62:
+		base = grass.lerp(dry, (t - 0.35) / 0.27)
+	elif t < 0.82:
+		base = dry.lerp(rock, (t - 0.62) / 0.20)
+	elif t < 0.94:
+		base = rock.lerp(snow, (t - 0.82) / 0.12)
+	else:
+		base = snow
+	if slope > PASSABLE_SLOPE:
+		base = base.lerp(rock, clampf((slope - PASSABLE_SLOPE) / maxf(STEEP_SLOPE - PASSABLE_SLOPE, 0.001), 0.0, 0.72))
+	if slope > STEEP_SLOPE:
+		base = base.lerp(Color(0.32, 0.32, 0.30), 0.45)
+	if structural_corridor:
+		var route := Color(0.12, 0.42, 0.46) if _dressing_style == "review_route" else Color(0.18, 0.39, 0.33)
+		base = base.lerp(route, 0.58)
+	return base
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -319,7 +390,9 @@ func _input(event: InputEvent) -> void:
 			KEY_MINUS:
 				_set_relief(_relief - 0.10)
 			KEY_R:
-				_set_relief(1.0)
+				_apply_variant(_variant_index)
+			KEY_V:
+				_cycle_variant()
 			KEY_F:
 				_focus_camera()
 			KEY_G:
@@ -388,6 +461,14 @@ func _overlay_label() -> String:
 		_:
 			return "terrain"
 
+func _variant_label() -> String:
+	var variant := _current_variant()
+	return "%d/%d %s" % [
+		_variant_index + 1,
+		_review_variants.size(),
+		str(variant.get("label", variant.get("id", "variant"))),
+	]
+
 func _process(_delta: float) -> void:
 	if _hud == null or _seed_worlds.is_empty():
 		return
@@ -396,16 +477,18 @@ func _process(_delta: float) -> void:
 	var world_km := float(_payload.get("world_span_m", 0.0)) / 1000.0
 	var chunk_count := int(_payload.get("chunk_count", 3))
 	_hud.text = "%s\n" % review_title \
-		+ "T seed | P overlay | B seam guides | N next seam | F focus | G overview | +/- relief | R reset | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Seed: %s | chunks %dx%d @ %.1f km | world %.1f km | relief %.2fx | height %.0fm | %s | %s | seam guides %s | prototype, not runtime streaming" % [
+		+ "T seed | V variant | P overlay | B seam guides | N next seam | F focus | G overview | +/- relief | R reset variant | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "Seed: %s | chunks %dx%d @ %.1f km | world %.1f km | variant %s | relief %.2fx | height %.0fm | %s | dressing %s | %s | seam guides %s | prototype, not runtime streaming" % [
 			seed_world.get("seed", "?"),
 			chunk_count,
 			chunk_count,
 			chunk_km,
 			world_km,
+			_variant_label(),
 			_relief,
 			_height_scale(),
 			_overlay_label(),
+			_dressing_style,
 			"flat" if _flat_lighting else "lit/no-shadow/no-fog",
 			"on" if _show_seam_guides else "off",
 		]

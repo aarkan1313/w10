@@ -107,6 +107,19 @@ def test_chunk_contact_sheet_renderer_builds_expected_panels():
     assert sheet.size == (404, 204)
 
 
+def test_variant_contact_sheet_renderer_uses_payload_variants():
+    payload = _small_payload()
+    payload["review_variants"] = [
+        {"id": "current_plain", "label": "current", "relief": 1.0, "dressing": "plain"},
+        {"id": "medium_dressed", "label": "medium", "relief": 1.25, "dressing": "review_biome"},
+        {"id": "high_route_read", "label": "route", "relief": 1.65, "dressing": "review_route"},
+    ]
+    panels = chunk_render.variant_panels_for_payload(payload, panel_px=80)
+    assert len(panels) == 6
+    for panel in panels:
+        assert panel.size == (80, 80)
+
+
 def test_variation_report_distinguishes_adjacent_chunks_and_seeds():
     payload = _small_payload()
     rows = chunks.variation_rows(payload)
@@ -137,9 +150,24 @@ def test_godot_travel_review_payload_builds_wider_5x5_artifact():
     assert payload["chunk_count"] == 5
     assert payload["chunk_n"] == 65
     assert payload["world_span_m"] == 128_000.0
+    variants = payload["review_variants"]
+    assert [variant["id"] for variant in variants] == [
+        "current_plain",
+        "medium_dressed",
+        "high_dressed",
+        "high_route_read",
+    ]
+    assert [variant["dressing"] for variant in variants] == [
+        "plain",
+        "review_biome",
+        "review_biome",
+        "review_route",
+    ]
+    assert [float(variant["relief"]) for variant in variants] == [1.0, 1.25, 1.5, 1.65]
     rows = travel.summary_rows(payload)
     assert len(rows) == 1
     row = rows[0]
+    assert row["review_variant_count"] == 4
     assert row["seam_rows"] == 80
     assert float(row["height_max_abs_delta"]) <= 2e-4
     assert float(row["corridor_min_match_frac"]) >= 0.90

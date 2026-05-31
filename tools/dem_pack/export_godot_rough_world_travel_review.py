@@ -23,11 +23,42 @@ REPORT_DIR = Path("D:/tmp/wg10_geography_engine")
 REPORT_CSV = REPORT_DIR / "rough_world_chunks_travel_5x5.csv"
 REPORT_MD = REPORT_DIR / "rough_world_chunks_travel_5x5.md"
 CONTACT_SHEET = REPORT_DIR / "rough_world_chunks_travel_5x5_contact.png"
+VARIANT_CONTACT_SHEET = REPORT_DIR / "rough_world_chunks_travel_5x5_variants.png"
 
 TRAVEL_CHUNK_COUNT = 5
 TRAVEL_CHUNK_N = 65
 TRAVEL_ORIGIN_X_M = chunks.WORLD_ORIGIN_X_M - chunks.CHUNK_SPAN_M
 TRAVEL_ORIGIN_Z_M = chunks.WORLD_ORIGIN_Z_M - chunks.CHUNK_SPAN_M
+REVIEW_VARIANTS = [
+    {
+        "id": "current_plain",
+        "label": "current relief / plain",
+        "relief": 1.00,
+        "dressing": "plain",
+        "intent": "baseline matching the first 5x5 owner read",
+    },
+    {
+        "id": "medium_dressed",
+        "label": "medium relief / dressed",
+        "relief": 1.25,
+        "dressing": "review_biome",
+        "intent": "test whether modest extra vertical scale plus material bands fixes the flat read",
+    },
+    {
+        "id": "high_dressed",
+        "label": "high relief / dressed",
+        "relief": 1.50,
+        "dressing": "review_biome",
+        "intent": "test stronger highland mass without changing the seam contract",
+    },
+    {
+        "id": "high_route_read",
+        "label": "high relief / route-read",
+        "relief": 1.65,
+        "dressing": "review_route",
+        "intent": "stress relief while visually preserving corridors and passes for travel judgement",
+    },
+]
 
 
 def build_payload() -> dict[str, object]:
@@ -42,6 +73,7 @@ def build_payload() -> dict[str, object]:
     payload["title"] = "WorldGen10 rough-highlands 5x5 travel review"
     payload["review_intent"] = "terrain_travel_pacing_not_runtime_streaming"
     payload["review_resolution_note"] = "5x5 travel scene uses 65x65 vertices per 25.6 km chunk for a wider 128 km flyable read."
+    payload["review_variants"] = REVIEW_VARIANTS
     return payload
 
 
@@ -55,6 +87,7 @@ def summary_rows(payload: dict[str, object]) -> list[dict[str, object]]:
             "chunk_count": int(payload["chunk_count"]),
             "chunk_n": int(payload["chunk_n"]),
             "world_span_km": float(payload["world_span_m"]) / 1000.0,
+            "review_variant_count": len(payload.get("review_variants", [])),
             "seam_rows": len(seam_rows),
             "height_max_abs_delta": max(float(row["height_max_abs_delta"]) for row in seam_rows),
             "corridor_min_match_frac": min(float(row["corridor_match_frac"]) for row in seam_rows),
@@ -81,17 +114,24 @@ def write_report(payload: dict[str, object], rows: list[dict[str, object]]) -> N
         f"Review area: {row['chunk_count']}x{row['chunk_count']} chunks, {float(row['world_span_km']):.1f} km wide.",
         "This is an offline static Godot review payload. It supports terrain/travel judgement, not runtime streaming/cache acceptance.",
         "",
-        "| chunks | chunk_n | seams | height max | corridor min | normal max deg | corridor mismatches | adjacent pairs | adjacent median delta | adjacent max corr |",
-        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| chunks | chunk_n | variants | seams | height max | corridor min | normal max deg | corridor mismatches | adjacent pairs | adjacent median delta | adjacent max corr |",
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
         (
-            f"| {row['chunk_count']}x{row['chunk_count']} | {row['chunk_n']} | {row['seam_rows']} | "
+            f"| {row['chunk_count']}x{row['chunk_count']} | {row['chunk_n']} | {row['review_variant_count']} | {row['seam_rows']} | "
             f"{float(row['height_max_abs_delta']):.6f} | {float(row['corridor_min_match_frac']):.3f} | "
             f"{float(row['normal_max_angle_deg']):.4f} | {row['corridor_edge_mismatch_count']} | "
             f"{row['adjacent_pair_count']} | {float(row['adjacent_mean_abs_delta_median']):.4f} | "
             f"{float(row['adjacent_corrcoef_max']):.4f} |"
         ),
         "",
+        "Review variants:",
+        *[
+            f"- `{variant['id']}`: relief {float(variant['relief']):.2f}x, dressing `{variant['dressing']}` - {variant['intent']}"
+            for variant in payload.get("review_variants", [])
+        ],
+        "",
         f"Contact sheet: `{CONTACT_SHEET}`",
+        f"Variant sheet: `{VARIANT_CONTACT_SHEET}`",
         "Godot scene: `wg-10/worldgen_terrain/harness/rough_world_travel_review.tscn`",
     ]
     REPORT_MD.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -104,10 +144,12 @@ def main() -> None:
     rows = summary_rows(payload)
     write_report(payload, rows)
     chunk_render.render(payload_path=OUT, out_path=CONTACT_SHEET, panel_px=300)
+    chunk_render.render_variant_sheet(payload_path=OUT, out_path=VARIANT_CONTACT_SHEET, panel_px=260)
     print(f"wrote {OUT}")
     print(f"wrote {REPORT_CSV}")
     print(f"wrote {REPORT_MD}")
     print(f"wrote {CONTACT_SHEET}")
+    print(f"wrote {VARIANT_CONTACT_SHEET}")
     print(f"height max={float(rows[0]['height_max_abs_delta']):.6f} corridor min={float(rows[0]['corridor_min_match_frac']):.3f}")
 
 

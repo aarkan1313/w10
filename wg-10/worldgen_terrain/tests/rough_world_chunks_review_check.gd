@@ -8,6 +8,7 @@ const SCENE := "res://worldgen_terrain/harness/rough_world_chunks_review.tscn"
 const EXPECTED_CHUNKS := 9
 const EXPECTED_SEAM_GUIDES := 12
 const EXPECTED_SEEDS := 2
+const EXPECTED_FALLBACK_VARIANTS := 4
 
 func _init() -> void:
 	quit(await _run())
@@ -28,6 +29,7 @@ func _run() -> int:
 	var camera := scene.get_node_or_null("ReviewCamera")
 	var payload: Dictionary = scene.get("_payload")
 	var seeds: Array = scene.get("_seed_worlds")
+	var variants: Array = scene.get("_review_variants")
 	var seam_targets: Array = scene.get("_seam_targets")
 
 	if payload.is_empty():
@@ -41,6 +43,8 @@ func _run() -> int:
 			errs.append("chunk_span_m=%s, expected 25600" % str(payload.get("chunk_span_m", 0.0)))
 	if seeds.size() != EXPECTED_SEEDS:
 		errs.append("seed worlds=%d, expected %d" % [seeds.size(), EXPECTED_SEEDS])
+	if variants.size() != EXPECTED_FALLBACK_VARIANTS:
+		errs.append("fallback variants=%d, expected %d" % [variants.size(), EXPECTED_FALLBACK_VARIANTS])
 	if chunks == null:
 		errs.append("Chunks node missing")
 	elif chunks.get_child_count() != EXPECTED_CHUNKS:
