@@ -8,10 +8,18 @@ def test_skeleton_coarse_fields_are_deterministic_and_nonflat():
     wx, wz = geo.grid(96, 90000.0)
     a = skel.build_coarse_skeleton(wx, wz, seed=31, coarse_n=64)
     b = skel.build_coarse_skeleton(wx, wz, seed=31, coarse_n=64)
-    for key in ("uplift", "discharge", "crest_dist", "channel_dist", "basin_seed"):
+    for key in ("uplift", "discharge", "tributary", "channel_axis", "crest_dist", "channel_dist", "basin_seed"):
         assert np.all(np.isfinite(a[key]))
         assert np.allclose(a[key], b[key])
         assert float(np.ptp(a[key])) > 0.05
+
+
+def test_skeleton_flow_uses_multi_flow_distribution_not_d8_integer_routing():
+    wx, wz = geo.grid(96, 90000.0)
+    skeleton = skel.build_coarse_skeleton(wx, wz, seed=35, coarse_n=64)
+    acc = skeleton["flow_accum"]
+    fractional = np.abs(acc - np.round(acc))
+    assert float(np.mean(fractional > 1e-6)) > 0.10
 
 
 def test_skeleton_height_is_deterministic_finite_and_nonflat():
@@ -53,3 +61,12 @@ def test_skeleton_scenarios_change_output():
     assert not np.allclose(base, rough)
     assert 0.0 <= skel.straight_artifact_score(base) <= 1.0
 
+
+def test_skeleton_scenarios_change_process_weights_not_only_height_contrast():
+    wx, wz = geo.grid(80, 90000.0)
+    fan = skel.compose_height(wx, wz, seed=36, scenario=skel.SCENARIOS[1], coarse_n=64)["weights"]
+    badlands = skel.compose_height(wx, wz, seed=36, scenario=skel.SCENARIOS[2], coarse_n=64)["weights"]
+    filled = skel.compose_height(wx, wz, seed=36, scenario=skel.SCENARIOS[4], coarse_n=64)["weights"]
+    assert float(np.mean(fan[1])) > float(np.mean(badlands[1]))
+    assert float(np.mean(badlands[5])) > float(np.mean(fan[5]))
+    assert float(np.mean(filled[0])) > float(np.mean(fan[0]))

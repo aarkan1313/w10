@@ -35,6 +35,7 @@ def _panels(span_m: float, n: int, panel_px: int, seed: int, ox: float, oz: floa
         debug.append(labeled(Image.fromarray(skel.regime_rgb(weights), mode="RGB").resize((panel_px, panel_px), Image.Resampling.NEAREST), f"{scenario.label} regimes"))
         debug.append(panel_from_height(skeleton["uplift"], f"{scenario.label} uplift", panel_px, 1.0))
         debug.append(panel_from_height(skeleton["discharge"], f"{scenario.label} discharge", panel_px, 1.0))
+        debug.append(panel_from_height(skeleton["tributary"], f"{scenario.label} tributaries", panel_px, 1.0))
         debug.append(panel_from_height(skeleton["channel_dist"], f"{scenario.label} channel dist", panel_px, 1.0))
         notes.append(f"{scenario.key}: line_score={score:.4f} relief_ptp={float(np.ptp(z)):.4f}")
     return panels, debug, notes
@@ -43,9 +44,9 @@ def _panels(span_m: float, n: int, panel_px: int, seed: int, ox: float, oz: floa
 def render_sheet(span_m: float, n: int, panel_px: int, seed: int, ox: float, oz: float, suffix: str, exaggeration: float) -> None:
     refs = [reference_panel(kernel_id, label, span_m, panel_px, exaggeration) for kernel_id, label in REFERENCES[:4]]
     synth, debug, notes = _panels(span_m, n, panel_px, seed, ox, oz, exaggeration)
-    contact_sheet(OUT / f"geography_skeleton_v1_{suffix}.png", refs + synth, cols=4)
-    contact_sheet(OUT / f"geography_skeleton_v1_{suffix}_debug.png", debug, cols=4)
-    (OUT / f"geography_skeleton_v1_{suffix}_notes.txt").write_text("\n".join(notes) + "\n", encoding="utf-8")
+    contact_sheet(OUT / f"geography_skeleton_v2_{suffix}.png", refs + synth, cols=4)
+    contact_sheet(OUT / f"geography_skeleton_v2_{suffix}_debug.png", debug, cols=4)
+    (OUT / f"geography_skeleton_v2_{suffix}_notes.txt").write_text("\n".join(notes) + "\n", encoding="utf-8")
 
 
 def main() -> None:

@@ -2,7 +2,9 @@
 
 Offline only. This is the fork after the v5 review: build a coarse world-anchored
 uplift/ridge skeleton, route flow on that skeleton, derive regimes from the routed
-structure, then add local noise as material.
+structure, then add local noise as material. Skeleton v2 replaces the coarse D8
+accumulation with multi-flow routing and uses separate primary/tributary fields so
+the 45 km view does not expose as many raster-aligned scars.
 """
 
 from __future__ import annotations
@@ -27,15 +29,61 @@ class SkeletonScenario:
     badlands_gain: float = 1.0
     range_texture: float = 1.0
     close_detail: float = 1.0
+    channel_width: float = 1.0
+    tributary_gain: float = 1.0
+    basin_smoothing: float = 1.0
+    range_spread: float = 1.0
 
 
 SCENARIOS = (
-    SkeletonScenario("skeleton_base", "skeleton base"),
-    SkeletonScenario("deep_incision", "deep incision", incision_gain=1.35, badlands_gain=1.15),
-    SkeletonScenario("range_fan", "range + fans", uplift_gain=1.18, fan_gain=1.35, range_texture=1.12),
-    SkeletonScenario("badlands_cut", "badlands cut", incision_gain=1.25, badlands_gain=1.55, close_detail=1.25),
-    SkeletonScenario("filled_basin", "filled basin", fill_gain=1.35, fan_gain=1.25, incision_gain=0.82),
-    SkeletonScenario("rough_range", "rough range", uplift_gain=1.25, range_texture=1.45, close_detail=1.18),
+    SkeletonScenario("skeleton_v2_base", "v2 base"),
+    SkeletonScenario(
+        "fan_aprons",
+        "fan aprons",
+        incision_gain=0.86,
+        fill_gain=1.12,
+        fan_gain=1.55,
+        channel_width=1.34,
+        basin_smoothing=1.22,
+        range_spread=1.10,
+    ),
+    SkeletonScenario(
+        "incised_badlands",
+        "incised badlands",
+        incision_gain=1.34,
+        badlands_gain=1.62,
+        close_detail=1.28,
+        channel_width=0.78,
+        tributary_gain=1.35,
+    ),
+    SkeletonScenario(
+        "range_front",
+        "range front",
+        uplift_gain=1.24,
+        fan_gain=1.18,
+        range_texture=1.28,
+        channel_width=0.92,
+        range_spread=0.82,
+    ),
+    SkeletonScenario(
+        "filled_basin",
+        "filled basin",
+        incision_gain=0.72,
+        fill_gain=1.45,
+        fan_gain=1.18,
+        channel_width=1.22,
+        basin_smoothing=1.42,
+    ),
+    SkeletonScenario(
+        "rough_highlands",
+        "rough highlands",
+        uplift_gain=1.34,
+        fill_gain=0.82,
+        range_texture=1.58,
+        close_detail=1.18,
+        tributary_gain=0.84,
+        range_spread=0.78,
+    ),
 )
 
 
@@ -46,34 +94,44 @@ def _resample(a: np.ndarray, shape: tuple[int, int], order: int = 3) -> np.ndarr
     return out[: shape[0], : shape[1]]
 
 
-def _flow_accumulation_d8(surface: np.ndarray) -> np.ndarray:
-    """Coarse-grid D8 accumulation. Used only on the 7B-lite skeleton grid, never on final render pixels."""
+def _flow_accumulation_mfd(surface: np.ndarray, power: float = 1.45) -> np.ndarray:
+    """Coarse-grid multiple-flow accumulation.
+
+    D8 picked one neighbor and produced obvious diagonal/axis scars. This distributes flow across all
+    downhill neighbors in proportion to slope, still on the coarse skeleton grid and never on final render
+    pixels. It is not a full erosion model; it is just enough routed structure for render-first review.
+    """
     h = np.asarray(surface, dtype=np.float64)
     rows, cols = h.shape
     acc = np.ones_like(h, dtype=np.float64)
     order = np.argsort(-h.ravel())
+    offsets = (
+        (-1, -1, 1.41421356237),
+        (-1, 0, 1.0),
+        (-1, 1, 1.41421356237),
+        (0, -1, 1.0),
+        (0, 1, 1.0),
+        (1, -1, 1.41421356237),
+        (1, 0, 1.0),
+        (1, 1, 1.41421356237),
+    )
     for idx in order:
         y = int(idx // cols)
         x = int(idx - y * cols)
-        best_y = y
-        best_x = x
-        best_drop = 0.0
-        for oy in (-1, 0, 1):
-            for ox in (-1, 0, 1):
-                if ox == 0 and oy == 0:
-                    continue
-                ny = y + oy
-                nx = x + ox
-                if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
-                    continue
-                dist = 1.41421356237 if ox != 0 and oy != 0 else 1.0
-                drop = (h[y, x] - h[ny, nx]) / dist
-                if drop > best_drop:
-                    best_drop = drop
-                    best_y = ny
-                    best_x = nx
-        if best_y != y or best_x != x:
-            acc[best_y, best_x] += acc[y, x]
+        targets: list[tuple[int, int, float]] = []
+        for oy, ox, dist in offsets:
+            ny = y + oy
+            nx = x + ox
+            if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
+                continue
+            drop = max((h[y, x] - h[ny, nx]) / dist, 0.0)
+            if drop > 0.0:
+                targets.append((ny, nx, drop))
+        if targets:
+            weights = np.array([drop for _, _, drop in targets], dtype=np.float64) ** float(power)
+            weights /= float(np.sum(weights)) + 1e-12
+            for (ny, nx, _), weight in zip(targets, weights):
+                acc[ny, nx] += acc[y, x] * float(weight)
     return acc
 
 
@@ -114,30 +172,39 @@ def build_coarse_skeleton(wx: np.ndarray, wz: np.ndarray, seed: int, coarse_n: i
     routed_surface = geo.znorm(1.18 * uplift + 0.28 * ridge_mid - 0.46 * basin_seed + outlet)
     routed_surface = gaussian_filter(routed_surface, sigma=0.75)
 
-    acc = _flow_accumulation_d8(routed_surface)
-    discharge = geo.norm01(np.log1p(acc))
-    discharge = gaussian_filter(discharge, sigma=1.15)
-    discharge = geo.norm01(discharge)
+    acc = _flow_accumulation_mfd(routed_surface)
+    raw_discharge = geo.norm01(np.log1p(acc))
+    discharge = geo.norm01(0.62 * gaussian_filter(raw_discharge, sigma=0.9) + 0.38 * gaussian_filter(raw_discharge, sigma=2.2))
+
+    # Tributaries are lower-order flow corridors. They are softer than primary channels but still derived
+    # from routed accumulation, not independent ridge noise.
+    tributary = geo.norm01(gaussian_filter(geo.smoothstep(0.34, 0.78, discharge), sigma=1.6))
 
     crest_seed = geo.smoothstep(0.63, 0.88, uplift)
     local_max = uplift >= maximum_filter(uplift, size=7, mode="nearest") - 1e-6
     crest_mask = (crest_seed > 0.38) & local_max
     if not np.any(crest_mask):
         crest_mask = crest_seed > np.quantile(crest_seed, 0.88)
-    channel_mask = discharge > np.quantile(discharge, 0.82)
+    channel_axis = geo.norm01(0.68 * geo.smoothstep(0.58, 0.96, discharge) + 0.32 * tributary)
+    channel_centerline = channel_axis >= maximum_filter(channel_axis, size=5, mode="nearest") - 1e-6
+    channel_mask = channel_centerline & (channel_axis > np.quantile(channel_axis, 0.58))
     if not np.any(channel_mask):
-        channel_mask = discharge > np.quantile(discharge, 0.92)
+        channel_mask = channel_axis > np.quantile(channel_axis, 0.88)
 
     crest_dist = distance_transform_edt(~crest_mask) * spacing
     channel_dist = distance_transform_edt(~channel_mask) * spacing
     gy, gx = np.gradient(routed_surface, spacing, spacing)
     slope = geo.norm01(np.sqrt(gx * gx + gy * gy))
-    drainage_density = geo.norm01(gaussian_filter(channel_mask.astype(np.float64), sigma=3.4))
+    drainage_density = geo.norm01(gaussian_filter(tributary, sigma=2.8))
 
     return {
         "uplift": uplift,
         "routed_surface": routed_surface,
         "discharge": discharge,
+        "raw_discharge": raw_discharge,
+        "flow_accum": acc,
+        "tributary": tributary,
+        "channel_axis": channel_axis,
         "crest_dist": crest_dist,
         "channel_dist": channel_dist,
         "slope": slope,
@@ -175,15 +242,17 @@ def compose_height(
     slope = np.asarray(sk["slope"])
     basin_seed = np.asarray(sk["basin_seed"])
     drainage_density = np.asarray(sk["drainage_density"])
+    tributary = np.asarray(sk["tributary"])
+    channel_axis = np.asarray(sk["channel_axis"])
 
-    crest_near = np.exp(-crest_dist / max(span * 0.105, 1.0))
-    channel_near = np.exp(-channel_dist / max(span * 0.045, 1.0))
-    basin = geo.smoothstep(0.42, 0.78, basin_seed) * (1.0 - 0.45 * crest_near)
+    crest_near = np.exp(-crest_dist / max(span * 0.105 * scenario.range_spread, 1.0))
+    channel_near = np.exp(-channel_dist / max(span * 0.032 * scenario.channel_width, 1.0))
+    basin = geo.smoothstep(0.42, 0.78, gaussian_filter(basin_seed, sigma=0.55 * scenario.basin_smoothing)) * (1.0 - 0.45 * crest_near)
     range_core = geo.smoothstep(0.58, 0.88, uplift) * (0.35 + 0.65 * crest_near)
-    foothill = np.exp(-((crest_dist - span * 0.13) / max(span * 0.085, 1.0)) ** 2) * (0.45 + 0.55 * slope)
+    foothill = np.exp(-((crest_dist - span * 0.13 * scenario.range_spread) / max(span * 0.085, 1.0)) ** 2) * (0.45 + 0.55 * slope)
     plateau = geo.smoothstep(0.46, 0.78, uplift) * (1.0 - range_core) * (1.0 - 0.38 * basin)
-    fan = channel_near * basin * geo.smoothstep(0.22, 0.62, slope) * (1.0 - geo.smoothstep(0.72, 0.95, uplift))
-    badlands = drainage_density * (0.35 + 0.65 * plateau + 0.35 * basin) * (1.0 - 0.35 * range_core)
+    fan = channel_near * basin * geo.smoothstep(0.18, 0.58, slope) * (1.0 - geo.smoothstep(0.70, 0.94, uplift))
+    badlands = drainage_density * scenario.tributary_gain * (0.35 + 0.65 * plateau + 0.35 * basin) * (1.0 - 0.35 * range_core)
 
     scores = [
         1.35 * basin * scenario.fill_gain,
@@ -216,22 +285,37 @@ def compose_height(
         + 0.26 * plateau
         + 0.10 * low
     )
-    incision_width = max(span * 0.014, 1.0)
-    valley_shape = np.exp(-(channel_dist / incision_width) ** 2)
-    focused_discharge = geo.smoothstep(0.42, 0.90, discharge)
-    incision = scenario.incision_gain * focused_discharge * (0.22 + 0.78 * valley_shape)
-    height = base - 0.46 * incision
+    primary_width = max(span * 0.010 * scenario.channel_width, 1.0)
+    tributary_width = max(span * 0.018 * scenario.channel_width, 1.0)
+    primary_shape = np.exp(-(channel_dist / primary_width) ** 2)
+    tributary_shape = np.exp(-(channel_dist / tributary_width) ** 2)
+    primary = geo.smoothstep(0.56, 0.96, discharge) * (0.28 + 0.72 * primary_shape)
+    tributary_cut = geo.smoothstep(0.34, 0.82, tributary) * (0.45 + 0.55 * tributary_shape) * (0.35 + 0.65 * slope)
+    incision = scenario.incision_gain * (0.72 * primary + 0.34 * scenario.tributary_gain * tributary_cut)
+    incision_context = np.clip(
+        0.70 + 0.44 * badlands_w + 0.26 * foothill_w + 0.18 * range_w - 0.50 * basin_w - 0.35 * fan_w,
+        0.18,
+        1.18,
+    )
+    height = base - 0.38 * incision_context * incision
 
     # Regime material, added after the skeleton and causal incision.
     height += 0.32 * scenario.range_texture * range_w * range_texture
     height += 0.18 * foothill_w * range_texture
-    height += 0.16 * scenario.fan_gain * fan_w * geo.znorm(gaussian_filter(discharge, sigma=3.0))
+    height += 0.16 * scenario.fan_gain * fan_w * geo.znorm(gaussian_filter(channel_axis, sigma=3.0))
     height += 0.10 * plateau_w * low
     height += 0.28 * scenario.badlands_gain * badlands_w * (0.58 * badland_texture + 0.42 * fine)
     height += 0.10 * scenario.close_detail * (badlands_w + range_w + foothill_w) * fine
+    height -= 0.06 * scenario.tributary_gain * (badlands_w + foothill_w + 0.35 * plateau_w) * tributary_cut
+    if scenario.basin_smoothing > 1.0:
+        basin_soft = np.clip(basin_w + 0.72 * fan_w, 0.0, 1.0)
+        basin_fill = gaussian_filter(height, sigma=0.75 * scenario.basin_smoothing)
+        mix = np.clip((scenario.basin_smoothing - 1.0) * 0.62 * basin_soft, 0.0, 0.48)
+        height = height * (1.0 - mix) + basin_fill * mix
 
     height = np.tanh(height * 0.72)
-    height = gaussian_filter(height, sigma=0.55)
+    height = 0.72 * height + 0.28 * gaussian_filter(height, sigma=0.95)
+    height = gaussian_filter(height, sigma=0.32)
     height = geo.znorm(height)
 
     return {

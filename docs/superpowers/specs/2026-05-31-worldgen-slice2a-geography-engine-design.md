@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-31
 **Milestone:** Worldgen core rebuild, Phase 5 / Slice 2A.
-**Status:** owner-approved direction, pre-plan / prototype.
+**Status:** owner-approved direction, prototype / owner review pending.
 **Parent:** `docs/plans/ROADMAP.md` Phase 5, `STRUCTURE_AUDIT_EXTRACT.md`, and
 `docs/superpowers/specs/2026-05-30-worldgen-core-design.md`.
 
@@ -109,6 +109,12 @@ This remains offline Python only. If the 7B-lite sheet is a clear improvement, t
 real subsystem: fixed flow windows, stitching, storage/reproducibility, and CPU/facts/collision semantics. Do
 not port by flattening the skeleton back into ad-hoc local noise.
 
+**Skeleton v2 implementation note:** after v1 owner review landed as Yellow+ / keep, v2 stays inside this
+offline proof and focuses on the 45 km read. It replaces single-neighbor D8 routing with coarse multiple-flow
+accumulation, keeps primary channels and tributaries as separate routed fields, damps incision on basin/fan
+floors, and lets scenarios alter process widths/weights/smoothing instead of just contrast. This is not a
+runtime design yet and remains subject to owner image review.
+
 ## 5. Structural Frame Requirements
 
 The coarse frame must create recognizable geography:
@@ -211,6 +217,11 @@ rejection.
    used, it must be on a coarse world grid and smoothed/vectorized before sampling by the final render grid.
 5. **Metrics pass.** Add focused metrics for relief/slope/curvature/spacing and line artifacts.
 6. **Owner review.** Open the sheet in Windows. Owner decides green/yellow/red.
+
+Current prototype state: v2 has completed the artifact/process pass in offline Python and generated
+`geography_skeleton_v2_*` contact/debug sheets. Owner selected `SYN rough highlands` as the current best
+Skeleton v2 panel. The port gate remains closed until this keeper is turned into an explicitly accepted stack
+with a parity/facts/render story.
 
 ## 11. Port Gate
 

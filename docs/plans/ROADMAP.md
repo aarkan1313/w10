@@ -316,7 +316,7 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       Current metrics fixed some dead knobs, but the generator basis still lacks enough structure. Do not
       continue scalar tuning as if this slice is on track; treat it as a useful parameter pipeline waiting
       for a better basis.
-- [ ] **Slice 2A — geography-engine prototype (offline Python, render-first).** Replace "try all noise
+- [~] **Slice 2A — geography-engine prototype (offline Python, render-first).** Replace "try all noise
       combos" with a hierarchical landform composition prototype before any runtime work:
       - explicit coarse landform regimes: basin floor, alluvial fan, foothill, range core, plateau, badlands,
         plain/grassland, and optional glacial/karst families;
@@ -331,6 +331,12 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
         foothill transition zones, and close-scale detail that follows the coarse structure;
       - DEM-reference contact sheets every run: real kernels beside synth for 200 km, 40 km, and close crops.
       Owner eye decides whether the geography read is worth continuing. A "least bad" sheet is not enough.
+      Current checkpoint: skeleton-first v1 was owner-reviewed as **Yellow+ / keep** ("looks pretty good tbh,
+      we are getting better"). Skeleton v2 is rendered and pending owner verdict; it swaps D8-only routing for
+      coarse multiple-flow accumulation, separates primary/tributary fields, damps basin/fan incision, and
+      makes scenarios alter process weights/widths/smoothing. Owner selected **`SYN rough highlands`** as
+      "great"; keep v2 offline and focus the next image work around that process family. Still no Rust/GLSL
+      port until the accepted stack has an explicit parity/facts/render story.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve

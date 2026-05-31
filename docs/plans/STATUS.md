@@ -83,6 +83,20 @@ Owner review: **"looks pretty good tbh, we are getting better"**. Treat this as 
 checkpoint: skeleton-first is now the active direction, and the next iteration should fix flow artifacts/scale
 blending instead of returning to broad noise-combo tuning.
 
+**7B-lite skeleton v2 checkpoint (pending owner verdict):** implemented in the same offline Python prototype.
+Changes vs v1: coarse routing now uses multiple-flow accumulation instead of single-neighbor D8 integer
+routing; primary channels and tributaries are separated; basin/fan floors damp incision more than badlands,
+foothills, and range cores; scenarios now change process weights/widths/smoothing rather than only contrast.
+Evidence: focused tests **21 passed** (pytest cache warning only); rendered
+`D:\tmp\wg10_geography_engine\geography_skeleton_v2_200km.png`,
+`D:\tmp\wg10_geography_engine\geography_skeleton_v2_45km_close.png`, and matching debug sheets/notes.
+Engineering read before owner review: v2 is a real iteration on the skeleton-first path and reduces some
+D8-style scar risk, but the 45 km sheet still has some synthetic-looking basin-edge/channel shapes. Owner
+verdict on the opened sheet: **"`SYN rough highlands` is great"**. Treat `rough_highlands` as the current
+Skeleton v2 keeper/current-best panel and focus the next image work around that process family. This completes
+the bounded Skeleton v2 offline goal, but it is not a Rust/GLSL port greenlight or full Phase-7B runtime
+architecture acceptance.
+
 ### Slice 2 — biome distillation: OFFLINE TOOLING BUILT + GATED; the LOOK is NOT yet accepted (2026-05-30)
 Spec: `docs/superpowers/specs/2026-05-30-worldgen-slice2-biome-distillation-design.md`; plan:
 `docs/superpowers/plans/2026-05-30-worldgen-slice2-biome-distillation.md`. **What's DONE (committed, gated):**
