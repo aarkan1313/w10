@@ -343,8 +343,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       First scene review separated two facts: the rough-highlands shape is promising, but the old 128-unit
       block compressed 90 km so aggressively that it could not answer player-scale/traversability questions.
       The review scene now defaults to the owner-preferred 200x horizontal expansion, about a 25.6 km scene
-      block, and exposes 10/25/50/100/150/200x presets, independent relief, and a terrain/slope/corridor
-      overlay cycle. Treat scale
+      block, and exposes 10/25/50/100/150/200x presets, independent relief, a `K` relief-policy cycle
+      (`k=0` / `0.5` / `1.0`), and a terrain/slope/corridor overlay cycle. Treat scale
       as a required generator/runtime knob, not a baked constant: different games may want different landform
       density, and "too big" can be as bad as "too small" for player pacing.
       Owner scale/traversal rule: tall mountains and high relief are allowed; the required production quality
@@ -355,7 +355,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       review, and a clean Godot import for the scale/no-fog/default-25km review harness. The audit now separates
       legacy passability from structural corridor quality and adds relief-policy probes: `k=0` is today's
       fixed-height scene behavior where slope falls as 1/span, while `k=1` is a slope-invariant review control
-      around the 25.6 km reference span. Current k=0 read: ~6.4 km blocked, ~12.8 km old-passability
+      around the 25.6 km reference span. The same policy probe is now flyable in the Godot review scene.
+      Current k=0 read: ~6.4 km blocked, ~12.8 km old-passability
       candidate but structural `thin`, and ~19.2-25.6 km structural candidates. This is still not a visual gate.
       Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,

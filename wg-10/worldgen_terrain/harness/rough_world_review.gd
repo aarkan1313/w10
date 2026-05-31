@@ -5,7 +5,9 @@ const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 
 const BASE_WORLD_SIZE := 128.0
 const BASE_HEIGHT_SCALE := 260.0
+const REFERENCE_WORLD_SIZE := 25600.0
 const SCALE_PRESETS := [10.0, 25.0, 50.0, 100.0, 150.0, 200.0]
+const RELIEF_POLICY_PRESETS := [0.0, 0.5, 1.0]
 const EASY_SLOPE := 0.12
 const PASSABLE_SLOPE := 0.28
 const STEEP_SLOPE := 0.45
@@ -21,6 +23,7 @@ var _items: Array = []
 var _selected := 4
 var _relief := 1.0
 var _scale_index := 5
+var _relief_policy_index := 0
 var _overview := false
 var _flat_lighting := false
 var _overlay_mode := OVERLAY_TERRAIN
@@ -105,8 +108,11 @@ func _world_scale() -> float:
 func _world_size() -> float:
 	return BASE_WORLD_SIZE * _world_scale()
 
+func _relief_exponent() -> float:
+	return float(RELIEF_POLICY_PRESETS[_relief_policy_index])
+
 func _height_scale() -> float:
-	return BASE_HEIGHT_SCALE * _relief
+	return BASE_HEIGHT_SCALE * _relief * pow(_world_size() / REFERENCE_WORLD_SIZE, _relief_exponent())
 
 func _apply_camera_limits() -> void:
 	var span := _world_size()
@@ -253,6 +259,8 @@ func _input(event: InputEvent) -> void:
 			KEY_P:
 				_overlay_mode = (_overlay_mode + 1) % OVERLAY_COUNT
 				_rebuild_current_mesh()
+			KEY_K:
+				_set_relief_policy_index(_relief_policy_index + 1)
 			KEY_COMMA:
 				_set_scale_index(_scale_index - 1)
 			KEY_PERIOD:
@@ -264,6 +272,14 @@ func _set_relief(value: float) -> void:
 
 func _set_scale_index(value: int) -> void:
 	_scale_index = clampi(value, 0, SCALE_PRESETS.size() - 1)
+	_rebuild_current_mesh()
+	if _overview:
+		_overview_camera()
+	else:
+		_focus_camera()
+
+func _set_relief_policy_index(value: int) -> void:
+	_relief_policy_index = value % RELIEF_POLICY_PRESETS.size()
 	_rebuild_current_mesh()
 	if _overview:
 		_overview_camera()
@@ -304,14 +320,16 @@ func _process(_delta: float) -> void:
 	var source_km := float(item.get("span_km", 0.0))
 	var source_scene_ratio := source_km / maxf(scene_km, 0.001)
 	_hud.text = "WG10 rough-highlands generated-world review\n" \
-		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | ,/. scale | P overlay | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Selected: %s | %s | %.1f km source -> %.1f km scene | source/scene %.2fx | relief %.2fx | scale %.0fx | %s | lighting %s" % [
+		+ "1-4 refs | 5-0 synth | [/] prev/next | F focus | G overview | +/- relief | ,/. scale | K policy | P overlay | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "Selected: %s | %s | %.1f km source -> %.1f km scene | source/scene %.2fx | relief %.2fx | k %.1f | height %.0fm | scale %.0fx | %s | lighting %s" % [
 			item.get("label", "?"),
 			item.get("kind", "?"),
 			source_km,
 			scene_km,
 			source_scene_ratio,
 			_relief,
+			_relief_exponent(),
+			_height_scale(),
 			_world_scale(),
 			_overlay_label(),
 			"flat" if _flat_lighting else "lit/no-shadow/no-fog",
