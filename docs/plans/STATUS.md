@@ -187,7 +187,8 @@ keeper family over a 3x3 set of **25.6 km** chunks, with two deterministic seeds
 seed switch in-scene. The latest payload is now `rough_world_chunks_v2_independent_windows`: each chunk is
 generated from its own deterministic world-coordinate skeleton window with a **25.6 km apron** at **200 m**
 spacing, then cropped to the 25.6 km core. The review scene's corridor overlay now prefers the exported
-structural route/corridor mask. Important boundary: this is still **offline Python + static Godot JSON**, not a
+structural route/corridor mask, and the scene now has default-off seam inspection aids: `B` toggles cyan seam
+guide lines and `N` jumps to the next shared border. Important boundary: this is still **offline Python + static Godot JSON**, not a
 final infinite streaming/runtime architecture, owner acceptance, or Rust/GLSL port. Dedicated proof/audit report:
 `docs/plans/CHUNK_CONTINUITY_PROOF_2026-05-31.md`.
 

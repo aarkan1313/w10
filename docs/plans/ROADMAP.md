@@ -363,7 +363,8 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       chunks to `rough_world_chunks_3x3.json`, and `rough_world_chunks_review.tscn` lets the owner fly across
       those chunk borders. The current payload is `rough_world_chunks_v2_independent_windows`: each chunk is
       generated from its own deterministic world-coordinate skeleton window with a 25.6 km apron, then cropped
-      to the authoritative core; a fixed route/corridor mask is exported for visual review. Current
+      to the authoritative core; a fixed route/corridor mask is exported for visual review, and the scene has
+      default-off seam guides (`B`) plus next-seam camera focus (`N`) for deliberate boundary inspection. Current
       non-visual evidence: exact shared-border height continuity and minimum structural-corridor component
       match fraction 0.917. This is still offline Python + static Godot JSON, not a final arbitrary infinite
       streaming architecture or Rust/GLSL port. Proof report:

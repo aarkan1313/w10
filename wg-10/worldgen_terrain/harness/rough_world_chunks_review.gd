@@ -15,13 +15,17 @@ const OVERLAY_COUNT := 3
 var _camera: Camera3D
 var _hud: Label
 var _chunks_root: Node3D
+var _guides_root: Node3D
 var _payload: Dictionary = {}
 var _seed_worlds: Array = []
 var _seed_index := 0
 var _relief := 1.0
 var _overview := false
 var _flat_lighting := false
+var _show_seam_guides := false
+var _seam_focus_index := -1
 var _overlay_mode := OVERLAY_TERRAIN
+var _seam_targets: Array[Dictionary] = []
 
 func _ready() -> void:
 	var env := Environment.new()
@@ -90,12 +94,21 @@ func _build_chunks(reset_camera: bool = false) -> void:
 	if _chunks_root != null and is_instance_valid(_chunks_root):
 		remove_child(_chunks_root)
 		_chunks_root.free()
+	if _guides_root != null and is_instance_valid(_guides_root):
+		remove_child(_guides_root)
+		_guides_root.free()
 	_chunks_root = Node3D.new()
 	_chunks_root.name = "Chunks"
 	add_child(_chunks_root)
+	_guides_root = Node3D.new()
+	_guides_root.name = "SeamGuides"
+	_guides_root.visible = _show_seam_guides
+	add_child(_guides_root)
+	_seam_targets.clear()
 
 	var seed_world: Dictionary = _seed_worlds[_seed_index]
 	var corridor_height := _height_percentile(seed_world["height"], 0.55)
+	var chunk_grid := _chunk_grid(seed_world)
 	for chunk_var in seed_world["chunks"]:
 		var chunk: Dictionary = chunk_var
 		var mesh_instance := MeshInstance3D.new()
@@ -103,9 +116,85 @@ func _build_chunks(reset_camera: bool = false) -> void:
 		mesh_instance.mesh = _make_mesh(chunk, corridor_height)
 		mesh_instance.material_override = _make_material()
 		_chunks_root.add_child(mesh_instance)
+	_build_seam_guides(chunk_grid)
 
 	if reset_camera:
 		_focus_camera()
+
+func _chunk_grid(seed_world: Dictionary) -> Array:
+	var chunk_count := int(_payload.get("chunk_count", 3))
+	var grid := []
+	for z in range(chunk_count):
+		var row := []
+		for _x in range(chunk_count):
+			row.append({})
+		grid.append(row)
+	for chunk_var in seed_world["chunks"]:
+		var chunk: Dictionary = chunk_var
+		var x := int(chunk.get("chunk_x", 0))
+		var z := int(chunk.get("chunk_z", 0))
+		if z >= 0 and z < grid.size() and x >= 0 and x < grid[z].size():
+			grid[z][x] = chunk
+	return grid
+
+func _build_seam_guides(chunk_grid: Array) -> void:
+	if _guides_root == null:
+		return
+	var chunk_count := int(_payload.get("chunk_count", 3))
+	for z in range(chunk_count):
+		for x in range(chunk_count - 1):
+			var chunk: Dictionary = chunk_grid[z][x]
+			if not chunk.is_empty():
+				_add_seam_guide(chunk, true)
+	for z in range(chunk_count - 1):
+		for x in range(chunk_count):
+			var chunk: Dictionary = chunk_grid[z][x]
+			if not chunk.is_empty():
+				_add_seam_guide(chunk, false)
+
+func _make_guide_material() -> StandardMaterial3D:
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.05, 0.95, 1.0, 1.0)
+	mat.disable_receive_shadows = true
+	return mat
+
+func _add_seam_guide(chunk: Dictionary, east_edge: bool) -> void:
+	var n := int(chunk["n"])
+	var heights: Array = chunk["height"]
+	var span := float(chunk["span_m"])
+	var origin_x := float(chunk["display_origin_x_m"])
+	var origin_z := float(chunk["display_origin_z_m"])
+	var verts := PackedVector3Array()
+	var idx := PackedInt32Array()
+	for i in range(n):
+		var x := n - 1 if east_edge else i
+		var z := i if east_edge else n - 1
+		var h := float(heights[z * n + x])
+		var px := origin_x + float(x) / float(n - 1) * span
+		var pz := origin_z + float(z) / float(n - 1) * span
+		verts.append(Vector3(px, h * _height_scale() + 9.0, pz))
+	for i in range(n - 1):
+		idx.append(i)
+		idx.append(i + 1)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX] = idx
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_LINES, arrays)
+	var instance := MeshInstance3D.new()
+	instance.name = "SeamGuide"
+	instance.mesh = mesh
+	instance.material_override = _make_guide_material()
+	_guides_root.add_child(instance)
+
+	var mid := verts[int(n / 2)]
+	_seam_targets.append({
+		"axis": "x" if east_edge else "z",
+		"position": mid,
+		"span": span,
+	})
 
 func _make_mesh(chunk: Dictionary, corridor_height: float) -> ArrayMesh:
 	var n := int(chunk["n"])
@@ -239,6 +328,12 @@ func _input(event: InputEvent) -> void:
 			KEY_L:
 				_flat_lighting = not _flat_lighting
 				_build_chunks()
+			KEY_B:
+				_show_seam_guides = not _show_seam_guides
+				if _guides_root != null:
+					_guides_root.visible = _show_seam_guides
+			KEY_N:
+				_focus_next_seam()
 			KEY_P:
 				_overlay_mode = (_overlay_mode + 1) % OVERLAY_COUNT
 				_build_chunks()
@@ -266,6 +361,21 @@ func _overview_camera() -> void:
 	_camera.global_position = Vector3(0.0, span * 0.54, span * 0.58)
 	_camera.rotation_degrees = Vector3(-48.0, 0.0, 0.0)
 
+func _focus_next_seam() -> void:
+	if _seam_targets.is_empty():
+		return
+	_show_seam_guides = true
+	if _guides_root != null:
+		_guides_root.visible = true
+	_seam_focus_index = (_seam_focus_index + 1) % _seam_targets.size()
+	var target: Dictionary = _seam_targets[_seam_focus_index]
+	var pos: Vector3 = target["position"]
+	var span := float(target["span"])
+	_overview = false
+	_apply_camera_limits()
+	_camera.global_position = pos + Vector3(span * 0.10, maxf(260.0, span * 0.030), span * 0.12)
+	_camera.look_at(pos, Vector3.UP)
+
 func _overlay_label() -> String:
 	match _overlay_mode:
 		OVERLAY_SLOPE:
@@ -282,8 +392,8 @@ func _process(_delta: float) -> void:
 	var chunk_km := float(_payload.get("chunk_span_m", 0.0)) / 1000.0
 	var world_km := float(_payload.get("world_span_m", 0.0)) / 1000.0
 	_hud.text = "WG10 rough-highlands 3x3 chunk continuity review\n" \
-		+ "T seed | P overlay | F focus | G overview | +/- relief | R reset | L flat | WASD/Space/C fly | Esc mouse\n" \
-		+ "Seed: %s | chunks 3x3 @ %.1f km | world %.1f km | relief %.2fx | height %.0fm | %s | %s | prototype, not runtime streaming" % [
+		+ "T seed | P overlay | B seam guides | N next seam | F focus | G overview | +/- relief | R reset | L flat | WASD/Space/C fly | Esc mouse\n" \
+		+ "Seed: %s | chunks 3x3 @ %.1f km | world %.1f km | relief %.2fx | height %.0fm | %s | %s | seam guides %s | prototype, not runtime streaming" % [
 			seed_world.get("seed", "?"),
 			chunk_km,
 			world_km,
@@ -291,4 +401,5 @@ func _process(_delta: float) -> void:
 			_height_scale(),
 			_overlay_label(),
 			"flat" if _flat_lighting else "lit/no-shadow/no-fog",
+			"on" if _show_seam_guides else "off",
 		]

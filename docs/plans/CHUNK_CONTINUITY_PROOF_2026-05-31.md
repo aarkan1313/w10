@@ -38,6 +38,9 @@ replace the static review payload.
   world-coordinate skeleton window, not by slicing one stretched height export.
 - Two visible seed examples: `133` and `211`, switchable in-scene with `T`.
 - A 3x3 layout of adjacent 25.6 km chunks.
+- Review scene has default-off seam inspection aids: `B` toggles cyan seam
+  guide lines, and `N` jumps the fly camera to the next shared border so the
+  owner can inspect boundaries deliberately, then turn guides off for a natural read.
 - Adjacent chunks are not repeated copies. Reported mean absolute center/east chunk deltas:
   - seed 133: `0.2247`
   - seed 211: `0.3854`
@@ -120,6 +123,7 @@ If the owner accepts the bounded 3x3 visual read, the next review should answer:
 4. **Streaming shape:** what is the smallest viable window/cache system for 25.6 km playable chunks without loading a whole 3x3 super-window every time?
 5. **Continuity gates:** exact height seams, bounded normal/material seams, corridor continuation, deterministic seed variation, and no repeated stamps.
 6. **Owner visual gate:** fly across boundaries at terrain view, corridor overlay, and oblique/overview scales.
+   Use `B`/`N` to deliberately locate seams, then disable guides to judge whether the terrain itself reveals them.
 
 Do not start a Rust/GLSL runtime port until those answers are accepted for the keeper.
 
