@@ -2,6 +2,7 @@ import numpy as np
 import keeper_v2 as v2
 import geography_skeleton_windows as win
 import export_godot_rough_world_chunks as ex
+import analyze_rough_world_traversability as trav
 
 
 def _window():
@@ -59,8 +60,8 @@ def test_v2_params_defaults_present_and_overridable():
                  "slope_norm_scale"):
         assert hasattr(p, name)
     import dataclasses
-    p2 = dataclasses.replace(p, relief_amplitude=2.0)
-    assert p2.relief_amplitude == 2.0 and p.relief_amplitude != 2.0
+    p2 = dataclasses.replace(p, relief_amplitude=3.0)
+    assert p2.relief_amplitude == 3.0 and p.relief_amplitude != 3.0
 
 def test_v2_adjacent_window_seams_are_exact():
     # Two adjacent chunks (x and x+1) built INDEPENDENTLY must share their border column exactly,
@@ -74,3 +75,12 @@ def test_v2_adjacent_window_seams_are_exact():
     b = v2.compose_windowed_height_v2(wb, 133, spec, p)
     border_delta = float(np.max(np.abs(a[:, -1] - b[:, 0])))
     assert border_delta == 0.0, f"v2 broke seams: max border delta {border_delta}"
+
+def test_v2_has_real_relief_not_flat_everywhere():
+    p = v2.KeeperV2Params()
+    spec = ex._window_spec(129, ex.CHUNK_SPAN_M)
+    w = win.build_skeleton_window(ex.WORLD_ORIGIN_X_M, ex.WORLD_ORIGIN_Z_M, 133, spec)
+    h = v2.compose_windowed_height_v2(w, 133, spec, p)
+    slopes = trav.slope_grid(h, scene_width_m=trav.BASE_WORLD_SIZE_M*200.0,
+                             height_scale_m=trav.BASE_HEIGHT_SCALE_M)
+    assert float(np.percentile(slopes, 90.0)) >= trav.MIN_STRUCTURAL_SLOPE_P90

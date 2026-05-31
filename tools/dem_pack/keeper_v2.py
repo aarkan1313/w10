@@ -33,7 +33,7 @@ def affine_remap(field: np.ndarray, center: float, scale: float) -> np.ndarray:
 @dataclass(frozen=True)
 class KeeperV2Params:
     softmax_temp: float = 0.36          # A's regime softmax temperature
-    relief_amplitude: float = 1.0       # overall vertical gain (default ~A relative; tune by eye)
+    relief_amplitude: float = 2.0       # overall vertical gain; flat-guard gate floor (slope_p90 >= MIN_STRUCTURAL_SLOPE_P90 at 200x preset) sets this default
     incision_gain: float = 1.0
     range_texture_gain: float = 0.32
     badland_gain: float = 0.28
