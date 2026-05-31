@@ -55,7 +55,8 @@ def test_v2_params_defaults_present_and_overridable():
     p = v2.KeeperV2Params()
     for name in ("softmax_temp", "relief_amplitude", "incision_gain",
                  "range_texture_gain", "badland_gain", "fine_gain",
-                 "blur_radius_m", "remap_center", "remap_scale", "weight_blur_m"):
+                 "blur_radius_m", "remap_center", "remap_scale", "weight_blur_m",
+                 "slope_norm_scale"):
         assert hasattr(p, name)
     import dataclasses
     p2 = dataclasses.replace(p, relief_amplitude=2.0)

@@ -7,11 +7,6 @@ import geography_engine as geo
 import geography_skeleton_windows as win
 import worldgen_proto as wg
 
-# Fixed, data-independent scale for the routed-surface gradient magnitude (replaces a per-window
-# global norm01). Routed-surface slope over a 25.6km chunk maxes around ~3.4e-4; 1/3.4e-4 ~= 2941
-# maps that typical max to ~1 before clipping, reproducing the prior [0,1] range without window stats.
-_SLOPE_NORM_SCALE: float = 2941.0
-
 
 def apron_blur_crop(field_with_apron: np.ndarray, apron_px: int, sigma: float, truncate: float = 4.0) -> np.ndarray:
     """Gaussian-blur an apron-padded window, then crop to the authoritative core (all axes).
@@ -47,6 +42,7 @@ class KeeperV2Params:
     weight_blur_m: float = 1700.0       # smooth_weights blur radius
     remap_center: float = 0.0           # affine remap (replaces znorm); tune to match A's tone
     remap_scale: float = 1.0
+    slope_norm_scale: float = 2941.0    # routed-surface slope -> ~[0,1] without per-window stats (seam-safe; see Task 5)
 
 
 def apron_blur_crop_full(field_full: np.ndarray, apron_px: int, sigma: float, truncate: float = 4.0) -> np.ndarray:
@@ -71,7 +67,7 @@ def _regime_weights(facts, spec, p, apron_px):
     # shared-border bit-identity that the apron design guarantees. Use fixed clip/affine instead.
     # slope: routed-surface gradient magnitude (tiny, ~<=3.4e-4 over a chunk); a fixed scale maps the
     # typical max to ~1 and clips, preserving the prior [0,1] dynamic range without reading window stats.
-    slope = np.clip(np.sqrt(gx * gx + gy * gy) * _SLOPE_NORM_SCALE, 0.0, 1.0)
+    slope = np.clip(np.sqrt(gx * gx + gy * gy) * p.slope_norm_scale, 0.0, 1.0)
     basin_seed = np.clip(1.0 - uplift, 0.0, 1.0)              # uplift is already ~[0,1]
     drainage_density = np.clip(apron_blur_crop_full(tributary, apron_px, 2.8), 0.0, 1.0)  # blurred tributary already ~[0,1]
     crest_near = np.exp(-crest_dist / max(span * 0.105, 1.0))
