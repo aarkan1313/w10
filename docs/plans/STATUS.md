@@ -249,9 +249,11 @@ height max **0.000000**, corridor min **0.905**, normal max **0.0000 deg**, corr
 pair median delta **0.359**, and max adjacent corr **0.487**. Verification: focused Python checks are
 **22 passed** (pytest cache warning only); Godot smoke checks verify the 3x3 scene builds **9** chunk meshes /
 **12** seam guides and the 5x5 travel scene builds **25** chunk meshes / **40** seam guides. This is still
-offline/static review data, not streamed runtime terrain. Next: owner fly should decide whether this keeper's
-travel-scale terrain/corridor structure is good enough to start the Rust CPU skeleton-facts parity spike, or
-whether Slice 2A needs another offline terrain/process iteration first.
+offline/static review data, not streamed runtime terrain. Owner first read on the opened 5x5 scene: **"seems
+good"**, but it may be too flat / not enough elevation, with the caveat that the current scene is untextured and
+has no biomes/materials. Treat this as a yellow keep signal for continuity/travel scale, not final terrain
+acceptance. Next: run one offline review pass that separates **relief envelope** from **surface/biome dressing**
+before deciding whether to start the Rust CPU skeleton-facts parity spike or iterate terrain shape again.
 
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision

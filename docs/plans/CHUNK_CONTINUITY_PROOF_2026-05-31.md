@@ -13,6 +13,11 @@ Owner seam verdict (2026-05-31): "from what i can see seams are good visually."
 Treat this as seam-continuity acceptance for the 3x3 review scene, not full
 terrain/gameplay acceptance and not production/runtime acceptance.
 
+Owner first 5x5 travel-scene read (2026-05-31): "seems good", but possibly too
+flat / not enough elevation; current judgement is confounded by missing biome
+and texture dressing. Treat this as a yellow keep signal for continuity/travel
+scale, not final terrain acceptance.
+
 The proof is good enough to review chunk-to-chunk terrain continuity in Godot:
 adjacent 25.6 km chunks are different terrain, share exact border heights, and
 carry structural route/corridor masks across seams well enough for a first visual pass.

@@ -242,7 +242,10 @@ The current owner-review artifact before any port decision is the wider 5x5 stat
 80 shared seams, height max `0.000000`, corridor min `0.905`, no corridor edge mismatches, and Godot smoke
 `[wg10-rough-travel-review] status=pass chunks=25 seam_guides=40 seeds=2`. This is still offline/static review
 data; it exists to decide whether rough-highlands has enough travel-scale terrain/corridor quality to justify
-the Rust CPU skeleton-facts parity spike.
+the Rust CPU skeleton-facts parity spike. Owner first read is yellow/keep: the 5x5 scene seems good for
+continuity/travel scale, but may be too flat / under-elevated, and the lack of biome/material dressing makes the
+terrain-quality read uncertain. Do one more offline review pass that separates relief envelope from dressing
+before treating this as a port greenlight.
 
 ## 11. Port Gate
 
