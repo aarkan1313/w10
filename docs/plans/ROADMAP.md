@@ -350,8 +350,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       is traversable structure, not flattened terrain. Validate valley floors, passes, ramps, shelves,
       basin/fan corridors, and route continuity as explicit acceptance signals.
       Non-visual hardening now includes deterministic export contract tests, skeleton-rough metric reports,
-      and a clean Godot import for the scale/no-fog/default-25km review harness. Owner visual acceptance
-      remains the blocking gate.
+      a traversability/scale audit over the rough-world review mesh, and a clean Godot import for the
+      scale/no-fog/default-25km review harness. The audit confirms scale sensitivity but is not a visual gate:
+      ~6.4 km fragments routes, ~12.8 km connects, and ~25.6 km is a plausible current review default.
+      Owner visual acceptance remains the blocking gate.
 - [ ] **Slice 2A-lite fallback — parity-clean local basis only if useful.** Multifractal weighting,
       stronger recursive warp, ridge/uplift-coupled valleys, and Worley/cellular branches remain allowed as
       components inside the geography engine, but they are not the milestone by themselves. They must serve
@@ -397,7 +399,9 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
 - [ ] **Slice 5 — live scale tune + owner fly.** Separate two scale knobs and gate both. First, the
       generator/content knob: horizontal landform density is allowed to change the feel dramatically (the
       same 90 km source block at ~6 km vs ~26 km reads like a different place), so final games need this
-      tunable. Second, the runtime-resolution knob: current `BASE_SPAN=8192`, `PAGE_PX=256`, 2^L spans, and
+      tunable. The current rough-world traversability audit supports this split: smaller spans can have many
+      passable cells but poor route connectivity, while larger spans connect across the block. Second, the
+      runtime-resolution knob: current `BASE_SPAN=8192`, `PAGE_PX=256`, 2^L spans, and
       shader detail frequency are still coupled; reaching a true 1-10 m near-field needs per-level
       span/page-px/detail-frequency policy instead of one global cascade. Tune this without losing
       flight-scale coherence. Confirm seamless biome transitions live. Owner acceptance bar: "Google Maps

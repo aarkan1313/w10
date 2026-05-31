@@ -157,6 +157,18 @@ parse error and only the known PDB shortening warning. The metrics pass now also
 offline/static generated review data, not a Rust/GLSL terrain port and not Phase 7B runtime drainage. Owner
 visual acceptance of the stack is still pending.
 
+**Rough-world traversability/scale audit:** added `tools/dem_pack/analyze_rough_world_traversability.py`
+with focused tests (`test_rough_world_traversability.py`, **4 passed**, pytest cache warning only). It reads
+the same conditioned `rough_world_3d.json` mesh used by the review scene and writes
+`D:\tmp\wg10_geography_engine\rough_world_traversability_scale.{csv,md}`. This is a slope/connectivity
+heuristic, not a gameplay navmesh and not visual acceptance. Initial result matches the owner scale read:
+at ~6.4 km scene span, all synth variants are **blocked** by connected-component fragmentation despite
+~41-48% passable pixels; at ~12.8 km they become connected candidates; at the current ~25.6 km default,
+all synth variants are connected candidates with ~97-99% passable coverage and whole-block crossing
+components. Interpretation: the horizontal content/landform-density knob is real and should remain explicit.
+The next quality question is not global flattening; it is whether the 25.6 km-scale world has enough
+interesting traversable routes, passes, shelves, and valley/fan corridors under owner visual review.
+
 **Port/Phase-7B non-visual groundwork:** the Slice 2A spec now names the minimum runtime story if the keeper
 depends on routed structure: world-anchored coarse skeleton windows, seam/apron continuity, facts/collision
 queries for skeleton fields, Python-vs-Rust fixtures, GPU world-coordinate sampling, cache/order independence,
