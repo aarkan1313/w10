@@ -170,7 +170,12 @@ from scipy.ndimage import gaussian_filter
 class BlendConfig:
     mode: str = "height_favored"     # 'height_favored' | 'field'
     relief_sigma_px: float = 6.0     # blur radius for the local-relief proxy (height_favored)
-    favor_strength: float = 0.9      # how hard to bias toward the higher-relief recipe in the band
+    favor_strength: float = 2.0      # how hard to bias toward the higher-relief recipe in the band
+    # NOTE (validated via clash tuning sweep, D:/tmp/wg10_biome_compose/probe_biome_blend_clash_tune.png):
+    # favor_strength=2.0 + a NARROW transition band (band_frac~=0.05, owned by the grammar/weight-field, NOT
+    # this config) gives the crispest NATURAL mountain<->dune transition without a hard-seam look. AAA goal:
+    # natural transitions, not visible seams. Band width is per-PAIR tunable (wider for gentle pairs like
+    # mountain<->grassland, narrow for clashing pairs) and lives in how the weight field is built.
 
 
 def _blend_field(a: np.ndarray, b: np.ndarray, w_a: np.ndarray) -> np.ndarray:
