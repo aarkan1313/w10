@@ -15,17 +15,27 @@ Rules that guarantee seam-exactness:
 1. All ``gaussian_filter`` calls use ``mode='nearest'``.
 2. Data-dependent normalisation (``zscore``, ``norm01``) is replaced by
    ``seam_safe.affine_remap`` with fixed constants (never per-window statistics).
-3. ``flow_accumulation_channels`` (global dependency, NOT seam-safe) is replaced
-   in the apron path by a local DoG (difference-of-Gaussians) channel proxy
-   whose kernel reach is bounded and fits within the apron.
+3. Channel carving uses REAL multiple-flow-direction (MFD) accumulation
+   (``geography_skeleton._flow_accumulation_mfd``) with a FIXED-max normalisation
+   (``log1p(acc) / log1p(acc.size)`` — data-independent, NOT per-window max).
+   Global flow accumulation is not bit-exact on a finite apron, but it CONVERGES
+   to bit-exact as the apron grows: the probe (``probe_flow_seam_real.py``) measured
+   final-height border delta 1.7e-10 at apron 80, 5.6e-17 at 128, 0.0 at 200.
+   1.7e-10 is far below float32 epsilon (~1e-7), so on the GPU (float32) it is
+   bit-identical at apron 80.  This replaces the earlier local DoG proxy, which was
+   literally seam-exact (delta 0.0) but produced disconnected/soft valleys; the owner
+   judged that too soft at scale — real flow accumulation gives connected drainage.
 4. A single crop ``height[a:-a, a:-a]`` is performed at the very end.
 
 Required apron (computed as sum of chained kernel reaches along the deepest path):
   - ``_lowland_mask``: blur σ=7.0 → reach 28 px
-  - DoG loose blur σ=3.5 → reach 14; channel width blur σ≤2.4 → reach 10; chain = 28+14+10 = 52
-  - floor blur σ≤5.6 → reach 23; input depth max(28, 52) = 52; chain = 52+23 = 75
-  - final blend blur σ=1.2 → reach 5; total = 75+5 = 80
-  → ``MOUNTAIN_APRON_PX = 80``
+  - flow pre-blur σ=1.15 → reach 5; channel width blur σ≤4.0 → reach 16; chain = 28+5+16 = 49
+  - floor blur σ≤5.6 → reach 23; input depth max(28, 49) = 49; chain = 49+23 = 72
+  - final blend blur σ=1.2 → reach 5; total = 72+5 = 77
+  → ``MOUNTAIN_APRON_PX = 80`` (>=77 reach budget; the dominant residual is the
+    flow-accumulation convergence error, 1.7e-10 at 80 — sub-float32-epsilon).
+    NOT inflated to 200 for literal 0.0: that doubles per-window compute for a
+    sub-epsilon difference (perf pillar).
 """
 
 from __future__ import annotations
@@ -36,6 +46,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 import geography_engine as geo
+import geography_skeleton as skel
 import worldgen_proto as wg
 import seam_safe as ss
 
@@ -71,12 +82,6 @@ MASSIF_SCALE: float = 0.72
 CHANNELS_CENTER: float = 0.32
 CHANNELS_SCALE: float = 1.47
 
-# DoG channel proxy fixed normalization scale (seam-safe path only).
-# DoG channel field (post-blur) has typical max≈0.22..0.40 → scale 1/0.30≈3.33
-# maps the typical range to [0, ~1.1] before smoothstep thresholds are applied.
-# SCALE pushed 3.33→3.50 during LOOK tuning so DoG channels read as defined valleys.
-CHANNELS_DOG_SCALE: float = 3.50
-
 # zscore → affine_remap targets mean≈0, std≈1 equivalent
 # base_inner: mean≈0.83, std≈0.45
 # SCALE pushed 2.22→2.28 during LOOK tuning to lift base relief toward legacy.
@@ -107,25 +112,18 @@ FINAL_SCALE: float = 0.80
 # ---------------------------------------------------------------------------
 # LOOK levers (seam-safe path only) — recover the accepted legacy look.
 # All are DATA-INDEPENDENT fixed constants → seams stay bit-exact.
-# These replace the implicit thresholds/gains that, paired with the DoG channel
-# proxy, made the seam-safe core read too smooth / under-incised vs legacy.
 # ---------------------------------------------------------------------------
-# DoG channel proxy sharpness: the tight/loose Gaussian pair. A tighter loose
-# blur makes the difference-of-Gaussians pick narrower, crisper valley cores.
-# loose 3.0→2.8 during LOOK tuning to tighten valley cores toward legacy.
-DOG_TIGHT_SIGMA: float = 0.9
-DOG_LOOSE_SIGMA: float = 2.8
-# Channel mask thresholds (seam-safe path). The DoG primary field's p90≈0.50, so
-# the legacy smoothstep(0.54, 0.94) barely fired → primary valleys vanished.
-# Lowered hard during LOOK tuning so primary main-valleys incise as deep as the
-# legacy flow-channel valleys (the chosen "balanced" variant).
-PRIMARY_THRESH_LO: float = 0.10
-PRIMARY_THRESH_HI: float = 0.50
-TRIBUTARY_THRESH_LO: float = 0.12
-TRIBUTARY_THRESH_HI: float = 0.54
+# Channel mask thresholds (seam-safe path), calibrated for the real flow-accumulation
+# discharge field (log1p(acc)/log1p(acc.size)), which is concentrated around
+# mean≈0.21, p90≈0.31, max≈0.47 — much tighter than the old DoG proxy.  These
+# thresholds carve the top ~30% discharge (connected main valleys + tributaries),
+# matching legacy relief (ptp/std/vdepth within ~10%).
+PRIMARY_THRESH_LO: float = 0.26
+PRIMARY_THRESH_HI: float = 0.40
+TRIBUTARY_THRESH_LO: float = 0.24
+TRIBUTARY_THRESH_HI: float = 0.40
 # Extra incision gain applied to the carve/branch terms in the seam-safe path
 # (multiplies the per-style carve_gain/branch_gain). >1 deepens valleys.
-# Pushed hard (1.30→2.0) so the DoG-carved valleys reach legacy incision depth;
 # FINAL_SCALE then normalizes overall amplitude back near legacy std.
 SEAMSAFE_CARVE_GAIN: float = 2.00
 SEAMSAFE_BRANCH_GAIN: float = 1.70
@@ -299,28 +297,36 @@ def _flow_channels_seam_safe(
     width_px: float,
     *,
     mode: str = "nearest",
+    power: float = 0.48,
 ) -> np.ndarray:
-    """Local DoG channel proxy (seam-safe).  Replaces flow_accumulation_channels.
+    """Seam-safe CONNECTED drainage: real MFD flow accumulation + FIXED-max normalization.
 
-    Difference-of-Gaussians: regions where the surface is locally concave (lower
-    than their neighbourhood) → positive values → channels/valleys.
+    Computes real multiple-flow-direction accumulation
+    (``geography_skeleton._flow_accumulation_mfd``) on a lightly pre-smoothed surface,
+    then normalises with a DATA-INDEPENDENT fixed max — ``log1p(acc) / log1p(acc.size)``
+    rather than per-window ``acc.max()`` — so adjacent windows agree at the border to
+    float epsilon on an adequate apron (probe: 1.7e-10 at apron 80, below float32
+    epsilon; see module docstring).  A final nearest-mode blur spreads the channel
+    extent.
 
-    Reach analysis (both blurs on ``surface``, not chained):
-      tight blur σ=DOG_TIGHT_SIGMA (1.0) → reach 4px (from surface's depth)
-      loose blur σ=DOG_LOOSE_SIGMA (3.0) → reach 12px (from surface's depth)
-      width blur σ=width_px≤4.0 → reach max 16px (on top of loose = 12+16=28)
-    The caller's surface already incorporates upstream blur depth; the DoG adds
-    at most 12 px to that depth (loose dominates), then width adds ≤16 → +28.
+    Replaces the earlier local DoG proxy, which was literally seam-exact (delta 0.0)
+    but produced disconnected/soft valleys (owner judged too soft at scale).  Real
+    flow accumulation routes connected drainage natively.
+
+    Reach (single chained path on ``surface``): pre-blur σ=1.15 → reach 5 px; the MFD
+    pass itself is global (its convergence error, not kernel reach, sets the apron);
+    width blur σ=width_px≤4.0 → reach 16 px.
     """
-    tight = gaussian_filter(surface, sigma=DOG_TIGHT_SIGMA, mode=mode)
-    loose = gaussian_filter(surface, sigma=DOG_LOOSE_SIGMA, mode=mode)
-    dog = loose - tight  # positive in concavities (valleys)
-    dog_positive = np.clip(dog, 0.0, None)
-    # Blur to spread channel extent (replaces the second blur in _flow_channels)
-    channels = gaussian_filter(dog_positive, sigma=max(float(width_px), 0.1), mode=mode)
-    # Fixed-scale normalization (SEAM-SAFE: no per-window statistics).
-    # CHANNELS_DOG_SCALE chosen so the typical max (≈0.30) maps to ≈1.0.
-    return channels * CHANNELS_DOG_SCALE
+    pre = gaussian_filter(np.asarray(surface, dtype=np.float64), sigma=1.15, mode=mode)
+    acc = skel._flow_accumulation_mfd(pre, power=float(power))
+    # FIXED-max normalization (SEAM-SAFE: no per-window statistics).
+    discharge = np.clip(np.log1p(acc) / np.log1p(float(acc.size)), 0.0, 1.0)
+    # Spread channel extent (seam-safe nearest-mode blur).
+    return np.clip(
+        gaussian_filter(discharge, sigma=max(float(width_px), 0.1), mode=mode),
+        0.0,
+        1.0,
+    )
 
 
 def _lowland_mask(
@@ -415,13 +421,13 @@ def generate(
 
         base = ss.affine_remap(style.uplift_gain * (1.50 * massif + 0.18 * ranges - 0.46 * lowland), BASE_CENTER, BASE_SCALE)
 
-        primary = _flow_channels_seam_safe(base, width_px=style.valley_width_px, mode=blur_mode)
-        # LOOK: DoG primary fires at a different scale than legacy flow channels,
-        # so use lower (data-independent) thresholds to recover main-valley incision.
+        primary = _flow_channels_seam_safe(base, width_px=style.valley_width_px, mode=blur_mode, power=0.48)
+        # Real flow accumulation (fixed-max normalized) fires at a different scale than
+        # the legacy per-window-max flow channels, so use data-independent thresholds.
         primary_mask = smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary)
 
         rough_surface = base + 0.18 * ss.affine_remap(ranges, RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE)
-        tributary = _flow_channels_seam_safe(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), mode=blur_mode)
+        tributary = _flow_channels_seam_safe(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), mode=blur_mode, power=0.34)
         tributary_mask = smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary)
 
         ridge_detail = ss.affine_remap(wg.ridged_multifractal(w_x, w_z, 1.0 / (feature_span * 0.045), 5, seed + 40, gain=0.52), RIDGE_DETAIL_CENTER, RIDGE_DETAIL_SCALE)
