@@ -219,13 +219,19 @@ def build_traverse_corridor(window: dict, seed: int, spec, p: TraverseParams, ke
     # Local import avoids a top-level circular import (corridor_router imports traverse_corridor).
     import corridor_router as crr
     n_core = cs.stop - cs.start
-    p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff))
+    p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff), slope_budget=float(p.slope_budget))
     # fall back to a single spanning route when a network is not seam-safe on this window (small span / wide
     # feather) -- always seam-safe over silently-broken seams (pillar: no shortcuts).
     if not crr.carve_seam_safe(spec, p_cor, n_core):
-        p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff), corridor_density=1)
+        p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff),
+                                   slope_budget=float(p.slope_budget), corridor_density=1)
     corridor = crr.build_corridor(full, spec, p, p_cor)
-    carve_delta = crr.carve_corridor(full, corridor, spec, p_cor, height_scale_m=float(p.height_scale_m))
+    # Slope-wall (mountain) barriers need a wide graded VALLEY (carve_ramp); a low-corridor/valley barrier just
+    # needs the gentle feathered reconnection (carve_corridor). Pick by the barrier type needs_route detected.
+    if decision.get("slope_wall_severs"):
+        carve_delta = crr.carve_ramp(full, corridor, spec, p_cor, height_scale_m=float(p.height_scale_m))
+    else:
+        carve_delta = crr.carve_corridor(full, corridor, spec, p_cor, height_scale_m=float(p.height_scale_m))
     keeper_core = np.ascontiguousarray(_core(full, spec))   # = compose_windowed_height_v2(...); avoid recompute
     final_core = keeper_core + carve_delta
     resolved = not needs_route_core(final_core, spec, p)["needs_route"]

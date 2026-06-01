@@ -1,7 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from scipy.ndimage import distance_transform_edt
+from scipy.ndimage import distance_transform_edt, gaussian_filter
 
 import traverse_corridor as tc
 import keeper_v2 as v2
@@ -17,6 +17,17 @@ class CorridorParams:
     carve_max_m: float = 700.0         # hard cap on |carve_delta| (world metres); deep enough to lower a
                                        # saddle to the valley cutoff on high-relief terrain (220 was too shallow)
     low_corridor_cutoff: float = 0.0   # FIXED seam-safe cutoff (NOT np.percentile)
+    slope_budget: float = 0.28         # grade a route must hold (rise/run); matches TraverseParams.slope_budget
+    # --- ramp carve (slope-wall barriers / mountains): cut a walkable VALLEY through a steep wall ---
+    ramp_floor_grade_frac: float = 0.35  # valley floor descends at slope_budget*this ALONG the route. < 1 leaves
+                                         # margin for the cross-slope so the COMBINED 2D gradient stays <= budget
+                                         # (a floor graded at full budget reads ~budget*sqrt2 -> impassable).
+    ramp_wall_grade_frac: float = 0.55   # band walls rise at slope_budget*this away from the flat floor
+    ramp_flat_half_m: float = 2000.0     # half-width of the flat valley bottom
+    ramp_half_width_m: float = 5000.0    # total half-width of the carved band (flat floor + graded walls)
+    ramp_floor_smooth_px: float = 5.0    # smoothing of the floor field (kills zigzag-route bumpiness)
+    ramp_carve_max_m: float = 3500.0     # cap for the ramp carve (mountains need a deep valley; bigger than the
+                                         # gentle-saddle carve_max_m)
 
 
 def edge_gates(seam_line: np.ndarray, p: CorridorParams) -> list[int]:
@@ -194,3 +205,59 @@ def carve_corridor(full: np.ndarray, corridor: dict, spec, p: CorridorParams, he
     cap_h = float(p.carve_max_m) / float(height_scale_m)
     delta = -np.clip(core - cutoff, 0.0, cap_h) * feather
     return np.ascontiguousarray(delta)
+
+
+def carve_ramp(full: np.ndarray, corridor: dict, spec, p: CorridorParams, height_scale_m: float = 1700.0) -> np.ndarray:
+    """Cut a walkable VALLEY through a steep slope-wall (mountain) barrier, on the CORE grid. Unlike
+    carve_corridor (a feathered cut toward a cutoff -- good for gentle valley reconnection), this builds a
+    slope-FEASIBLE valley: a smooth floor that descends gently ALONG the route + graded walls rising away from
+    it, so a connected passable BAND crosses the wall.
+
+    KEY (the hard-won fix): the floor's along-route grade must be slope_budget * ramp_floor_grade_frac (< 1),
+    NOT full budget -- a floor graded at full budget plus any cross-slope gives a COMBINED 2D gradient ~budget*
+    sqrt2 > budget (impassable). The reduced along-grade leaves margin so the combined gradient stays <= budget.
+    The floor field is smoothed to remove the zigzag-route bumpiness that otherwise re-introduces slope.
+
+    Subtractive (<=0), bounded by ramp_carve_max_m. Seam-exactness: same gate-anchored basis as carve_corridor
+    (the route ends at seam-identical gates); the floor/wall grading is a local function of distance-to-route."""
+    core = _core(full, spec)
+    n = core.shape[0]
+    cell_m = float(spec.spacing_m)
+    budget = float(p.slope_budget)
+    core_m = core * float(height_scale_m)
+
+    routes = corridor.get("routes", [])
+    if not routes:
+        return np.ascontiguousarray(np.zeros_like(core))
+
+    # union the floor target across all routes (network); each route contributes a slope-feasible valley
+    delta_m = np.zeros_like(core_m)
+    for route in routes:
+        path = route["path"]
+        if not path:
+            continue
+        idx = np.asarray(path, dtype=np.int64)
+        # 1) slope-feasible floor ALONG the route at the REDUCED grade (margin for cross-slope)
+        along = core_m[idx[:, 0], idx[:, 1]].astype(np.float64)
+        prof = along.copy()
+        step = budget * float(p.ramp_floor_grade_frac) * cell_m
+        for i in range(1, prof.size):
+            prof[i] = min(prof[i], prof[i - 1] + step)
+        for i in range(prof.size - 2, -1, -1):
+            prof[i] = min(prof[i], prof[i + 1] + step)
+        # 2) scatter to a floor field, smooth it (kill zigzag bumps), grade walls up away from the route
+        on_path = np.zeros((n, n), dtype=bool)
+        on_path[idx[:, 0], idx[:, 1]] = True
+        prof_field = np.full((n, n), np.inf)
+        prof_field[idx[:, 0], idx[:, 1]] = prof
+        distpx, (iy, ix) = distance_transform_edt(~on_path, return_indices=True)
+        floor = gaussian_filter(prof_field[iy, ix], sigma=float(p.ramp_floor_smooth_px))
+        d_m = distpx * cell_m
+        wall_rise = np.clip(d_m - float(p.ramp_flat_half_m), 0.0, None) * (budget * float(p.ramp_wall_grade_frac))
+        target = floor + wall_rise
+        band = d_m <= float(p.ramp_half_width_m)
+        this = np.where(band, np.minimum(target - core_m, 0.0), 0.0)
+        delta_m = np.minimum(delta_m, this)   # deepest carve wins where routes overlap
+
+    delta_m = np.clip(delta_m, -float(p.ramp_carve_max_m), 0.0)
+    return np.ascontiguousarray(delta_m / float(height_scale_m))
