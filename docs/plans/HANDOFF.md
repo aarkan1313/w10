@@ -14,7 +14,50 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-05-31 (**KEEPER-FORK + TRAVERSABILITY ADDENDUM — latest.** `STATUS.md` "fork-resolution session
+Updated: 2026-06-01 (**TERRAIN-EDIT FRAMEWORK — latest; this is the fresh-session pickup.** `STATUS.md` top
+("▶ CURRENT (2026-06-01)") is the live authority; this is the pointer. Read order for a new chat:
+STATUS.md top → ROADMAP "▶ YOU ARE HERE" box → spec `docs/superpowers/specs/2026-06-01-worldgen-terrain-edit-framework-design.md`
+§9 → memory `worldgen10-tier3-corridor-built-mountain-gap` (top section = the resolved framework + the full
+research record).
+
+**WHERE WE ARE (done + pushed, clean):**
+- The Tier-3 traversability arc RESOLVED into a **tunable TERRAIN-EDIT FRAMEWORK, owner-accepted.**
+  `tools/dem_pack/terrain_edits/` — an edit = (Placement WHERE + Profile WHAT) → seam-exact world-local delta
+  at the M4 edit-provider seam; edits READ facts, stay separate. **13 offline tests green** (run:
+  `cd tools/dem_pack && python -m pytest terrain_edits/ -v`).
+- Layers: `apply` (blend_edges/bound_depth/combine/EditContext) · `placement` (low_corridor_route /
+  contour_sweep / cross_waypoint) · `profile` (thin_climbing_trail / graded_valley) · `edit` (TerrainEdit +
+  apply_edits) · `configs` (mountain_trail / mountain_trail_connected + road/river/lake/poi SKETCHES).
+- **Mountains solved:** thin Fellowship trails that PRESERVE the mountain (no gouge/cliff/gash). Tunable trail
+  spectrum: `mountain_trail()` sparse · `mountain_trail(route_count=N)` spread · `mountain_trail_connected()` =
+  4 arms meeting at a central waypoint → full L↔R + U↔D traversal (the chunk-scene default).
+- Wired into the real mountain 9x9 chunk scene: `wg-10/worldgen_terrain/harness/terrain_edit_chunks_review.tscn`
+  (fly/walk H / mega-speed J / collision). Owner flew + accepted (the connected net is GEOMETRICALLY full —
+  gated; ~66% walkable, rest short scrambles = the depth-cap-vs-walkable tension, a tunable; owner saw one ~50m
+  walkable-mask gap, judged fine).
+- THE PROVEN CARVE RECIPE (don't relearn): re-grade the route's RAW height at `slope_budget*floor_grade_frac`
+  (0.5) — **NOT a gaussian-smoothed version** (smoothing re-steepens toward peaks — the repeated bug) — thin
+  ledge, smoothstep-blend, depth_cap. Gives 0% over-budget along a single trail; preserves the mountain.
+- **All FIX-NOW B-bugs (B1/B2/B3) are CLOSED + gate-verified** (the ledger table said FIX-NOW but they were
+  done; reconciled this session). 552MB of regenerable review JSONs untracked from git (gitignored; files on
+  disk; regenerate via the committed `tools/dem_pack/export_godot_*.py`). HEAD `ea72876`, pushed, in sync.
+
+**NEXT (owner-gated, pick one in the new chat):**
+1. **Extend the framework** — flesh ONE sketch config into a real editor (rivers = flow_trace+incised_channel,
+   or roads = spline+flat_road), proving the abstraction on a genuinely different edit than trails.
+2. **The Phase 5 keeper/port question** — Slice 3 (Rust port) is still ⛔ BLOCKED on an owner-accepted height
+   STACK. Trails are ON TOP of the mountain terrain; the strategic gate is "is the base terrain the accepted
+   thing to port?" (Slices 2/2A still `[~]`).
+3. **Runtime/Rust path** — the terrain-edit runtime sample/bake split + cross-chunk seam-exactness for
+   independent-window streaming (today's seam-exactness is carve-then-slice — fine for the 9x9 review; infinite
+   streaming needs world-anchored fact-derived routes, not chunk-local Dijkstra).
+**CONVENTIONS:** offline-Python-render-first (Phase 5); don't kill the Godot editor (ask to close for Rust
+rebuilds); commit only when asked, stage by name (NEVER `git add -A` — repo has pre-existing dirty files that
+are NOT mine: CHUNK_CONTINUITY_PROOF, keeper-contract spec, render_biomes, a few export scripts + an owner
+biome-transition STATUS addition). The owner CAN push (`GIT_TERMINAL_PROMPT=0 git push origin main`).
+(Older addenda below = history.)
+
+Updated: 2026-05-31 (**KEEPER-FORK + TRAVERSABILITY ADDENDUM.** `STATUS.md` "fork-resolution session
 update" is the authority; this is the pointer. Three things happened on top of the audit addendum below:
 1. **The keeper fork was found + acted on.** "rough_highlands" named THREE different height formulas: **A** =
    `geography_skeleton.compose_height` (the owner-approved 90 km look), **B** = the frozen
