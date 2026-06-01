@@ -5,12 +5,18 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ CURRENT (2026-05-31):** Phase 5, building **Tier-3 guaranteed traversability** to unblock the Rust port.
-> Tier-3 detection + verify-first no-op BUILT + seam-safe (18 offline tests green, `tools/dem_pack/
-> traverse_corridor.py` + keeper_v2); the **carve is blocked** on a seam-stitched connected-corridor fact (the
-> Phase 7B pull-forward) — cross-seam join already works, only edge-spanning missing. NEXT: spec connected-
-> corridor routing → build → carve → owner review. Full current state is the "fork-resolution session update"
-> section below + ROADMAP "▶ YOU ARE HERE" box. (The 2026-05-30 handoff pointer just below is older history.)
+> **▶ CURRENT (2026-05-31):** Phase 5, **Tier-3 guaranteed traversability** to unblock the Rust port.
+> The connected-corridor router (the Phase 7B pull-forward) is **BUILT + seam-exact + 16 tests green**
+> (`tools/dem_pack/corridor_router.py`; `report_corridor_traversability.py` → `[wg10-corridor] pass`): the
+> Tier-3 carve is **no longer blocked** for valley barriers. **GAP:** the carve resolves **valley/low-corridor**
+> barriers but NOT **slope-wall/steep-massif** barriers (needs a wide graded WALKABLE ramp, not a deep slot).
+> **Fly-through DEFERRED:** the resolving case renders flat at 260 m / 25.6 km (owner flew it → flat plain); the
+> visible-mountain cases are slope-wall barriers the carve doesn't yet resolve. **RESUME after mountains are
+> promoted** in the base generator (owner doing that now): build the slope-wall ramp carve against
+> mountain terrain → re-export + fly `rough_world_corridor_review.tscn`. Memory
+> `worldgen10-tier3-corridor-built-mountain-gap`; spec §11
+> `…/2026-05-31-worldgen-connected-corridor-router-design.md`. Full state: ROADMAP "▶ YOU ARE HERE" box +
+> "fork-resolution session update" below. (The 2026-05-30 handoff pointer just below is older history.)
 
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
 > point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now

@@ -188,3 +188,29 @@ Offline Python; TDD; do not flip docs to "accepted" until the owner accepts the 
   skeleton grid — `log()`ged, never silently downsampled.
 - Downstream unblocked on acceptance, not done here: the Slice-3 port target, the authority-window cache, the
   runtime off-frame route.
+
+## 11. BUILD STATUS + finding (2026-05-31 — built, gates green, fly-through deferred)
+
+Built + committed + 16 offline tests green (`corridor_router.py` + `traverse_corridor.py`):
+edge_gates (seam-identical) → window_gates → route_between_gates (reuses the extracted `_dijkstra_cost_field`)
+→ build_corridor (anchor-routed interior + perpendicular gate stubs = connected AND seam-exact) → carve_corridor
+(local feathered, seam-exact). `report_corridor_traversability.py` → `[wg10-corridor] status=pass`. Three real
+seam bugs were found+fixed by the hard seam gate during the build (route-along-edge, stub-drop disconnect,
+cross-route-interior-near-perpendicular-seam); the last is now guarded by `carve_seam_safe` (network density
+falls back to a single route when the feather is too large for the window).
+
+**Finding (the carve's real limit — drives the next step):** the carve robustly **resolves the low-corridor /
+valley barrier** (reconnect a broken valley route — the gentle, large-span case) seam-exactly. It does **NOT**
+reliably resolve the **slope-wall / steep-massif barrier** (a narrow/feathered carve toward a cutoff cannot
+open a *passable* crossing through a steep wall — `passable_crosses` stays False at every width/depth/cutoff
+tried on the 8–12 km high-relief configs). The carve owed for slope-walls is a **wide graded WALKABLE ramp**
+(grade the corridor floor + flanks under slope_budget across the wall), not a deep slot — a real carve upgrade.
+
+**Why the fly-through is deferred:** at the current 260 m relief, the case that resolves (valley barrier)
+renders nearly flat at 25.6 km scene scale — nothing to see; the cases with visible mountains are slope-wall
+barriers the carve doesn't yet resolve. So the in-engine acceptance test is premature. **The right place to
+build + test the slope-wall ramp carve is against PROMOTED-MOUNTAIN terrain** (owner is promoting mountains in
+the base generator as of 2026-05-31) — where slope-wall barriers are the normal case, the fly-through shows a
+real pass through a real wall, and the carve can be tuned against terrain that won't immediately change.
+**Resume = (1) mountains promoted in the base terrain → (2) build the wide-graded-ramp slope-wall carve → (3)
+re-export `rough_world_corridor_review.tscn` and fly it.** Memory `worldgen10-tier3-corridor-built-mountain-gap`.
