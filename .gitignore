@@ -3,3 +3,9 @@
 tools/dem_pack/__pycache__/
 tools/dem_pack/dem_tag_review.html
 tools/dem_pack/dem_tag_review.csv
+tools/dem_pack/terrain_edits/__pycache__/
+
+# Generated Godot review payloads (build PRODUCTS, not source — 500+ MB, regenerable).
+# Re-create by running the matching tools/dem_pack/export_godot_*.py before flying a review scene.
+# (Untracked 2026-06-01; the .tscn scenes + exporters are committed, the .json outputs are not.)
+wg-10/worldgen_terrain/generated/review/*.json

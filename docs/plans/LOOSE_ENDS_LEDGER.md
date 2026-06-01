@@ -16,9 +16,9 @@ independent reviews, every claim re-verified against source + re-run gates).
 
 | ID | Item | Severity | Decision | Why |
 |----|------|----------|----------|-----|
-| **B1** | `Wg10PagePool` leaks GPU RIDs — no `Drop`/teardown; `m3_review.gd` + `m5_detail_check.gd` have FACTUALLY WRONG comments claiming auto-free | HIGH | **FIX-NOW** | Real leak, cheap structural fix (add `Drop`→`free_all`), and the wrong comments are a footgun the rebuild would inherit. The render pipeline is KEPT, so its bugs matter. |
-| **B2** | Never-black "hold-last-good" can show stale terrain (page-A geometry + page-B pixels) under pool eviction; guarantee is capacity-dependent, not structural | HIGH | **FIX-NOW** | The render pipeline is the KEPT foundation; a non-structural never-black is a latent corruption the rebuild sits on. Fix = protect held coarse pages + re-validate held RID + capacity-pressure gate. |
-| **B3** | Hardened perf gate hole: 100%-sky frame scores `nonblack=1.0` (sky is bright); detail not on/off-tested | MEDIUM | **FIX-NOW** | This is MY gate, built to honor "is profiling real?" — and it has the exact hole that rule forbids. The rebuild will lean on this gate to measure worldgen perf; it must be trustworthy first. Fix = terrain-vs-sky nonblack + detail on/off assert. |
+| **B1** | `Wg10PagePool` leaks GPU RIDs — no `Drop`/teardown; `m3_review.gd` + `m5_detail_check.gd` have FACTUALLY WRONG comments claiming auto-free | HIGH | **✅ CLOSED** | Source-fixed (`impl Drop`→`free_all_impl`, wrong comments deleted; commit `be9c4f2`) and gate-verified in the B-bug closeout (`aec1165`; STATUS top: cargo 121 / m3 9/9). |
+| **B2** | Never-black "hold-last-good" can show stale terrain (page-A geometry + page-B pixels) under pool eviction; guarantee is capacity-dependent, not structural | HIGH | **✅ CLOSED** | Source-fixed (pinned-slot system, eviction skips pins, whole-capacity-pinned→`Full`; commit `0b1e2f9`, +6 unit tests) AND the capacity-pressure gate `tests/m3_b2_capacity_check.gd` is written + in the m3 suite (9/9). Gate-verified (`aec1165`). |
+| **B3** | Hardened perf gate hole: 100%-sky frame scores `nonblack=1.0` (sky is bright); detail not on/off-tested | MEDIUM | **✅ CLOSED** | Source-fixed (`m5_perf_hardened_check.gd`: `_terrain_frac` counts a pixel as terrain only if it differs from the SKY color by `SKY_DELTA`; `MIN_TERRAIN_FRAC` + detail-on/off-delta assertions active; commit `7e37f29`, verified `aec1165`). |
 
 ### Added 2026-05-31 (validated code-path audit; not a visual verdict)
 
