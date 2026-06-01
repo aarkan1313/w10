@@ -33,10 +33,46 @@ biome tiles into a static 4×3 atlas with a field-crossfade — a look reference
 This is a real separation-of-concerns gap: there is no single "give me the height at (x,z) for whatever biome
 the grammar says is here, blended seam-exactly with its neighbors" entry point. This spec defines that layer.
 
-The immediate deliverable is a deterministic, seam-exact biome composition layer where biomes are PARAM
-PRESETS of one shared generator and boundaries are a continuous PARAM MORPH. The structural deliverable is the
-`blend_biome_params` + `generate(params)` seam the roadmap's Slice 3 already names as its Rust port target —
-finally built and owner-accepted offline, so the port has a frozen, validated thing to port.
+The immediate deliverable is a deterministic, seam-exact biome composition layer where biomes plug into one
+dispatch+blend interface and boundaries are a principled cross-recipe blend. The structural deliverable is the
+`blend_biome_params` + biome-`generate` seam the roadmap's Slice 3 already names as its Rust port target —
+built and owner-accepted offline, so the port has a frozen, validated thing to port.
+
+> **★ REVISED 2026-06-01 (probe finding → Fork B). Supersedes the "one shared generator / pure param-blend"
+> framing in §3 below; read this first.** A render-first probe (`tools/dem_pack/probe_v2_as_mountain.py`,
+> `D:/tmp/wg10_biome_compose/probe_v2_as_mountain.png`) tested whether the owner-accepted `keeper_v2` engine can
+> express a mountain by tuning `KeeperV2Params`. **It cannot:** cranking relief/ridge/peak knobs just makes a
+> TALLER version of v2's rounded rolling hills — it never grows the oriented ridge-lines / connected ranges that
+> `mountain_synthesis` produces (v2's regime model has no oriented-ridge vocabulary; this matches memory
+> `worldgen10-too-flat-decomposition`). So **"biomes = pure presets of ONE v2 engine" (clean Fork A) is DEAD** —
+> it would lose accepted biome looks. A parallel chat's `biome_transition_world` scene was confirmed to be a
+> static FIELD-BLEND review atlas (compose-big-then-slice), NOT a runtime architecture — no competing design.
+> **DECISION (owner-approved): Fork B.** Each biome KEEPS its own composition recipe (mountain keeps oriented
+> ridges, etc.); the unification is (1) make every recipe SEAM-SAFE (replace per-window `zscore`/`norm01` with
+> data-independent `affine_remap`, the v2 lesson), and (2) plug them into ONE dispatch+blend interface that
+> crossfades at boundaries with a PRINCIPLED cross-recipe blend (NOT mushy field-averaging — the mechanism is the
+> one genuinely-unsolved piece). Slice 1 is therefore a render-first BLEND PROBE on two accepted recipes
+> (mountain + grassland) to prove the blend is tractable BEFORE converting all 13. `BiomeParams` becomes
+> {recipe selector + that recipe's knobs}, still blendable where recipes share primitives. The rest of this spec
+> stands EXCEPT: §3.4 "one engine, presets" → per-recipe dispatch; §3.5 "param-blend" → principled cross-recipe
+> blend (param-blend where recipes share primitives, mask handoff otherwise); §7 slice plan gains the slice-1
+> blend probe. §4 (synths as the accepted source) is REINFORCED by the probe.
+>
+> **★★ BLEND PROBE RESULT + DECISION 2026-06-01 (`tools/dem_pack/probe_biome_blend.py`,
+> `D:/tmp/wg10_biome_compose/probe_biome_blend.png`).** Rendered a mountain↔grassland transition with 3 blend
+> mechanisms. **All three read as believable transitions — NOT the feared mushy ghost** — because the synths
+> SHARE warp/fbm primitives (the blend morphs between RELATED terrains, not unrelated ones; this narrows the
+> earlier "field-blend is mushy" worry to CLASHING pairs). Findings: (1) plain field-blend is an acceptable
+> simple fallback for primitive-sharing recipes; (2) "height-favored" — bias the blend weight toward the
+> locally-higher-relief recipe inside the band so mountain structure stays CRISP instead of ghost-flattening —
+> read best. **DECISION (by the four pillars): blend mode is a TUNABLE `blend_mode` knob; PRIMARY = `height_favored`
+> (pillar 3 quality: only one that protects structure through the band; pillar 1: tunable; pillar 4: builds the
+> mechanism that actually works rather than assuming the easy case generalizes), FALLBACK = `field` (pillar 2:
+> cheap lerp). Height-favored's extra cost (a band-local blurred-relief proxy) is bounded and off the hot
+> interior.** HONEST CAVEAT: mountain↔grassland is a GENTLE pair; the real stress test is a structurally CLASHING
+> pair (mountain↔desert-dunes, where dune-train directionality could fight ridge orientation). Per pillar 4, the
+> plan's FIRST slice re-runs this probe on a clash pair before any bulk conversion — if height_favored needs
+> adjustment there, we learn it at biome 2, not 13.
 
 ## 2. Non-Goals
 
