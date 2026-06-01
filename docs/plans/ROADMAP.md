@@ -277,7 +277,7 @@ plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-
 
 ### Phase 5 — Worldgen core rebuild (ACTIVE) — 85%-target geography engine
 
-> **▶ YOU ARE HERE (2026-05-31) — Phase 5, working to unblock the Rust port (Slice 3).** Plain-language state:
+> **▶ YOU ARE HERE (2026-06-01) — Phase 5, building a tunable TERRAIN-EDIT framework (traversability is its first use).** Plain-language state:
 > - **Milestones 0–4 are DONE** (engine machinery: toolchain, CPU worldgen, GPU parity, render pipeline, Facts
 >   API). Phases 6–9 have NOT started — they're all gated on Phase 5 accepting a live height core.
 > - **Phase 5 is about the terrain CONTENT** (what the height *looks like*), proven offline in Python before any
@@ -286,14 +286,18 @@ plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-
 >   (best-of-both, seam-exact) and kept A/B/v2 as selectable variants.
 > - **The real quality bar = traversability (B8):** owner direction shifted to "guarantee you can cross a
 >   barrier region." That's **Tier-3** (current active work, offline Python).
-> - **Tier-3 status:** detection + verify-first no-op BUILT + seam-safe (18 tests green). The **carve is BLOCKED**
->   — proven that a connected route needs a seam-stitched **connected-corridor fact**, which is the **Phase 7B
->   pull-forward** (see Phase 7B below — the roadmap explicitly allows pulling it into Phase 5 when traversability
->   demands it; this is that trigger, not a detour). The cross-seam-JOIN half already works; only edge-spanning
->   is missing → tractable.
-> - **NEXT:** spec the connected-corridor routing (edge-spanning + seam-join) → build offline → local seam-exact
->   carve → owner review → only THEN unblock Slice 3 (Rust port). Detail: Slice 3 block below, `STATUS.md` top,
->   LEDGER B7/B8, specs `…/2026-05-31-worldgen-tier3-guaranteed-traversability-design.md` (§1.2 = the finding).
+> - **Tier-3 traversability: BUILT.** Connected-corridor router + `carve_ramp` resolve a real mountain wall;
+>   connected pass NETWORK runs in the real mountain 9x9 chunk scene (seam-exact by carve-big-field-then-slice).
+>   Commits 4252bcd/75dd5fb. (`mountain_synthesis` landed — `MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`.)
+> - **Owner flew it → the work GENERALIZED (owner directive 2026-06-01):** the wide carve looked too wide /
+>   gouged peaks / had cliff drops; owner wants thin Fellowship-style mountain TRAILS — AND said "make it
+>   tunable, it won't just be used for this": the same machinery must serve **roads, POIs, rivers, lakes** later.
+>   So Tier-3 is now the first use of a **tunable TERRAIN-EDIT FRAMEWORK** (placement strategy + carve profile +
+>   seam-exact apply; edits READ facts, emit a seam-exact world-local delta at the M4 edit-provider seam).
+> - **NEXT:** build the framework core + mountain-trail config (offline Python) → wire into the mountain 9x9 →
+>   owner fly. Spec: `docs/superpowers/specs/2026-06-01-worldgen-terrain-edit-framework-design.md`. Full carve/
+>   routing trace + negative results: memory `worldgen10-tier3-corridor-built-mountain-gap`. STATUS.md top = live.
+>   (The Rust port / Slice 3 stays gated on an owner-accepted live stack, now including accepted trails.)
 
 Replaces `height::height`/`sample_kernel` (the tiling) with a deterministic generator, but the target is no
 longer "better warped noise." The target is an **85%-class geography read**: at normal game/fly-camera

@@ -5,18 +5,24 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ CURRENT (2026-05-31):** Phase 5, **Tier-3 guaranteed traversability** to unblock the Rust port.
-> The connected-corridor router (the Phase 7B pull-forward) is **BUILT + seam-exact + 16 tests green**
-> (`tools/dem_pack/corridor_router.py`; `report_corridor_traversability.py` → `[wg10-corridor] pass`): the
-> Tier-3 carve is **no longer blocked** for valley barriers. **GAP:** the carve resolves **valley/low-corridor**
-> barriers but NOT **slope-wall/steep-massif** barriers (needs a wide graded WALKABLE ramp, not a deep slot).
-> **Fly-through DEFERRED:** the resolving case renders flat at 260 m / 25.6 km (owner flew it → flat plain); the
-> visible-mountain cases are slope-wall barriers the carve doesn't yet resolve. **RESUME after mountains are
-> promoted** in the base generator (owner doing that now): build the slope-wall ramp carve against
-> mountain terrain → re-export + fly `rough_world_corridor_review.tscn`. Memory
-> `worldgen10-tier3-corridor-built-mountain-gap`; spec §11
-> `…/2026-05-31-worldgen-connected-corridor-router-design.md`. Full state: ROADMAP "▶ YOU ARE HERE" box +
-> "fork-resolution session update" below. (The 2026-05-30 handoff pointer just below is older history.)
+> **▶ CURRENT (2026-05-31):** Phase 5. Tier-3 traversability work has **broadened into a reusable goal** (owner
+> directive): build a **tunable / adjustable TERRAIN-EDIT subsystem** — mountain passes are ONE use; the same
+> machinery must later serve **roads, POIs, rivers, lakes** (all edit terrain). "Make it tunable, it won't just
+> be used for this."
+> **Mountains landed** (`mountain_synthesis.py`, HEIGHT_SCALE 1700, 9x9 chunk scene — `MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`).
+> The corridor router + `carve_ramp` (wide graded valley) RESOLVE a real mountain wall and run in the real
+> mountain 9x9 chunk scene (`export_godot_mountain_network_chunks.py` + `mountain_network_chunks_review.tscn`,
+> seam-exact by carve-big-field-then-slice). Connected pass NETWORK built (`mountain_pass_network.py`).
+> **OWNER LOOK FEEDBACK + DIRECTION:** the wide carve looked too wide / gouged peaks / had cliff drops →
+> wants **thin mountain PATHS / TRAILS / switchbacks + thin valleys that slowly climb (Fellowship/Caradhras
+> path: ONE sparse sweeping trail, few wide switchbacks, "other stuff besides Dijkstra")**. PROVEN: a sparse
+> valley-following route + thin re-graded-raw-height ledge carve gives a fully-walkable (0% over-budget) thin
+> trail that PRESERVES the mountain (look solved). REMAINING TENSION: depth-cap to avoid the one deep gouge
+> re-steepens the trail — the genuinely-hard research-grade trail-carve piece. **NEXT: build the tunable
+> terrain-edit framework (swappable routing strategy + carve profile + named knobs; mountain trail = one
+> config), then finish the trail carve in that frame.** Full trace + all the negative results: memory
+> `worldgen10-tier3-corridor-built-mountain-gap`. Commits 4252bcd/75dd5fb (network+chunk scene). Spec for the
+> framework pending. (ROADMAP "▶ YOU ARE HERE" box + the 2026-05-30 handoff just below = older history.)
 
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
 > point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now
@@ -24,6 +30,54 @@ point — see DESIGN §7.3.)
 > `origin/main` is synced through the B-bug closeout + first Slice 2A probe. Current coarse-structure matrix
 > and landform-regime work is local research/probe state until accepted or explicitly committed. Roadmap
 > Phase 5 is now realigned around an 85%-target geography-engine prototype before any Rust/GLSL port.
+
+> **Mountain biome promotion note (2026-05-31):** `docs/plans/MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`
+> records the current mountain-kernel candidate, the 81-chunk static review artifact, and the key finding:
+> player/world scale is a project-wide contract problem, not another per-biome height knob. Mountain is a
+> yellow/keep candidate, not a runtime promotion, until a player-to-world scale policy exists and the owner
+> accepts the on-foot valley read.
+
+> **Glacial biome promotion note (2026-05-31):** `docs/plans/GLACIAL_BIOME_PROMOTION_2026-05-31.md`
+> records the current glacial-kernel candidate, the single generated-world review, and the 81-chunk continuity
+> review. Glacial is **promoted as an owner-accepted setup biome**: seams and checks are green and the owner
+> accepted it as good enough to move on. It is still not a runtime promotion; detailed tuning and the same
+> project-wide player/world scale policy remain later gates.
+
+> **Karst biome promotion note (2026-05-31):** `docs/plans/KARST_BIOME_PROMOTION_2026-05-31.md`
+> records the first-pass karst synthesis, reference sheets, Godot single-world export, scene, and smoke gate.
+> Karst is **promoted as an owner-accepted setup biome**. For the current biome setup sweep, promote families
+> that broadly read right and are not obviously broken; defer deep tuning, 9x9 continuity, and runtime/player
+> scale proof until the full biome set exists or a specific blocker appears.
+
+> **Volcanic biome promotion note (2026-05-31):** `docs/plans/VOLCANIC_BIOME_PROMOTION_2026-05-31.md`
+> records the first-pass volcanic synthesis, reference sheets, Godot single-world export, scene, and smoke
+> gate. Volcanic is **promoted as an owner-accepted setup biome**. Keep all four synth styles as useful
+> volcanic variants for later runtime design; do not collapse them into one averaged shape during setup. Also,
+> volcanic-origin terrain does **not** require an obvious cone in every zone; lava fields, rift provinces,
+> caldera remnants, and eroded volcanic highlands are valid volcanic reads.
+
+> **Biome setup index (2026-05-31):** `docs/plans/BIOME_SETUP_INDEX_2026-05-31.md` is the organizing tracker
+> for this sweep. It records promoted, active, and pending biome families plus where setup artifacts belong.
+
+> **Desert biome promotion note (2026-05-31):** `docs/plans/DESERT_BIOME_PROMOTION_2026-05-31.md`
+> records the first-pass desert synthesis, reference sheets, Godot single-world export, scene, and smoke gate.
+> Desert is **promoted as an owner-accepted setup biome**. Keep all four synth styles as useful desert DNA:
+> dune seas, yardang/deflation basins, rocky basin-range deserts, and wadi/erg margins. Do not collapse desert
+> into only dunes during setup.
+
+> **Grassland biome setup pass (2026-05-31):** first-pass grassland synthesis is built and review-ready:
+> `tools/dem_pack/grassland_synthesis.py`, `render_grassland_synthesis.py`,
+> `export_godot_grassland_world_review.py`, `wg-10/worldgen_terrain/generated/review/grassland_world_3d.json`,
+> and `wg-10/worldgen_terrain/harness/grassland_world_review.tscn`. Smoke gate:
+> `[wg10-grassland-world-review] status=pass`. Owner review is pending before setup promotion.
+
+> **Biome review queue (2026-06-01):** `docs/plans/BIOME_REVIEW_QUEUE_2026-06-01.md` lists all remaining
+> unvalidated setup scenes prepared for tomorrow: grassland, coast, rainforest, temperate, tundra, and wetland.
+> Each has generator/render/export/review-scene/test artifacts, rendered 90 km + 200 km contact sheets, and a
+> passing headless Godot smoke gate. No interactive scenes were launched for these final queue items. Coast and
+> wetland are explicitly terrain/mask setup passes only; water/sea-level/flooding behavior remains later work.
+> Final non-visual validation rerun: Python synthesis tests `36 passed`; all six headless Godot review gates
+> returned `status=pass items=8 selected=4`.
 
 ---
 
