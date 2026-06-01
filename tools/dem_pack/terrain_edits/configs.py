@@ -4,11 +4,24 @@ import terrain_edits.placement as pl
 import terrain_edits.profile as pr
 
 
-def mountain_trail() -> te.TerrainEdit:
-    """Sparse thin Fellowship-style mountain trails: valley-following route + thin climbing ledge."""
+def mountain_trail(route_count: int = 1) -> te.TerrainEdit:
+    """Sparse thin Fellowship-style mountain trails: valley-following route + thin climbing ledge.
+    route_count > 1 spreads that many crossings per axis across the range (less untouched dead area;
+    too many starts to read as an artificial grid -- tune by eye)."""
     return te.TerrainEdit(
-        placement=pl.low_corridor_route, placement_params=pl.LowCorridorParams(low_pref=8.0, route_count=1),
+        placement=pl.low_corridor_route, placement_params=pl.LowCorridorParams(low_pref=8.0, route_count=int(route_count)),
         axes=("x", "z"),
+        profile=pr.thin_climbing_trail, profile_params=pr.ThinTrailParams(),
+    )
+
+
+def mountain_trail_connected() -> te.TerrainEdit:
+    """FULL-TRAVERSAL mountain trail: 4 thin arms from a central meeting waypoint out to each edge (W/E/N/S),
+    sharing the waypoint -> ONE connected network you can traverse fully left<->right AND up<->down, meeting in
+    the middle. Use when the game needs guaranteed whole-map crossability (vs the sparse single-pass default)."""
+    return te.TerrainEdit(
+        placement=pl.cross_waypoint, placement_params=pl.CrossWaypointParams(low_pref=8.0, center_frac=0.5),
+        axes=("x",),   # cross_waypoint defines its own 4-arm geometry; axis is ignored
         profile=pr.thin_climbing_trail, profile_params=pr.ThinTrailParams(),
     )
 
