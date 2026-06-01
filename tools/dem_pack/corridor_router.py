@@ -22,9 +22,12 @@ class CorridorParams:
     ramp_floor_grade_frac: float = 0.35  # valley floor descends at slope_budget*this ALONG the route. < 1 leaves
                                          # margin for the cross-slope so the COMBINED 2D gradient stays <= budget
                                          # (a floor graded at full budget reads ~budget*sqrt2 -> impassable).
-    ramp_wall_grade_frac: float = 0.55   # band walls rise at slope_budget*this away from the flat floor
-    ramp_flat_half_m: float = 2000.0     # half-width of the flat valley bottom
-    ramp_half_width_m: float = 5000.0    # total half-width of the carved band (flat floor + graded walls)
+                                         # 0.35 is near the max that still resolves; higher = fails.
+    ramp_wall_grade_frac: float = 0.80   # band walls rise at slope_budget*this away from the flat floor (steeper
+                                         # walls = tighter canyon = less area carved)
+    ramp_flat_half_m: float = 200.0      # half-width of the flat valley bottom (narrow = a pass, not a plain)
+    ramp_half_width_m: float = 1200.0    # total half-width of the carved band; ~10-11% area on a 25.6km mountain
+                                         # window (down from ~28% at the wide defaults) -- a believable pass
     ramp_floor_smooth_px: float = 5.0    # smoothing of the floor field (kills zigzag-route bumpiness)
     ramp_carve_max_m: float = 3500.0     # cap for the ramp carve (mountains need a deep valley; bigger than the
                                          # gentle-saddle carve_max_m)
