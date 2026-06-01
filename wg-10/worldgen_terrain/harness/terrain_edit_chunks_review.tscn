@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://worldgen_terrain/harness/mountain_world_chunks_review.gd" id="1"]
+
+[node name="TerrainEditChunksReview" type="Node3D"]
+script = ExtResource("1")
+data_path = "res://worldgen_terrain/generated/review/terrain_edit_chunks.json"
+review_title = "WG10 mountain 9x9 + terrain-edit trail"
+base_height_scale = 1700.0
