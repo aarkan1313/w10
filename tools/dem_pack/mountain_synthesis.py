@@ -62,8 +62,9 @@ RIDGES_CENTER: float = 0.10
 RIDGES_SCALE: float = 1.15
 
 # massif_inner: mean≈0.83, range≈[0.12 .. 1.56]
+# SCALE pushed 0.70→0.72 during LOOK tuning to lift massif contrast toward legacy.
 MASSIF_CENTER: float = 0.12
-MASSIF_SCALE: float = 0.70
+MASSIF_SCALE: float = 0.72
 
 # norm01 on flow channels output: range≈[0.32 .. 1.0]
 # (only used in non-apron path; apron path uses DoG which is already [0,1]-ish)
@@ -73,28 +74,66 @@ CHANNELS_SCALE: float = 1.47
 # DoG channel proxy fixed normalization scale (seam-safe path only).
 # DoG channel field (post-blur) has typical max≈0.22..0.40 → scale 1/0.30≈3.33
 # maps the typical range to [0, ~1.1] before smoothstep thresholds are applied.
-CHANNELS_DOG_SCALE: float = 3.33
+# SCALE pushed 3.33→3.50 during LOOK tuning so DoG channels read as defined valleys.
+CHANNELS_DOG_SCALE: float = 3.50
 
 # zscore → affine_remap targets mean≈0, std≈1 equivalent
 # base_inner: mean≈0.83, std≈0.45
+# SCALE pushed 2.22→2.28 during LOOK tuning to lift base relief toward legacy.
 BASE_CENTER: float = 0.83
-BASE_SCALE: float = 2.22
+BASE_SCALE: float = 2.28
 
 # zscore(ranges) used in rough_surface: mean≈0.42, std≈0.14
 RANGES_ZSCORE_CENTER: float = 0.42
 RANGES_ZSCORE_SCALE: float = 7.00
 
 # ridge_detail raw: mean≈0.31, std≈0.21
+# SCALE pushed 4.76→4.85 during LOOK tuning to sharpen ridge crests toward legacy.
 RIDGE_DETAIL_CENTER: float = 0.31
-RIDGE_DETAIL_SCALE: float = 4.76
+RIDGE_DETAIL_SCALE: float = 4.85
 
 # near_detail (fbm) raw: mean≈0.0, std≈0.28
 NEAR_DETAIL_CENTER: float = 0.00
-NEAR_DETAIL_SCALE: float = 3.57
+NEAR_DETAIL_SCALE: float = 3.60
 
-# final blend: upstream is already ≈mean=0, std=1 by construction; keep scale 1
+# final blend: upstream is already ≈mean=0, std≈1 by construction.
+# Legacy ends with a per-window zscore (forces std=1.0); the seam-safe path
+# cannot (data-dependent), so FINAL_SCALE is the overall-amplitude knob. Tuned
+# to 0.80 so the post-incision std lands near legacy's ~1.0 (the carve/ridge
+# gains below add relief that this scale then normalizes back down).
 FINAL_CENTER: float = 0.00
-FINAL_SCALE: float = 1.00
+FINAL_SCALE: float = 0.80
+
+# ---------------------------------------------------------------------------
+# LOOK levers (seam-safe path only) — recover the accepted legacy look.
+# All are DATA-INDEPENDENT fixed constants → seams stay bit-exact.
+# These replace the implicit thresholds/gains that, paired with the DoG channel
+# proxy, made the seam-safe core read too smooth / under-incised vs legacy.
+# ---------------------------------------------------------------------------
+# DoG channel proxy sharpness: the tight/loose Gaussian pair. A tighter loose
+# blur makes the difference-of-Gaussians pick narrower, crisper valley cores.
+# loose 3.0→2.8 during LOOK tuning to tighten valley cores toward legacy.
+DOG_TIGHT_SIGMA: float = 0.9
+DOG_LOOSE_SIGMA: float = 2.8
+# Channel mask thresholds (seam-safe path). The DoG primary field's p90≈0.50, so
+# the legacy smoothstep(0.54, 0.94) barely fired → primary valleys vanished.
+# Lowered hard during LOOK tuning so primary main-valleys incise as deep as the
+# legacy flow-channel valleys (the chosen "balanced" variant).
+PRIMARY_THRESH_LO: float = 0.10
+PRIMARY_THRESH_HI: float = 0.50
+TRIBUTARY_THRESH_LO: float = 0.12
+TRIBUTARY_THRESH_HI: float = 0.54
+# Extra incision gain applied to the carve/branch terms in the seam-safe path
+# (multiplies the per-style carve_gain/branch_gain). >1 deepens valleys.
+# Pushed hard (1.30→2.0) so the DoG-carved valleys reach legacy incision depth;
+# FINAL_SCALE then normalizes overall amplitude back near legacy std.
+SEAMSAFE_CARVE_GAIN: float = 2.00
+SEAMSAFE_BRANCH_GAIN: float = 1.70
+# Extra ridge/detail gain in the seam-safe path (multiplies per-style ridge_gain
+# /detail_gain). >1 sharpens ridge crests. Kept modest (1.12/1.05) so ridges read
+# crisp without over-roughening relative to legacy.
+SEAMSAFE_RIDGE_GAIN: float = 1.12
+SEAMSAFE_DETAIL_GAIN: float = 1.05
 
 
 @dataclass(frozen=True)
@@ -267,14 +306,14 @@ def _flow_channels_seam_safe(
     than their neighbourhood) → positive values → channels/valleys.
 
     Reach analysis (both blurs on ``surface``, not chained):
-      tight blur σ=1.0 → reach 4px (from surface's depth)
-      loose blur σ=3.5 → reach 14px (from surface's depth)
-      width blur σ=width_px≤4.0 → reach max 16px (on top of loose = 14+16=30)
+      tight blur σ=DOG_TIGHT_SIGMA (1.0) → reach 4px (from surface's depth)
+      loose blur σ=DOG_LOOSE_SIGMA (3.0) → reach 12px (from surface's depth)
+      width blur σ=width_px≤4.0 → reach max 16px (on top of loose = 12+16=28)
     The caller's surface already incorporates upstream blur depth; the DoG adds
-    at most 14 px to that depth (loose dominates), then width adds ≤16 → +30.
+    at most 12 px to that depth (loose dominates), then width adds ≤16 → +28.
     """
-    tight = gaussian_filter(surface, sigma=1.0, mode=mode)
-    loose = gaussian_filter(surface, sigma=3.5, mode=mode)
+    tight = gaussian_filter(surface, sigma=DOG_TIGHT_SIGMA, mode=mode)
+    loose = gaussian_filter(surface, sigma=DOG_LOOSE_SIGMA, mode=mode)
     dog = loose - tight  # positive in concavities (valleys)
     dog_positive = np.clip(dog, 0.0, None)
     # Blur to spread channel extent (replaces the second blur in _flow_channels)
@@ -377,11 +416,13 @@ def generate(
         base = ss.affine_remap(style.uplift_gain * (1.50 * massif + 0.18 * ranges - 0.46 * lowland), BASE_CENTER, BASE_SCALE)
 
         primary = _flow_channels_seam_safe(base, width_px=style.valley_width_px, mode=blur_mode)
-        primary_mask = smoothstep(0.54, 0.94, primary)
+        # LOOK: DoG primary fires at a different scale than legacy flow channels,
+        # so use lower (data-independent) thresholds to recover main-valley incision.
+        primary_mask = smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary)
 
         rough_surface = base + 0.18 * ss.affine_remap(ranges, RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE)
         tributary = _flow_channels_seam_safe(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), mode=blur_mode)
-        tributary_mask = smoothstep(0.44, 0.88, tributary)
+        tributary_mask = smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary)
 
         ridge_detail = ss.affine_remap(wg.ridged_multifractal(w_x, w_z, 1.0 / (feature_span * 0.045), 5, seed + 40, gain=0.52), RIDGE_DETAIL_CENTER, RIDGE_DETAIL_SCALE)
         near_detail = ss.affine_remap(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.020), 4, seed + 50, gain=0.48), NEAR_DETAIL_CENTER, NEAR_DETAIL_SCALE)
@@ -409,11 +450,19 @@ def generate(
     high_mask = smoothstep(0.48, 0.86, massif) * (1.0 - 0.38 * lowland)
     valley_mask = np.clip(0.72 * primary_mask + 0.46 * tributary_mask, 0.0, 1.0)
 
+    # LOOK: in the seam-safe path the DoG channel proxy + conservative affine
+    # constants read too smooth; apply fixed (data-independent) gain multipliers
+    # to sharpen ridges and deepen valleys back toward the accepted legacy look.
+    ridge_g = style.ridge_gain * (SEAMSAFE_RIDGE_GAIN if seam_safe_mode else 1.0)
+    detail_g = style.detail_gain * (SEAMSAFE_DETAIL_GAIN if seam_safe_mode else 1.0)
+    carve_g = style.carve_gain * (SEAMSAFE_CARVE_GAIN if seam_safe_mode else 1.0)
+    branch_g = style.branch_gain * (SEAMSAFE_BRANCH_GAIN if seam_safe_mode else 1.0)
+
     height = base
-    height += style.ridge_gain * (0.08 + 0.58 * high_mask) * (0.24 * ridge_detail)
-    height += style.detail_gain * (0.04 + 0.34 * high_mask) * (0.34 * near_detail)
-    height -= style.carve_gain * (0.42 + 0.58 * high_mask) * primary_mask
-    height -= style.branch_gain * (0.18 + 0.42 * high_mask) * tributary_mask
+    height += ridge_g * (0.08 + 0.58 * high_mask) * (0.24 * ridge_detail)
+    height += detail_g * (0.04 + 0.34 * high_mask) * (0.34 * near_detail)
+    height -= carve_g * (0.42 + 0.58 * high_mask) * primary_mask
+    height -= branch_g * (0.18 + 0.42 * high_mask) * tributary_mask
 
     floor_mask = np.clip(
         smoothstep(0.48, 0.86, gaussian_filter(valley_mask, sigma=1.2, mode=blur_mode)) + 0.24 * lowland,
