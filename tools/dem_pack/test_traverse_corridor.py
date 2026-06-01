@@ -99,17 +99,25 @@ def test_verify_first_noop_is_zero_seam_safe_and_resolved():
     assert float(np.max(np.abs(ra["carve_delta"][:, -1] - rb["carve_delta"][:, 0]))) == 0.0
 
 
-def test_real_barrier_is_reported_pending_not_falsely_resolved():
+def test_real_barrier_is_resolved_seam_exact_and_still_rugged():
     # seed 1, spiky, 25.6 km is a measured low-corridor barrier (memory worldgen10-tier3-barrier-measurements)
     spec = ex._window_spec(129, ex.CHUNK_SPAN_M)
     p = tc.TraverseParams()
     spiky = dataclasses.replace(v2.KeeperV2Params(), post_tanh_gain=2.4, relief_amplitude=3.2)
-    w = win.build_skeleton_window(ex.WORLD_ORIGIN_X_M, ex.WORLD_ORIGIN_Z_M, 1, spec)
-    res = tc.build_traverse_corridor(w, 1, spec, p, spiky)
-    assert res["needs_route"] is True            # a real barrier exists
-    assert res["resolved"] is False              # honesty: we did NOT resolve it
-    assert res["carve_pending"] is True          # ... and we say so
-    assert np.count_nonzero(res["carve_delta"]) == 0   # emitted ZERO (seam-safe), not a seam-breaking carve
+    ox, oz = ex.WORLD_ORIGIN_X_M, ex.WORLD_ORIGIN_Z_M
+    wa = win.build_skeleton_window(ox, oz, 1, spec)
+    wb = win.build_skeleton_window(ox + ex.CHUNK_SPAN_M, oz, 1, spec)
+    ra = tc.build_traverse_corridor(wa, 1, spec, p, spiky)
+    rb = tc.build_traverse_corridor(wb, 1, spec, p, spiky)
+    assert ra["needs_route"] is True                       # a real barrier exists
+    assert ra["resolved"] is True and ra["carved"] is True  # ... and the corridor carve RESOLVED it
+    keeper_core = v2.compose_windowed_height_v2(wa, 1, spec, spiky)
+    final_core = keeper_core + ra["carve_delta"]
+    assert tc.needs_route_core(final_core, spec, p)["needs_route"] is False   # guarantee holds
+    border = float(np.max(np.abs(ra["carve_delta"][:, -1] - rb["carve_delta"][:, 0])))
+    assert border == 0.0, f"carve broke seams: {border}"                      # seam-exact
+    slopes = tc.trav.slope_grid(final_core, scene_width_m=p.scene_width_m, height_scale_m=p.height_scale_m)
+    assert float(np.percentile(slopes, 90.0)) >= tc.trav.MIN_STRUCTURAL_SLOPE_P90   # still rugged
 
 
 def test_crossing_holds_matches_needs_route_core():

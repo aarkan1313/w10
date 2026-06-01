@@ -92,6 +92,54 @@ def _step_cost(slope_b: float, h_b: float, chan_b: float, cell_m: float, p: Trav
     return max(base * (1.0 - reward), float(cell_m) * 0.05)
 
 
+def _dijkstra_cost_field(work_s, work_h, work_ch, cell_m, p, sources, is_target):
+    """Deterministic Dijkstra over a working grid. `sources` = iterable of (row, col) seeded at their own
+    step cost; `is_target(r, c)` returns True at a goal cell (search stops at the first popped target).
+    Returns (prev_flat, dist_flat, target_flat_idx or -1). Cost model (`_step_cost`), fixed neighbour order,
+    and heap (cost, idx) tie-break are shared by least_cost_crossing (edge->edge) and the corridor router
+    (gate->gate), so both route identically."""
+    rows, cols = work_s.shape
+    dist = np.full(rows * cols, float("inf"), dtype=np.float64)
+    prev = np.full(rows * cols, -1, dtype=np.int64)
+    pq: list[tuple[float, int]] = []
+    for (r, c) in sources:
+        idx = r * cols + c
+        cost = _step_cost(work_s[r, c], work_h[r, c], work_ch[r, c], cell_m, p)
+        if cost < dist[idx]:
+            dist[idx] = cost
+            heapq.heappush(pq, (cost, idx))
+    target = -1
+    while pq:
+        d, idx = heapq.heappop(pq)
+        if d > dist[idx]:
+            continue
+        r, c = divmod(idx, cols)
+        if is_target(r, c):
+            target = idx
+            break
+        for dr, dc in ((-1, 0), (1, 0), (0, 1), (0, -1)):
+            nr, nc = r + dr, c + dc
+            if not (0 <= nr < rows and 0 <= nc < cols):
+                continue
+            nidx = nr * cols + nc
+            nd = d + _step_cost(work_s[nr, nc], work_h[nr, nc], work_ch[nr, nc], cell_m, p)
+            if nd < dist[nidx]:
+                dist[nidx] = nd
+                prev[nidx] = idx
+                heapq.heappush(pq, (nd, nidx))
+    return prev, dist, target
+
+
+def _reconstruct_path(prev, target, cols):
+    path_work: list[tuple[int, int]] = []
+    node = target
+    while node != -1:
+        path_work.append(divmod(int(node), cols))
+        node = int(prev[node])
+    path_work.reverse()
+    return path_work
+
+
 def least_cost_crossing(
     slopes: np.ndarray,
     height_full: np.ndarray,
@@ -115,43 +163,13 @@ def least_cost_crossing(
     work_s, work_h, work_ch = (s, h, ch) if axis == "x" else (s.T, h.T, ch.T)
     rows, cols = work_s.shape
     cell_m = float(spec.spacing_m)
-    dist = np.full(rows * cols, float("inf"), dtype=np.float64)
-    prev = np.full(rows * cols, -1, dtype=np.int64)
-    pq: list[tuple[float, int]] = []
-    for r in range(rows):
-        idx = r * cols
-        cost = _step_cost(work_s[r, 0], work_h[r, 0], work_ch[r, 0], cell_m, p)
-        dist[idx] = cost
-        heapq.heappush(pq, (cost, idx))
-
-    target = -1
-    while pq:
-        d, idx = heapq.heappop(pq)
-        if d > dist[idx]:
-            continue
-        r, c = divmod(idx, cols)
-        if c == cols - 1:
-            target = idx
-            break
-        for dr, dc in ((-1, 0), (1, 0), (0, 1), (0, -1)):
-            nr, nc = r + dr, c + dc
-            if not (0 <= nr < rows and 0 <= nc < cols):
-                continue
-            nidx = nr * cols + nc
-            nd = d + _step_cost(work_s[nr, nc], work_h[nr, nc], work_ch[nr, nc], cell_m, p)
-            if nd < dist[nidx]:
-                dist[nidx] = nd
-                prev[nidx] = idx
-                heapq.heappush(pq, (nd, nidx))
-
+    sources = [(r, 0) for r in range(rows)]
+    prev, dist, target = _dijkstra_cost_field(
+        work_s, work_h, work_ch, cell_m, p, sources, lambda r, c: c == cols - 1
+    )
     if target < 0:
         raise RuntimeError("least_cost_crossing: no path found across grid")
-    path_work: list[tuple[int, int]] = []
-    node = target
-    while node != -1:
-        path_work.append(divmod(int(node), cols))
-        node = int(prev[node])
-    path_work.reverse()
+    path_work = _reconstruct_path(prev, target, cols)
     path = [(r, c) if axis == "x" else (c, r) for (r, c) in path_work]
     max_step_slope = max((float(s[r, c]) for r, c in path), default=0.0)
     return {"path": path, "max_step_slope": float(max_step_slope), "total_cost": float(dist[target]), "axis": axis}
@@ -196,13 +214,27 @@ def build_traverse_corridor(window: dict, seed: int, spec, p: TraverseParams, ke
             **decision,
         }
 
-    # Real barrier, but the seam-exact connected carve is blocked (spec §1.2). Report honestly; emit no carve.
+    # Real barrier: route a connected corridor and carve along it (seam-exact, gate-anchored).
+    # Local import avoids a top-level circular import (corridor_router imports traverse_corridor).
+    import corridor_router as crr
+    n_core = cs.stop - cs.start
+    p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff))
+    # fall back to a single spanning route when a network is not seam-safe on this window (small span / wide
+    # feather) -- always seam-safe over silently-broken seams (pillar: no shortcuts).
+    if not crr.carve_seam_safe(spec, p_cor, n_core):
+        p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff), corridor_density=1)
+    corridor = crr.build_corridor(full, spec, p, p_cor)
+    carve_delta = crr.carve_corridor(full, corridor, spec, p_cor, height_scale_m=float(p.height_scale_m))
+    keeper_core = v2.compose_windowed_height_v2(window, seed, spec, keeper_params)
+    final_core = keeper_core + carve_delta
+    resolved = not needs_route_core(final_core, spec, p)["needs_route"]
+    carved = bool(np.any(carve_delta != 0.0))
     return {
-        "carve_delta": np.ascontiguousarray(zero),   # zero = seam-safe; NOT a resolved route
-        "route_dist": np.ascontiguousarray(far),
-        "carved": False,
-        "resolved": False,
-        "carve_pending": True,                       # a seam-exact connected-corridor carve is owed here
+        "carve_delta": np.ascontiguousarray(carve_delta),
+        "route_dist": np.ascontiguousarray(corridor["corridor_dist"]),
+        "carved": carved,
+        "resolved": bool(resolved),
+        "carve_pending": False,
         "route_axis": "",
         **decision,
     }
