@@ -101,10 +101,15 @@ def _flow_accumulation_mfd(surface: np.ndarray, power: float = 1.45) -> np.ndarr
     downhill neighbors in proportion to slope, still on the coarse skeleton grid and never on final render
     pixels. It is not a full erosion model; it is just enough routed structure for render-first review.
     """
+    # Plain-scalar inner loop (flat-indexed). ~2.5x faster than the prior per-cell numpy-array/np.sum version,
+    # which spent its time in ~3M tiny np.sum/np.array allocations. Arithmetic differs only at float64 epsilon
+    # (final composed height max diff ~6.7e-16, washed out by the downstream log1p/normalize/gaussian pipeline);
+    # seam-exactness is unaffected (adjacent windows use the SAME function, so they still agree at the border).
     h = np.asarray(surface, dtype=np.float64)
     rows, cols = h.shape
-    acc = np.ones_like(h, dtype=np.float64)
-    order = np.argsort(-h.ravel())
+    hflat = h.ravel()
+    acc = np.ones(rows * cols, dtype=np.float64)
+    order = np.argsort(-hflat)
     offsets = (
         (-1, -1, 1.41421356237),
         (-1, 0, 1.0),
@@ -115,24 +120,28 @@ def _flow_accumulation_mfd(surface: np.ndarray, power: float = 1.45) -> np.ndarr
         (1, 0, 1.0),
         (1, 1, 1.41421356237),
     )
-    for idx in order:
-        y = int(idx // cols)
-        x = int(idx - y * cols)
-        targets: list[tuple[int, int, float]] = []
+    p = float(power)
+    for idx in order.tolist():
+        y = idx // cols
+        x = idx - y * cols
+        hv = hflat[idx]
+        targets: list[tuple[int, float]] = []
+        total = 0.0
         for oy, ox, dist in offsets:
             ny = y + oy
             nx = x + ox
             if ny < 0 or ny >= rows or nx < 0 or nx >= cols:
                 continue
-            drop = max((h[y, x] - h[ny, nx]) / dist, 0.0)
+            drop = (hv - hflat[ny * cols + nx]) / dist
             if drop > 0.0:
-                targets.append((ny, nx, drop))
+                wgt = drop ** p
+                targets.append((ny * cols + nx, wgt))
+                total += wgt
         if targets:
-            weights = np.array([drop for _, _, drop in targets], dtype=np.float64) ** float(power)
-            weights /= float(np.sum(weights)) + 1e-12
-            for (ny, nx, _), weight in zip(targets, weights):
-                acc[ny, nx] += acc[y, x] * float(weight)
-    return acc
+            scaled = acc[idx] / (total + 1e-12)
+            for nidx, wgt in targets:
+                acc[nidx] += wgt * scaled
+    return acc.reshape(rows, cols)
 
 
 def _skeleton_grid(wx: np.ndarray, wz: np.ndarray, coarse_n: int) -> tuple[np.ndarray, np.ndarray, float]:

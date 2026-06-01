@@ -207,6 +207,7 @@ def build_traverse_corridor(window: dict, seed: int, spec, p: TraverseParams, ke
         return {
             "carve_delta": np.ascontiguousarray(zero),
             "route_dist": np.ascontiguousarray(far),
+            "keeper_core": np.ascontiguousarray(_core(full, spec)),   # no recompute (= compose_windowed_height_v2)
             "carved": False,
             "resolved": True,            # already crossable -> guarantee holds with no work
             "carve_pending": False,
@@ -225,13 +226,14 @@ def build_traverse_corridor(window: dict, seed: int, spec, p: TraverseParams, ke
         p_cor = crr.CorridorParams(low_corridor_cutoff=float(p.low_corridor_cutoff), corridor_density=1)
     corridor = crr.build_corridor(full, spec, p, p_cor)
     carve_delta = crr.carve_corridor(full, corridor, spec, p_cor, height_scale_m=float(p.height_scale_m))
-    keeper_core = v2.compose_windowed_height_v2(window, seed, spec, keeper_params)
+    keeper_core = np.ascontiguousarray(_core(full, spec))   # = compose_windowed_height_v2(...); avoid recompute
     final_core = keeper_core + carve_delta
     resolved = not needs_route_core(final_core, spec, p)["needs_route"]
     carved = bool(np.any(carve_delta != 0.0))
     return {
         "carve_delta": np.ascontiguousarray(carve_delta),
         "route_dist": np.ascontiguousarray(corridor["corridor_dist"]),
+        "keeper_core": keeper_core,        # exposed so callers (compose_with_corridor) don't recompose
         "carved": carved,
         "resolved": bool(resolved),
         "carve_pending": False,
@@ -242,10 +244,10 @@ def build_traverse_corridor(window: dict, seed: int, spec, p: TraverseParams, ke
 
 def compose_with_corridor(window: dict, seed: int, spec, p: TraverseParams, keeper_params) -> tuple[np.ndarray, dict]:
     """Final composed height = keeper core height + Tier-3 carve delta. Render and collision both call this,
-    so visible==collision parity holds by construction."""
-    keeper = v2.compose_windowed_height_v2(window, seed, spec, keeper_params)
+    so visible==collision parity holds by construction. Reuses res["keeper_core"] (computed inside
+    build_traverse_corridor) instead of recomposing the keeper -- the keeper compose is the expensive step."""
     res = build_traverse_corridor(window, seed, spec, p, keeper_params)
-    return np.ascontiguousarray(keeper + res["carve_delta"]), res
+    return np.ascontiguousarray(res["keeper_core"] + res["carve_delta"]), res
 
 
 def crossing_holds(core_height: np.ndarray, spec, p: TraverseParams) -> bool:
