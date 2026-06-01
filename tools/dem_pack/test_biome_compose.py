@@ -37,13 +37,17 @@ def test_compose_biomes_two_recipes_reduces_to_pure_at_ends():
     assert np.allclose(out[:, -1], 1.0)           # pure b
 
 def test_compose_biomes_three_recipe_order_independent():
-    a = np.full((6, 6), 3.0); a[:, ::2] = 6.0   # structured
-    b = np.full((6, 6), 1.0); c = np.full((6, 6), 0.0)
-    w = [np.full((6, 6), 0.5), np.full((6, 6), 0.3), np.full((6, 6), 0.2)]
+    # TWO structured fields (a stripes, b checker) + one flat, so a reintroduced order-dependent
+    # fold would actually diverge between the two orderings (the weak single-structured version
+    # collapsed to 'a' both ways and could not catch the bug).
+    a = np.full((6, 6), 3.0); a[:, ::2] = 6.0          # vertical stripes
+    b = np.full((6, 6), 2.0); b[::2, :] = 5.0          # horizontal stripes (different structure)
+    c = np.full((6, 6), 0.0)                            # flat
+    wa = np.full((6, 6), 0.5); wb = np.full((6, 6), 0.3); wc = np.full((6, 6), 0.2)
     cfg = bc.BlendConfig(mode="height_favored")
-    out1 = bc.compose_biomes([a, b, c], w, cfg)
-    out2 = bc.compose_biomes([c, b, a], [w[2], w[1], w[0]], cfg)
-    assert np.allclose(out1, out2), "3-recipe compose must be order-independent"
+    out1 = bc.compose_biomes([a, b, c], [wa, wb, wc], cfg)
+    out2 = bc.compose_biomes([c, b, a], [wc, wb, wa], cfg)
+    assert np.allclose(out1, out2, atol=1e-9), "3-recipe compose must be order-independent"
 
 def test_compose_biomes_determinism():
     a = np.full((4, 4), 5.0); b = np.full((4, 4), 1.0)
