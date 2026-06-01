@@ -158,3 +158,37 @@ Offline Python; TDD; render-first.
   with the real density policy deferred to that scale slice.
 - Downstream unblocked on acceptance, not done here: the runtime sample/bake split, the Rust port, and the
   full road/river/lake/POI editors.
+
+## 9. BUILT + OWNER-ACCEPTED (2026-06-01)
+
+The framework is built, flown in the real mountain 9x9 chunk scene, and owner-accepted. 13 offline tests green.
+
+**Package `tools/dem_pack/terrain_edits/`** (commits ed7d03b, 9c8186e, …):
+- `apply.py` (blend_edges/bound_depth/combine/EditContext), `placement.py` (low_corridor_route, contour_sweep,
+  cross_waypoint), `profile.py` (thin_climbing_trail, graded_valley), `edit.py` (TerrainEdit, apply_edits +
+  `_place_routes`/`_as_routes` — handle route_count spread AND placements that return multiple routes),
+  `configs.py` (mountain_trail, mountain_trail_connected, road/river/lake/poi sketches).
+- Wired into the 9x9 chunk scene: `export_godot_terrain_edit_chunks.py` + `terrain_edit_chunks_review.tscn`
+  (carve-big-field-then-slice = seam-exact; fly + walk + collision).
+
+**Trail-placement knobs (the tunable spectrum, from owner fly feedback):**
+- `mountain_trail()` — sparse single Fellowship pass per axis (can skirt one side, leaving dead area).
+- `mountain_trail(route_count=N)` — N spread crossings per axis (fills the range; too high → artificial grid).
+- `mountain_trail_connected()` — `cross_waypoint`: 4 arms meet at a central low waypoint → ONE network spanning
+  all four edges = full left↔right + up↔down traversal, meeting in the middle. **This is the chunk-scene
+  default.** Knob comparison: `D:/tmp/wg10_mountain_synthesis/trail_knobs.png`.
+
+**Owner acceptance + honest characteristic:** owner flew `mountain_trail_connected` and accepted the look
+(thin trails preserve the mountain; the cross meets in the middle). The connected network is GEOMETRICALLY
+full (carved component touches all four edges — gated). ~66% of its length is fully walkable; the rest has
+short steep SCRAMBLES (the arms climb from the deep center to high edges → the depth-cap-vs-walkable tension,
+§8). Owner observed one ~50 m spot where the *walkable* mask gaps but judged it walkable (a real-pass scramble).
+This is acceptable/intended, not a bug; tighten via `depth_cap_m`↑ or `floor_grade_frac`↓ if a game wants a
+smoother trail (at the cost of more carve). The walkable fraction is a per-game tunable, not a fixed 100%.
+
+**Still open (deferred, owner-gated):** true contour-traversal placement (vs the low_corridor_route alias);
+real spline/flow_trace/basin_fill/point placements + flat_road/incised_channel/lake_surface/level_pad profiles
+(sketches today); the runtime sample/bake split + Rust port; cross-chunk seam-exactness for independent-window
+streaming (today's seam-exactness is carve-then-slice — fine for the 9x9 review; independent windows need
+world-anchored fact-derived routes, the Slice-3 concern). Pass DENSITY is part of the player-to-world scale
+contract (mountain promotion doc).

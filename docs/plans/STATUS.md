@@ -5,24 +5,32 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ CURRENT (2026-05-31):** Phase 5. Tier-3 traversability work has **broadened into a reusable goal** (owner
-> directive): build a **tunable / adjustable TERRAIN-EDIT subsystem** — mountain passes are ONE use; the same
-> machinery must later serve **roads, POIs, rivers, lakes** (all edit terrain). "Make it tunable, it won't just
-> be used for this."
-> **Mountains landed** (`mountain_synthesis.py`, HEIGHT_SCALE 1700, 9x9 chunk scene — `MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`).
-> The corridor router + `carve_ramp` (wide graded valley) RESOLVE a real mountain wall and run in the real
-> mountain 9x9 chunk scene (`export_godot_mountain_network_chunks.py` + `mountain_network_chunks_review.tscn`,
-> seam-exact by carve-big-field-then-slice). Connected pass NETWORK built (`mountain_pass_network.py`).
-> **OWNER LOOK FEEDBACK + DIRECTION:** the wide carve looked too wide / gouged peaks / had cliff drops →
-> wants **thin mountain PATHS / TRAILS / switchbacks + thin valleys that slowly climb (Fellowship/Caradhras
-> path: ONE sparse sweeping trail, few wide switchbacks, "other stuff besides Dijkstra")**. PROVEN: a sparse
-> valley-following route + thin re-graded-raw-height ledge carve gives a fully-walkable (0% over-budget) thin
-> trail that PRESERVES the mountain (look solved). REMAINING TENSION: depth-cap to avoid the one deep gouge
-> re-steepens the trail — the genuinely-hard research-grade trail-carve piece. **NEXT: build the tunable
-> terrain-edit framework (swappable routing strategy + carve profile + named knobs; mountain trail = one
-> config), then finish the trail carve in that frame.** Full trace + all the negative results: memory
-> `worldgen10-tier3-corridor-built-mountain-gap`. Commits 4252bcd/75dd5fb (network+chunk scene). Spec for the
-> framework pending. (ROADMAP "▶ YOU ARE HERE" box + the 2026-05-30 handoff just below = older history.)
+> **▶ CURRENT (2026-06-01):** Phase 5. The **tunable TERRAIN-EDIT FRAMEWORK is BUILT + OWNER-ACCEPTED.** An
+> edit = (Placement WHERE + Profile WHAT) → seam-exact world-local delta, composed at the M4 edit-provider seam;
+> edits READ facts, stay separate. `tools/dem_pack/terrain_edits/` — `apply` (blend/bound/combine/EditContext),
+> `placement` (low_corridor_route / contour_sweep / cross_waypoint), `profile` (thin_climbing_trail /
+> graded_valley), `edit` (TerrainEdit + apply_edits), `configs` (mountain_trail, mountain_trail_connected,
+> road/river/lake/poi SKETCHES). **13 offline tests green.** Wired into the real mountain 9x9 chunk scene
+> (`export_godot_terrain_edit_chunks.py` + `terrain_edit_chunks_review.tscn`; carve-big-field-then-slice =
+> seam-exact; fly + walk + collision). Commits ed7d03b … 77c3828.
+> **Owner flew it + accepted.** Thin Fellowship trails PRESERVE the mountain (no gouge/cliff/wide gash). Trail
+> placement is a tunable spectrum: `mountain_trail()` sparse single pass · `mountain_trail(route_count=N)` spread
+> · `mountain_trail_connected()` = 4 arms meeting at a central waypoint → ONE network spanning all four edges
+> (full L↔R + U↔D, meet-in-the-middle; the chunk-scene default). **Honest:** the connected net is GEOMETRICALLY
+> full (gated, touches all 4 edges); ~66% of its length is fully walkable, the rest short steep scrambles
+> (depth-cap-vs-walkable tension, a tunable via `depth_cap_m`/`floor_grade_frac`). Owner saw one ~50 m
+> walkable-mask gap, judged it a fine walkable scramble.
+> Spec §9 (built+accepted): `docs/superpowers/specs/2026-06-01-worldgen-terrain-edit-framework-design.md`. Full
+> carve/routing trace + negative results: memory `worldgen10-tier3-corridor-built-mountain-gap`.
+> **NEXT (deferred, owner-gated):** flesh out road/river/lake/POI editors as needed; runtime sample/bake split +
+> Rust port (Slice 3); cross-chunk seam-exactness for independent-window streaming (today = carve-then-slice,
+> fine for the 9x9 review; independent windows need world-anchored fact-derived routes). Pass DENSITY ties to the
+> player-to-world scale contract (`MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`). (Below: prior history + ROADMAP box.)
+
+> **(2026-05-31, history):** the framework goal emerged from Tier-3 traversability: corridor router + carve_ramp
+> resolved a real mountain wall (pass NETWORK in the 9x9), owner flew the wide carve → "too wide / gouges peaks /
+> cliff drops" → asked for thin Fellowship trails + "make it tunable, won't just be for this" → the framework
+> above. Mountains landed via `mountain_synthesis.py` (`MOUNTAIN_BIOME_PROMOTION_2026-05-31.md`).
 
 > **Latest session handoff: `docs/plans/SESSION_HANDOFF_2026-05-30.md`** — read it for the exact
 > point-in-time state (Slice 2 paused for structure research). Current addendum: the B-bug closeout is now
