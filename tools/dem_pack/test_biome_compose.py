@@ -17,3 +17,19 @@ def test_height_favored_biases_toward_higher_relief_in_band():
     favored = bc._blend_height_favored(a, b, w, cfg)
     plain = bc._blend_field(a, b, w)
     assert float(np.mean(np.abs(favored))) > float(np.mean(np.abs(plain)))
+
+def test_compose_biomes_two_recipes_reduces_to_pure_at_ends():
+    a = np.full((4, 4), 5.0); b = np.full((4, 4), 1.0)
+    w_a = np.array([[1.0, 1.0, 0.0, 0.0]] * 4)   # left 2 cols pure a, right 2 cols pure b
+    cfg = bc.BlendConfig(mode="height_favored")
+    out = bc.compose_biomes([a, b], [w_a, 1.0 - w_a], cfg)
+    assert np.allclose(out[:, 0], 5.0)            # pure a
+    assert np.allclose(out[:, -1], 1.0)           # pure b
+
+def test_compose_biomes_determinism():
+    a = np.full((4, 4), 5.0); b = np.full((4, 4), 1.0)
+    w_a = np.full((4, 4), 0.5)
+    cfg = bc.BlendConfig()
+    o1 = bc.compose_biomes([a, b], [w_a, 1.0 - w_a], cfg)
+    o2 = bc.compose_biomes([a, b], [w_a, 1.0 - w_a], cfg)
+    assert np.array_equal(o1, o2)
