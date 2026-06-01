@@ -53,7 +53,10 @@ def build_terrain_edit_world(style, *, seed=SEED, chunk_count=CHUNK_COUNT, chunk
         cell_m=display_total_m / (raw.shape[0] - 1),
         height_scale_m=HEIGHT_SCALE_M,
     )
-    delta = te.apply_edits(raw, ctx, [cfg.mountain_trail()])
+    # mountain_trail_connected = the full-traversal config: 4 arms meet at a central waypoint -> one connected
+    # network spanning all four edges (full L<->R + U<->D). Swap to cfg.mountain_trail() for the sparse single
+    # pass, or cfg.mountain_trail(route_count=N) for a denser spread -- all tunable, same exporter.
+    delta = te.apply_edits(raw, ctx, [cfg.mountain_trail_connected()])
     raw_carved = raw + delta
 
     # track carved fraction (cells where delta < -1m, normalised to height_scale_m)
