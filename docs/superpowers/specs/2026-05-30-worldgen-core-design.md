@@ -30,6 +30,13 @@ valleys, drainage) everywhere, seamless biome transitions. Priority 1 = the cont
 
 ## 2. The architecture (owner-locked)
 
+> **PARAM-SOURCE UPDATE (2026-06-01):** the per-biome param SOURCE below ("real DEMs distilled into per-biome
+> structural DNA") is SUPERSEDED by the owner-accepted hand-authored biome SYNTHS (`*_synthesis.py`). The
+> DEM-distillation look was never owner-accepted (ROADMAP Slice 2); the synths were reviewed + promoted
+> biome-by-biome. DEM-distillation is kept as a superseded-but-available refinement feeding the SAME
+> `BiomeParams` interface. The mechanism below (grammar places + blends params → one generator) is UNCHANGED and
+> is built by `docs/superpowers/specs/2026-06-01-worldgen-biome-composition-layer-design.md`.
+
 Parameter-driven procedural worldgen: real DEMs distilled into per-biome structural DNA; the grammar places
 + smoothly blends that DNA; one continuous warped-noise generator turns blended DNA into infinite seamless
 terrain. **Kernels are never sampled at runtime — they are the offline DNA library, so they cannot tile.**

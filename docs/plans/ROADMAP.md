@@ -346,7 +346,10 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
 - [~] **Slice 2 — biome distillation tooling.** Tooling is BUILT + kept, but the LOOK is NOT accepted.
       Current metrics fixed some dead knobs, but the generator basis still lacks enough structure. Do not
       continue scalar tuning as if this slice is on track; treat it as a useful parameter pipeline waiting
-      for a better basis.
+      for a better basis. **SUPERSEDED AS PARAM SOURCE (2026-06-01):** the biome-param SOURCE is now the
+      owner-accepted hand-authored biome SYNTHS (`*_synthesis.py`), not DEM-distillation (whose look was never
+      accepted). DEM-distillation is kept as a superseded-but-available refinement that can feed the SAME
+      `BiomeParams` interface later. See `docs/superpowers/specs/2026-06-01-worldgen-biome-composition-layer-design.md`.
 - [~] **Slice 2A — geography-engine prototype (offline Python, render-first).** Replace "try all noise
       combos" with a hierarchical landform composition prototype before any runtime work:
       - explicit coarse landform regimes: basin floor, alluvial fan, foothill, range core, plateau, badlands,
@@ -467,8 +470,11 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       cargo 121, fast 6/6, gpu 4/4, m3 9/9 after an editor-closed rebuild. These are in the KEPT
       render/perf foundation and the rebuild sits on them: pool RID cleanup, structural never-black under
       capacity pressure, and terrain-vs-sky/detail-on-off perf gate.
-- [ ] **Slice 3 — Rust generator core, accepted geography stack only. ⛔ BLOCKED on a final owner-accepted
-      stack (fork acted on; now also gated on Tier-3 traversability).**
+- [ ] **Slice 3 — Rust generator core, accepted geography stack only. ✅ UNBLOCKED (2026-06-01): owner flew the
+      A|B|v2 switcher and ACCEPTED `v2` (`keeper_v2.compose_windowed_height_v2`) as the port target.** Both
+      gating arms are now resolved: Tier-3 traversability generalized into the accepted terrain-edit framework,
+      and the keeper fork is closed by owner acceptance of v2 (the only seam-exact variant with a crossing
+      corridor at play scales — fresh ABV gate evidence in STATUS top). Next: writing-plans → the Rust CPU port.
       The A/B drift (frozen `keeper_v1` = formula B ≠ owner-approved formula A; `corr(A,B)=+0.13`, B 35% of A's
       relief) has been ACTED ON (2026-05-31): `keeper_v2` (best-of-both: A's regimes on B's seam-safe substrate)
       is BUILT + seam-exact + committed (`tools/dem_pack/keeper_v2.py`, 23 tests); an A|B|v2 in-place switcher

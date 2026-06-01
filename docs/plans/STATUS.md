@@ -5,6 +5,23 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ BASE STACK ACCEPTED — `v2` (2026-06-01, owner flew A|B|v2 + accepted v2).** The roadmap's Slice-3 blocker
+> (accept a BASE height stack to port) is RESOLVED. Owner flew `rough_world_abv_review.tscn` (keys 1/2/3) and
+> accepted **v2** ("it looks good") — the owner-eye acceptance the gate can't give (DESIGN §7.3). This unblocks
+> Slice 3 (Rust port). Evidence behind the pick — fresh Tier-1 ABV traversability gate on a regenerated
+> `rough_world_abv.json` (k=0 policy = the scene's real policy): **v2 is the only variant whose low corridor
+> actually CROSSES the block** (WE+NS) at 100×/200× and grades `candidate`; A and B both read `blocked` at 25×
+> and `thin` everywhere (no crossing route at any scale):
+> | variant | 25× | 100× | 200× | crosses |
+> |---|---|---|---|---|
+> | A approved | blocked 31.5% | thin 83.5% | thin 97.3% | never |
+> | B keeper_v1 | blocked 16.2% | thin 86.8% | thin 98.1% | never |
+> | v2 best-of-both | thin 49.2% | candidate 96.6% | candidate 100% | WE+NS |
+> Relief ptp: A 1.721 · B 1.685 · v2 1.423 (v2 is the flattest — its honest cost, owner judged acceptable).
+> NOTE: the old `corr(A,B)=+0.13 / B=35% of A` drift claim does NOT reproduce on this matched-core export (B ptp
+> ≈ 98% of A). **v2 = `keeper_v2.compose_windowed_height_v2` (A's regimes on B's seam-safe substrate; seam-exact,
+> 23 tests).** PORT TARGET for Slice 3. (STATUS working note; not committed — owner stages/commits by name.)
+
 > **▶ CURRENT (2026-06-01):** Phase 5. The **tunable TERRAIN-EDIT FRAMEWORK is BUILT + OWNER-ACCEPTED.** An
 > edit = (Placement WHERE + Profile WHAT) → seam-exact world-local delta, composed at the M4 edit-provider seam;
 > edits READ facts, stay separate. `tools/dem_pack/terrain_edits/` — `apply` (blend/bound/combine/EditContext),
@@ -86,6 +103,13 @@ point — see DESIGN §7.3.)
 > wetland are explicitly terrain/mask setup passes only; water/sea-level/flooding behavior remains later work.
 > Final non-visual validation rerun: Python synthesis tests `36 passed`; all six headless Godot review gates
 > returned `status=pass items=8 selected=4`.
+
+> **All-biome transition review scene (2026-06-01):** `wg-10/worldgen_terrain/harness/biome_transition_world_review.tscn`
+> is built for visual validation of biome adjacency. It uses all 12 current setup families, gives each family a
+> 3x3 chunk block, and blends height/color across biome borders in one continuous 12x9 chunk lattice. Generated
+> payload: `wg-10/worldgen_terrain/generated/review/biome_transition_world_3x3.json`. Exporter/layout tests:
+> `3 passed`; headless Godot smoke gate: `[wg10-biome-transition-world-review] status=pass biomes=12 chunks=108
+> labels=12`.
 
 ---
 
