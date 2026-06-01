@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://worldgen_terrain/harness/rough_world_review.gd" id="1"]
+
+[node name="MountainNetworkReview" type="Node3D"]
+script = ExtResource("1")
+data_path = "res://worldgen_terrain/generated/review/mountain_network.json"
+review_title = "WG10 MOUNTAIN range + pass network (press 1 = range, 2 = + passes)"
+base_height_scale = 1700.0
+reference_world_size = 76800.0
