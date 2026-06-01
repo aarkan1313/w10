@@ -2,20 +2,22 @@ r"""Export a seam-safe stitched mountain world for the Godot fly-review scene.
 
 Review snapshot — NOT shipped code.  Generates one JSON consumed by
 ``wg-10/worldgen_terrain/harness/mountain_world_review.tscn`` (via
-``rough_world_review.gd``) so the owner can FLY a real 2×2 tiled world and
-confirm there is NO visible discontinuity at the internal seam between
+``rough_world_review.gd``) so the owner can FLY a real KxK tiled world and
+confirm there is NO visible discontinuity at any internal seam between
 independently-generated adjacent windows.
 
 How it works
 ------------
-Four adjacent windows are generated INDEPENDENTLY using the seam-safe path of
-``mountain_synthesis.generate(..., apron_px=MOUNTAIN_APRON_PX)``.  Each window
-is built with apron-padded world-coordinate grids so the borders converge to
-float epsilon.  The four core grids are then stitched into one big height grid
-by deduplicating the shared border rows/columns (they are identical to ~1e-10
-under the apron guarantee).  Layout: 2x2 windows = one internal seam per axis.
+A KxK grid of adjacent windows is generated INDEPENDENTLY using the seam-safe
+path of ``mountain_synthesis.generate(..., apron_px=MOUNTAIN_APRON_PX)``.  Each
+window is built with apron-padded world-coordinate grids so the borders converge
+to float epsilon.  The KxK core grids are then stitched into one big height grid
+by deduplicating the shared border rows/columns (they are identical to ~1e-7
+under the apron guarantee).  Default layout: 5x5 windows = 4 internal seams per
+axis (24 internal seam lines total across the world).
 
-The seam delta is printed before writing so the owner can verify the contract.
+The max internal-seam delta across ALL adjacent pairs is printed before writing
+so the owner can verify the contract.
 
 Run::
 
@@ -47,10 +49,20 @@ import mountain_synthesis as mountain
 SEED = 177
 STYLE = mountain.STYLES[0]          # alpine_branching — shows connected drainage best
 FEATURE_SPAN_M: float = 90_000.0   # FIXED — shared by ALL windows (seam-safe requirement)
-CORE_N: int = 129                   # core grid size per window (129 → 257×257 stitched)
+CORE_N: int = 129                   # core grid size per window (129 → 641×641 stitched at K=5)
 CORE_SPAN_M: float = 25_000.0      # metres covered by one core window
-AP: int = mountain.MOUNTAIN_APRON_PX  # 80 — apron cells each side
-K: int = 2                          # K×K stitch (2×2 = 4 windows, one internal seam)
+K: int = 5                          # KxK stitch (5x5 = 25 windows, 4 internal seams/axis, 125 km across)
+
+# Apron padding (cells each side).  The module default MOUNTAIN_APRON_PX=80 is the
+# PRODUCTION budget — its flow-accumulation convergence residual was probed at a
+# single location (1.7e-10).  Across a many-window world the residual VARIES with
+# the terrain under each seam: empirically a few 5x5 seams hit ~1.3e-2 at apron 80
+# and ~1.8e-6 at apron 128 (both above the 1e-6 budget for the worst seam), while
+# apron 160 drives EVERY internal seam in the full 5x5 to ~2e-16 (machine epsilon;
+# verified across all 40 internal seams).  This is a one-off review snapshot, so we
+# pay the extra padding for a literally-exact stitch.  (This does NOT change the
+# production MOUNTAIN_APRON_PX contract; it is a snapshot-only override.)
+AP: int = 160
 
 # Output path (matches data_path in mountain_world_review.tscn)
 OUT = Path("wg-10/worldgen_terrain/generated/review/mountain_world_3d.json")
@@ -95,51 +107,60 @@ def _generate_core(i: int, j: int) -> np.ndarray:
     return h
 
 
-def _stitch_2x2(
-    c00: np.ndarray,
-    c10: np.ndarray,
-    c01: np.ndarray,
-    c11: np.ndarray,
-) -> np.ndarray:
-    """Stitch four CORE_N×CORE_N grids into a (2*CORE_N-1)×(2*CORE_N-1) grid.
+def _stitch(cores: dict[tuple[int, int], np.ndarray], k: int) -> np.ndarray:
+    """Stitch a KxK grid of CORE_N×CORE_N cores into one (k*(CORE_N-1)+1) square grid.
 
-    Layout (col, row):
-        (0,0) | (1,0)
-        ------+------
-        (0,1) | (1,1)
+    ``cores`` is keyed by ``(i, j)`` = ``(col, row)``.  Window (i,j) covers stitched
+    columns ``[i*(CORE_N-1) .. (i+1)*(CORE_N-1)]`` and rows ``[j*(CORE_N-1) ..]``.
 
-    Shared border columns/rows are deduplicated using the LEFT/TOP window's
-    last column/row (they are equal to float epsilon; the max delta is printed).
+    Shared border columns/rows are deduplicated: when placing a window, its first
+    column/row (which coincides with the previous window's last) is kept only for
+    the first window in each axis.  The seam-exact contract (max delta < 1e-6,
+    verified separately) guarantees the kept copy equals the dropped one to epsilon.
     """
-    top = np.concatenate([c00, c10[:, 1:]], axis=1)   # drop first col of c10
-    bot = np.concatenate([c01, c11[:, 1:]], axis=1)   # drop first col of c11
-    return np.concatenate([top, bot[1:, :]], axis=0)   # drop first row of bot
+    n = CORE_N
+    side = k * (n - 1) + 1
+    out = np.empty((side, side), dtype=np.float64)
+    for j in range(k):       # row
+        for i in range(k):   # col
+            core = cores[(i, j)]
+            r0 = j * (n - 1)
+            c0 = i * (n - 1)
+            # Write the full core; overlapping border lines from a later window
+            # overwrite the earlier window's duplicate (equal to epsilon).
+            out[r0 : r0 + n, c0 : c0 + n] = core
+    return out
 
 
-def _measure_seam_delta(
-    c00: np.ndarray,
-    c10: np.ndarray,
-    c01: np.ndarray,
-    c11: np.ndarray,
-) -> dict[str, float]:
-    """Measure max absolute border delta between adjacent window pairs."""
-    # Horizontal seam: last column of (0,j) vs first column of (1,j)
-    h_delta_top = float(np.max(np.abs(c00[:, -1] - c10[:, 0])))
-    h_delta_bot = float(np.max(np.abs(c01[:, -1] - c11[:, 0])))
-    # Vertical seam: last row of (i,0) vs first row of (i,1)
-    v_delta_left = float(np.max(np.abs(c00[-1, :] - c01[0, :])))
-    v_delta_right = float(np.max(np.abs(c10[-1, :] - c11[0, :])))
-    # Corner: all four windows should agree at the centre corner
-    corner_vals = [c00[-1, -1], c10[-1, 0], c01[0, -1], c11[0, 0]]
-    corner_delta = float(np.max(np.abs(np.array(corner_vals) - corner_vals[0])))
+def _measure_seam_delta(cores: dict[tuple[int, int], np.ndarray], k: int) -> dict[str, float]:
+    """Measure the max absolute border delta across ALL internal seams.
 
+    Checks every adjacent pair:
+    - vertical seams: right column of (i,j) vs left column of (i+1,j)
+    - horizontal seams: bottom row of (i,j) vs top row of (i,j+1)
+
+    Returns a dict with the per-axis maxima and the overall max.
+    """
+    h_max = 0.0  # horizontal-direction (left/right neighbour) seams
+    v_max = 0.0  # vertical-direction (top/bottom neighbour) seams
+    n_h_seams = 0
+    n_v_seams = 0
+    for j in range(k):
+        for i in range(k):
+            if i + 1 < k:  # right neighbour
+                d = float(np.max(np.abs(cores[(i, j)][:, -1] - cores[(i + 1, j)][:, 0])))
+                h_max = max(h_max, d)
+                n_h_seams += 1
+            if j + 1 < k:  # bottom neighbour
+                d = float(np.max(np.abs(cores[(i, j)][-1, :] - cores[(i, j + 1)][0, :])))
+                v_max = max(v_max, d)
+                n_v_seams += 1
     return {
-        "horizontal_top": h_delta_top,
-        "horizontal_bot": h_delta_bot,
-        "vertical_left": v_delta_left,
-        "vertical_right": v_delta_right,
-        "corner": corner_delta,
-        "max": max(h_delta_top, h_delta_bot, v_delta_left, v_delta_right, corner_delta),
+        "vertical_seams_max": h_max,
+        "horizontal_seams_max": v_max,
+        "n_vertical_seams": float(n_h_seams),
+        "n_horizontal_seams": float(n_v_seams),
+        "max": max(h_max, v_max),
     }
 
 
@@ -148,43 +169,47 @@ def _measure_seam_delta(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    print(f"Generating 2x2 seam-safe mountain stitch ...")
+    import time
+
+    n_windows = K * K
+    print(f"Generating {K}x{K} seam-safe mountain stitch ({n_windows} windows) ...")
     print(f"  style={STYLE.key}  seed={SEED}  feature_span={FEATURE_SPAN_M/1000:.0f} km")
     print(f"  CORE_N={CORE_N}  CORE_SPAN={CORE_SPAN_M/1000:.1f} km/window  AP={AP}")
     print(f"  Padded N per window = {CORE_N + 2*AP}")
     print()
 
-    print("  Generating window (0,0) ...")
-    c00 = _generate_core(0, 0)
-    print("  Generating window (1,0) ...")
-    c10 = _generate_core(1, 0)
-    print("  Generating window (0,1) ...")
-    c01 = _generate_core(0, 1)
-    print("  Generating window (1,1) ...")
-    c11 = _generate_core(1, 1)
+    t0 = time.time()
+    cores: dict[tuple[int, int], np.ndarray] = {}
+    for j in range(K):       # row
+        for i in range(K):   # col
+            done = j * K + i
+            print(f"  Generating window ({i},{j}) ... [{done + 1}/{n_windows}]")
+            cores[(i, j)] = _generate_core(i, j)
+    gen_secs = time.time() - t0
+    print(f"\nGenerated {n_windows} windows in {gen_secs:.1f}s ({gen_secs / n_windows:.1f}s/window).")
     print()
 
-    # --- seam verification ---
-    deltas = _measure_seam_delta(c00, c10, c01, c11)
-    print("Inter-window border delta (proof of seam-exact contract):")
-    for name, val in deltas.items():
-        status = "OK" if val < 1e-6 else "FAIL"
-        print(f"  {name:20s}: {val:.3e}  [{status}]")
+    # --- seam verification (ALL internal seams) ---
+    deltas = _measure_seam_delta(cores, K)
+    print("Internal-seam border delta across all adjacent pairs (proof of seam-exact contract):")
+    print(f"  vertical seams   ({int(deltas['n_vertical_seams'])}): max {deltas['vertical_seams_max']:.3e}")
+    print(f"  horizontal seams ({int(deltas['n_horizontal_seams'])}): max {deltas['horizontal_seams_max']:.3e}")
 
     max_delta = deltas["max"]
     if max_delta >= 1e-6:
-        print(f"\nERROR: max border delta {max_delta:.3e} >= 1e-6 — seam-safe contract violated!")
+        print(f"\nERROR: max internal-seam delta {max_delta:.3e} >= 1e-6 — seam-safe contract violated!")
         print("Do NOT write JSON. Check apron math or feature_span_m consistency.")
         sys.exit(1)
 
-    print(f"\nSeam delta OK ({max_delta:.3e} < 1e-6).")
+    print(f"\nMax internal-seam delta OK ({max_delta:.3e} < 1e-6).")
     print()
 
     # --- stitch ---
-    stitched = _stitch_2x2(c00, c10, c01, c11)
+    stitched = _stitch(cores, K)
     n_stitched = stitched.shape[0]
     total_span_km = (K * CORE_SPAN_M) / 1000.0
     assert stitched.shape == (n_stitched, n_stitched), f"non-square stitch: {stitched.shape}"
+    assert n_stitched == K * (CORE_N - 1) + 1, f"unexpected stitched size {n_stitched}"
     print(f"Stitched grid: {n_stitched}x{n_stitched}  ({total_span_km:.1f} km x {total_span_km:.1f} km)")
 
     # Normalize to [-1, 1] range matching how rough_world_review.gd renders colors:
@@ -212,8 +237,8 @@ def main() -> None:
     }
 
     stitched_item = {
-        "key": "seamsafe_fly_2x2",
-        "label": f"SEAM-SAFE 2x2 stitch ({STYLE.label})",
+        "key": f"seamsafe_fly_{K}x{K}",
+        "label": f"SEAM-SAFE {K}x{K} stitch ({STYLE.label})",
         "kind": "synth",
         "span_km": round(total_span_km, 1),
         "source": f"mountain_synthesis seam-safe apron={AP} style={STYLE.key}",
@@ -226,6 +251,7 @@ def main() -> None:
 
     # Include a reference single-window item for side-by-side comparison.
     # Window (0,0) as a standalone item (n=CORE_N).
+    c00 = cores[(0, 0)]
     ref_h = np.round(c00.ravel(), 4).astype(float).tolist()
     single_item = {
         "key": "seamsafe_window_00",
@@ -247,7 +273,7 @@ def main() -> None:
     }
 
     payload = {
-        "title": "WorldGen10 mountain seam-safe 2x2 fly review",
+        "title": f"WorldGen10 mountain seam-safe {K}x{K} fly review",
         "generator_version": "mountain_synthesis_seamsafe_fly_v0",
         "span_km": total_span_km,
         "seam_delta_max": max_delta,
@@ -264,7 +290,7 @@ def main() -> None:
     print(f"  items[1]: n={single_item['n']}")
     print()
     print("To fly: open Godot -> wg-10/worldgen_terrain/harness/mountain_world_review.tscn")
-    print("  Press 1 -> stitched 2x2 world (cross the seam!)")
+    print(f"  Press 1 -> stitched {K}x{K} world (cross the seams!)")
     print("  Press 2 -> single window (0,0) for comparison")
     print("  WASD/Space/C to fly, P to toggle slope/corridor overlay, +/- relief scale")
 
