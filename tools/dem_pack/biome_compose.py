@@ -18,6 +18,7 @@ class BlendConfig:
     mode: str = "height_favored"     # 'height_favored' | 'field'
     relief_sigma_px: float = 6.0     # blur radius for the local-relief proxy (height_favored)
     favor_strength: float = 2.0      # how hard to bias toward the higher-relief recipe in the band
+    relief_confidence_floor: float = 1e-3   # below this total local relief, the bias fades to a plain lerp (no spurious flat-region jump)
 
 
 def _blend_field(a: np.ndarray, b: np.ndarray, w_a: np.ndarray) -> np.ndarray:
@@ -35,9 +36,11 @@ def _blend_height_favored(a: np.ndarray, b: np.ndarray, w_a: np.ndarray, cfg: "B
     w = np.asarray(w_a, dtype=np.float64)
     relief_a = np.abs(a - gaussian_filter(a, sigma=cfg.relief_sigma_px))
     relief_b = np.abs(b - gaussian_filter(b, sigma=cfg.relief_sigma_px))
-    favor = relief_a / (relief_a + relief_b + 1e-9)            # ~1 where a has the structure
+    total_relief = relief_a + relief_b
+    favor = relief_a / (total_relief + 1e-9)                   # ~1 where a has the structure
+    signal_confidence = total_relief / (total_relief + cfg.relief_confidence_floor)  # ~0 in flat+flat -> no bias
     band = 1.0 - np.abs(2.0 * w - 1.0)                         # 1 at band center, 0 at the pure ends
-    w_adj = np.clip(w + (favor - 0.5) * cfg.favor_strength * band, 0.0, 1.0)
+    w_adj = np.clip(w + (favor - 0.5) * cfg.favor_strength * band * signal_confidence, 0.0, 1.0)
     return w_adj * a + (1.0 - w_adj) * b
 
 
@@ -45,9 +48,10 @@ def compose_biomes(fields: list[np.ndarray], weights: list[np.ndarray], cfg: "Bl
     """Compose N per-recipe height fields by their per-pixel weights into one height.
 
     Weights are expected to be a partition of unity (sum to ~1 per pixel) from the grammar.
-    For N=2 we use the pairwise blend mode (height_favored | field). For N>2 we fold pairwise
-    in list order (the accumulator vs each next recipe by relative weight), which keeps the
-    2-recipe behavior the probes validated and degrades gracefully where 3+ biomes meet.
+    height_favored is applied exactly for the N=2 boundary case; for 3+ biomes meeting (rare
+    triple points) we fold with field blend to avoid order-dependent over-reinforcement of
+    earlier recipes (the relief bias would compound on the running accumulator, making the
+    result depend on `fields` order). field blend with matching weights is order-independent.
     """
     if len(fields) != len(weights):
         raise ValueError(f"fields/weights length mismatch: {len(fields)} vs {len(weights)}")
@@ -59,12 +63,13 @@ def compose_biomes(fields: list[np.ndarray], weights: list[np.ndarray], cfg: "Bl
         return fields[0]
     acc = fields[0]
     acc_w = weights[0].copy()
+    use_favored = (cfg.mode != "field") and (len(fields) == 2)
     for f, w in zip(fields[1:], weights[1:]):
         denom = acc_w + w + 1e-12
         w_acc = acc_w / denom                       # weight on the accumulator vs the new recipe
-        if cfg.mode == "field":
-            acc = _blend_field(acc, f, w_acc)
-        else:
+        if use_favored:
             acc = _blend_height_favored(acc, f, w_acc, cfg)
+        else:
+            acc = _blend_field(acc, f, w_acc)
         acc_w = acc_w + w
     return acc
