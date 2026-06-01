@@ -25,3 +25,17 @@ def _blend_field(a: np.ndarray, b: np.ndarray, w_a: np.ndarray) -> np.ndarray:
     a = np.asarray(a, dtype=np.float64); b = np.asarray(b, dtype=np.float64)
     w = np.asarray(w_a, dtype=np.float64)
     return w * a + (1.0 - w) * b
+
+
+def _blend_height_favored(a: np.ndarray, b: np.ndarray, w_a: np.ndarray, cfg: "BlendConfig") -> np.ndarray:
+    """Bias the blend weight toward whichever recipe has stronger LOCAL relief inside the
+    transition band, so structured terrain (e.g. mountain ridges) is not ghost-flattened into a
+    low mound by a neutral average. Outside the band (w_a at 0 or 1) this reduces to the field blend."""
+    a = np.asarray(a, dtype=np.float64); b = np.asarray(b, dtype=np.float64)
+    w = np.asarray(w_a, dtype=np.float64)
+    relief_a = np.abs(a - gaussian_filter(a, sigma=cfg.relief_sigma_px))
+    relief_b = np.abs(b - gaussian_filter(b, sigma=cfg.relief_sigma_px))
+    favor = relief_a / (relief_a + relief_b + 1e-9)            # ~1 where a has the structure
+    band = 1.0 - np.abs(2.0 * w - 1.0)                         # 1 at band center, 0 at the pure ends
+    w_adj = np.clip(w + (favor - 0.5) * cfg.favor_strength * band, 0.0, 1.0)
+    return w_adj * a + (1.0 - w_adj) * b
