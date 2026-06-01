@@ -24,6 +24,14 @@ def test_unknown_recipe_raises():
     with pytest.raises(KeyError):
         br.get_recipe("not_a_biome")
 
+def test_distinct_recipes_produce_distinct_output():
+    # Regression guard: if the registry comprehension were ever rewritten with a closure that
+    # late-binds the loop var, every recipe would capture the LAST module and these would match.
+    wx, wz = geo.grid(32, 60_000.0, ox=60_000.0, oz=36_000.0)
+    m = br.get_recipe("mountain").generate(wx, wz, seed=5, feature_span_m=90_000.0)
+    d = br.get_recipe("desert").generate(wx, wz, seed=5, feature_span_m=90_000.0)
+    assert not np.array_equal(m, d), "distinct biomes must produce distinct terrain (closure capture bug?)"
+
 def test_all_registered_recipes_run_and_return_2d_float():
     wx, wz = geo.grid(24, 60_000.0, ox=60_000.0, oz=36_000.0)
     for name in br.REGISTRY:
