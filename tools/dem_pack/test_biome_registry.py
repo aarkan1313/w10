@@ -39,3 +39,30 @@ def test_all_registered_recipes_run_and_return_2d_float():
         assert isinstance(h, np.ndarray) and h.ndim == 2, f"{name} did not return a 2D array"
         assert np.issubdtype(h.dtype, np.floating), f"{name} returned non-float dtype"
         assert np.all(np.isfinite(h)), f"{name} returned non-finite values"
+
+def test_recipe_forwards_apron_px_and_returns_cropped_core():
+    # F4 regression: _adapt must FORWARD apron_px so the seam-safe path is exercised through
+    # composition. With apron_px > 0 the synth expects an apron-PADDED grid and returns the
+    # CORE-cropped height (shape n, NOT n + 2*apron). If apron_px were dropped (old bug), the
+    # synth would run in legacy mode on the full padded grid and return shape n + 2*apron ->
+    # this test FAILS. So it is NOT a tautology: it can only pass if apron_px reaches the synth.
+    n = 32
+    apron = 16
+    cell_m = 90_000.0 / (n - 1)                     # core cell size; apron extends real world coords
+    padded = n + 2 * apron
+    # apron-padded grid: origin shifted back by `apron` cells so the core occupies the centre n x n
+    ox = 60_000.0 - apron * cell_m
+    oz = 36_000.0 - apron * cell_m
+    span_padded = (padded - 1) * cell_m
+    wx, wz = geo.grid(padded, span_padded, ox=ox, oz=oz)
+    assert wx.shape == (padded, padded)             # confirm we really fed a padded grid
+    r = br.get_recipe("mountain")
+    core = r.generate(wx, wz, seed=11, feature_span_m=90_000.0, apron_px=apron)
+    print(f"[F4] padded_in={wx.shape} apron_px={apron} core_out={core.shape}")
+    assert core.shape == (n, n), (
+        f"apron path must return the CORE-cropped shape ({n},{n}); got {core.shape}. "
+        "If this is the padded shape, apron_px was dropped (the F4 bug)."
+    )
+    # determinism on the seam-safe path
+    core2 = r.generate(wx, wz, seed=11, feature_span_m=90_000.0, apron_px=apron)
+    assert np.array_equal(core, core2), "apron path must be deterministic"

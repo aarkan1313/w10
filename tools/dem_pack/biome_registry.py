@@ -30,9 +30,16 @@ class Recipe:
 
 
 def _adapt(mod) -> Callable[..., np.ndarray]:
-    """Wrap a *_synthesis module's generate so it returns the bare height array."""
-    def gen(wx, wz, seed: int = 0, feature_span_m: float | None = None) -> np.ndarray:
-        out = mod.generate(wx, wz, seed=int(seed), feature_span_m=feature_span_m)
+    """Wrap a *_synthesis module's generate so it returns the bare height array.
+
+    Threads apron_px through to the synth (default 0 = legacy path). When apron_px > 0 the
+    caller must pass an apron-PADDED wx/wz grid (apron_px real-world cells on every side); the
+    synth computes on the padded array and returns the CORE-cropped height (shape n, not n+2a),
+    which is what makes seams visually-exact across independent windows. Forwarding apron_px here
+    is what lets the COMPOSITION layer actually exercise that seam-safe path (it was dropped
+    before, so composition always fell back to the legacy seam-breaking path)."""
+    def gen(wx, wz, seed: int = 0, feature_span_m: float | None = None, apron_px: int = 0) -> np.ndarray:
+        out = mod.generate(wx, wz, seed=int(seed), feature_span_m=feature_span_m, apron_px=int(apron_px))
         return np.asarray(out["height"], dtype=np.float64)
     return gen
 

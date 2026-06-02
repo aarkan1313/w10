@@ -31,11 +31,27 @@ def _blend_field(a: np.ndarray, b: np.ndarray, w_a: np.ndarray) -> np.ndarray:
 def _blend_height_favored(a: np.ndarray, b: np.ndarray, w_a: np.ndarray, cfg: "BlendConfig") -> np.ndarray:
     """Bias the blend weight toward whichever recipe has stronger LOCAL relief inside the
     transition band, so structured terrain (e.g. mountain ridges) is not ghost-flattened into a
-    low mound by a neutral average. Outside the band (w_a at 0 or 1) this reduces to the field blend."""
+    low mound by a neutral average. Outside the band (w_a at 0 or 1) this reduces to the field blend.
+
+    SEAM-SAFETY: the local-relief proxy is a gaussian blur, so its result near an array EDGE
+    depends on the boundary mode. scipy's default (mode='reflect') invents mirrored values at the
+    edge that a NEIGHBOURING window would not see, so two windows that share a seam disagree on the
+    relief proxy there -> the favoring bias differs -> the BLEND is not seam-exact near a biome
+    boundary that crosses a chunk seam. We use mode='nearest' (clamp-to-edge), the SAME apron-safe
+    boundary the seam-safe biome synths use. nearest is necessary either way; full seam-correctness
+    additionally requires the blur to read into real neighbour data:
+      - compose-big-then-slice model: the field is ONE big array, so nearest-on-the-big-field reads
+        the true neighbouring values at every interior column and is correct after slicing.
+      - independent-window model: the caller must blend on APRON-PADDED fields then crop the core,
+        so the blur reads real neighbour world-data inside the apron (not invented edge values).
+    In both cases mode='nearest' (not 'reflect') is the apron-safe choice; mode='reflect' breaks
+    seams regardless of how the inputs were padded."""
     a = np.asarray(a, dtype=np.float64); b = np.asarray(b, dtype=np.float64)
     w = np.asarray(w_a, dtype=np.float64)
-    relief_a = np.abs(a - gaussian_filter(a, sigma=cfg.relief_sigma_px))
-    relief_b = np.abs(b - gaussian_filter(b, sigma=cfg.relief_sigma_px))
+    # mode='nearest' = clamp-to-edge: apron-safe boundary (reflect would invent edge values and
+    # break seam-exactness of the blend at window edges). See the docstring for the apron model.
+    relief_a = np.abs(a - gaussian_filter(a, sigma=cfg.relief_sigma_px, mode="nearest"))
+    relief_b = np.abs(b - gaussian_filter(b, sigma=cfg.relief_sigma_px, mode="nearest"))
     total_relief = relief_a + relief_b
     favor = relief_a / (total_relief + 1e-9)                   # ~1 where a has the structure
     signal_confidence = total_relief / (total_relief + cfg.relief_confidence_floor)  # ~0 in flat+flat -> no bias
