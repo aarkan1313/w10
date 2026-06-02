@@ -127,6 +127,19 @@ fn bytes_to_f32s(b: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+/// Biome selector from a fragment path: the file stem with a leading `biome_` stripped.
+/// e.g. ".../biome_mountain.glsl" -> "mountain", ".../biome_grassland.glsl" -> "grassland".
+/// Falls back to the bare stem (then the whole string) if the conventions don't match, so the
+/// `run_inner` match arm reports a precise "no schedule for biome '<x>'" error.
+fn biome_stem(path: &str) -> String {
+    let file = path
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(path);
+    let stem = file.strip_suffix(".glsl").unwrap_or(file);
+    stem.strip_prefix("biome_").unwrap_or(stem).to_string()
+}
+
 fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
     let mut u = RdUniform::new_gd();
     u.set_uniform_type(UniformType::STORAGE_BUFFER);
@@ -182,6 +195,223 @@ fn mountain_sigmas() -> Vec<f64> {
     let floor_smooth = 4.0_f64.max(0.2);
     // All distinct sigmas used by run_gaussian / run_flow_channels.
     vec![1.15, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, trib_width, floor_smooth]
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler: the per-biome dispatch SEAM. Holds all per-dispatch state so a biome's pass
+// chain can live in a standalone `schedule_<biome>()` fn (instead of inline closures/macros).
+// `run_inner` allocates buffers + opens ONE compute list, builds a Scheduler, then hands it
+// to the selected schedule fn. Every future biome adds a `schedule_<biome>()` + one match arm.
+//
+// IMPORTANT: this is a PURE code-structure seam. `dispatch`/`gauss`/`flow_channels` carry the
+// SAME bodies the old `dispatch` closure + `gauss!`/`flow_channels!` macros had; the GPU
+// dispatch sequence, push-constant values, STABLE_ITERS loop, and discharge_fd invariant are
+// byte-identical to the pre-refactor inline schedule.
+// ---------------------------------------------------------------------------
+
+/// Resolved gaussian sigma -> (koffset, kradius) for the packed kernel buffer. The sigma set is
+/// pre-validated (see `kp`) BEFORE the compute list opens, so the in-list lookups are
+/// provably-unreachable failures. Stored as a small fixed Vec rather than a borrowed closure to
+/// keep the borrow-checker happy across the open-list `&mut rd` reborrows.
+struct KernelParams {
+    /// (sigma, koffset, kradius) in the FIXED `mountain_sigmas()` order.
+    slots: Vec<(f64, i32, i32)>,
+}
+
+impl KernelParams {
+    fn from_sigmas(sigmas: &[f64]) -> Self {
+        let slots = sigmas
+            .iter()
+            .enumerate()
+            .map(|(slot, &sg)| {
+                (sg, (slot * KERNEL_STRIDE) as i32, gaussian_radius(sg, TRUNCATE) as i32)
+            })
+            .collect();
+        Self { slots }
+    }
+
+    /// sigma -> (koffset, kradius). Pre-validated by `run_inner` before the list opens, so the
+    /// `.expect` here is provably-unreachable inside the open compute list (same `.expect`
+    /// semantics as the old `kparams` closure).
+    fn kp(&self, sigma: f64) -> (i32, i32) {
+        let (_, ko, kr) = self
+            .slots
+            .iter()
+            .copied()
+            .find(|&(s, _, _)| (s - sigma).abs() < 1e-9)
+            .expect("sigma not in mountain_sigmas()");
+        (ko, kr)
+    }
+}
+
+/// Per-dispatch state for one open compute list. Built once `run_inner` has the list open; the
+/// schedule fn drives it. `cl` matches the type `compute_list_begin()` returns (i64 in the
+/// Godot 4.6 bindings).
+struct Scheduler<'a> {
+    rd: &'a mut Gd<RenderingDevice>,
+    cl: i64,
+    uset: Rid,
+    rows: i32,
+    cols: i32,
+    apron: i32,
+    seed: i32,
+    spacing: f32,
+    ox: f32,
+    oz: f32,
+    feature_span_m: f32,
+    wg_full_x: u32,
+    wg_full_y: u32,
+    wg_core_x: u32,
+    wg_core_y: u32,
+    kparams: KernelParams,
+}
+
+impl<'a> Scheduler<'a> {
+    /// One full pass dispatch + trailing barrier (so the next reader sees the writes). Same body
+    /// as the old `dispatch` closure.
+    #[allow(clippy::too_many_arguments)]
+    fn dispatch(
+        &mut self,
+        pass: i32,
+        kradius: i32,
+        koffset: i32,
+        copy_sel: i32,
+        flow_dir: i32,
+        flow_power: f32,
+        wgx: u32,
+        wgy: u32,
+    ) {
+        self.rd.compute_list_bind_uniform_set(self.cl, self.uset, 0);
+        let pc = PackedByteArray::from(
+            build_push(
+                pass, self.rows, self.cols, self.apron, self.seed, kradius, copy_sel, flow_dir,
+                koffset, self.spacing, self.ox, self.oz, self.feature_span_m, flow_power,
+            )
+            .as_slice(),
+        );
+        self.rd.compute_list_set_push_constant(self.cl, &pc, pc.len() as u32);
+        self.rd.compute_list_dispatch(self.cl, wgx, wgy, 1);
+        self.rd.compute_list_add_barrier(self.cl);
+    }
+
+    /// Full-field dispatch (the overwhelmingly common case): wgx/wgy = full padded dims, and the
+    /// no-kernel/no-copy/no-flow params default to 0. Convenience wrapper so schedule fns read
+    /// cleanly.
+    fn dispatch_full(&mut self, pass: i32, copy_sel: i32, flow_dir: i32, flow_power: f32) {
+        self.dispatch(pass, 0, 0, copy_sel, flow_dir, flow_power, self.wg_full_x, self.wg_full_y);
+    }
+
+    /// gaussian(sigma) on gauss_in -> gauss_out (AXIS0 then AXIS1, packed kernel by koffset).
+    /// Same body as the old `gauss!` macro.
+    fn gauss(&mut self, sigma: f64) {
+        let (ko, kr) = self.kparams.kp(sigma);
+        self.dispatch(PASS_GAUSS_AXIS0, kr, ko, 0, 0, 0.0, self.wg_full_x, self.wg_full_y);
+        self.dispatch(PASS_GAUSS_AXIS1, kr, ko, 0, 0, 0.0, self.wg_full_x, self.wg_full_y);
+    }
+
+    /// flow_channels_seam_safe(flow_pre, width_px, power): pre-blur 1.15 -> K relax ->
+    /// log1p discharge -> spread gaussian(width). Leaves spread discharge in gauss_out.
+    /// Same body as the old `flow_channels!` macro (incl STABLE_ITERS loop + discharge_fd
+    /// invariant).
+    fn flow_channels(&mut self, power: f32, width: f64) {
+        // pre-blur sigma=1.15
+        self.dispatch_full(PASS_FLOW_PRE_PREBLUR_IN, 0, 0, 0.0);
+        self.gauss(1.15);
+        self.dispatch_full(PASS_FLOW_PRE_FROM_GAUSS, 0, 0, 0.0);
+        // acc init = 1.0 (both buffers)
+        self.dispatch_full(PASS_ACC_INIT, 0, 0, 0.0);
+        // K ping-pong relaxation steps. In PASS_FLOW_RELAX, flow_dir selects the WRITE
+        // target: fd=0 reads acc_a writes acc_b; fd=1 reads acc_b writes acc_a. The last
+        // step is i=STABLE_ITERS-1, fd=(STABLE_ITERS-1)%2, so it writes:
+        //   STABLE_ITERS even -> last fd=1 -> final result in acc_a
+        //   STABLE_ITERS odd  -> last fd=0 -> final result in acc_b
+        for i in 0..STABLE_ITERS {
+            let fd = if i % 2 == 0 { 0 } else { 1 };
+            self.dispatch_full(PASS_FLOW_RELAX, 0, fd, power);
+        }
+        // PASS_DISCHARGE: here flow_dir selects the READ buffer holding the final acc
+        // (OPPOSITE of PASS_FLOW_RELAX, where it selects the write target) -> fd=0 reads
+        // acc_a, fd=1 reads acc_b. So discharge_fd must equal the parity of the LAST write:
+        //   STABLE_ITERS odd  -> final in acc_b -> discharge_fd=1
+        //   STABLE_ITERS even -> final in acc_a -> discharge_fd=0
+        // This trap is live ONLY if STABLE_ITERS changes (the flagged convergence knob).
+        let discharge_fd: i32 = if STABLE_ITERS % 2 == 1 { 1 } else { 0 };
+        debug_assert_eq!(
+            discharge_fd,
+            1 - ((STABLE_ITERS as i32 - 1) % 2),
+            "discharge_fd must read the buffer the LAST relax step wrote"
+        );
+        self.dispatch_full(PASS_DISCHARGE, 0, discharge_fd, 0.0);
+        // spread sigma = max(width, 0.1) (all widths here are >= 0.1)
+        self.gauss(width.max(0.1));
+    }
+}
+
+/// The MOUNTAIN dispatch schedule (style = ALPINE_BRANCHING). EXACTLY the pre-refactor sequence
+/// + params; this is the reference pattern every future biome `schedule_<biome>()` copies. The
+/// constants here (valley_width_px/trib_width/floor_smooth) mirror `mountain_sigmas()` so the
+/// gauss/flow widths resolve to pre-validated kernel slots.
+fn schedule_mountain(s: &mut Scheduler) {
+    let valley_width_px = 2.4_f64;
+    let trib_width = (valley_width_px * 0.42).max(0.6);
+    let floor_smooth = 4.0_f64.max(0.2);
+
+    // 0) meshgrid ; 1) pointwise
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+    s.dispatch_full(PASS_POINTWISE, 0, 0, 0.0);
+
+    // 2) range_envelope = smoothstep(0.24,0.58, gaussian(ranges, 5.0))
+    s.dispatch_full(PASS_COPY, CP_RANGES, 0, 0.0);
+    s.gauss(5.0);
+    s.dispatch_full(PASS_RANGE_ENV, 0, 0, 0.0);
+
+    // 3) lowland: broad_range = gaussian(ranges, 7.0); combine with regional
+    s.dispatch_full(PASS_COPY, CP_RANGES, 0, 0.0);
+    s.gauss(7.0);
+    s.dispatch_full(PASS_LOWLAND, 0, 0, 0.0);
+
+    // 4) massif: gaussian(ranges,1.8) -> massif_inner; then gaussian(massif,2.0) writeback
+    s.dispatch_full(PASS_COPY, CP_RANGES, 0, 0.0);
+    s.gauss(1.8);
+    s.dispatch_full(PASS_MASSIF_INNER, 0, 0, 0.0);
+    s.dispatch_full(PASS_COPY, CP_MASSIF, 0, 0.0);
+    s.gauss(2.0);
+    s.dispatch_full(PASS_MASSIF_WRITEBACK, 0, 0, 0.0);
+
+    // 5) base
+    s.dispatch_full(PASS_BASE, 0, 0, 0.0);
+
+    // 6) primary channels: flow_channels_seam_safe(base, valley_width, power=0.48)
+    s.dispatch_full(PASS_FLOW_PRE_BASE, 0, 0, 0.0);
+    s.flow_channels(0.48_f32, valley_width_px);
+    s.dispatch_full(PASS_PRIMARY_MASK, 0, 0, 0.0);
+
+    // 7) tributaries: flow_channels_seam_safe(rough_surface, trib_width, power=0.34)
+    s.dispatch_full(PASS_FLOW_PRE_ROUGH, 0, 0, 0.0);
+    s.flow_channels(0.34_f32, trib_width);
+    s.dispatch_full(PASS_TRIB_MASK, 0, 0, 0.0);
+
+    // 8) high_mask / valley_mask
+    s.dispatch_full(PASS_MASKS, 0, 0, 0.0);
+
+    // 9) assemble height
+    s.dispatch_full(PASS_ASSEMBLE, 0, 0, 0.0);
+
+    // 10) floor blend
+    s.dispatch_full(PASS_COPY, CP_VALLEY, 0, 0.0);
+    s.gauss(1.2);
+    s.dispatch_full(PASS_FLOOR_MASK, 0, 0, 0.0);
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);
+    s.gauss(floor_smooth);
+    s.dispatch_full(PASS_FLOOR_BLEND, 0, 0, 0.0);
+
+    // 11) final: height_blur = gaussian(height,1.2); final_blend; affine
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);
+    s.gauss(1.2);
+    s.dispatch_full(PASS_FINAL, 0, 0, 0.0);
+
+    // 12) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, s.wg_core_x, s.wg_core_y);
 }
 
 #[derive(GodotClass)]
@@ -254,16 +484,21 @@ impl Wg10BiomePageCompute {
             return PackedFloat64Array::new();
         }
         // Load the selected per-biome FRAGMENT (the biome_pass() body) for this call.
-        let fragment = match std::fs::read_to_string(biome_fragment_path.to_string()) {
+        let frag_path = biome_fragment_path.to_string();
+        let fragment = match std::fs::read_to_string(&frag_path) {
             Ok(s) => s,
             Err(e) => {
                 godot_error!("Wg10BiomePageCompute::generate_core_page: biome fragment glsl: {e}");
                 return PackedFloat64Array::new();
             }
         };
+        // Biome selector = the fragment path stem with a leading `biome_` stripped, e.g.
+        // ".../biome_mountain.glsl" -> "mountain". `run_inner` matches on this to pick the
+        // per-biome schedule fn.
+        let biome = biome_stem(&frag_path);
         match self.run_inner(
             spacing as f32, ox as f32, oz as f32, rows, cols, apron, seed as i32, feature_span_m as f32,
-            &fragment,
+            &fragment, &biome,
         ) {
             Ok(core) => {
                 let mut out = PackedFloat64Array::new();
@@ -294,6 +529,7 @@ impl Wg10BiomePageCompute {
         seed: i32,
         feature_span_m: f32,
         biome_fragment: &str,
+        biome: &str,
     ) -> Result<Vec<f32>, String> {
         if rows <= 2 * apron || cols <= 2 * apron {
             return Err(format!("apron {apron} too large for padded {rows}x{cols}"));
@@ -390,14 +626,10 @@ impl Wg10BiomePageCompute {
             .storage_buffer_create_ex(bsize(packed.len() * 4))
             .data(&packed_pba)
             .done(); // 19
-        // sigma -> (koffset, kradius) lookup.
-        let kparams = |sigma: f64| -> (i32, i32) {
-            let slot = sigmas
-                .iter()
-                .position(|&s| (s - sigma).abs() < 1e-9)
-                .expect("sigma not in mountain_sigmas()");
-            ((slot * KERNEL_STRIDE) as i32, gaussian_radius(sigma, TRUNCATE) as i32)
-        };
+        // sigma -> (koffset, kradius) lookup, resolved BEFORE the compute list opens. Stored as a
+        // small fixed Vec (KernelParams) so the in-list `.expect` is provably-unreachable and the
+        // borrow-checker is happy across the open-list `&mut rd` reborrows in the Scheduler.
+        let kparams = KernelParams::from_sigmas(&sigmas);
 
         let b_flow_pre = mk_field(&mut rd);    // 20
         let b_acc_a = mk_field(&mut rd);       // 21
@@ -437,128 +669,62 @@ impl Wg10BiomePageCompute {
         let floor_smooth = 4.0_f64.max(0.2);
 
         // PRE-VALIDATE every sigma the pipeline will request, BEFORE the compute list is open:
-        // kparams uses `.expect()`, and a panic AFTER compute_list_begin would unwind with an
-        // active list and leak the local RD. Resolving them here proves the in-list lookups
-        // cannot fail. (The `mountain_sigmas_cover_all_pipeline_blurs` unit test also guards this.)
+        // KernelParams::kp uses `.expect()`, and a panic AFTER compute_list_begin would unwind
+        // with an active list and leak the local RD. Resolving them here proves the in-list
+        // lookups cannot fail. (The `mountain_sigmas_cover_all_pipeline_blurs` unit test also
+        // guards this.)
         for s in [1.15_f64, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, trib_width, floor_smooth] {
-            let _ = kparams(s);
+            let _ = kparams.kp(s);
         }
 
         // ===== record the WHOLE pipeline into ONE compute list, with a barrier after every
-        // dependent dispatch (the proven flow_spike pattern). Then submit + sync once. =====
+        // dependent dispatch (the proven flow_spike pattern). Then submit + sync once. The
+        // per-biome dispatch SEQUENCE lives in a standalone `schedule_<biome>()` fn, driven via
+        // the Scheduler seam. =====
         let cl = rd.compute_list_begin();
         rd.compute_list_bind_compute_pipeline(cl, pipeline);
 
-        // helper closures capture rows/cols/apron/seed/grid/cl/pipeline/uset.
-        // dispatch a full-field pass + trailing barrier (so the next reader sees the writes).
-        let mut dispatch = |rd: &mut Gd<RenderingDevice>, pass: i32, kradius: i32, koffset: i32, copy_sel: i32, flow_dir: i32, flow_power: f32, wgx: u32, wgy: u32| {
-            rd.compute_list_bind_uniform_set(cl, uset, 0);
-            let pc = PackedByteArray::from(
-                build_push(pass, rows as i32, cols as i32, apron as i32, seed, kradius, copy_sel, flow_dir, koffset, spacing, ox, oz, feature_span_m, flow_power).as_slice(),
-            );
-            rd.compute_list_set_push_constant(cl, &pc, pc.len() as u32);
-            rd.compute_list_dispatch(cl, wgx, wgy, 1);
-            rd.compute_list_add_barrier(cl);
+        // Build the Scheduler over the open list, then run the selected biome's schedule. The
+        // schedule fns own the dispatch SEQUENCE (byte-identical to the old inline schedule).
+        let mut sched = Scheduler {
+            rd: &mut rd,
+            cl,
+            uset,
+            rows: rows as i32,
+            cols: cols as i32,
+            apron: apron as i32,
+            seed,
+            spacing,
+            ox,
+            oz,
+            feature_span_m,
+            wg_full_x,
+            wg_full_y,
+            wg_core_x,
+            wg_core_y,
+            kparams,
         };
-
-        // gaussian(sigma) on gauss_in -> gauss_out (AXIS0 then AXIS1, packed kernel by koffset).
-        macro_rules! gauss {
-            ($rd:expr, $sigma:expr) => {{
-                let (ko, kr) = kparams($sigma);
-                dispatch($rd, PASS_GAUSS_AXIS0, kr, ko, 0, 0, 0.0, wg_full_x, wg_full_y);
-                dispatch($rd, PASS_GAUSS_AXIS1, kr, ko, 0, 0, 0.0, wg_full_x, wg_full_y);
-            }};
-        }
-        // flow_channels_seam_safe(flow_pre, width_px, power): pre-blur 1.15 -> K relax ->
-        // log1p discharge -> spread gaussian(width). Leaves spread discharge in gauss_out.
-        macro_rules! flow_channels {
-            ($rd:expr, $power:expr, $width:expr) => {{
-                // pre-blur sigma=1.15
-                dispatch($rd, PASS_FLOW_PRE_PREBLUR_IN, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-                gauss!($rd, 1.15);
-                dispatch($rd, PASS_FLOW_PRE_FROM_GAUSS, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-                // acc init = 1.0 (both buffers)
-                dispatch($rd, PASS_ACC_INIT, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-                // K ping-pong relaxation steps. In PASS_FLOW_RELAX, flow_dir selects the WRITE
-                // target: fd=0 reads acc_a writes acc_b; fd=1 reads acc_b writes acc_a. The last
-                // step is i=STABLE_ITERS-1, fd=(STABLE_ITERS-1)%2, so it writes:
-                //   STABLE_ITERS even -> last fd=1 -> final result in acc_a
-                //   STABLE_ITERS odd  -> last fd=0 -> final result in acc_b
-                for i in 0..STABLE_ITERS {
-                    let fd = if i % 2 == 0 { 0 } else { 1 };
-                    dispatch($rd, PASS_FLOW_RELAX, 0, 0, 0, fd, $power, wg_full_x, wg_full_y);
+        // Biome selector (derived from the fragment path stem in generate_core_page). Mountain is
+        // the only biome today; each future biome adds a `schedule_<name>()` + one match arm here.
+        match biome {
+            "mountain" => schedule_mountain(&mut sched),
+            // TODO(per-biome): add arms as biomes port, e.g.
+            //   "grassland" => schedule_grassland(&mut sched),
+            other => {
+                // drop the Scheduler's &mut borrow before freeing the RD.
+                let _ = sched;
+                rd.compute_list_end();
+                rd.submit();
+                rd.sync();
+                for (_, rid) in bindings.iter() {
+                    rd.free_rid(*rid);
                 }
-                // PASS_DISCHARGE: here flow_dir selects the READ buffer holding the final acc
-                // (OPPOSITE of PASS_FLOW_RELAX, where it selects the write target) -> fd=0 reads
-                // acc_a, fd=1 reads acc_b. So discharge_fd must equal the parity of the LAST write:
-                //   STABLE_ITERS odd  -> final in acc_b -> discharge_fd=1
-                //   STABLE_ITERS even -> final in acc_a -> discharge_fd=0
-                // This trap is live ONLY if STABLE_ITERS changes (the flagged convergence knob).
-                let discharge_fd: i32 = if STABLE_ITERS % 2 == 1 { 1 } else { 0 };
-                debug_assert_eq!(discharge_fd, 1 - ((STABLE_ITERS as i32 - 1) % 2),
-                    "discharge_fd must read the buffer the LAST relax step wrote");
-                dispatch($rd, PASS_DISCHARGE, 0, 0, 0, discharge_fd, 0.0, wg_full_x, wg_full_y);
-                // spread sigma = max(width, 0.1) (all widths here are >= 0.1)
-                gauss!($rd, ($width as f64).max(0.1));
-            }};
+                rd.free_rid(pipeline);
+                rd.free_rid(shader);
+                rd.free();
+                return Err(format!("no schedule for biome '{other}'"));
+            }
         }
-
-        // 0) meshgrid ; 1) pointwise
-        dispatch(&mut rd, PASS_MESHGRID, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-        dispatch(&mut rd, PASS_POINTWISE, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 2) range_envelope = smoothstep(0.24,0.58, gaussian(ranges, 5.0))
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_RANGES, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 5.0);
-        dispatch(&mut rd, PASS_RANGE_ENV, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 3) lowland: broad_range = gaussian(ranges, 7.0); combine with regional
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_RANGES, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 7.0);
-        dispatch(&mut rd, PASS_LOWLAND, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 4) massif: gaussian(ranges,1.8) -> massif_inner; then gaussian(massif,2.0) writeback
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_RANGES, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 1.8);
-        dispatch(&mut rd, PASS_MASSIF_INNER, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_MASSIF, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 2.0);
-        dispatch(&mut rd, PASS_MASSIF_WRITEBACK, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 5) base
-        dispatch(&mut rd, PASS_BASE, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 6) primary channels: flow_channels_seam_safe(base, valley_width, power=0.48)
-        dispatch(&mut rd, PASS_FLOW_PRE_BASE, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-        flow_channels!(&mut rd, 0.48_f32, valley_width_px);
-        dispatch(&mut rd, PASS_PRIMARY_MASK, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 7) tributaries: flow_channels_seam_safe(rough_surface, trib_width, power=0.34)
-        dispatch(&mut rd, PASS_FLOW_PRE_ROUGH, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-        flow_channels!(&mut rd, 0.34_f32, trib_width);
-        dispatch(&mut rd, PASS_TRIB_MASK, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 8) high_mask / valley_mask
-        dispatch(&mut rd, PASS_MASKS, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 9) assemble height
-        dispatch(&mut rd, PASS_ASSEMBLE, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 10) floor blend
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_VALLEY, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 1.2);
-        dispatch(&mut rd, PASS_FLOOR_MASK, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_HEIGHT, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, floor_smooth);
-        dispatch(&mut rd, PASS_FLOOR_BLEND, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 11) final: height_blur = gaussian(height,1.2); final_blend; affine
-        dispatch(&mut rd, PASS_COPY, 0, 0, CP_HEIGHT, 0, 0.0, wg_full_x, wg_full_y);
-        gauss!(&mut rd, 1.2);
-        dispatch(&mut rd, PASS_FINAL, 0, 0, 0, 0, 0.0, wg_full_x, wg_full_y);
-
-        // 12) crop core (over core cells)
-        dispatch(&mut rd, PASS_CROP, 0, 0, 0, 0, 0.0, wg_core_x, wg_core_y);
 
         rd.compute_list_end();
         rd.submit();
