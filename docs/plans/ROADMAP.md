@@ -491,11 +491,20 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       cargo 121, fast 6/6, gpu 4/4, m3 9/9 after an editor-closed rebuild. These are in the KEPT
       render/perf foundation and the rebuild sits on them: pool RID cleanup, structural never-black under
       capacity pressure, and terrain-vs-sky/detail-on-off perf gate.
-- [ ] **Slice 3 — Rust generator core, accepted geography stack only. ✅ UNBLOCKED (2026-06-01): owner flew the
-      A|B|v2 switcher and ACCEPTED `v2` (`keeper_v2.compose_windowed_height_v2`) as the port target.** Both
-      gating arms are now resolved: Tier-3 traversability generalized into the accepted terrain-edit framework,
-      and the keeper fork is closed by owner acceptance of v2 (the only seam-exact variant with a crossing
-      corridor at play scales — fresh ABV gate evidence in STATUS top). Next: writing-plans → the Rust CPU port.
+- [~] **Slice 3 — Rust generator core. ✅ UNBLOCKED + IN PROGRESS (2026-06-02).** The port target EVOLVED past
+      "v2 keeper": v2 acceptance closed the keeper fork, but the height core is now the **biome-composition layer**
+      (11 seam-safe biomes + `compose_biomes`), the accepted offline stack. Contract FROZEN (Slice-3 plan Task 1,
+      commit 08adceb): all 11 biomes, real-metre scale contract, GPU-flow gate EARLY. **CPU foundation PORTED +
+      parity machine-exact:** `recipe_noise.rs` (worldgen_proto primitives — a DIFFERENT hash than the WG9
+      `hash.rs`, ported separately; d2cfd04/6d728ab) + `array_ops.rs` (gaussian_filter mode=nearest + the
+      sequential flow_accumulation_mfd; 50c1592). cargo 126 green. **NEXT in the port:** GPU-flow feasibility gate
+      (flow_accumulation is a sequential sweep; same-height cells are independent → wavefront, or baked-facts
+      fallback) → port the 11 recipe compositions (apron-grid pipelines on recipe_noise+array_ops) → port
+      `compose_biomes` → replace `sample_kernel` in `height.rs` → CPU then GLSL parity gates. Plan:
+      `docs/superpowers/plans/2026-06-01-slice3-rust-port-plan.md`. The older "frozen-stack / don't-port-any-keeper"
+      language below is HISTORY — the stack is the biome layer, frozen, and the port is underway.
+
+      [history] Once unblocked: port the owner-accepted Phase-5
       The A/B drift (frozen `keeper_v1` = formula B ≠ owner-approved formula A; `corr(A,B)=+0.13`, B 35% of A's
       relief) has been ACTED ON (2026-05-31): `keeper_v2` (best-of-both: A's regimes on B's seam-safe substrate)
       is BUILT + seam-exact + committed (`tools/dem_pack/keeper_v2.py`, 23 tests); an A|B|v2 in-place switcher

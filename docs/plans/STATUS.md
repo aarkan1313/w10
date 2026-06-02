@@ -5,6 +5,20 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ AUDIT RESPONSE (2026-06-02) — owner audit fixed + verified, pushed.** An owner audit found real issues
+> (validated against current code, not the stale snapshot). FIXED: F4 registry now forwards `apron_px` (seam-safe
+> path reachable through composition) · F5 `height_favored` blur → `mode='nearest'` (apron-safe) · F6 tautological
+> terrain-edit seam test → real carve-then-slice test + honest `xfail` documenting the ~4.47m independent-window
+> gap (commit 89e4758) · F7 page_pool `free_all` stale-state→`acquire` panic + F8 `configure` RID leak (ce61449,
+> cargo 126 + **gpu gate green windowed**) · F1 HANDOFF reconciled (Slice-3 unblocked+in-progress, not BLOCKED) +
+> F2 dirty-tree noted (f24db1f) · F11 stray 14MB wrong-CWD artifact deleted · F10 `gate.py` gained a `pytest`
+> suite so "gate green" covers the Python side (243 tests; 5f32dfd). TRIAGE (documented-known, no code fix):
+> F3 biome_compose_world exporter is review-only/known-rough, SUPERSEDED by the fast Python renderers
+> (`render_biome_blocks_fast`/`render_biome_compose_fast`) — not a port target. F9 displayed-mesh detail diverges
+> from facts/collision by ~88m BY DESIGN (M3 shader detail; base-terrain parity is what's gated). F12 road/river/
+> lake/POI are explicitly SKETCHES (spec-acknowledged). My CPU port work (recipe_noise/array_ops) was NOT
+> implicated — parity machine-exact. All pushed through 5f32dfd.
+
 > **▶ CURRENT (2026-06-01, late) — BIOME-COMPOSITION LAYER (Fork B) + SCALE CONTRACT done; Slice-3 unblocked.**
 > The "shouldn't be bound to kernels" insight → a full biome-composition layer: `biome_compose` (compose_biomes
 > + height_favored blend), `biome_registry` (name→recipe), `seam_safe` (shared apron/affine helpers). **All 11
