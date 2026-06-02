@@ -19,6 +19,7 @@ mod terrain_view;
 mod edit_layer;
 mod facts;
 mod facts_api;
+mod recipe_noise;
 
 #[cfg(test)]
 mod hash_tests;
@@ -42,6 +43,8 @@ mod ring_geometry_tests;
 mod edit_layer_tests;
 #[cfg(test)]
 mod facts_tests;
+#[cfg(test)]
+mod recipe_noise_tests;
 
 struct Wg10Terrain;
 

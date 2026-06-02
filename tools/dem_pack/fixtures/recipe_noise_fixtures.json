@@ -1,0 +1,3646 @@
+{
+  "generator_version": "recipe_noise_fixtures/v1",
+  "source": "tools/dem_pack/worldgen_proto.py",
+  "note": "World-coordinate parity oracle for wg-10/rust/src/recipe_noise.rs (f64).",
+  "counts": {
+    "value_noise": 42,
+    "fbm": 35,
+    "ridged_fbm": 32,
+    "ridged_multifractal": 36,
+    "domain_warp": 28,
+    "recursive_domain_warp": 35,
+    "cellular_edges": 24,
+    "range_spine_field": 28,
+    "fault_block_field": 21
+  },
+  "records": [
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": 0
+      },
+      "expected_output": -1.0
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": 0
+      },
+      "expected_output": 0.2984036616042274
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": 0
+      },
+      "expected_output": 0.45371359933806277
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": 0
+      },
+      "expected_output": -0.14160437399596182
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": 0
+      },
+      "expected_output": -0.03661509805570229
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": 0
+      },
+      "expected_output": 0.5790287112281136
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "seed": 0
+      },
+      "expected_output": 0.04381223214270191
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "seed": 0
+      },
+      "expected_output": 0.5652643571885936
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": 1
+      },
+      "expected_output": -0.39287035790871383
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": 1
+      },
+      "expected_output": -0.33293387635281957
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": 1
+      },
+      "expected_output": 0.4551776512317256
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": 1
+      },
+      "expected_output": -0.11652827873664373
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": 1
+      },
+      "expected_output": -0.4842163014157784
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": 1
+      },
+      "expected_output": -0.5764834484354282
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": 7
+      },
+      "expected_output": 0.5703052494536645
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": 7
+      },
+      "expected_output": -0.018437672647851344
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": 7
+      },
+      "expected_output": -0.357483895894831
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": 7
+      },
+      "expected_output": 0.217430812640782
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": 7
+      },
+      "expected_output": 0.11635690158140521
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": 7
+      },
+      "expected_output": -0.14353689342669063
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "seed": 7
+      },
+      "expected_output": -0.4555544155478606
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "seed": 7
+      },
+      "expected_output": -0.3474966572012409
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": 42
+      },
+      "expected_output": -0.867578729925481
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": 42
+      },
+      "expected_output": -0.0714232386422452
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": 42
+      },
+      "expected_output": 0.3979685157062338
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": 42
+      },
+      "expected_output": 0.19917444917334914
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": 42
+      },
+      "expected_output": 0.7010430542094004
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": 42
+      },
+      "expected_output": 0.5747726300635654
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": 1337
+      },
+      "expected_output": 0.687932176370142
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": 1337
+      },
+      "expected_output": 0.0401847947110352
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": 1337
+      },
+      "expected_output": 0.2317052622007698
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": 1337
+      },
+      "expected_output": 0.027907235095234295
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": 1337
+      },
+      "expected_output": 0.3774034997641351
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": 1337
+      },
+      "expected_output": 0.2412776922570028
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "seed": 1337
+      },
+      "expected_output": -0.7893363246991052
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "seed": 1337
+      },
+      "expected_output": 0.6936377080513605
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "seed": -5
+      },
+      "expected_output": 0.879639362860303
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "seed": -5
+      },
+      "expected_output": 0.034534265768963124
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "seed": -5
+      },
+      "expected_output": 0.11568408325113544
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "seed": -5
+      },
+      "expected_output": -0.2565453805758364
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "seed": -5
+      },
+      "expected_output": 0.18890944225388995
+    },
+    {
+      "primitive": "value_noise",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "seed": -5
+      },
+      "expected_output": -0.3435389069380944
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.029412177782010312
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.02941147905434467
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.02941094272591508
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.029416413819944108
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.02940310418277077
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.0036190775854505015
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.0005,
+        "octaves": 6,
+        "seed": 2,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.17695693081614985
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.2933128053581082
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.29331280671834564
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.293312811136344
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.2933127896659175
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.293312499204731
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.2915651558645942
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.000125,
+        "octaves": 4,
+        "seed": 17,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.30961562530576653
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.011465941893752512
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.011473162131087131
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.011473408572288814
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.011462561845612436
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.011724895994427196
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": -0.22295974242506164
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.002,
+        "octaves": 3,
+        "seed": 43,
+        "gain": 0.5,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.3834219691761009
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.4528479752999609
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.452847974597787
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.4528479746146914
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.45284797435886304
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.4528479739393137
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.45274456408423647
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 3.3333333333333335e-05,
+        "octaves": 5,
+        "seed": 9101,
+        "gain": 0.56,
+        "lacunarity": 2.0
+      },
+      "expected_output": -0.4458635687948284
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.5663007688406643
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.5663043471783727
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.5663035732557113
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.5663075858230694
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.5662939121397196
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.6030880383674788
+    },
+    {
+      "primitive": "fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.0008103727714748784,
+        "octaves": 4,
+        "seed": -5,
+        "gain": 0.48,
+        "lacunarity": 2.1
+      },
+      "expected_output": 0.3545872034157026
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.6906810152145791
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.6906807150242958
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.6906805494556363
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.6906818389694095
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.690682702903599
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.7160204115158488
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.9286378241402126
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "base_freq": 0.0005,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.5468706992603537
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.36877953162146593
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.36878218362171195
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.36878167373088866
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.3687823118470607
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.3688332084007984
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.4526202286114831
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.7051985665461452
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.55,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.7012543255082745
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8174288206504482
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8174290746563263
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8174291542478975
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8174287385086199
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8174306940655222
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8139103517648659
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8066671987594685
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "base_freq": 0.0004,
+        "octaves": 4,
+        "seed": 200,
+        "gain": 0.5,
+        "lacunarity": 2.0
+      },
+      "expected_output": 0.8491885502070227
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.3464953676658563
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.3465101277727018
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.34650910252738804
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.34652662531989376
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.3474070501244958
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.5050310891372443
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.604631082818369
+    },
+    {
+      "primitive": "ridged_fbm",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "base_freq": 0.00125,
+        "octaves": 5,
+        "seed": 7,
+        "gain": 0.46,
+        "lacunarity": 1.9
+      },
+      "expected_output": 0.7655145032033908
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.37278301044519385
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.3727830036078674
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.37278299958874167
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.37278303435207316
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.3727830851843469
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0004,
+        "octaves": 5,
+        "seed": 6,
+        "gain": 0.5,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.3758671405336005
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.455227027950367
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4552270279501727
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.45522702794860354
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4552270279588091
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4552270279808303
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 9.523809523809523e-06,
+        "octaves": 5,
+        "seed": 2,
+        "gain": 0.57,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4552280424291908
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.39006031052881407
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.390060310528781
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.3900603105270165
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.39006031053821394
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.39006031056412543
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 1.5384615384615384e-05,
+        "octaves": 4,
+        "seed": 3,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.3900614456503157
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4571072554052135
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.45710725566026955
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.45710725564194293
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.457107255334358
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.45710725370204314
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 5.555555555555556e-05,
+        "octaves": 5,
+        "seed": 23,
+        "gain": 0.55,
+        "lacunarity": 2.0,
+        "offset": 1.0,
+        "weight_gain": 1.35
+      },
+      "expected_output": 0.4570991315258889
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.1160482048224326
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.11604823757084172
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.11604823308896997
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.11604823723085247
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.11604836567556075
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0006666666666666666,
+        "octaves": 4,
+        "seed": 100,
+        "gain": 0.6,
+        "lacunarity": 1.9,
+        "offset": 0.9,
+        "weight_gain": 1.5
+      },
+      "expected_output": 0.11969193172467965
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.048443357481631526
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.04844336042993672
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.048443360567587974
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.048443361468903434
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.048443498004510026
+    },
+    {
+      "primitive": "ridged_multifractal",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "base_freq": 0.0003333333333333333,
+        "octaves": 3,
+        "seed": 430,
+        "gain": 0.42,
+        "lacunarity": 2.0,
+        "offset": 1.1,
+        "weight_gain": 1.2
+      },
+      "expected_output": 0.048951995406682186
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 25.497012550708433,
+        "out_z": 792.4362277377298
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 26.99701423118053,
+        "out_z": 794.9362209729231
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 23.997014738926325,
+        "out_z": 794.9362205970949
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 27.997014957827126,
+        "out_z": 790.9362219913768
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 22.246997667563527,
+        "out_z": 784.6859260558024
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 149.24782033611007,
+        "out_z": 703.3788202552981
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": -470.9079182387689,
+        "out_z": 1242.464101020455
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -321.36173118900587,
+        "out_z": 2044.271109746097
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -319.86172235857885,
+        "out_z": 2046.7711091660049
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -322.86172203392647,
+        "out_z": 2046.7711098342788
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -318.86172955281296,
+        "out_z": 2042.7711029124425
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -324.6114359871449,
+        "out_z": 2036.521069807285
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -197.50734266448586,
+        "out_z": 1955.2445165487563
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 2500.0,
+        "warp_freq": 0.000125,
+        "seed": 5
+      },
+      "expected_output": {
+        "out_x": -776.8046707975213,
+        "out_z": 2534.059980735219
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 0.0,
+        "out_z": 0.0
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 1.5,
+        "out_z": 2.5
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": -1.5,
+        "out_z": 2.5
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 2.5,
+        "out_z": -1.5
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": -3.25,
+        "out_z": -7.75
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": 123.5,
+        "out_z": -88.25
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4
+      },
+      "expected_output": {
+        "out_x": -512.0,
+        "out_z": 511.999
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 91.78431177395326,
+        "out_z": 48.08243558586288
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 93.28431280899409,
+        "out_z": 50.58243623346227
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 90.28431347962236,
+        "out_z": 50.582436571215254
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 94.28431161134982,
+        "out_z": 46.58243562120701
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 88.53432338900083,
+        "out_z": 40.3324342268133
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": 215.27049606645073,
+        "out_z": -40.167209923454706
+      }
+    },
+    {
+      "primitive": "domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 900.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5
+      },
+      "expected_output": {
+        "out_x": -397.83933310064054,
+        "out_z": 573.3293352612491
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 132.6774304826971,
+        "out_z": -1679.5520729681614
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 135.37761517879696,
+        "out_z": -1676.6318131249604
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 132.67748455608557,
+        "out_z": -1676.627548651372
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 134.1229290885417,
+        "out_z": -1681.2916909040955
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 125.58166530497172,
+        "out_z": -1688.3932930820656
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 199.39930089939122,
+        "out_z": -1753.0414020801559
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 1500.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -59.72886391384935,
+        "out_z": -708.9720497442968
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -714.7121759260026,
+        "out_z": -1229.9976775843165
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -711.2872367124916,
+        "out_z": -1226.4322895836367
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -714.3757094152961,
+        "out_z": -1226.4862703596968
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -713.2614984337008,
+        "out_z": -1232.0736533695756
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -723.8476232038605,
+        "out_z": -1240.994956146048
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -642.3864597539111,
+        "out_z": -1350.2770586257539
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 2700.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 2,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -997.8278872159242,
+        "out_z": -608.3105510973965
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -259.989243276261,
+        "out_z": -886.2226471266418
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -258.68355384213413,
+        "out_z": -883.697840418945
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -262.23058101688736,
+        "out_z": -883.4139820906422
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -256.75316677619395,
+        "out_z": -888.0636855351593
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -262.42857214209874,
+        "out_z": -894.1681969718265
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -103.78319515238434,
+        "out_z": -992.3962087728943
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 1875.0,
+        "warp_freq": 0.000125,
+        "seed": 5,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -888.7147963155227,
+        "out_z": -429.76549534166503
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 0.0,
+        "out_z": 0.0
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 1.5,
+        "out_z": 2.5
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -1.5,
+        "out_z": 2.5
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 2.5,
+        "out_z": -1.5
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -3.25,
+        "out_z": -7.75
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": 123.5,
+        "out_z": -88.25
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 0.0,
+        "warp_freq": 0.00016666666666666666,
+        "seed": 4,
+        "steps": 3,
+        "decay": 0.55,
+        "freq_mul": 1.9
+      },
+      "expected_output": {
+        "out_x": -512.0,
+        "out_z": 511.999
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -693.7080290489988,
+        "out_z": -748.6679801865965
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -691.0406637691896,
+        "out_z": -745.9940797399211
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -694.6087694012956,
+        "out_z": -745.9742504841846
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -691.2745823343666,
+        "out_z": -750.2699720928434
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -700.3534663630313,
+        "out_z": -756.8957897665716
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -572.6232846486755,
+        "out_z": -825.4200430394488
+      }
+    },
+    {
+      "primitive": "recursive_domain_warp",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "warp_amount": 1200.0,
+        "warp_freq": 0.00011111111111111112,
+        "seed": -5,
+        "steps": 4,
+        "decay": 0.6,
+        "freq_mul": 2.0
+      },
+      "expected_output": {
+        "out_x": -1157.5921971655146,
+        "out_z": 89.0437607134909
+      }
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.10061099591463263
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.09806124684963125
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.10182143376892872
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.09787862265293246
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.10677471670909067
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "freq": 0.0003333333333333333,
+        "seed": 7,
+        "sharpness": 2.0
+      },
+      "expected_output": 0.0
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.8063552850896019
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.80616508545153
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.8061354373298163
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.8065032771937529
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.8069583476614045
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "freq": 0.0002,
+        "seed": 160,
+        "sharpness": 1.3
+      },
+      "expected_output": 0.8151496455615845
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.598083419657642
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.6102875457484955
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.6023548608781796
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.5997720138982289
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.5639115594662275
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "freq": 0.0008333333333333334,
+        "seed": 300,
+        "sharpness": 2.6
+      },
+      "expected_output": 0.6697556685568113
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 0.0,
+        "wz": 0.0,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.8039844953848609
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 1.5,
+        "wz": 2.5,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.7969987745048421
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -1.5,
+        "wz": 2.5,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.7988267843405895
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 2.5,
+        "wz": -1.5,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.8061317682194065
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": -3.25,
+        "wz": -7.75,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.8247560182024567
+    },
+    {
+      "primitive": "cellular_edges",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "freq": 0.00125,
+        "seed": 11,
+        "sharpness": 1.25
+      },
+      "expected_output": 0.971917422104994
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 0.00010574713365808806
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 0.0002064874585791748
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 8.094361096532079e-05
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 0.0005899267648117237
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 3.779532476529209e-05
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 0.0007183543918264532
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 65000.0,
+        "width": 7000.0,
+        "seed": 8,
+        "neighborhood": 2
+      },
+      "expected_output": 0.1569369520622965
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.8711113678141543
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.8966477296291854
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9038442737409639
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9122801512504802
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.4157551909012827
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.2576817980891911
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 76000.0,
+        "width": 21000.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.8191946266251499
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.2368628146353523
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.32023815194325006
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.348105452923411
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.3835514353054153
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.0001050696597132073
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 7.128017640592665e-07
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 76000.0,
+        "width": 6500.0,
+        "seed": 408,
+        "neighborhood": 2
+      },
+      "expected_output": 0.12472277705443122
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9310829912547177
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9418739361466472
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9002048882595577
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.9687895672140034
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.4612286469645858
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.6000256043649127
+    },
+    {
+      "primitive": "range_spine_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 85000.0,
+        "width": 24000.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.8535401147587847
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.11265923677261083
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.12368432754626331
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.19405828218423007
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.1209576229662208
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.40256409990066866
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": 0.07691956664139615
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 80000.0,
+        "width": 9000.0,
+        "seed": 9,
+        "neighborhood": 2
+      },
+      "expected_output": -0.017819879439354005
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": -0.06725389995348988
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": 0.0623892558761261
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": -0.014253963627891346
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": 0.06656174506348782
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": -0.4328057240873509
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": 0.3605579767963931
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 90000.0,
+        "width": 9000.0,
+        "seed": 500,
+        "neighborhood": 2
+      },
+      "expected_output": -0.0993541493058317
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 123.5,
+        "wz": -88.25,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.1435030683110349
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -512.0,
+        "wz": 511.999,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.15661298777115182
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 1024.25,
+        "wz": 2048.75,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.18162594332860726
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -2049.0,
+        "wz": 33.0,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.15598581046126106
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 40000.0,
+        "wz": -25000.0,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.035143066032352795
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": -128000.0,
+        "wz": 64000.0,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": 0.06630145066865568
+    },
+    {
+      "primitive": "fault_block_field",
+      "inputs": {
+        "wx": 333333.0,
+        "wz": -222222.0,
+        "cell_size": 85000.0,
+        "width": 7500.0,
+        "seed": 510,
+        "neighborhood": 2
+      },
+      "expected_output": -0.3249178812056021
+    }
+  ]
+}
