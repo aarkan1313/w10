@@ -33,7 +33,8 @@ mod recipes_rainforest;
 mod recipes_coast;
 mod recipes_wetland;
 mod biome_compose;
-mod flow_spike;
+pub(crate) mod flow_spike;
+mod page_measure;
 
 #[cfg(test)]
 mod hash_tests;
@@ -85,6 +86,8 @@ mod recipes_coast_tests;
 mod recipes_wetland_tests;
 #[cfg(test)]
 mod biome_compose_tests;
+#[cfg(test)]
+mod page_measure_tests;
 
 struct Wg10Terrain;
 
