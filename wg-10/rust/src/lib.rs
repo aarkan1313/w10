@@ -20,6 +20,7 @@ mod edit_layer;
 mod facts;
 mod facts_api;
 mod recipe_noise;
+mod array_ops;
 
 #[cfg(test)]
 mod hash_tests;
@@ -45,6 +46,8 @@ mod edit_layer_tests;
 mod facts_tests;
 #[cfg(test)]
 mod recipe_noise_tests;
+#[cfg(test)]
+mod array_ops_tests;
 
 struct Wg10Terrain;
 
