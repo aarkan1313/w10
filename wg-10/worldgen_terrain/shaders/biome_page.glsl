@@ -162,6 +162,19 @@ layout(set = 0, binding = 37, std430) restrict buffer Pool13 { float v[]; } pool
 layout(set = 0, binding = 38, std430) restrict buffer Pool14 { float v[]; } pool14;
 layout(set = 0, binding = 39, std430) restrict buffer Pool15 { float v[]; } pool15;
 
+// ---------------------------------------------------------------------------
+// VENT BUFFER (binding 40): a SMALL packed vent list for VOLCANIC. ADDITIVE -- the 10 proven
+// biomes never read it (they leave it zeroed). The numpy-PCG64 RNG that places the vents +
+// per-vent flow directions stays in RUST (recipes_volcanic::packed_vents, parity-exact); the GPU
+// only CONSUMES this uploaded buffer doing pure f32 cone/crater/shield/flow math -- NO RNG in GLSL.
+// Packed `(vx, vz, amp, dir0, dir1, dir2, dir3)` = VENT_STRIDE(7) floats per vent, padded to
+// MAX_VENTS(8) entries; the active count is the `vent_count` push constant. MUST match
+// recipes_volcanic::{MAX_VENTS, VENT_STRIDE} + biome_page_compute.rs.
+// ---------------------------------------------------------------------------
+const int VENT_STRIDE = 7;
+const int MAX_VENTS   = 8;
+layout(set = 0, binding = 40, std430) restrict readonly buffer Vents { float v[]; } vents;
+
 // pool slot accessors. A small switch keeps the slot index data-driven (the `pool_sel` push
 // constant for the generic pool passes; a literal for biome fragments). Out-of-range slots are
 // inert (read 0 / no write) -- a wrong slot fails parity loudly rather than corrupting memory.
@@ -219,7 +232,7 @@ layout(push_constant, std430) uniform Params {
     int flow_dir;    // PASS_FLOW_RELAX: 0 = acc_a->acc_b, 1 = acc_b->acc_a
     int koffset;     // base index of the active kernel in the packed kernel buffer
     int pool_sel;    // PASS_COPY_POOL / PASS_POOL_FROM_GAUSS: which scratch pool slot
-    int ipad1;
+    int vent_count;  // VOLCANIC: active vents in the vent buffer (0 for the 10 non-volcanic biomes -> byte-identical to the former ipad1)
     int ipad2;
     float spacing;   // grid spacing (metres/px)
     float ox;        // grid origin x

@@ -139,3 +139,67 @@ fn volcanic_seamsafe_matches_python_oracle() {
         "volcanic_seamsafe parity exceeded EPS={EPS:.1e}: max |delta|={max_delta:.3e} at {worst}"
     );
 }
+
+/// The CPU vent-buffer packing (`volcanic::packed_vents`) is what the GPU consumes -- it MUST
+/// reproduce the recipe's two RNG streams exactly (the whole "RNG stays in Rust" insight rides on
+/// this). The proven `vent_points`/flow-dir RNG inside `vent_fields` is private, so we pin
+/// `packed_vents` against numpy ground truth (the SAME values `rng_unit_tests` already validate the
+/// raw streams against): for STYLES[0], seed=0, span=60000:
+///   * vent0 is the FIXED-origin normal-jittered centre with amp 1.08; its (vx,vz) are
+///     (0 + normal(0, span*0.08), 0 + normal(0, span*0.08)) = (3350.088848951808, -4163.82158704271)
+///     (numpy default_rng(500).normal(0,4800) x2 -- see pcg64_random_matches_numpy_seed500).
+///   * vent0's 4 flow dirs are the first 4 uniform(-PI,PI) of default_rng(900):
+///     -3.10801602613677, -2.8620128338816295, 2.5596769870805165, ... (see
+///     pcg64_uniform_matches_numpy_seed900).
+/// vent_count must be 4 (stratovolcano_cluster) and the buffer length MAX_VENTS*VENT_STRIDE.
+#[test]
+fn packed_vents_matches_numpy_streams_seed0() {
+    use std::f64::consts::PI;
+    let (packed, count) =
+        volcanic::packed_vents(&volcanic::STRATOVOLCANO_CLUSTER, 0, 60000.0);
+    assert_eq!(count, 4, "stratovolcano_cluster vent_count");
+    assert_eq!(packed.len(), volcanic::MAX_VENTS * volcanic::VENT_STRIDE);
+
+    // vent0 (slot 0): vx, vz, amp, dir0..dir3.
+    let vx = packed[0] as f64;
+    let vz = packed[1] as f64;
+    let amp = packed[2] as f64;
+    let d0 = packed[3] as f64;
+    let d1 = packed[4] as f64;
+    let d2 = packed[5] as f64;
+    // f32-narrowed, so compare at f32 precision (~1e-3 on metre-scale coords).
+    assert!((vx - 3350.088848951808).abs() < 1.0, "vent0 vx={vx}");
+    assert!((vz - (-4163.82158704271)).abs() < 1.0, "vent0 vz={vz}");
+    assert!((amp - 1.08).abs() < 1e-5, "vent0 amp={amp}");
+    assert!((d0 - (-3.10801602613677)).abs() < 1e-5, "vent0 dir0={d0}");
+    assert!((d1 - (-2.8620128338816295)).abs() < 1e-5, "vent0 dir1={d1}");
+    assert!((d2 - 2.5596769870805165).abs() < 1e-5, "vent0 dir2={d2}");
+    // all dirs are uniform draws in [-PI, PI].
+    for vi in 0..count {
+        for k in 3..7 {
+            let dir = packed[vi * volcanic::VENT_STRIDE + k] as f64;
+            assert!(dir >= -PI - 1e-4 && dir <= PI + 1e-4, "dir out of range: {dir}");
+        }
+    }
+    // padding past vent_count is zero.
+    for vi in count..volcanic::MAX_VENTS {
+        for k in 0..volcanic::VENT_STRIDE {
+            assert_eq!(packed[vi * volcanic::VENT_STRIDE + k], 0.0, "pad not zero");
+        }
+    }
+}
+
+/// Seed 7 (the fixture's second record): vent_count must also be 4 and fit MAX_VENTS, and the
+/// packing must be deterministic (the GPU buffer is rebuilt per page from these seeds).
+#[test]
+fn packed_vents_seed7_is_four_vents() {
+    let (packed, count) =
+        volcanic::packed_vents(&volcanic::STRATOVOLCANO_CLUSTER, 7, 60000.0);
+    assert_eq!(count, 4);
+    assert_eq!(packed.len(), volcanic::MAX_VENTS * volcanic::VENT_STRIDE);
+    // deterministic: same seed -> same bytes.
+    let (packed2, count2) =
+        volcanic::packed_vents(&volcanic::STRATOVOLCANO_CLUSTER, 7, 60000.0);
+    assert_eq!(count, count2);
+    assert_eq!(packed, packed2);
+}

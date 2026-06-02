@@ -208,6 +208,22 @@ const RF_WET_PRE: i32 = 42;
 const RF_ASSEMBLE: i32 = 43;
 const RF_FINAL: i32 = 44;
 
+// VOLCANIC biome-private PASS_* codes (start at 32) -- MUST match biome_volcanic.glsl VO_*.
+const VO_POINTWISE: i32 = 32;
+const VO_VENT_ACCUM: i32 = 33;
+const VO_FLOWS_FINAL: i32 = 34;
+const VO_REMAP: i32 = 35;
+const VO_LAVA_ROUGH: i32 = 36;
+const VO_BASE: i32 = 37;
+const VO_RADIAL: i32 = 38;
+const VO_GULLIES: i32 = 39;
+const VO_SPC_PRE: i32 = 40;
+const VO_CALDERA: i32 = 41;
+const VO_ASSEMBLE: i32 = 42;
+const VO_ASH_PRE: i32 = 43;
+const VO_ASH_BLEND: i32 = 44;
+const VO_FINAL: i32 = 45;
+
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
@@ -309,6 +325,10 @@ fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
 
 /// Build the 96-byte push constant (std430): 12 i32 (48B) then 12 f32 (48B).
 /// Layout MUST match biome_page.glsl Params.
+///
+/// `vent_count` occupies the former `ipad1` int slot (index 10). It is 0 for every non-volcanic
+/// biome (the 10 proven biomes pass vent_count=0 -> the exact bytes the hardcoded `0` produced
+/// before, so their push is byte-identical). VOLCANIC passes its actual vent count there.
 #[allow(clippy::too_many_arguments)]
 fn build_push(
     pass: i32,
@@ -321,6 +341,7 @@ fn build_push(
     flow_dir: i32,
     koffset: i32,
     pool_sel: i32,
+    vent_count: i32,
     spacing: f32,
     ox: f32,
     oz: f32,
@@ -328,8 +349,8 @@ fn build_push(
     flow_power: f32,
 ) -> Vec<u8> {
     let mut b = Vec::with_capacity(96);
-    // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel + 2 pad.
-    for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, pool_sel, 0, 0] {
+    // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count + 1 pad.
+    for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, pool_sel, vent_count, 0] {
         b.extend_from_slice(&v.to_le_bytes());
     }
     // 12 floats: spacing,ox,oz,feature_span_m,flow_power + 7 pad.
@@ -534,6 +555,24 @@ fn rainforest_sigmas() -> Vec<f64> {
     vec![1.0, 1.15, 1.7, 2.2, 2.6, 4.5, 5.4]
 }
 
+/// Distinct gaussian sigmas the VOLCANIC recipe uses (recipes_volcanic.rs::generate_seamsafe), in a
+/// FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's blurs
+/// (read directly from the oracle, style = stratovolcano_cluster):
+///   * flows        = gaussian(vent flows raw,             1.1)              [_vent_fields trailing]
+///   * gullies      = gully_channels_seam_safe(radial_surface, power=0.40):
+///                    PRE-BLUR 1.15 (shared) + spread 1.2 (NOT max(width,0.1); a FIXED 1.2)
+///   * spc_blur     = gaussian(shields + cones,            2.6)              [caldera bowl/rim]
+///   * max_cf_blur  = gaussian(max(cones, flows),          3.0)              [ash_plain]
+///   * smoothed_plain = gaussian(height,                   2.6)              [ash blend; dedups spc]
+///   * final blend  = gaussian(height,                     0.85)
+/// Deduped: 0.85, 1.1, 1.15, 1.2, 2.6, 3.0. VOLCANIC uses the SHARED pre-blur 1.15 (flow_discharge),
+/// then a dedicated spread sigma=1.2 (the gully_channels_seam_safe FIXED spread, NOT the flow width)
+/// -- so it spreads the RAW discharge once at 1.2 via the flow_discharge prefix + a separate gauss,
+/// exactly like temperate/rainforest spread their raw discharge (minus the second spread).
+fn volcanic_sigmas() -> Vec<f64> {
+    vec![0.85, 1.1, 1.15, 1.2, 2.6, 3.0]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -548,6 +587,7 @@ fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
         "karst" => Some(karst_sigmas()),
         "temperate" => Some(temperate_sigmas()),
         "rainforest" => Some(rainforest_sigmas()),
+        "volcanic" => Some(volcanic_sigmas()),
         _ => None,
     }
 }
@@ -614,6 +654,9 @@ struct Scheduler<'a> {
     ox: f32,
     oz: f32,
     feature_span_m: f32,
+    /// VOLCANIC: active vents (forwarded into every dispatch's push constant). 0 for the 10
+    /// non-volcanic biomes -> their push bytes are byte-identical to the pre-vent layout.
+    vent_count: i32,
     wg_full_x: u32,
     wg_full_y: u32,
     wg_core_x: u32,
@@ -643,7 +686,8 @@ impl<'a> Scheduler<'a> {
         let pc = PackedByteArray::from(
             build_push(
                 pass, self.rows, self.cols, self.apron, self.seed, kradius, copy_sel, flow_dir,
-                koffset, pool_sel, self.spacing, self.ox, self.oz, self.feature_span_m, flow_power,
+                koffset, pool_sel, self.vent_count, self.spacing, self.ox, self.oz,
+                self.feature_span_m, flow_power,
             )
             .as_slice(),
         );
@@ -1462,6 +1506,86 @@ fn schedule_rainforest(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+/// The VOLCANIC dispatch schedule (style = stratovolcano_cluster). Mirrors the field DAG of
+/// recipes_volcanic.rs::generate_seamsafe ONE-FOR-ONE: warp+regional/rift -> VENT ACCUMULATION
+/// (cones/craters/shields raw + raw flows, looping the uploaded vent buffer) -> flows (blur raw
+/// flows 1.1) -> cones/craters/shields affine-remap -> lava_texture/rough_aa -> base -> gullies
+/// (SHARED flow_discharge pre-blur 1.15, then a FIXED 1.2 spread) -> caldera bowl/rim + cone_lift
+/// (uses gaussian(shields+cones,2.6)) -> assemble -> ash_plain blend (gaussian(max(cones,flows),3.0)
+/// + gaussian(height,2.6)) -> final. All intermediate fields live in the GENERIC scratch POOL
+/// (pool0..pool15; pool15 is TRANSIENT: raw flows staging, then REUSED for max_cf_blur; see
+/// biome_volcanic.glsl for the slot map). The sigmas (1.1, 1.15, 1.2, 2.6, 3.0, 0.85) are all in
+/// volcanic_sigmas().
+///
+/// THE KEY INSIGHT (the most novel port): VOLCANIC's vents are placed by numpy PCG64 RNG, but that
+/// RNG STAYS IN RUST (recipes_volcanic::packed_vents, parity-exact). The CPU builds a SMALL packed
+/// vent buffer (vx,vz,amp + 4 flow dirs per vent) BEFORE the compute list opens; the GPU's
+/// VO_VENT_ACCUM pass loops `vent_count` vents doing PURE f32 cone/crater/shield/flow math -- NO RNG
+/// on the GPU. The vent buffer is bound at binding 40 (ADDITIVE; the 10 proven biomes never read it).
+///
+/// VOLCANIC's gully carve uses `flow_discharge(0.40, 1.15)` (the common PREFIX leaving the raw log1p
+/// discharge in gauss_in), then a SINGLE spread at sigma=1.2 -- the gully_channels_seam_safe FIXED
+/// spread (NOT the flow-channels width.max(0.1)), so it cannot use flow_channels (whose spread sigma
+/// IS the width). It rides the proven flow_discharge prefix + a dedicated gauss(1.2).
+fn schedule_volcanic(s: &mut Scheduler) {
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; regional=pool2 ; rift=pool3
+    s.dispatch_full(VO_POINTWISE, 0, 0, 0.0);
+
+    // 2) vent accumulation: loop the uploaded vent buffer (PURE f32 math; RNG already done in Rust)
+    //    -> cones(pool4), craters(pool5), shields(pool6) RAW ; raw flows -> pool15 (transient)
+    s.dispatch_full(VO_VENT_ACCUM, 0, 0, 0.0);
+
+    // 3) flows = clip(affine(gaussian(raw flows, 1.1), FLOWS)) ; pool15(raw flows) -> blur -> pool7
+    s.gauss_pool(15, 1.1);                           // gauss_out = gaussian(raw flows, 1.1)
+    s.dispatch_full(VO_FLOWS_FINAL, 0, 0, 0.0);      // pool7 = flows
+
+    // 4) finalize cones/craters/shields: clip(affine(raw, *)) in place (pool4/5/6)
+    s.dispatch_full(VO_REMAP, 0, 0, 0.0);
+
+    // 5) lava_texture (pool8) + rough_aa (pool9), pointwise on w_x/w_z (NO clip)
+    s.dispatch_full(VO_LAVA_ROUGH, 0, 0, 0.0);
+
+    // 6) base = affine(0.58*regional + 0.52*shields*shield_gain + 0.22*rift, BASE) = pool10
+    s.dispatch_full(VO_BASE, 0, 0, 0.0);
+
+    // 7) gullies: radial_surface = base + 1.12*cones - 0.78*craters -> flow_pre ; gully_channels
+    //    = flow_discharge(power=0.40, pre-blur 1.15) [raw discharge in gauss_in] -> spread 1.2 ;
+    //    gullies = smoothstep(0.52,0.92, discharge) * (0.30 + 0.70*cones) = pool11
+    s.dispatch_full(VO_RADIAL, 0, 0, 0.0);           // flow_pre <- radial_surface (NO clip)
+    s.flow_discharge(0.40_f32, 1.15);                // gauss_in = raw log1p discharge
+    s.gauss(1.2);                                    // gauss_out = gaussian(discharge, 1.2)
+    s.dispatch_full(VO_GULLIES, 0, 0, 0.0);          // pool11 = gullies
+
+    // 8) caldera: spc_blur = gaussian(shields + cones, 2.6) ; caldera_bowl(pool12),
+    //    caldera_rim(pool13), cone_lift(pool14)
+    s.dispatch_full(VO_SPC_PRE, 0, 0, 0.0);          // gauss_in <- shields + cones
+    s.gauss(2.6);                                    // gauss_out = gaussian(shields+cones, 2.6)
+    s.dispatch_full(VO_CALDERA, 0, 0, 0.0);          // pool12/13/14
+
+    // 9) assemble height (base + cone_lift/shields/rift/flows/caldera_rim - caldera_bowl/gullies + detail)
+    s.dispatch_full(VO_ASSEMBLE, 0, 0, 0.0);
+
+    // 10) ash_plain blend: max_cf_blur = gaussian(max(cones,flows), 3.0) -> pool15 (REUSE) ;
+    //     smoothed_plain = gaussian(height, 2.6) ; height = blend by ash_plain
+    s.dispatch_full(VO_ASH_PRE, 0, 0, 0.0);          // gauss_in <- max(cones, flows)
+    s.gauss(3.0);                                    // gauss_out = gaussian(max_cf, 3.0)
+    s.dispatch_pool(PASS_POOL_FROM_GAUSS, 15);       // pool15 = max_cf_blur (transient reuse)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(2.6);                                    // gauss_out = gaussian(height, 2.6) = smoothed_plain
+    s.dispatch_full(VO_ASH_BLEND, 0, 0, 0.0);        // height = blend (reads pool15 + gauss_out)
+
+    // 11) final: height_blur = gaussian(height, 0.85); final_blend = 0.82*h + 0.18*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(0.85);                                   // gauss_out = gaussian(height, 0.85)
+    s.dispatch_full(VO_FINAL, 0, 0, 0.0);
+
+    // 12) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1706,7 +1830,30 @@ impl Wg10BiomePageCompute {
         // them -> its result is unchanged). Additive: the fixed named buffers above are untouched.
         let b_pool: Vec<Rid> = (0..POOL_SLOTS).map(|_| mk_field(&mut rd)).collect();
 
-        // one uniform set binding the 24 fixed buffers + POOL_SLOTS pool buffers (build once).
+        // VENT buffer (binding 40): VOLCANIC's CPU-built packed vent list (vx,vz,amp + 4 flow dirs
+        // per vent, padded to MAX_VENTS). THE KEY INSIGHT -- the numpy PCG64 RNG that places the
+        // vents stays in RUST (recipes_volcanic::packed_vents, parity-exact); this buffer is the
+        // only thing the GPU consumes (PURE f32 cone/crater/shield/flow math, NO RNG in GLSL).
+        // ADDITIVE: every biome gets the binding (so the uniform set always satisfies the machine's
+        // binding 40); the 10 non-volcanic biomes get a zeroed buffer + vent_count=0 (never read).
+        let (vent_packed, vent_count): (Vec<f32>, usize) = if biome == "volcanic" {
+            crate::recipes_volcanic::volcanic::packed_vents(
+                &crate::recipes_volcanic::volcanic::STRATOVOLCANO_CLUSTER,
+                seed as i64,
+                feature_span_m as f64,
+            )
+        } else {
+            let stride = crate::recipes_volcanic::volcanic::VENT_STRIDE;
+            let maxv = crate::recipes_volcanic::volcanic::MAX_VENTS;
+            (vec![0.0_f32; maxv * stride], 0)
+        };
+        let vent_pba = PackedByteArray::from(f32s_to_bytes(&vent_packed).as_slice());
+        let b_vents = rd
+            .storage_buffer_create_ex(bsize(vent_packed.len() * 4))
+            .data(&vent_pba)
+            .done(); // 40
+
+        // one uniform set binding the 24 fixed buffers + POOL_SLOTS pool buffers + vent buffer.
         let mut bindings: Vec<(i32, Rid)> = vec![
             (0, b_wx), (1, b_wz), (2, b_regional), (3, b_ranges), (4, b_ridge_detail),
             (5, b_near_detail), (6, b_range_env), (7, b_lowland), (8, b_massif), (9, b_base),
@@ -1717,6 +1864,7 @@ impl Wg10BiomePageCompute {
         for (k, &rid) in b_pool.iter().enumerate() {
             bindings.push((24 + k as i32, rid));
         }
+        bindings.push((40, b_vents));
         let mut uniforms: Array<Gd<RdUniform>> = Array::new();
         for (bind, rid) in bindings.iter() {
             uniforms.push(&make_storage_uniform(*bind, *rid));
@@ -1761,6 +1909,7 @@ impl Wg10BiomePageCompute {
             ox,
             oz,
             feature_span_m,
+            vent_count: vent_count as i32,
             wg_full_x,
             wg_full_y,
             wg_core_x,
@@ -1780,6 +1929,7 @@ impl Wg10BiomePageCompute {
             "karst" => schedule_karst(&mut sched),
             "temperate" => schedule_temperate(&mut sched),
             "rainforest" => schedule_rainforest(&mut sched),
+            "volcanic" => schedule_volcanic(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -1896,14 +2046,14 @@ mod biome_page_compute_tests {
 
     #[test]
     fn push_constant_is_96_bytes() {
-        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48);
+        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48);
         assert_eq!(p.len(), 96);
     }
 
     #[test]
     fn push_constant_packs_ints_then_floats() {
-        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,spacing,ox,oz,span,power)
-        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 3913.0, 12000.0, -31000.0, 90000.0, 0.34);
+        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count,spacing,ox,oz,span,power)
+        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 4, 3913.0, 12000.0, -31000.0, 90000.0, 0.34);
         assert_eq!(i32::from_le_bytes([p[0], p[1], p[2], p[3]]), 7);
         assert_eq!(i32::from_le_bytes([p[4], p[5], p[6], p[7]]), 344);
         assert_eq!(i32::from_le_bytes([p[8], p[9], p[10], p[11]]), 343);
@@ -1914,12 +2064,23 @@ mod biome_page_compute_tests {
         assert_eq!(i32::from_le_bytes([p[28], p[29], p[30], p[31]]), 1);
         assert_eq!(i32::from_le_bytes([p[32], p[33], p[34], p[35]]), 128); // koffset
         assert_eq!(i32::from_le_bytes([p[36], p[37], p[38], p[39]]), 9);   // pool_sel
-        // 2 int pad at 40..48; floats start at byte 48.
+        assert_eq!(i32::from_le_bytes([p[40], p[41], p[42], p[43]]), 4);   // vent_count (former ipad1)
+        // 1 int pad at 44..48; floats start at byte 48.
         let spacing = f32::from_le_bytes([p[48], p[49], p[50], p[51]]);
         assert!((spacing - 3913.0).abs() < 1e-1);
         // floats: spacing(48),ox(52),oz(56),span(60),power(64)
         let flow_power = f32::from_le_bytes([p[64], p[65], p[66], p[67]]);
         assert!((flow_power - 0.34).abs() < 1e-6);
+    }
+
+    #[test]
+    fn non_volcanic_push_vent_count_is_zero_byte_identical() {
+        // The 10 proven biomes pass vent_count=0 -> byte-identical to the former hardcoded `0` pad.
+        // Build a representative mountain dispatch push with vent_count=0 and confirm the vent_count
+        // int slot (bytes 40..44) is exactly zero (so mountain's 1.89e-6 parity is preserved).
+        let p = build_push(8, 344, 344, 160, 0, 0, 0, 0, 0, 0, 0, 2608.7, 12000.0, -31000.0, 60000.0, 0.0);
+        assert_eq!(i32::from_le_bytes([p[40], p[41], p[42], p[43]]), 0);
+        assert_eq!(p.len(), 96);
     }
 
     #[test]
@@ -2241,5 +2402,55 @@ mod biome_page_compute_tests {
     #[test]
     fn rainforest_sigmas_is_known_biome() {
         assert!(biome_sigmas("rainforest").is_some());
+    }
+
+    #[test]
+    fn volcanic_sigmas_fit_stride() {
+        for &sg in &volcanic_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn volcanic_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_volcanic asks for must be present (kparams panics otherwise).
+        // flows blur=1.1 ; gully flow_discharge PRE-BLUR(1.15) + FIXED spread(1.2) ;
+        // caldera spc_blur=2.6 ; ash max_cf_blur=3.0 ; smoothed_plain=2.6 (dedups) ; final=0.85.
+        let s = volcanic_sigmas();
+        for need in [0.85_f64, 1.1, 1.15, 1.2, 2.6, 3.0] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+        // VOLCANIC uses the SHARED pre-blur 1.15 (flow_discharge prefix), NOT a glacial-style custom
+        // pre-blur -- assert it is present.
+        assert!(s.iter().any(|&v| (v - 1.15).abs() < 1e-9), "volcanic shared pre-blur 1.15 missing");
+        // The gully spread is a FIXED 1.2 (the gully_channels_seam_safe spread, NOT the flow width),
+        // and is distinct from the pre-blur -- assert it is present.
+        assert!(s.iter().any(|&v| (v - 1.2).abs() < 1e-9), "volcanic gully spread 1.2 missing");
+    }
+
+    #[test]
+    fn pool_slots_matches_volcanic_pool_map() {
+        // volcanic's biome_volcanic.glsl uses pool0..pool15 (16 slots; pool15 transient -> raw flows,
+        // then REUSED for max_cf_blur). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 16, "POOL_SLOTS {POOL_SLOTS} < volcanic's 16 pool slots");
+    }
+
+    #[test]
+    fn volcanic_sigmas_is_known_biome() {
+        assert!(biome_sigmas("volcanic").is_some());
+    }
+
+    #[test]
+    fn volcanic_vent_count_fits_max_vents() {
+        // The CPU vent packing for the fixture seeds must produce vent_count <= MAX_VENTS (so the
+        // packed buffer is never truncated). STYLES[0] (stratovolcano_cluster) draws vent_count=4.
+        use crate::recipes_volcanic::volcanic;
+        for &seed in &[0_i64, 7] {
+            let (packed, count) = volcanic::packed_vents(&volcanic::STRATOVOLCANO_CLUSTER, seed, 60000.0);
+            assert!(count <= volcanic::MAX_VENTS, "seed {seed}: vent_count {count} > MAX_VENTS");
+            assert_eq!(count, 4, "stratovolcano_cluster vent_count should be 4 (got {count})");
+            assert_eq!(packed.len(), volcanic::MAX_VENTS * volcanic::VENT_STRIDE);
+        }
     }
 }

@@ -70,6 +70,11 @@ const BIOMES := [
 		"fixture": "res://worldgen_terrain/fixtures/recipe_rainforest_fixture.json",
 		"fragment": "res://worldgen_terrain/shaders/biome_rainforest.glsl",
 	},
+	{
+		"name": "volcanic",
+		"fixture": "res://worldgen_terrain/fixtures/recipe_volcanic_fixture.json",
+		"fragment": "res://worldgen_terrain/shaders/biome_volcanic.glsl",
+	},
 ]
 
 # Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12

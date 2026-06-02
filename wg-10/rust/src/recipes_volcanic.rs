@@ -432,6 +432,65 @@ pub mod volcanic {
         (a - b).sin().atan2((a - b).cos())
     }
 
+    /// Max vents the GPU vent buffer is sized for (a FIXED upper bound so the storage buffer
+    /// has a constant size regardless of style). STYLES[0] (stratovolcano_cluster) uses 4; the
+    /// other styles use up to a handful. The buffer is packed `(vx, vz, amp, dir0..dir3)` = 7
+    /// floats per vent, padded to `MAX_VENTS` entries; the actual count is passed via push
+    /// constant. Keep this >= every style's `vent_count`.
+    pub(crate) const MAX_VENTS: usize = 8;
+    /// Floats per packed vent: vx, vz, amp, then the 4 flow directions (in vent-list order).
+    pub(crate) const VENT_STRIDE: usize = 7;
+
+    /// CPU-side build of the GPU vent buffer (THE key insight: the RNG stays in Rust, the GPU
+    /// only consumes this small uploaded buffer). Reproduces `vent_fields`' EXACT two RNG streams:
+    ///   * vent positions/amps via `vent_points(style, sseed, feature_span_m)` (RNG seed
+    ///     `sseed + seed_offset + 500`),
+    ///   * per-vent flow directions via a SECOND stream `default_rng(sseed + seed_offset + 900)`,
+    ///     drawn 4-at-a-time IN VENT-LIST ORDER (exactly as `vent_fields` pre-draws them per vent).
+    /// Returns the packed buffer (length `MAX_VENTS * VENT_STRIDE`, zero-padded past `vent_count`)
+    /// and the actual `vent_count`. The GPU loops `[0, vent_count)` doing PURE f32 cone/crater/
+    /// shield/flow math (NO RNG on the GPU).
+    ///
+    /// `sseed = seed + style.seed_offset` (the caller's resolved seed, matching `generate_seamsafe`).
+    pub(crate) fn packed_vents(
+        style: &VolcanicStyle,
+        seed: i64,
+        feature_span_m: f64,
+    ) -> (Vec<f32>, usize) {
+        let feature_span = feature_span_m.max(1.0);
+        let sseed = seed + style.seed_offset;
+
+        // Stream 1: vent positions/amps (vent_points opens default_rng(sseed + seed_offset + 500)).
+        let vent_list = vent_points(style, sseed, feature_span);
+
+        // Stream 2: flow directions, drawn 4 per vent in vent-list order (mirror of vent_fields).
+        let mut flow_rng = Generator::from_seed_int((sseed + style.seed_offset + 900) as u128);
+
+        let mut packed = vec![0.0_f32; MAX_VENTS * VENT_STRIDE];
+        let count = vent_list.len();
+        debug_assert!(
+            count <= MAX_VENTS,
+            "vent_count {count} > MAX_VENTS {MAX_VENTS} (bump MAX_VENTS)"
+        );
+        for (vi, &(vx, vz, amp)) in vent_list.iter().enumerate() {
+            // The 4 flow directions for THIS vent, drawn BEFORE moving to the next vent
+            // (byte-identical draw order to vent_fields' per-vent `dirs` array).
+            let d0 = flow_rng.uniform(-std::f64::consts::PI, std::f64::consts::PI);
+            let d1 = flow_rng.uniform(-std::f64::consts::PI, std::f64::consts::PI);
+            let d2 = flow_rng.uniform(-std::f64::consts::PI, std::f64::consts::PI);
+            let d3 = flow_rng.uniform(-std::f64::consts::PI, std::f64::consts::PI);
+            let b = vi * VENT_STRIDE;
+            packed[b] = vx as f32;
+            packed[b + 1] = vz as f32;
+            packed[b + 2] = amp as f32;
+            packed[b + 3] = d0 as f32;
+            packed[b + 4] = d1 as f32;
+            packed[b + 5] = d2 as f32;
+            packed[b + 6] = d3 as f32;
+        }
+        (packed, count)
+    }
+
     /// Mirror of `_vent_points(..., seam_safe_mode=True)` for the seam-safe path.
     /// Returns `(vx, vz, amp)` tuples. RNG: `default_rng(seed + style.seed_offset + 500)`.
     /// In seam-safe mode the centre is the FIXED world origin (0,0) and `span` is the
