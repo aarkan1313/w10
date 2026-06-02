@@ -74,18 +74,20 @@ func _run() -> int:
 			failed += 1
 			if d > max_abs:
 				max_abs = d
-				worst = "%s args=%s expected=%.10f got=%.10f d=%.3e tol=%.3e" % [fn_name, str(raw_args), expected, got, d, tol]
+				# NB: this Godot 4.6.2 build's String-% does NOT support %e/%g scientific specifiers
+				# (they print literally); use str()/%f only. See memory worldgen10-* env quirk.
+				worst = "%s args=%s expected=%s got=%s d=%s tol=%s" % [fn_name, str(raw_args), str(expected), str(got), str(d), str(tol)]
 		else:
 			if d > max_abs:
 				max_abs = d
-				worst = "%s d=%.3e (within tol)" % [fn_name, d]
+				worst = "%s d=%s (within tol)" % [fn_name, str(d)]
 		checked += 1
 
 	if failed > 0:
-		print("[wg10-primitive-parity] status=fail checked=%d failed=%d maxd=%.3e worst=[%s]" % [checked, failed, max_abs, worst])
+		print("[wg10-primitive-parity] status=fail checked=%d failed=%d maxd=%s worst=[%s]" % [checked, failed, str(max_abs), worst])
 		push_error("[wg10-primitive-parity] FAIL: %d/%d samples out of tolerance; worst=%s" % [failed, checked, worst])
 		return 1
-	print("[wg10-primitive-parity] status=pass checked=%d failed=0 maxd=%.3e worst=[%s]" % [checked, max_abs, worst])
+	print("[wg10-primitive-parity] status=pass checked=%d failed=0 maxd=%s worst=[%s]" % [checked, str(max_abs), worst])
 	return 0
 
 func _load_fixture() -> Dictionary:

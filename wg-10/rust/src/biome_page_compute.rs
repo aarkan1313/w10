@@ -293,13 +293,9 @@ impl Wg10BiomePageCompute {
                 "create_local_rendering_device returned null (headless / no device)".to_string()
             })?;
 
-        // --- compile: concat primitives + page, strip non-GLSL #[...] header lines ---
-        let joined = format!("{prim}\n{page}");
-        let glsl_stripped: String = joined
-            .lines()
-            .filter(|l| !l.trim_start().starts_with("#["))
-            .collect::<Vec<_>>()
-            .join("\n");
+        // --- compile: concat primitives + page, strip #[...] lines AND hoist #version to line 1
+        // (the page fragment carries #version but is concatenated AFTER the helpers fragment) ---
+        let glsl_stripped = crate::primitive_probe::concat_glsl_hoist_version(prim, page);
         let mut src = RdShaderSource::new_gd();
         src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
         let spirv = match rd.shader_compile_spirv_from_source(&src) {

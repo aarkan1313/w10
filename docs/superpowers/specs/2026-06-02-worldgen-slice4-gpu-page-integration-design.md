@@ -63,6 +63,21 @@ hardened GPU-time perf gate (p99 < 6 ms at ~1000 m/s with did-real-work assertio
 work contributed + no atlas path used); owner fly review (the live biome-composed terrain).
 
 ### 3.1 The page pipeline (decided by the 4a measurement)
+
+> **▶ MEASURED 2026-06-02 (RTX 5090 Laptop / D3D12, windowed) → DECISION: `coarse-drainage-fact-fallback`.**
+> At the REAL per-page apron dimension (256 core + 2×160 apron = **576²**) with 128 flow-relaxation iterations,
+> the marginal flow cost is **flow_marginal_ms = 4.30 ms** (0.0336 ms/iter; wall_hi 4.61, wall_lo 0.57), which
+> EXCEEDS the half-budget threshold of 3.00 ms. This confirms the spec §6 #1 risk: the 256² flow spike (~1.9 ms)
+> understated the real per-page cost because the 576² apron grid is ~5× the pixels. So a per-page LIVE flow pass
+> does NOT fit the frame budget → the FALLBACK (coarse-drainage-fact + fine per-page detail) is the indicated
+> RUNTIME pipeline. (Gate: `python tools/gate.py --suite page_measure`, `[wg10-page-measure] ... PIPELINE=coarse-drainage-fact-fallback`.)
+> NOTE: this does NOT affect the PARITY-PROVEN 4a mountain page — that pipeline ran the live flow at the small
+> FIXTURE dims (344²) and matched the f64 oracle to **overall_maxd = 1.89e-6** (gate `biome_page` green). The
+> recipe transcription + flow approximation are CORRECT; the open question 4b/4c must answer is how DRAINAGE is
+> DELIVERED at the 576² production page (live-per-page is too slow → coarse cached drainage fact), not whether the
+> recipe math is right. The coarse-fact bake/cache is now a REQUIRED 4b/4c design item, not optional. PRIMITIVE
+> parity on real hardware: maxd 1.86e-4 (warp_x, within the 2e-4 budget) — the i64-emulated hash holds on D3D12.
+
 - **DEFAULT (if 4a fits budget): per-page live pipeline** — each page dispatch is a mini-pipeline on an
   apron-padded buffer: generate biome fields + warp/ridge → run the N ping-pong flow-relaxation passes →
   `compose_biomes` → crop the core into the output R32F image. Procedural/infinite-pure, no cache. This is the

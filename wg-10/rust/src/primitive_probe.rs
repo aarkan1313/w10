@@ -23,6 +23,35 @@ use godot::classes::{
     rendering_device::{UniformType, ShaderStage},
 };
 
+/// Concatenate a helpers GLSL fragment + a `main` GLSL fragment into one compute source.
+///
+/// Both fragments are stripped of non-GLSL `#[...]` header lines (the Godot `#[compute]`
+/// marker). CRITICAL: GLSL requires `#version` to be the FIRST token in the shader, but the
+/// helpers fragment (recipe_primitives.glsl) has no `#version` and is concatenated FIRST, so
+/// the `main` fragment's `#version` would otherwise land ~200 lines deep and fail to compile
+/// ("'#version' : must occur first in shader"). This hoists the single `#version` line to the
+/// very top regardless of which fragment carried it. Returns the assembled source.
+pub(crate) fn concat_glsl_hoist_version(helpers: &str, main: &str) -> String {
+    let joined = format!("{helpers}\n{main}");
+    let mut version_line: Option<String> = None;
+    let mut body: Vec<&str> = Vec::new();
+    for line in joined.lines() {
+        let t = line.trim_start();
+        if t.starts_with("#[") {
+            continue; // strip Godot non-GLSL header markers
+        }
+        if version_line.is_none() && t.starts_with("#version") {
+            version_line = Some(line.to_string());
+            continue; // pull the (single) #version out; re-emitted at line 1
+        }
+        body.push(line);
+    }
+    match version_line {
+        Some(v) => format!("{v}\n{}", body.join("\n")),
+        None => body.join("\n"),
+    }
+}
+
 // fn_sel codes -- MUST match primitive_probe.glsl + export_primitive_parity_fixture.py.
 fn fn_sel(name: &str) -> Option<i32> {
     match name {
@@ -128,14 +157,9 @@ impl Wg10PrimitiveProbe {
             .create_local_rendering_device()
             .ok_or_else(|| "create_local_rendering_device returned null (headless / no device)".to_string())?;
 
-        // Concatenate helpers + probe main, strip non-GLSL `#[...]` header lines (same as
-        // flow_spike). The probe's own `#version`/`layout`/`main` survive.
-        let joined = format!("{prim}\n{probe}");
-        let glsl_stripped: String = joined
-            .lines()
-            .filter(|l| !l.trim_start().starts_with("#["))
-            .collect::<Vec<_>>()
-            .join("\n");
+        // Concatenate helpers + probe main, stripping non-GLSL `#[...]` lines AND hoisting the
+        // probe's `#version` to line 1 (the helpers fragment has none and is concatenated first).
+        let glsl_stripped = concat_glsl_hoist_version(prim, probe);
 
         let mut src = RdShaderSource::new_gd();
         src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
@@ -218,6 +242,28 @@ impl Wg10PrimitiveProbe {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concat_hoists_version_to_line_one() {
+        // helpers fragment has NO #version (concatenated FIRST); main carries it. The result
+        // MUST begin with #version or the GPU compile fails ("'#version' : must occur first").
+        let helpers = "// helper\nfloat hash2() { return 0.0; }\nfloat noise() { return 1.0; }";
+        let main = "#[compute]\n#version 450\nlayout(local_size_x=1) in;\nvoid main(){}";
+        let out = concat_glsl_hoist_version(helpers, main);
+        assert!(out.starts_with("#version 450"), "first line must be #version, got:\n{out}");
+        // the #[compute] marker is stripped, the helper body survives, only ONE #version remains.
+        assert!(!out.contains("#[compute]"));
+        assert!(out.contains("float hash2()"));
+        assert_eq!(out.matches("#version").count(), 1);
+    }
+
+    #[test]
+    fn concat_no_version_anywhere_is_versionless() {
+        // defensive: if neither fragment had a #version, don't fabricate one.
+        let out = concat_glsl_hoist_version("float a(){return 0.0;}", "void main(){}");
+        assert!(!out.contains("#version"));
+        assert!(out.contains("void main()"));
+    }
 
     #[test]
     fn fn_sel_maps_known_names() {

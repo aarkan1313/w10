@@ -5,21 +5,32 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ SLICE 4a BUILT — mountain terrain on the GPU, behind a flag, parity-gated (2026-06-02).** The GPU page
-> integration begins: the accepted MOUNTAIN recipe now runs as a multi-pass GLSL compute pipeline on the apron
-> grid, parity-gated against the committed f64 fixture. DONE (all GPU-free validation green): **4a.1** per-page
+> **▶ SLICE 4a DONE + PROVEN ON HARDWARE — mountain terrain runs on the GPU, parity-exact, behind a flag
+> (2026-06-02, RTX 5090/D3D12 windowed).** The GPU page integration's first biome works: the accepted MOUNTAIN
+> recipe runs as a 25-pass GLSL compute pipeline on the apron grid and **matches the f64 oracle fixture to
+> overall_maxd = 1.89e-6** (~5000x under the tightened 1e-4 epsilon; `biome_page` suite GREEN). Primitive parity
+> also green on real D3D12 (maxd 1.86e-4, the i64-emulated lattice hash holds on the actual driver). The windowed
+> run found+fixed a real integration bug the no-GPU validation structurally couldn't catch: the GLSL concat placed
+> `#version` mid-file (helpers fragment is concatenated first) → both shaders failed to compile; fixed with a shared,
+> unit-tested `concat_glsl_hoist_version` helper. **§3.1 PIPELINE DECISION (MEASURED): `coarse-drainage-fact-fallback`**
+> — per-page LIVE flow at the real 576² production apron costs 4.30 ms marginal > the 3.0 ms half-budget, so
+> live-per-page drainage is TOO SLOW; the coarse cached drainage-fact is the runtime path (now a REQUIRED 4b/4c
+> design item). The recipe MATH is proven correct regardless of how drainage is delivered. The accepted MOUNTAIN
+> recipe now runs as a multi-pass GLSL compute pipeline on the apron
+> grid, parity-gated against the committed f64 fixture. DONE: **4a.1** per-page
 > cost measurement spike (`Wg10PageMeasure`, commit c50f19d); **4a.2** measurement gate + `page_measure` suite
 > (3c017a0); **4a.3** GLSL noise/warp primitives with an **i64-emulated lattice hash cross-proven to 2.8e-8 vs the
 > f64 oracle** + `primitive_parity_check.gd` (`biome_page` suite) (0e38ffd); **4a.4** verified the mountain fixture
 > schema (records[] + apron meshgrid params) + documented the gaussian-as-GPU-passes approach (5cc3c1d); **4a.5**
 > the 25-pass mountain page pipeline (`biome_page_4a.glsl` + `Wg10BiomePageCompute`) + two-tier parity check vs the
-> fixture (0114b26). **cargo test = 165 passed, 0 failed.** The GLSL body compiles clean (glslangValidator). The
-> legacy `height_page.glsl` + kernel atlas remain the runtime default — nothing flipped. **PENDING (OWNER-RUN
-> WINDOWED, needs editor closed + rebuilt dll):** the 3 windowed gates that PROVE 4a on real hardware —
-> `python tools/gate.py --suite page_measure` (records the §3.1 per-page-live-vs-coarse-fact decision) and
-> `--suite biome_page` (primitive parity + mountain page parity). Until those pass, 4a is built-but-unproven.
-> NEXT after the windowed proof: Slice 4b (10 recipes + compose_biomes + grammar weights, same pattern). Plan:
-> `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`. Memory `worldgen10-biome-composition-layer`.
+> fixture (0114b26, hardened: seed-range guard + kparams pre-validate + discharge_fd invariant). **cargo test =
+> 167 passed, 0 failed** (165 + 2 concat-helper tests). **Windowed gates GREEN on RTX 5090/D3D12:**
+> `tools/gate.py --suite page_measure` (→ coarse-fact decision) + `--suite biome_page` (→ both parity checks pass).
+> The legacy `height_page.glsl` + kernel atlas remain the runtime default — nothing flipped (this is behind a flag).
+> **NEXT: Slice 4b** — the other 10 recipes + `compose_biomes` + grammar weights, same fixture-parity pattern,
+> PLUS the coarse-drainage-fact bake/cache the §3.1 measurement now requires (live-per-page flow is too slow at
+> 576²). Plan: `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`. Branch:
+> `slice4-gpu-page-integration`. Memory `worldgen10-biome-composition-layer`, `worldgen10-godot46-string-format`.
 
 > **▶ ALL 11 BIOME RECIPES PORTED TO RUST (2026-06-02) — Slice-3 CPU port bulk DONE.** Every seam-safe biome
 > recipe (mountain/volcanic/glacial/karst/grassland/desert/temperate/tundra/rainforest/coast/wetland) ported to

@@ -10,11 +10,14 @@ extends SceneTree
 const FIXTURE := "res://worldgen_terrain/fixtures/recipe_mountain_fixture.json"
 const PRIM_GLSL := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
 const PAGE_GLSL := "res://worldgen_terrain/shaders/biome_page_4a.glsl"
-# Normalized recipe units (NOT metres): height ~[-0.5,0.5]. The M2 metres budget 1e-2 over
-# ~1000m relief maps to ~1e-5 normalized, but the flow-relaxation APPROXIMATION (spec 4) is
-# coarser than the exact CPU sweep, so start at 1e-2 normalized and tighten/justify after the
-# first real run measures the actual flow-driven delta. Record the achieved maxd in the spec.
-const NORM_EPS := 1.0e-2
+# Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12
+# (2026-06-02): the GPU mountain page matches the f64 fixture to overall_maxd = 1.89e-6 over
+# both fixture records — the 128-iter flow relaxation converged essentially exactly to the CPU
+# sweep and the f32 drift across all 25 passes is negligible (FAR below the feared flow-approx
+# floor). Tightened from the initial 1e-2 placeholder to 1e-4 (~50x the achieved drift): tight
+# enough that a real regression trips it, with headroom for the other 10 biomes' flow patterns
+# in 4b (some carve more aggressively). Widen ONLY with a recorded justification.
+const NORM_EPS := 1.0e-4
 
 func _init() -> void:
 	quit(_run())
@@ -71,14 +74,14 @@ func _run() -> int:
 			if d > NORM_EPS:
 				fails += 1
 				if fails <= 5:
-					push_error("[wg10-biome-parity] rec=%d core[%d] gpu=%f exp=%f d=%g" % [rec_i, i, got[i], expected[i], d])
+					push_error("[wg10-biome-parity] rec=%d core[%d] gpu=%f exp=%f d=%s" % [rec_i, i, got[i], expected[i], str(d)])
 		if max_d != max_d:
 			push_error("[wg10-biome-parity] rec=%d NaN delta (degenerate page)" % rec_i)
 			return 1
 		if fails > 0:
-			print("[wg10-biome-parity] status=fail rec=%d core=%d fails=%d maxd=%g" % [rec_i, got.size(), fails, max_d])
+			print("[wg10-biome-parity] status=fail rec=%d core=%d fails=%d maxd=%s" % [rec_i, got.size(), fails, str(max_d)])
 			return 1
 		overall_max = maxf(overall_max, max_d)
 		rec_i += 1
-	print("[wg10-biome-parity] status=pass biome=mountain records=%d overall_maxd=%g eps=%g" % [records.size(), overall_max, NORM_EPS])
+	print("[wg10-biome-parity] status=pass biome=mountain records=%d overall_maxd=%s eps=%s" % [records.size(), str(overall_max), str(NORM_EPS)])
 	return 0
