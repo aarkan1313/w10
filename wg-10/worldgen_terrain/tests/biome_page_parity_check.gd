@@ -55,6 +55,11 @@ const BIOMES := [
 		"fixture": "res://worldgen_terrain/fixtures/recipe_glacial_fixture.json",
 		"fragment": "res://worldgen_terrain/shaders/biome_glacial.glsl",
 	},
+	{
+		"name": "karst",
+		"fixture": "res://worldgen_terrain/fixtures/recipe_karst_fixture.json",
+		"fragment": "res://worldgen_terrain/shaders/biome_karst.glsl",
+	},
 ]
 
 # Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12

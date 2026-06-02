@@ -159,6 +159,28 @@ const GC_FLOOR_BLEND: i32 = 51;
 const GC_ICE_BLEND: i32 = 52;
 const GC_FINAL: i32 = 53;
 
+// KARST biome-private PASS_* codes (start at 32) -- MUST match biome_karst.glsl KS_*.
+const KS_POINTWISE: i32 = 32;
+const KS_PLATEAU: i32 = 33;
+const KS_TOWER_PRE: i32 = 34;
+const KS_TOWER_FINAL: i32 = 35;
+const KS_DOLINE_PRE: i32 = 36;
+const KS_DOLINE_FINAL: i32 = 37;
+const KS_LINEAMENTS: i32 = 38;
+const KS_CELLULAR_RAW: i32 = 39;
+const KS_CELLULAR: i32 = 40;
+const KS_COCKPIT_NOISE: i32 = 41;
+const KS_COCKPIT: i32 = 42;
+const KS_BASE: i32 = 43;
+const KS_FINE_KARREN: i32 = 44;
+const KS_DV_SURFACE: i32 = 45;
+const KS_DV_FINAL: i32 = 46;
+const KS_MASKS: i32 = 47;
+const KS_ASSEMBLE: i32 = 48;
+const KS_FLOOR_MASK: i32 = 49;
+const KS_FLOOR_BLEND: i32 = 50;
+const KS_FINAL: i32 = 51;
+
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
@@ -423,6 +445,27 @@ fn glacial_sigmas() -> Vec<f64> {
     vec![axial_sigma, 1.25, 1.35, 1.6, 1.85, 2.8, trib_spread, ice_smooth, 5.8, floor, primary_spread, 7.0]
 }
 
+/// Distinct gaussian sigmas the KARST recipe uses (recipes_karst.rs::generate_seamsafe), in a
+/// FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's blurs
+/// (read directly from the oracle, style = tower_karst: tower_width_px=2.0, doline_width_px=2.6,
+/// floor_smooth_px=2.8):
+///   * plateau      = gaussian(regional,                5.8)
+///   * towers       = gaussian(sparse_pow, max(tower_width_px, 0.2) = 2.0)   [_tower_field]
+///   * dolines      = gaussian(pits_pow,   max(doline_width_px, 0.2) = 2.6)  [_doline_field]
+///   * cellular     = gaussian(cellular_edges raw,      3.8)
+///   * dry_valleys  = flow_channels(width=2.6, power=0.54): pre-blur 1.15 + spread max(2.6,0.1)=2.6
+///   * floor smooth = gaussian(height, max(floor_smooth_px=2.8, 0.2) = 2.8)
+///   * final blend  = gaussian(height,                  0.95)
+/// Deduped: 0.95, 1.15, 2.0, 2.6, 2.8, 3.8, 5.8. (the dv spread 2.6 dedups against doline_width_px).
+fn karst_sigmas() -> Vec<f64> {
+    let tower_width = 2.0_f64.max(0.2);       // tower_width_px.max(0.2) = 2.0
+    let doline_width = 2.6_f64.max(0.2);      // doline_width_px.max(0.2) = 2.6
+    let dv_spread = 2.6_f64.max(0.1);         // flow_channels width.max(0.1) = 2.6 (dedups doline_width)
+    let floor_smooth = 2.8_f64.max(0.2);      // tower_karst.floor_smooth_px.max(0.2) = 2.8
+    let _ = dv_spread;                         // identical to doline_width; not a distinct slot
+    vec![0.95, 1.15, tower_width, doline_width, floor_smooth, 3.8, 5.8]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -434,6 +477,7 @@ fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
         "wetland" => Some(wetland_sigmas()),
         "tundra" => Some(tundra_sigmas()),
         "glacial" => Some(glacial_sigmas()),
+        "karst" => Some(karst_sigmas()),
         _ => None,
     }
 }
@@ -1099,6 +1143,92 @@ fn schedule_glacial(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+/// The KARST dispatch schedule (style = tower_karst). Mirrors the field DAG of
+/// recipes_karst.rs::generate_seamsafe ONE-FOR-ONE: warp+regional -> plateau (blur 5.8) -> towers
+/// (raw sparse_pow -> blur 2.0) -> dolines (raw pits_pow -> blur 2.6) -> lineaments (pointwise) ->
+/// cellular (raw -> blur 3.8) -> cockpit_noise (pointwise) -> cockpit (pointwise) -> base ->
+/// fine/karren (pointwise; REUSE the dead regional/cellular slots) -> dry_valleys (SHARED flow
+/// channels, pre-blur 1.15, spread 2.6) -> masks (tower/cockpit/doline/lineament, tower modulated
+/// by doline_mask + dry_valleys) -> assemble -> floor mask + blend -> final. All intermediate
+/// fields live in the GENERIC scratch POOL (pool0..pool15; pool15 is the transient blur-staging
+/// slot, then REUSED for lineament_mask; pool2/pool7 are REUSED for fine/karren post-base; see
+/// biome_karst.glsl for the slot map). KARST uses the PROVEN flow_channels (pre-blur 1.15), NOT the
+/// flow_channels_ex hook -- its "custom" flow is just power=0.54, width=2.6 (the spread sigma is the
+/// existing width param). The sigmas (0.95, 1.15, 2.0, 2.6, 2.8, 3.8, 5.8) are all in karst_sigmas().
+/// Same PATTERN as schedule_desert/glacial: pointwise passes write pool slots; blur a slot via
+/// gauss_pool(slot,sigma) then read gauss_out; flow channels reuse the proven flow_channels().
+fn schedule_karst(s: &mut Scheduler) {
+    let tower_width = 2.0_f64.max(0.2);      // tower_width_px.max(0.2) = 2.0
+    let doline_width = 2.6_f64.max(0.2);     // doline_width_px.max(0.2) = 2.6
+    let floor_smooth = 2.8_f64.max(0.2);     // floor_smooth_px.max(0.2) = 2.8
+
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; regional=pool2
+    s.dispatch_full(KS_POINTWISE, 0, 0, 0.0);
+
+    // 2) plateau = smoothstep(0.30,0.72, gaussian(regional, 5.8))
+    s.gauss_pool(2, 5.8);                            // gauss_out = gaussian(regional, 5.8)
+    s.dispatch_full(KS_PLATEAU, 0, 0, 0.0);          // pool3 = plateau
+
+    // 3) towers sub-pipeline: sparse_pow (pool15) -> gaussian(2.0) -> clip(affine(., TOWER_FINAL)) = pool4
+    s.dispatch_full(KS_TOWER_PRE, 0, 0, 0.0);        // pool15 = sparse_pow
+    s.gauss_pool(15, tower_width);                   // gauss_out = gaussian(pool15, 2.0)
+    s.dispatch_full(KS_TOWER_FINAL, 0, 0, 0.0);      // pool4 = towers
+
+    // 4) dolines sub-pipeline: pits_pow (pool15) -> gaussian(2.6) -> clip(affine(., DOLINE_BOWLS)) = pool5
+    s.dispatch_full(KS_DOLINE_PRE, 0, 0, 0.0);       // pool15 = pits_pow
+    s.gauss_pool(15, doline_width);                  // gauss_out = gaussian(pool15, 2.6)
+    s.dispatch_full(KS_DOLINE_FINAL, 0, 0, 0.0);     // pool5 = dolines
+
+    // 5) lineaments (pointwise, no blur) = pool6
+    s.dispatch_full(KS_LINEAMENTS, 0, 0, 0.0);
+
+    // 6) cellular = gaussian(cellular_edges raw, 3.8)
+    s.dispatch_full(KS_CELLULAR_RAW, 0, 0, 0.0);     // pool15 = cellular_raw
+    s.gauss_pool(15, 3.8);                           // gauss_out = gaussian(pool15, 3.8)
+    s.dispatch_full(KS_CELLULAR, 0, 0, 0.0);         // pool7 = cellular
+
+    // 7) cockpit_noise (pointwise) = pool8 ; cockpit (pointwise, uses dolines/cellular/cockpit_noise) = pool9
+    s.dispatch_full(KS_COCKPIT_NOISE, 0, 0, 0.0);    // pool8 = cockpit_noise
+    s.dispatch_full(KS_COCKPIT, 0, 0, 0.0);          // pool9 = cockpit
+
+    // 8) base = affine(plateau_gain*(1.06*plateau + 0.18*regional), BASE) = pool10
+    s.dispatch_full(KS_BASE, 0, 0, 0.0);
+
+    // 9) fine/karren (pointwise on w_x/w_z); REUSE pool2 (regional dead) = fine, pool7 (cellular dead) = karren
+    s.dispatch_full(KS_FINE_KARREN, 0, 0, 0.0);
+
+    // 10) dry_valleys: flow_pre <- base - 0.30*lineaments - 0.10*dolines ; dry_valleys =
+    //     flow_channels(width=2.6, power=0.54) [pre-blur 1.15] ; then smoothstep + scale = pool11
+    s.dispatch_full(KS_DV_SURFACE, 0, 0, 0.0);       // flow_pre <- dv_surface (NO clip)
+    s.flow_channels(0.54_f32, 2.6);                  // gauss_out = spread discharge (sigma=2.6)
+    s.dispatch_full(KS_DV_FINAL, 0, 0, 0.0);         // pool11 = dry_valleys
+
+    // 11) masks: cockpit_mask=pool13, doline_mask=pool14, lineament_mask=pool15 (REUSE),
+    //     tower_mask=pool12 (finalized w/ doline_mask + dry_valleys)
+    s.dispatch_full(KS_MASKS, 0, 0, 0.0);
+
+    // 12) assemble height (base + tower/lineament relief - cockpit/doline/valley + detail)
+    s.dispatch_full(KS_ASSEMBLE, 0, 0, 0.0);
+
+    // 13) floor mask + blend: floor_mask = clip(0.72*doline_mask + 0.56*cockpit_mask + 0.48*dry_valleys);
+    //     smoothed_floor = gaussian(height, max(floor_smooth_px,0.2)=2.8); floor blend
+    s.dispatch_full(KS_FLOOR_MASK, 0, 0, 0.0);       // floor_mask (named buf)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(floor_smooth);                           // gauss_out = gaussian(height, 2.8)
+    s.dispatch_full(KS_FLOOR_BLEND, 0, 0, 0.0);
+
+    // 14) final: height_blur = gaussian(height, 0.95); final_blend = 0.80*h + 0.20*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(0.95);                                   // gauss_out = gaussian(height, 0.95)
+    s.dispatch_full(KS_FINAL, 0, 0, 0.0);
+
+    // 15) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1414,6 +1544,7 @@ impl Wg10BiomePageCompute {
             "wetland" => schedule_wetland(&mut sched),
             "tundra" => schedule_tundra(&mut sched),
             "glacial" => schedule_glacial(&mut sched),
+            "karst" => schedule_karst(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -1750,5 +1881,48 @@ mod biome_page_compute_tests {
     #[test]
     fn glacial_sigmas_is_known_biome() {
         assert!(biome_sigmas("glacial").is_some());
+    }
+
+    #[test]
+    fn karst_sigmas_fit_stride() {
+        for &sg in &karst_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn karst_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_karst asks for must be present (kparams panics otherwise).
+        // The schedule's gauss(...)/gauss_pool(...) calls + flow_channels(power, 2.6) pre-blur(1.15)/
+        // spread(2.6). KARST uses the SHARED flow_channels (pre-blur 1.15), NOT the glacial-style
+        // flow_channels_ex hook -- its "custom" flow is just power=0.54, width=2.6 (the spread sigma
+        // is the existing width param). plateau=5.8, towers=2.0, dolines=2.6, cellular=3.8,
+        // floor=2.8, final=0.95.
+        let tower_width = 2.0_f64.max(0.2);     // 2.0
+        let doline_width = 2.6_f64.max(0.2);    // 2.6
+        let dv_spread = 2.6_f64.max(0.1);       // 2.6 (dedups against doline_width)
+        let floor_smooth = 2.8_f64.max(0.2);    // 2.8
+        let s = karst_sigmas();
+        for need in [
+            5.8_f64, tower_width, doline_width, 3.8, 1.15, dv_spread, floor_smooth, 0.95,
+        ] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+        // KARST uses the SHARED pre-blur 1.15 (NOT a glacial-style custom pre-blur). Assert it is
+        // present, proving the dry-valley flow rides the proven flow_channels() path.
+        assert!(s.iter().any(|&v| (v - 1.15).abs() < 1e-9), "karst shared pre-blur 1.15 missing");
+    }
+
+    #[test]
+    fn pool_slots_matches_karst_pool_map() {
+        // karst's biome_karst.glsl uses pool0..pool15 (16 slots; pool15 transient -> lineament_mask,
+        // pool2/pool7 reused for fine/karren post-base). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 16, "POOL_SLOTS {POOL_SLOTS} < karst's 16 pool slots");
+    }
+
+    #[test]
+    fn karst_sigmas_is_known_biome() {
+        assert!(biome_sigmas("karst").is_some());
     }
 }
