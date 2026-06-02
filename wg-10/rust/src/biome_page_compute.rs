@@ -57,10 +57,9 @@ const PASS_FLOW_PRE_FROM_GAUSS: i32 = 22;
 const PASS_MASSIF_WRITEBACK: i32 = 23;
 const PASS_ACC_INIT: i32 = 24;
 const PASS_COPY_POOL: i32 = 25;       // gauss_in <- pool[pool_sel] (to blur a pool slot)
-/// Generic capability for biomes that need to stash a blur back into a slot. Grassland reads the
-/// blur straight from gauss_out (no stash), so it is unused TODAY but part of the pool API the
-/// other 9 ports may use; keep it defined to match biome_page.glsl PASS_POOL_FROM_GAUSS.
-#[allow(dead_code)]
+/// Generic capability for biomes that need to stash a blur back into a slot. Grassland/desert/coast
+/// read the blur straight from gauss_out (no stash); WETLAND uses it (stash gaussian(channels,2.2)
+/// for the levee DoG, and flat_base back into its slot). Matches biome_page.glsl PASS_POOL_FROM_GAUSS.
 const PASS_POOL_FROM_GAUSS: i32 = 26; // pool[pool_sel] <- gauss_out (stash a blur)
 
 // GRASSLAND biome-private PASS_* codes (start at 32) -- MUST match biome_grassland.glsl GL_*.
@@ -108,6 +107,20 @@ const CO_ISLANDS: i32 = 37;
 const CO_ASSEMBLE: i32 = 38;
 const CO_SEA_BLEND: i32 = 39;
 const CO_FINAL: i32 = 40;
+
+// WETLAND biome-private PASS_* codes (start at 32) -- MUST match biome_wetland.glsl WL_*.
+const WL_POINTWISE: i32 = 32;
+const WL_ONE_MINUS_MACRO: i32 = 33;
+const WL_BASIN: i32 = 34;
+const WL_FLOODPLAIN_PRE: i32 = 35;
+const WL_FLOODPLAIN: i32 = 36;
+const WL_CHANNELS_FIRST: i32 = 37;
+const WL_FLOW_PRE: i32 = 38;
+const WL_CHANNELS_FLOW: i32 = 39;
+const WL_LEVEES: i32 = 40;
+const WL_FLAT_BASE_PRE: i32 = 41;
+const WL_ASSEMBLE: i32 = 42;
+const WL_FINAL: i32 = 43;
 
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
@@ -308,6 +321,23 @@ fn coast_sigmas() -> Vec<f64> {
     vec![0.90, 1.15, channel_spread, 2.00, 3.00]
 }
 
+/// Distinct gaussian sigmas the WETLAND recipe uses (recipes_wetland.rs::generate_seamsafe), in a
+/// FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's
+/// blurs (read directly from the oracle):
+///   * basin        = gaussian(1 - macro,             5.8)
+///   * floodplain   = gaussian(1 - |macro - 0.42|,    5.2)
+///   * fine_flow    = flow_channels_seam_safe(flow_input, width=1.8, power=0.44):
+///                    pre-blur 1.15 + spread max(1.8,0.1)=1.8
+///   * levees       = gaussian(channels, 2.2) - gaussian(channels, 5.2)   [DoG; 5.2 dedups]
+///   * flat_base    = gaussian(flat_base_inner, smoothing_px = 4.4)
+///   * final blend  = gaussian(height,               1.2)
+/// Deduped: 1.15, 1.20, 1.80, 2.20, 4.40, 5.20, 5.80.
+fn wetland_sigmas() -> Vec<f64> {
+    let smoothing_px = 4.4_f64;             // delta_distributary.smoothing_px (flat_base blur)
+    let flow_spread = 1.8_f64.max(0.1);     // flow_channels width.max(0.1) = 1.8
+    vec![1.15, 1.20, flow_spread, 2.20, smoothing_px, 5.20, 5.80]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -316,6 +346,7 @@ fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
         "grassland" => Some(grassland_sigmas()),
         "desert" => Some(desert_sigmas()),
         "coast" => Some(coast_sigmas()),
+        "wetland" => Some(wetland_sigmas()),
         _ => None,
     }
 }
@@ -745,6 +776,71 @@ fn schedule_coast(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+/// The WETLAND dispatch schedule (style = delta_distributary). Mirrors the field DAG of
+/// recipes_wetland.rs::generate_seamsafe ONE-FOR-ONE: warp+macro/micro/meander -> basin (blur
+/// 1-macro) -> floodplain (blur 1-|macro-0.42|) -> channels (meander*floodplain) -> fine_flow
+/// (flow channels on flow_input) -> channels reassigned -> levees (DoG of channels) -> flat_base
+/// (blur of affine combo) -> assemble -> final. All intermediate fields live in the GENERIC
+/// scratch POOL (pool0..pool10; see biome_wetland.glsl for the slot map). pool8 is TRANSIENT
+/// (stages gaussian(channels,2.2) for the levee DoG). The sigmas (5.8, 5.2, flow pre-blur 1.15 +
+/// spread 1.8, 2.2, smoothing_px=4.4, final 1.2) are all in wetland_sigmas(). Same PATTERN as
+/// schedule_grassland/desert/coast: pointwise passes write pool slots; blur a slot via
+/// gauss_pool(slot,sigma) then read gauss_out (or POOL_FROM_GAUSS to stash); flow channels reuse
+/// the proven flow_channels().
+fn schedule_wetland(s: &mut Scheduler) {
+    let smoothing_px = 4.4_f64;          // delta_distributary.smoothing_px (flat_base blur)
+
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; macro_f=pool2 ; micro=pool3 ; meander=pool4
+    s.dispatch_full(WL_POINTWISE, 0, 0, 0.0);
+
+    // 2) basin = smoothstep(0.48,0.86, gaussian(1 - macro, 5.8))
+    s.dispatch_full(WL_ONE_MINUS_MACRO, 0, 0, 0.0); // gauss_in <- 1 - macro_f
+    s.gauss(5.8);                                    // gauss_out = gaussian(1-macro, 5.8)
+    s.dispatch_full(WL_BASIN, 0, 0, 0.0);            // pool5 = basin
+
+    // 3) floodplain = smoothstep(0.36,0.78, gaussian(1 - |macro-0.42|, 5.2))
+    s.dispatch_full(WL_FLOODPLAIN_PRE, 0, 0, 0.0);   // gauss_in <- 1 - |macro_f - 0.42|
+    s.gauss(5.2);                                    // gauss_out = gaussian(., 5.2)
+    s.dispatch_full(WL_FLOODPLAIN, 0, 0, 0.0);       // pool6 = floodplain
+
+    // 4) channels = meander * floodplain (first assignment)
+    s.dispatch_full(WL_CHANNELS_FIRST, 0, 0, 0.0);   // pool7 = channels
+
+    // 5) fine_flow: flow_input = affine(macro - 0.34*basin, FLOW_INPUT) -> flow_pre ;
+    //    fine_flow = flow_channels_seam_safe(flow_input, width=1.8, power=0.44) ; channels reassigned
+    s.dispatch_full(WL_FLOW_PRE, 0, 0, 0.0);         // flow_pre <- flow_input (NO clip)
+    s.flow_channels(0.44_f32, 1.8);                  // gauss_out = spread discharge
+    s.dispatch_full(WL_CHANNELS_FLOW, 0, 0, 0.0);    // pool7 = clip(0.68*channels + 0.50*ss(fine_flow))
+
+    // 6) levees = smoothstep(0.02,0.18, gaussian(channels,2.2) - gaussian(channels,5.2))
+    //             * (1 - smoothstep(0.42,0.86, channels))
+    // stash gaussian(channels,2.2) into pool8 (transient), then compute gaussian(channels,5.2)
+    // into gauss_out so WL_LEVEES has BOTH blurs live (pool8 = blur22, gauss_out = blur52).
+    s.gauss_pool(7, 2.2);                            // gauss_out = gaussian(channels, 2.2)
+    s.dispatch_pool(PASS_POOL_FROM_GAUSS, 8);        // pool8 = gaussian(channels, 2.2)
+    s.gauss_pool(7, 5.2);                            // gauss_out = gaussian(channels, 5.2)
+    s.dispatch_full(WL_LEVEES, 0, 0, 0.0);           // pool9 = levees
+
+    // 7) flat_base = gaussian(affine(0.42*macro - 0.58*basin + 0.20*floodplain, FLAT_BASE), smoothing_px)
+    s.dispatch_full(WL_FLAT_BASE_PRE, 0, 0, 0.0);    // pool10 = flat_base_inner
+    s.gauss_pool(10, smoothing_px);                  // gauss_out = gaussian(pool10, smoothing_px)
+    s.dispatch_pool(PASS_POOL_FROM_GAUSS, 10);       // pool10 = flat_base
+
+    // 8) assemble height (macro/basin/floodplain/channels/levees/micro + flat_base blend)
+    s.dispatch_full(WL_ASSEMBLE, 0, 0, 0.0);
+
+    // 9) final: height_blur = gaussian(height, 1.2); final_blend = 0.88*h + 0.12*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(1.2);                                    // gauss_out = gaussian(height, 1.2)
+    s.dispatch_full(WL_FINAL, 0, 0, 0.0);
+
+    // 10) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1057,6 +1153,7 @@ impl Wg10BiomePageCompute {
             "grassland" => schedule_grassland(&mut sched),
             "desert" => schedule_desert(&mut sched),
             "coast" => schedule_coast(&mut sched),
+            "wetland" => schedule_wetland(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -1228,7 +1325,35 @@ mod biome_page_compute_tests {
         assert!(biome_sigmas("grassland").is_some());
         assert!(biome_sigmas("desert").is_some());
         assert!(biome_sigmas("coast").is_some());
+        assert!(biome_sigmas("wetland").is_some());
         assert!(biome_sigmas("nope").is_none());
+    }
+
+    #[test]
+    fn wetland_sigmas_fit_stride() {
+        for &sg in &wetland_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn wetland_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_wetland asks for must be present (kparams panics otherwise).
+        // The schedule's gauss(...)/gauss_pool(...) calls + flow_channels(power, 1.8)
+        // pre-blur(1.15)/spread(1.8). Levee DoG uses 2.2 and 5.2; flat_base uses smoothing_px=4.4.
+        let smoothing_px = 4.4_f64;
+        let flow_spread = 1.8_f64.max(0.1);
+        let s = wetland_sigmas();
+        for need in [5.8_f64, 5.2, 1.15, flow_spread, 2.2, smoothing_px, 1.2] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+    }
+
+    #[test]
+    fn pool_slots_matches_wetland_pool_map() {
+        // wetland's biome_wetland.glsl uses pool0..pool10 (11 slots). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 11, "POOL_SLOTS {POOL_SLOTS} < wetland's 11 pool slots");
     }
 
     #[test]
