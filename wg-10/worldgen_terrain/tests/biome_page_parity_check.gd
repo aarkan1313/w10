@@ -30,6 +30,11 @@ const BIOMES := [
 		"fixture": "res://worldgen_terrain/fixtures/recipe_grassland_fixture.json",
 		"fragment": "res://worldgen_terrain/shaders/biome_grassland.glsl",
 	},
+	{
+		"name": "desert",
+		"fixture": "res://worldgen_terrain/fixtures/recipe_desert_fixture.json",
+		"fragment": "res://worldgen_terrain/shaders/biome_desert.glsl",
+	},
 ]
 
 # Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12

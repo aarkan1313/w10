@@ -109,7 +109,7 @@ const int CP_HEIGHT   = 3;
 // slots: bump POOL_SLOTS here AND the matching POOL_SLOTS in biome_page_compute.rs (one buffer
 // per slot is allocated + bound). MUST match biome_page_compute.rs::POOL_SLOTS.
 // ---------------------------------------------------------------------------
-const int POOL_SLOTS = 12;
+const int POOL_SLOTS = 16;
 
 // ---------------------------------------------------------------------------
 // storage buffers (all std430 float[], length rows*cols unless noted)
@@ -157,6 +157,10 @@ layout(set = 0, binding = 32, std430) restrict buffer Pool8  { float v[]; } pool
 layout(set = 0, binding = 33, std430) restrict buffer Pool9  { float v[]; } pool9;
 layout(set = 0, binding = 34, std430) restrict buffer Pool10 { float v[]; } pool10;
 layout(set = 0, binding = 35, std430) restrict buffer Pool11 { float v[]; } pool11;
+layout(set = 0, binding = 36, std430) restrict buffer Pool12 { float v[]; } pool12;
+layout(set = 0, binding = 37, std430) restrict buffer Pool13 { float v[]; } pool13;
+layout(set = 0, binding = 38, std430) restrict buffer Pool14 { float v[]; } pool14;
+layout(set = 0, binding = 39, std430) restrict buffer Pool15 { float v[]; } pool15;
 
 // pool slot accessors. A small switch keeps the slot index data-driven (the `pool_sel` push
 // constant for the generic pool passes; a literal for biome fragments). Out-of-range slots are
@@ -174,6 +178,10 @@ float pool_read(int slot, int idx) {
     if (slot == 9)  return pool9.v[idx];
     if (slot == 10) return pool10.v[idx];
     if (slot == 11) return pool11.v[idx];
+    if (slot == 12) return pool12.v[idx];
+    if (slot == 13) return pool13.v[idx];
+    if (slot == 14) return pool14.v[idx];
+    if (slot == 15) return pool15.v[idx];
     return 0.0;
 }
 
@@ -190,6 +198,10 @@ void pool_write(int slot, int idx, float val) {
     if (slot == 9)  { pool9.v[idx]  = val; return; }
     if (slot == 10) { pool10.v[idx] = val; return; }
     if (slot == 11) { pool11.v[idx] = val; return; }
+    if (slot == 12) { pool12.v[idx] = val; return; }
+    if (slot == 13) { pool13.v[idx] = val; return; }
+    if (slot == 14) { pool14.v[idx] = val; return; }
+    if (slot == 15) { pool15.v[idx] = val; return; }
 }
 
 // ---------------------------------------------------------------------------
