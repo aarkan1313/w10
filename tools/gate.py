@@ -41,6 +41,31 @@ CHECKS = {
 }
 
 
+# The Python side (offline worldgen: 11 seam-safe biomes, biome_compose/registry,
+# recipe_noise/array_ops parity, dem_pack tools). NOT Godot *_check.gd — a pytest run.
+# MUST run from the repo ROOT (tests use repo-root-relative fixture paths; running from
+# inside tools/dem_pack breaks them -> false failures). This is its own suite so
+# "gate green" covers the Phase-5 Python work, not just the Godot render checks.
+PYTEST_SUITE = "pytest"
+
+
+def run_pytest_suite() -> int:
+    """Run the dem_pack pytest suite from the repo root. Returns process rc (0 = all pass).
+
+    cwd is the REPO ROOT (PROJECT is wg-10/, but tools/dem_pack/ lives at the repo root, and the
+    tests use repo-root-relative fixture paths — running from anywhere else collects nothing / fails).
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    cmd = [sys.executable, "-m", "pytest", "tools/dem_pack/", "-q"]
+    res = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True)
+    sys.stdout.write(res.stdout[-3000:])
+    if res.returncode != 0:
+        sys.stderr.write(res.stderr[-3000:])
+    fail = res.returncode != 0
+    print(f"[gate] suite=pytest fail={1 if fail else 0} (dem_pack pytest, from repo root)")
+    return res.returncode
+
+
 def godot_bin() -> str:
     env = os.environ.get("GODOT_BIN")
     if env and Path(env).exists():
@@ -65,8 +90,10 @@ def ensure_extension_imported(godot: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--suite", choices=sorted(CHECKS), default="fast")
+    ap.add_argument("--suite", choices=sorted(list(CHECKS) + [PYTEST_SUITE]), default="fast")
     args = ap.parse_args()
+    if args.suite == PYTEST_SUITE:
+        return run_pytest_suite()
     headless = args.suite not in ("gpu", "m3")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
