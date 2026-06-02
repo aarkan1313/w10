@@ -99,7 +99,7 @@ mod page_measure;
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p worldgen_terrain page_measure_tests 2>&1 | tail -20`
+Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain page_measure_tests 2>&1 | tail -20`
 Expected: FAIL — `page_measure` module / `apron_dim` not found.
 
 - [ ] **Step 3: Write the spike class with the pure helpers**
@@ -270,7 +270,7 @@ Note: `flow_spike::make_ridged_field` is `pub` (`flow_spike.rs:30`), BUT the `fl
 
 - [ ] **Step 4: Verify flow_spike visibility, then run tests to verify they pass**
 
-Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p worldgen_terrain page_measure_tests 2>&1 | tail -20`
+Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain page_measure_tests 2>&1 | tail -20`
 Expected: PASS (3 tests). If it fails on `make_ridged_field` private, make `flow_spike` mod `pub(crate)` in lib.rs and re-run.
 
 - [ ] **Step 5: Commit**
@@ -627,7 +627,7 @@ Expected: keys include spacing/ox/oz/apron_px/seed/feature_span_m/rows/cols and 
 
 Edit `tools/dem_pack/export_recipe_mountain_fixture.py` to also store the apron-meshgrid params + padded dims so the GPU can rebuild the exact grid. Re-run it; verify the Rust `recipes_tests.rs` mountain parity still passes (the stored height must be byte-identical to before — only metadata is added).
 
-Run: `python tools/dem_pack/export_recipe_mountain_fixture.py && env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p worldgen_terrain recipes_tests 2>&1 | tail -5`
+Run: `python tools/dem_pack/export_recipe_mountain_fixture.py && env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain recipes_tests 2>&1 | tail -5`
 Expected: exporter writes; `recipes_tests` PASS (parity unaffected).
 
 - [ ] **Step 3: Document the gaussian-pass approach in the shader header**
@@ -763,7 +763,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Run the full gate sweep (verify no regression)**
 
-Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p worldgen_terrain 2>&1 | tail -5` (cargo suite)
+Run: `env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain 2>&1 | tail -5` (cargo suite)
 Then the windowed suites (owner): `python tools/gate.py --suite fast` / `--suite gpu` / `--suite m3` / `--suite biome_page` / `--suite page_measure`.
 Expected: cargo all green (count grew by the new tests); windowed suites pass; `biome_page` + `page_measure` pass.
 
