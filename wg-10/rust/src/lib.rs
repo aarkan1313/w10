@@ -21,6 +21,7 @@ mod facts;
 mod facts_api;
 mod recipe_noise;
 mod array_ops;
+mod flow_spike;
 
 #[cfg(test)]
 mod hash_tests;

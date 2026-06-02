@@ -1,0 +1,14 @@
+[remap]
+
+importer="glsl"
+type="RDShaderFile"
+uid="uid://dcgm6vcfiqeeq"
+path="res://.godot/imported/flow_accum_spike.glsl-ce3392c003351f409d6fb31f0affa687.res"
+
+[deps]
+
+source_file="res://worldgen_terrain/shaders/flow_accum_spike.glsl"
+dest_files=["res://.godot/imported/flow_accum_spike.glsl-ce3392c003351f409d6fb31f0affa687.res"]
+
+[params]
+
