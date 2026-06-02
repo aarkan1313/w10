@@ -5,20 +5,21 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ SLICE 4b IN PROGRESS — 6 of 11 biomes run on the GPU, ALL hardware-parity-proven (2026-06-02, RTX 5090/
-> D3D12).** After 4a (mountain) the pattern generalized cleanly. Restructured to CONCAT-SELECTION (`biome_page.glsl`
-> generic pass-MACHINE + per-biome `biome_<name>.glsl` FRAGMENT, selected at concat time) + a `Scheduler` seam
-> (`schedule_<biome>()` dispatch fns) + a generic scratch buffer POOL (16 slots). PROVEN GREEN on hardware
-> (`biome_page` suite, NORM_EPS=1e-4): mountain 1.89e-6 · grassland 6.84e-7 · desert 1.30e-5 · coast 5.62e-6 ·
-> wetland 2.46e-6 · tundra 3.11e-7. cargo test 183/0. Each biome = a fragment (its field math, biome-private PASS
-> codes >=32, hand-ported local primitives like cellular_edges) + a `schedule_<biome>()` + a `<biome>_sigmas()` arm
-> + a one-row BIOMES entry in the parity check + its fixture — turnkey, append-only, parallel-safe by file. REMAINING
-> 5 (the TRICKY tier, may need machine-hook extensions): glacial/karst (custom flow sigma), temperate (truncated
-> flow), rainforest (dual-mask from one discharge), volcanic (PCG64 RNG vents). THEN: compose_biomes + grammar
-> weights on GPU (4b.11) + the coarse-drainage-fact bake/cache the §3.1 measurement requires. Branch
-> `slice4-gpu-page-integration`. Plan: `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`.
-> Note: worktree isolation snapshots from a STALE base here — port in the MAIN tree (append-only, serial windowed
-> proof). Memory `worldgen10-slice4a-proven`.
+> **▶ SLICE 4b — ALL 11 BIOMES RUN ON THE GPU, EVERY ONE HARDWARE-PARITY-PROVEN (2026-06-02, RTX 5090/D3D12).**
+> The full accepted biome stack now generates as GPU page pipelines, each parity-exact to its f64 oracle fixture
+> (`biome_page` suite GREEN, NORM_EPS=1e-4): mountain 1.89e-6 · grassland 6.84e-7 · desert 1.30e-5 · coast 5.62e-6 ·
+> wetland 2.46e-6 · tundra 3.11e-7 · glacial 1.81e-6 · karst 2.00e-6 · temperate 1.69e-6 · rainforest 3.24e-6 ·
+> volcanic 3.01e-6. **cargo test 207/0.** Architecture: CONCAT-SELECTION (`biome_page.glsl` generic pass-MACHINE +
+> per-biome `biome_<name>.glsl` FRAGMENT, concatenated + compiled per biome) + a `Scheduler` seam
+> (`schedule_<biome>()` dispatch fns) + a 16-slot generic scratch POOL + a few additive machine hooks: `flow_channels_ex`
+> (parameterized pre-blur, for glacial's 1.85), `flow_discharge` (raw discharge for temperate/rainforest dual-spread),
+> a vent SSBO at binding 40 (volcanic's PCG64 vents computed CPU-side in Rust — RNG never entered GLSL). Each biome:
+> fragment + `schedule_<biome>()` + `<biome>_sigmas()` + a BIOMES parity row + its fixture. The legacy
+> `height_page.glsl` + kernel atlas are STILL the runtime default — nothing flipped (all behind the flag). **NEXT:
+> 4b.11** (compose_biomes + the grammar biome-weight field on GPU, so multiple biomes blend per page) + the
+> **coarse-drainage-fact bake/cache** the §3.1 measurement requires (live-per-page flow too slow at 576²). THEN
+> Slice 4c (flip runtime + remove atlas + perf gate + owner fly). Branch `slice4-gpu-page-integration`. Plan:
+> `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`. Memory `worldgen10-slice4a-proven`.
 
 > **▶ SLICE 4a DONE + PROVEN ON HARDWARE — mountain terrain runs on the GPU, parity-exact, behind a flag
 > (2026-06-02, RTX 5090/D3D12 windowed).** The GPU page integration's first biome works: the accepted MOUNTAIN
