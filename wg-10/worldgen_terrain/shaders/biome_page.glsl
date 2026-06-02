@@ -33,9 +33,14 @@
 //   * The generic LEAF HELPERS (fragments reuse these directly):
 //       cell_idx, clamp_idx, affine_remap, ss, clip01, rotated0,
 //       recipe_recursive_domain_warp, rmf, fbm5
+//   * The generic scratch POOL: POOL_SLOTS reusable float[rows*cols] buffers + pool_read /
+//     pool_write(slot,idx[,val]). Biomes with more sub-fields than the fixed named buffers
+//     (grassland has 12) stage intermediate fields in pool slots; to blur a slot, COPY_POOL it
+//     into gauss_in, GAUSS, then read gauss_out (or POOL_FROM_GAUSS to stash back). The pool is
+//     ADDITIVE -- mountain never touches it; its named buffers/behavior are byte-unchanged.
 //   * The GENERIC PASS bodies (handled inline in main()):
-//       MESHGRID, COPY, GAUSS_AXIS0, GAUSS_AXIS1, FLOW_PRE_BASE, FLOW_PRE_PREBLUR_IN,
-//       FLOW_PRE_FROM_GAUSS, ACC_INIT, FLOW_RELAX, DISCHARGE, CROP
+//       MESHGRID, COPY, COPY_POOL, POOL_FROM_GAUSS, GAUSS_AXIS0, GAUSS_AXIS1, FLOW_PRE_BASE,
+//       FLOW_PRE_PREBLUR_IN, FLOW_PRE_FROM_GAUSS, ACC_INIT, FLOW_RELAX, DISCHARGE, CROP
 //   * The flow MECHANISM (FLOW_RELAX/DISCHARGE) is generic; note however that the flow SOURCE
 //     surfaces are biome-specific. FLOW_PRE_BASE (flow_pre <- base) is the one generic source
 //     (just copies `base`); any biome that needs a DIFFERENT flow source (e.g. mountain's
@@ -43,8 +48,11 @@
 //
 // Every biome_<name>.glsl FRAGMENT MUST define exactly:
 //       void biome_pass(int pass, int cx, int cy, int i)
-//   covering the biome-specific PASS_* values for that biome (POINTWISE, RANGE_ENV, BASE,
-//   ASSEMBLE, FINAL, etc. plus any biome-only source-surface / mask passes). main() dispatches
+//   covering the biome-specific PASS_* values for that biome. Shared/generic codes occupy 0..26
+//   (27..31 reserved for future generic passes); BIOME-private pass codes start at 32 so two
+//   biomes' private codes never collide with the shared machine codes. (Mountain predates this
+//   convention and reuses some shared 1..23 slots as its biome passes -- that is grandfathered;
+//   NEW biomes use 32+.) main() dispatches
 //   the generic passes inline and forwards everything else to biome_pass(). A fragment MAY
 //   define its own consts/helpers (e.g. mountain's STYLE_* + oriented_ridges_point); those
 //   names must not collide with the machine's.
@@ -85,12 +93,23 @@ const int PASS_FLOW_PRE_PREBLUR_IN = 21; // [GENERIC] gauss_in <- flow_pre (to p
 const int PASS_FLOW_PRE_FROM_GAUSS = 22; // [GENERIC] flow_pre <- gauss_out (after pre-blur)
 const int PASS_MASSIF_WRITEBACK    = 23; // [BIOME]   massif <- gauss_out (the gaussian(massif,2.0))
 const int PASS_ACC_INIT            = 24; // [GENERIC] acc_a = acc_b = 1.0 (matches CPU acc init)
+const int PASS_COPY_POOL           = 25; // [GENERIC] gauss_in <- pool[pool_sel] (to blur a pool slot)
+const int PASS_POOL_FROM_GAUSS     = 26; // [GENERIC] pool[pool_sel] <- gauss_out (stash a blur)
+// 27..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
 
 // copy_sel codes for PASS_COPY (which field buffer to copy into gauss_in)
 const int CP_RANGES   = 0;
 const int CP_MASSIF   = 1;
 const int CP_VALLEY   = 2;
 const int CP_HEIGHT   = 3;
+
+// ---------------------------------------------------------------------------
+// GENERIC scratch POOL slot count. Biomes with more sub-fields (grassland uses 12) index
+// pool0..pool(POOL_SLOTS-1) by slot via pool_read/pool_write. To add a biome that needs more
+// slots: bump POOL_SLOTS here AND the matching POOL_SLOTS in biome_page_compute.rs (one buffer
+// per slot is allocated + bound). MUST match biome_page_compute.rs::POOL_SLOTS.
+// ---------------------------------------------------------------------------
+const int POOL_SLOTS = 12;
 
 // ---------------------------------------------------------------------------
 // storage buffers (all std430 float[], length rows*cols unless noted)
@@ -121,6 +140,59 @@ layout(set = 0, binding = 22, std430) restrict buffer AccB          { float v[];
 layout(set = 0, binding = 23, std430) restrict buffer CoreOut       { float v[]; } core_out;
 
 // ---------------------------------------------------------------------------
+// GENERIC scratch POOL: POOL_SLOTS reusable float[rows*cols] buffers (bindings 24..24+SLOTS-1).
+// Biome fragments read/write these by slot via pool_read/pool_write. They are ADDITIVE to the
+// fixed named buffers above (mountain never touches them; its bindings/behavior are unchanged).
+// One binding per slot (a fixed indexed set is portable; SSBO-arrays-of-blocks are not).
+// ---------------------------------------------------------------------------
+layout(set = 0, binding = 24, std430) restrict buffer Pool0  { float v[]; } pool0;
+layout(set = 0, binding = 25, std430) restrict buffer Pool1  { float v[]; } pool1;
+layout(set = 0, binding = 26, std430) restrict buffer Pool2  { float v[]; } pool2;
+layout(set = 0, binding = 27, std430) restrict buffer Pool3  { float v[]; } pool3;
+layout(set = 0, binding = 28, std430) restrict buffer Pool4  { float v[]; } pool4;
+layout(set = 0, binding = 29, std430) restrict buffer Pool5  { float v[]; } pool5;
+layout(set = 0, binding = 30, std430) restrict buffer Pool6  { float v[]; } pool6;
+layout(set = 0, binding = 31, std430) restrict buffer Pool7  { float v[]; } pool7;
+layout(set = 0, binding = 32, std430) restrict buffer Pool8  { float v[]; } pool8;
+layout(set = 0, binding = 33, std430) restrict buffer Pool9  { float v[]; } pool9;
+layout(set = 0, binding = 34, std430) restrict buffer Pool10 { float v[]; } pool10;
+layout(set = 0, binding = 35, std430) restrict buffer Pool11 { float v[]; } pool11;
+
+// pool slot accessors. A small switch keeps the slot index data-driven (the `pool_sel` push
+// constant for the generic pool passes; a literal for biome fragments). Out-of-range slots are
+// inert (read 0 / no write) -- a wrong slot fails parity loudly rather than corrupting memory.
+float pool_read(int slot, int idx) {
+    if (slot == 0)  return pool0.v[idx];
+    if (slot == 1)  return pool1.v[idx];
+    if (slot == 2)  return pool2.v[idx];
+    if (slot == 3)  return pool3.v[idx];
+    if (slot == 4)  return pool4.v[idx];
+    if (slot == 5)  return pool5.v[idx];
+    if (slot == 6)  return pool6.v[idx];
+    if (slot == 7)  return pool7.v[idx];
+    if (slot == 8)  return pool8.v[idx];
+    if (slot == 9)  return pool9.v[idx];
+    if (slot == 10) return pool10.v[idx];
+    if (slot == 11) return pool11.v[idx];
+    return 0.0;
+}
+
+void pool_write(int slot, int idx, float val) {
+    if (slot == 0)  { pool0.v[idx]  = val; return; }
+    if (slot == 1)  { pool1.v[idx]  = val; return; }
+    if (slot == 2)  { pool2.v[idx]  = val; return; }
+    if (slot == 3)  { pool3.v[idx]  = val; return; }
+    if (slot == 4)  { pool4.v[idx]  = val; return; }
+    if (slot == 5)  { pool5.v[idx]  = val; return; }
+    if (slot == 6)  { pool6.v[idx]  = val; return; }
+    if (slot == 7)  { pool7.v[idx]  = val; return; }
+    if (slot == 8)  { pool8.v[idx]  = val; return; }
+    if (slot == 9)  { pool9.v[idx]  = val; return; }
+    if (slot == 10) { pool10.v[idx] = val; return; }
+    if (slot == 11) { pool11.v[idx] = val; return; }
+}
+
+// ---------------------------------------------------------------------------
 // push constant. 16-byte-aligned: 12 ints (48B) then 12 floats (48B) = 96B.
 // MUST match biome_page_compute.rs::build_push byte layout exactly.
 // ---------------------------------------------------------------------------
@@ -134,7 +206,7 @@ layout(push_constant, std430) uniform Params {
     int copy_sel;    // PASS_COPY: which field to copy into gauss_in
     int flow_dir;    // PASS_FLOW_RELAX: 0 = acc_a->acc_b, 1 = acc_b->acc_a
     int koffset;     // base index of the active kernel in the packed kernel buffer
-    int ipad0;
+    int pool_sel;    // PASS_COPY_POOL / PASS_POOL_FROM_GAUSS: which scratch pool slot
     int ipad1;
     int ipad2;
     float spacing;   // grid spacing (metres/px)
@@ -262,6 +334,18 @@ void main() {
         else if (P.copy_sel == CP_VALLEY) v = valley_mask.v[i];
         else if (P.copy_sel == CP_HEIGHT) v = height.v[i];
         gauss_in.v[i] = v;
+        return;
+    }
+
+    if (pass == PASS_COPY_POOL) {
+        // copy a selected scratch-pool slot into gauss_in (so the gaussian passes can blur it).
+        gauss_in.v[i] = pool_read(P.pool_sel, i);
+        return;
+    }
+
+    if (pass == PASS_POOL_FROM_GAUSS) {
+        // stash the gaussian result (gauss_out) back into a selected scratch-pool slot.
+        pool_write(P.pool_sel, i, gauss_out.v[i]);
         return;
     }
 

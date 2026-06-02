@@ -56,12 +56,42 @@ const PASS_FLOW_PRE_PREBLUR_IN: i32 = 21;
 const PASS_FLOW_PRE_FROM_GAUSS: i32 = 22;
 const PASS_MASSIF_WRITEBACK: i32 = 23;
 const PASS_ACC_INIT: i32 = 24;
+const PASS_COPY_POOL: i32 = 25;       // gauss_in <- pool[pool_sel] (to blur a pool slot)
+/// Generic capability for biomes that need to stash a blur back into a slot. Grassland reads the
+/// blur straight from gauss_out (no stash), so it is unused TODAY but part of the pool API the
+/// other 9 ports may use; keep it defined to match biome_page.glsl PASS_POOL_FROM_GAUSS.
+#[allow(dead_code)]
+const PASS_POOL_FROM_GAUSS: i32 = 26; // pool[pool_sel] <- gauss_out (stash a blur)
+
+// GRASSLAND biome-private PASS_* codes (start at 32) -- MUST match biome_grassland.glsl GL_*.
+const GL_POINTWISE: i32 = 32;
+const GL_COMBO: i32 = 33;
+const GL_SWELLS: i32 = 34;
+const GL_ONE_MINUS_SWELLS: i32 = 35;
+const GL_PANS: i32 = 36;
+const GL_SANDHILL_PRE: i32 = 37;
+const GL_SANDHILL_FINAL: i32 = 38;
+const GL_ESC_PRE: i32 = 39;
+const GL_ESC_FINAL: i32 = 40;
+const GL_BASE_FOR_FLOW: i32 = 41;
+const GL_DRAWS: i32 = 42;
+const GL_TEXTURE: i32 = 43;
+const GL_ASSEMBLE: i32 = 44;
+const GL_OPEN_FLOOR_BLEND: i32 = 45;
+const GL_FINAL: i32 = 46;
 
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
 const CP_VALLEY: i32 = 2;
 const CP_HEIGHT: i32 = 3;
+
+/// GENERIC scratch-pool slot count -- MUST match biome_page.glsl POOL_SLOTS. One additional
+/// storage buffer is allocated + bound per slot (bindings 24..24+POOL_SLOTS-1), reusable by ANY
+/// biome that needs more sub-fields than the fixed named buffers. Grassland uses all 12; to add a
+/// biome needing more, bump this AND the GLSL POOL_SLOTS together. Mountain ignores the pool
+/// entirely (its named buffers are untouched), so this is purely additive.
+const POOL_SLOTS: usize = 12;
 
 /// scipy gaussian truncate (array_ops::TRUNCATE).
 const TRUNCATE: f64 = 4.0;
@@ -161,6 +191,7 @@ fn build_push(
     copy_sel: i32,
     flow_dir: i32,
     koffset: i32,
+    pool_sel: i32,
     spacing: f32,
     ox: f32,
     oz: f32,
@@ -168,8 +199,8 @@ fn build_push(
     flow_power: f32,
 ) -> Vec<u8> {
     let mut b = Vec::with_capacity(96);
-    // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset + 3 pad.
-    for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, 0, 0, 0] {
+    // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel + 2 pad.
+    for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, pool_sel, 0, 0] {
         b.extend_from_slice(&v.to_le_bytes());
     }
     // 12 floats: spacing,ox,oz,feature_span_m,flow_power + 7 pad.
@@ -195,6 +226,34 @@ fn mountain_sigmas() -> Vec<f64> {
     let floor_smooth = 4.0_f64.max(0.2);
     // All distinct sigmas used by run_gaussian / run_flow_channels.
     vec![1.15, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, trib_width, floor_smooth]
+}
+
+/// Distinct gaussian sigmas the GRASSLAND recipe uses (recipes_grassland.rs::generate_seamsafe),
+/// in a FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's
+/// blurs (read directly from the oracle):
+///   * pre_swells   = gaussian(combo,           smoothing_px = 3.7)
+///   * pans         = gaussian(1 - swells,      5.2)
+///   * sandhill     = gaussian(pre,             1.55)            [_sandhill_field]
+///   * escarpment   = gaussian(edge,            1.4)             [_escarpment_field]
+///   * draws        = flow_channels(width=2.1, power=0.50): pre-blur 1.15 + spread max(2.1,0.1)=2.1
+///   * floor smooth = gaussian(height, max(smoothing_px, 0.5) = 3.7)   [dup of smoothing_px]
+///   * final blend  = gaussian(height, 1.1)
+/// Deduped: 1.10, 1.15, 1.40, 1.55, 2.10, 3.70, 5.20.
+fn grassland_sigmas() -> Vec<f64> {
+    let smoothing_px = 3.7_f64;        // ROLLING_PRAIRIE.smoothing_px
+    let floor_smooth = smoothing_px.max(0.5); // 3.7 (dedups against smoothing_px)
+    let draw_spread = 2.1_f64.max(0.1);       // flow_channels width.max(0.1) = 2.1
+    vec![1.10, 1.15, 1.40, 1.55, draw_spread, smoothing_px, 5.20, floor_smooth]
+}
+
+/// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
+/// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
+fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
+    match biome {
+        "mountain" => Some(mountain_sigmas()),
+        "grassland" => Some(grassland_sigmas()),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -268,7 +327,9 @@ struct Scheduler<'a> {
 
 impl<'a> Scheduler<'a> {
     /// One full pass dispatch + trailing barrier (so the next reader sees the writes). Same body
-    /// as the old `dispatch` closure.
+    /// as the old `dispatch` closure, plus the additive `pool_sel` push-constant for the generic
+    /// pool passes (0 for every mountain dispatch -> byte-identical to the pre-pool push for
+    /// mountain, since pool_sel maps to a former int-pad slot).
     #[allow(clippy::too_many_arguments)]
     fn dispatch(
         &mut self,
@@ -278,6 +339,7 @@ impl<'a> Scheduler<'a> {
         copy_sel: i32,
         flow_dir: i32,
         flow_power: f32,
+        pool_sel: i32,
         wgx: u32,
         wgy: u32,
     ) {
@@ -285,7 +347,7 @@ impl<'a> Scheduler<'a> {
         let pc = PackedByteArray::from(
             build_push(
                 pass, self.rows, self.cols, self.apron, self.seed, kradius, copy_sel, flow_dir,
-                koffset, self.spacing, self.ox, self.oz, self.feature_span_m, flow_power,
+                koffset, pool_sel, self.spacing, self.ox, self.oz, self.feature_span_m, flow_power,
             )
             .as_slice(),
         );
@@ -295,18 +357,31 @@ impl<'a> Scheduler<'a> {
     }
 
     /// Full-field dispatch (the overwhelmingly common case): wgx/wgy = full padded dims, and the
-    /// no-kernel/no-copy/no-flow params default to 0. Convenience wrapper so schedule fns read
-    /// cleanly.
+    /// no-kernel/no-copy/no-flow/no-pool params default to 0. Convenience wrapper so schedule fns
+    /// read cleanly.
     fn dispatch_full(&mut self, pass: i32, copy_sel: i32, flow_dir: i32, flow_power: f32) {
-        self.dispatch(pass, 0, 0, copy_sel, flow_dir, flow_power, self.wg_full_x, self.wg_full_y);
+        self.dispatch(pass, 0, 0, copy_sel, flow_dir, flow_power, 0, self.wg_full_x, self.wg_full_y);
+    }
+
+    /// Full-field POOL copy/stash dispatch (pool_sel selects the slot). Used by COPY_POOL (slot
+    /// -> gauss_in) and POOL_FROM_GAUSS (gauss_out -> slot) so a biome can blur ANY pool slot.
+    fn dispatch_pool(&mut self, pass: i32, pool_sel: i32) {
+        self.dispatch(pass, 0, 0, 0, 0, 0.0, pool_sel, self.wg_full_x, self.wg_full_y);
     }
 
     /// gaussian(sigma) on gauss_in -> gauss_out (AXIS0 then AXIS1, packed kernel by koffset).
     /// Same body as the old `gauss!` macro.
     fn gauss(&mut self, sigma: f64) {
         let (ko, kr) = self.kparams.kp(sigma);
-        self.dispatch(PASS_GAUSS_AXIS0, kr, ko, 0, 0, 0.0, self.wg_full_x, self.wg_full_y);
-        self.dispatch(PASS_GAUSS_AXIS1, kr, ko, 0, 0, 0.0, self.wg_full_x, self.wg_full_y);
+        self.dispatch(PASS_GAUSS_AXIS0, kr, ko, 0, 0, 0.0, 0, self.wg_full_x, self.wg_full_y);
+        self.dispatch(PASS_GAUSS_AXIS1, kr, ko, 0, 0, 0.0, 0, self.wg_full_x, self.wg_full_y);
+    }
+
+    /// Blur a scratch-pool slot in place: COPY_POOL(slot) -> gauss_in, gaussian(sigma), then the
+    /// blur lives in gauss_out (the caller reads gauss_out, or POOL_FROM_GAUSS stashes it back).
+    fn gauss_pool(&mut self, slot: i32, sigma: f64) {
+        self.dispatch_pool(PASS_COPY_POOL, slot);
+        self.gauss(sigma);
     }
 
     /// flow_channels_seam_safe(flow_pre, width_px, power): pre-blur 1.15 -> K relax ->
@@ -411,7 +486,74 @@ fn schedule_mountain(s: &mut Scheduler) {
     s.dispatch_full(PASS_FINAL, 0, 0, 0.0);
 
     // 12) crop core (over core cells)
-    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, s.wg_core_x, s.wg_core_y);
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
+/// The GRASSLAND dispatch schedule (style = ROLLING_PRAIRIE). Mirrors the field DAG of
+/// recipes_grassland.rs::generate_seamsafe ONE-FOR-ONE: warp+macro/secondary -> swells (blur) ->
+/// pans (blur 1-swells) -> sandhills/escarpments (whole-field sub-pipelines) -> base_for_flow ->
+/// draws (flow channels) -> fine_grain/low_ripple -> assemble -> floor blend -> final. All
+/// intermediate fields live in the GENERIC scratch POOL (pool0..pool11; see biome_grassland.glsl
+/// for the slot map). The sigmas (smoothing_px=3.7, 5.2, 1.55, 1.4, flow pre-blur 1.15 + spread
+/// 2.1, floor 3.7, final 1.1) are all in grassland_sigmas(). This is the PATTERN the other 9 ports
+/// copy: pointwise passes write pool slots; blur a slot via gauss_pool(slot,sigma) then read
+/// gauss_out (or POOL_FROM_GAUSS to stash); flow channels reuse the proven flow_channels().
+fn schedule_grassland(s: &mut Scheduler) {
+    let smoothing_px = 3.7_f64;          // ROLLING_PRAIRIE.smoothing_px
+    let floor_smooth = smoothing_px.max(0.5);
+
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; macro_f=pool2 ; secondary=pool3
+    s.dispatch_full(GL_POINTWISE, 0, 0, 0.0);
+
+    // 2) swells = clip(affine(gaussian(0.74*macro + 0.26*secondary, smoothing_px), SWELLS))
+    s.dispatch_full(GL_COMBO, 0, 0, 0.0);   // gauss_in <- combo
+    s.gauss(smoothing_px);                  // gauss_out = gaussian(combo, smoothing_px)
+    s.dispatch_full(GL_SWELLS, 0, 0, 0.0);  // pool4 = swells
+
+    // 3) pans = smoothstep(0.54,0.88, gaussian(1 - swells, 5.2))
+    s.dispatch_full(GL_ONE_MINUS_SWELLS, 0, 0, 0.0); // gauss_in <- 1 - swells
+    s.gauss(5.2);                                    // gauss_out = gaussian(1-swells, 5.2)
+    s.dispatch_full(GL_PANS, 0, 0, 0.0);             // pool5 = pans
+
+    // 4) sandhills sub-pipeline: pre (pool11) -> gaussian(1.55) -> clip(affine(., SH_FINAL)) = pool6
+    s.dispatch_full(GL_SANDHILL_PRE, 0, 0, 0.0);     // pool11 = softened*envelope*broken
+    s.gauss_pool(11, 1.55);                          // gauss_out = gaussian(pool11, 1.55)
+    s.dispatch_full(GL_SANDHILL_FINAL, 0, 0, 0.0);   // pool6 = sandhills
+
+    // 5) escarpments sub-pipeline: edge (pool11) -> gaussian(1.4) -> clip(affine(., ESC_FINAL)) = pool7
+    s.dispatch_full(GL_ESC_PRE, 0, 0, 0.0);          // pool11 = smoothstep(|bands|)*plateau
+    s.gauss_pool(11, 1.4);                           // gauss_out = gaussian(pool11, 1.4)
+    s.dispatch_full(GL_ESC_FINAL, 0, 0, 0.0);        // pool7 = escarpments
+
+    // 6) base_for_flow = affine(0.82*swells + 0.28*esc - 0.34*pans, BASE_FLOW) (NO clip) -> flow_pre
+    s.dispatch_full(GL_BASE_FOR_FLOW, 0, 0, 0.0);
+
+    // 7) draws = smoothstep(0.60,0.94, flow_channels(base_for_flow, width=2.1, power=0.50))
+    //            * (0.42 + 0.58*(1 - pans))    [flow_channels leaves spread discharge in gauss_out]
+    s.flow_channels(0.50_f32, 2.1);
+    s.dispatch_full(GL_DRAWS, 0, 0, 0.0);            // pool8 = draws
+
+    // 8) texture: fine_grain (pool9) + low_ripple (pool10), rotated angle+1.10 on w_x/w_z
+    s.dispatch_full(GL_TEXTURE, 0, 0, 0.0);
+
+    // 9) assemble height (swells/sandhills/escarpments/pans/draws/texture weighted sum)
+    s.dispatch_full(GL_ASSEMBLE, 0, 0, 0.0);
+
+    // 10) floor blend: smooth = gaussian(height, max(smoothing_px,0.5)); open_floor blend
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(floor_smooth);                           // gauss_out = gaussian(height, floor_smooth)
+    s.dispatch_full(GL_OPEN_FLOOR_BLEND, 0, 0, 0.0);
+
+    // 11) final: height_blur = gaussian(height, 1.1); final_blend = 0.86*h + 0.14*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(1.1);                                    // gauss_out = gaussian(height, 1.1)
+    s.dispatch_full(GL_FINAL, 0, 0, 0.0);
+
+    // 12) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
 #[derive(GodotClass)]
@@ -607,8 +749,17 @@ impl Wg10BiomePageCompute {
         // PACKED kernel buffer (19): all distinct sigmas' kernels at fixed offsets
         // (slot * KERNEL_STRIDE). Built + uploaded ONCE so the whole pipeline runs inside a
         // SINGLE compute list (no mid-list buffer_update); the active kernel is selected by
-        // the `koffset` push constant. Build the kernels in the fixed sigma order.
-        let sigmas = mountain_sigmas();
+        // the `koffset` push constant. Build the kernels in the fixed sigma order. The sigma SET
+        // is biome-specific (each schedule_<biome> requests its own blurs); pick it BEFORE the
+        // list opens so a wrong/missing biome errors cleanly.
+        let sigmas = match biome_sigmas(biome) {
+            Some(s) => s,
+            None => {
+                rd.free_rid(shader);
+                rd.free();
+                return Err(format!("no sigma list for biome '{biome}' (add a biome_sigmas arm)"));
+            }
+        };
         let n_slots = sigmas.len();
         let mut packed = vec![0.0_f32; n_slots * KERNEL_STRIDE];
         for (slot, &sg) in sigmas.iter().enumerate() {
@@ -643,14 +794,23 @@ impl Wg10BiomePageCompute {
             .data(&core_pba)
             .done(); // 23
 
-        // one uniform set binding all 24 buffers (build once).
-        let bindings: [(i32, Rid); 24] = [
+        // GENERIC scratch POOL (bindings 24..24+POOL_SLOTS-1): POOL_SLOTS reusable field buffers
+        // any biome can stage sub-fields in (grassland uses all 12). Allocated for EVERY biome so
+        // the uniform set always satisfies the machine's pool bindings (mountain just never reads
+        // them -> its result is unchanged). Additive: the fixed named buffers above are untouched.
+        let b_pool: Vec<Rid> = (0..POOL_SLOTS).map(|_| mk_field(&mut rd)).collect();
+
+        // one uniform set binding the 24 fixed buffers + POOL_SLOTS pool buffers (build once).
+        let mut bindings: Vec<(i32, Rid)> = vec![
             (0, b_wx), (1, b_wz), (2, b_regional), (3, b_ranges), (4, b_ridge_detail),
             (5, b_near_detail), (6, b_range_env), (7, b_lowland), (8, b_massif), (9, b_base),
             (10, b_primary), (11, b_trib), (12, b_high), (13, b_valley), (14, b_height),
             (15, b_floor), (16, b_gauss_in), (17, b_gauss_mid), (18, b_gauss_out),
             (19, b_kernel), (20, b_flow_pre), (21, b_acc_a), (22, b_acc_b), (23, b_core),
         ];
+        for (k, &rid) in b_pool.iter().enumerate() {
+            bindings.push((24 + k as i32, rid));
+        }
         let mut uniforms: Array<Gd<RdUniform>> = Array::new();
         for (bind, rid) in bindings.iter() {
             uniforms.push(&make_storage_uniform(*bind, *rid));
@@ -664,16 +824,13 @@ impl Wg10BiomePageCompute {
         let wg_core_x = (core_cols as u32).div_ceil(16);
         let wg_core_y = (core_rows as u32).div_ceil(16);
 
-        let valley_width_px = 2.4_f64;
-        let trib_width = (valley_width_px * 0.42).max(0.6);
-        let floor_smooth = 4.0_f64.max(0.2);
-
         // PRE-VALIDATE every sigma the pipeline will request, BEFORE the compute list is open:
         // KernelParams::kp uses `.expect()`, and a panic AFTER compute_list_begin would unwind
-        // with an active list and leak the local RD. Resolving them here proves the in-list
-        // lookups cannot fail. (The `mountain_sigmas_cover_all_pipeline_blurs` unit test also
-        // guards this.)
-        for s in [1.15_f64, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, trib_width, floor_smooth] {
+        // with an active list and leak the local RD. Every sigma a schedule_<biome> asks for MUST
+        // be in that biome's `*_sigmas()` (the per-biome unit tests, e.g.
+        // `mountain_sigmas_cover_all_pipeline_blurs` / `grassland_sigmas_cover_all_pipeline_blurs`,
+        // guard this); resolving the whole list here proves the in-list lookups cannot fail.
+        for &s in &sigmas {
             let _ = kparams.kp(s);
         }
 
@@ -704,12 +861,11 @@ impl Wg10BiomePageCompute {
             wg_core_y,
             kparams,
         };
-        // Biome selector (derived from the fragment path stem in generate_core_page). Mountain is
-        // the only biome today; each future biome adds a `schedule_<name>()` + one match arm here.
+        // Biome selector (derived from the fragment path stem in generate_core_page). Each biome
+        // adds a `schedule_<name>()` + one match arm here + a `*_sigmas()` arm in `biome_sigmas`.
         match biome {
             "mountain" => schedule_mountain(&mut sched),
-            // TODO(per-biome): add arms as biomes port, e.g.
-            //   "grassland" => schedule_grassland(&mut sched),
+            "grassland" => schedule_grassland(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -826,14 +982,14 @@ mod biome_page_compute_tests {
 
     #[test]
     fn push_constant_is_96_bytes() {
-        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48);
+        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48);
         assert_eq!(p.len(), 96);
     }
 
     #[test]
     fn push_constant_packs_ints_then_floats() {
-        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,spacing,ox,oz,span,power)
-        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 3913.0, 12000.0, -31000.0, 90000.0, 0.34);
+        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,spacing,ox,oz,span,power)
+        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 3913.0, 12000.0, -31000.0, 90000.0, 0.34);
         assert_eq!(i32::from_le_bytes([p[0], p[1], p[2], p[3]]), 7);
         assert_eq!(i32::from_le_bytes([p[4], p[5], p[6], p[7]]), 344);
         assert_eq!(i32::from_le_bytes([p[8], p[9], p[10], p[11]]), 343);
@@ -843,11 +999,48 @@ mod biome_page_compute_tests {
         assert_eq!(i32::from_le_bytes([p[24], p[25], p[26], p[27]]), 2);
         assert_eq!(i32::from_le_bytes([p[28], p[29], p[30], p[31]]), 1);
         assert_eq!(i32::from_le_bytes([p[32], p[33], p[34], p[35]]), 128); // koffset
-        // 3 int pad at 36..48; floats start at byte 48.
+        assert_eq!(i32::from_le_bytes([p[36], p[37], p[38], p[39]]), 9);   // pool_sel
+        // 2 int pad at 40..48; floats start at byte 48.
         let spacing = f32::from_le_bytes([p[48], p[49], p[50], p[51]]);
         assert!((spacing - 3913.0).abs() < 1e-1);
         // floats: spacing(48),ox(52),oz(56),span(60),power(64)
         let flow_power = f32::from_le_bytes([p[64], p[65], p[66], p[67]]);
         assert!((flow_power - 0.34).abs() < 1e-6);
+    }
+
+    #[test]
+    fn grassland_sigmas_fit_stride() {
+        for &sg in &grassland_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn grassland_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_grassland asks for must be present (kparams panics otherwise).
+        // The schedule's gauss(...) calls + flow_channels(power, 2.1) pre-blur(1.15)/spread(2.1).
+        let smoothing_px = 3.7_f64;
+        let floor_smooth = smoothing_px.max(0.5);
+        let draw_spread = 2.1_f64.max(0.1);
+        let s = grassland_sigmas();
+        for need in [
+            smoothing_px, 5.2_f64, 1.55, 1.4, 1.15, draw_spread, floor_smooth, 1.1,
+        ] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+    }
+
+    #[test]
+    fn biome_sigmas_known_biomes() {
+        assert!(biome_sigmas("mountain").is_some());
+        assert!(biome_sigmas("grassland").is_some());
+        assert!(biome_sigmas("nope").is_none());
+    }
+
+    #[test]
+    fn pool_slots_matches_grassland_pool_map() {
+        // grassland's biome_grassland.glsl uses pool0..pool11 (12 slots). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 12, "POOL_SLOTS {POOL_SLOTS} < grassland's 12 pool slots");
     }
 }
