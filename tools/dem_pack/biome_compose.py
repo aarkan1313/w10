@@ -69,6 +69,10 @@ def compose_biomes(fields: list[np.ndarray], weights: list[np.ndarray], cfg: "Bl
     earlier recipes (the relief bias would compound on the running accumulator, making the
     result depend on `fields` order). field blend with matching weights is order-independent.
     """
+    if cfg.mode not in ("height_favored", "field"):
+        # STRICT: a typo'd mode must NOT silently fall through to height_favored (it once did:
+        # `mode != "field"` treated any unknown string as favored). Reject loudly.
+        raise ValueError(f"BlendConfig.mode must be 'height_favored' or 'field', got {cfg.mode!r}")
     if len(fields) != len(weights):
         raise ValueError(f"fields/weights length mismatch: {len(fields)} vs {len(weights)}")
     if not fields:
@@ -79,7 +83,7 @@ def compose_biomes(fields: list[np.ndarray], weights: list[np.ndarray], cfg: "Bl
         return fields[0]
     acc = fields[0]
     acc_w = weights[0].copy()
-    use_favored = (cfg.mode != "field") and (len(fields) == 2)
+    use_favored = (cfg.mode == "height_favored") and (len(fields) == 2)
     for f, w in zip(fields[1:], weights[1:]):
         denom = acc_w + w + 1e-12
         w_acc = acc_w / denom                       # weight on the accumulator vs the new recipe

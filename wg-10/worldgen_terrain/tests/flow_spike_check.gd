@@ -136,12 +136,14 @@ func _run() -> int:
 	var flow_with_fixed_ms: float = fixed_ms + flow_marginal_ms
 	# The flow pass should leave >= half the 6ms budget for height gen + the rest of the frame.
 	var fits := flow_with_fixed_ms < (BUDGET_MS * 0.5)
-	var verdict := "PASS" if fits else "FAIL"
+	# A genuine GATE: live GPU flow must BOTH fit the budget AND converge. Either failing = FAIL.
+	var passed := fits and conv_ok
+	var verdict := "PASS" if passed else "FAIL"
 	print("[wg10-flow-spike] VERDICT=%s stable_iters=%d flow_marginal_ms~=%.4f flow_with_fixed_ms~=%.4f (wall-differential model) budget_ms=%.1f half_budget_ms=%.1f converging=%s last_rel_delta=%.5f" % [
 		verdict, iters_for_stable, flow_marginal_ms, flow_with_fixed_ms, BUDGET_MS, BUDGET_MS * 0.5, str(conv_ok), last_rel_delta])
-
-	# The harness returns 0 if it MEASURED successfully (the verdict is data, not a hard gate):
-	# this is a risk spike whose job is to produce the number, not to fail the build.
+	if not passed:
+		push_error("[wg10-flow-spike] FAIL: fits_budget=%s converged=%s -- live GPU flow over budget or non-convergent" % [str(fits), str(conv_ok)])
+		return 1
 	return 0
 
 func _max_abs_delta(a: PackedFloat64Array, b: PackedFloat64Array) -> float:

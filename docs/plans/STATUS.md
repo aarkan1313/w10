@@ -20,8 +20,12 @@ point — see DESIGN §7.3.)
 > **▶ GPU-FLOW GATE PASSED (2026-06-02) — Slice-3 #1 risk retired on real hardware.** The drainage operator
 > (`flow_accumulation_mfd`, a sequential CPU sweep) reformulated as iterative PULL relaxation in a GLSL compute
 > shader (`flow_accum_spike.glsl`), measured on RTX 5090/D3D12 windowed: **~1.9 ms for a 256² page at 128 iters**
-> (converges bit-stable by 128 iters), linear ~0.0147 ms/iter. Comfortably under the 6 ms frame budget → **drainage
-> goes LIVE on GPU; no baked-facts fallback needed.** Commit 4b392b6 (cargo 132). Measurement gotcha recorded:
+> (converges bit-stable by 128 iters), linear ~0.0147 ms/iter. Comfortably under the 6 ms frame budget → drainage
+> **measured to fit live on GPU** (a MEASUREMENT SPIKE, now a REAL gate: `flow_spike_check.gd` returns nonzero on
+> over-budget/non-convergence; suite `python tools/gate.py --suite gpu_flow`). NOT "risk eliminated forever" — a
+> measured PASS on this hardware, to be re-confirmed by the gate + re-validated at the real per-page render
+> integration (Slice 4). Leaning LIVE drainage; baked-facts fallback stays available if the integrated path
+> regresses. Commit 4b392b6 (cargo 132). Measurement gotcha recorded:
 > local-RD compute timestamps (`get_captured_timestamp_gpu_time`) are UNRELIABLE on this box (reported >wall-clock);
 > use wall-clock differential across iter counts. Also: local RenderingDevice must be `.free()`d each run (driver
 > slot exhaustion). **Slice-3 port shape now fully de-risked** — remaining: port the 11 recipe compositions

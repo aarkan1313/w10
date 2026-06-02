@@ -90,7 +90,14 @@ def build_pack_dict(fam_of, meta, footprint_scale=1.0):
     """Assemble a worldgen10.terrain_pack.v1 dict from {kernel_id->family} +
     {kernel_id->kernel.json metadata}. relief_m=height_range_m;
     footprint_m=approx_sample_spacing_m*sample_px*footprint_scale. Raises
-    ValueError naming the offending kernel on bad metadata."""
+    ValueError naming the offending kernel on bad metadata.
+
+    LEGACY / SCAFFOLDING (the kernel-tiling pack feeding height.rs::sample_kernel + height_page.glsl,
+    being REPLACED at Slice 4 by the 11-biome composition stack). `relief_m = height_range_m` is the
+    KNOWN z-score over-amplification bug (z-score DEMs should use height_std_m, not the full range —
+    DESIGN, LOOSE_ENDS_LEDGER): it over-amplifies relief ~3.97-11.16x. The fix is the Slice-4 swap
+    (which removes kernel sampling from the runtime), NOT patching this assembler. Do NOT build new
+    detail/render work on this pack path."""
     if footprint_scale <= 0.0:
         raise ValueError(f"footprint_scale must be > 0, got {footprint_scale}")
     families = {}

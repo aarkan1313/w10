@@ -27,6 +27,13 @@ CHECKS = {
         "worldgen_terrain/tests/facts_collision_parity_check.gd",
         "worldgen_terrain/tests/facts_bake_check.gd",
     ],
+    # GPU-flow feasibility gate (windowed). A REAL gate now: flow_spike_check returns nonzero on
+    # over-budget OR non-convergence. Kept as its OWN suite (not folded into `gpu`) because it
+    # measures HARDWARE perf (p99 budget), which is device-dependent — `gpu` gates parity (device-
+    # independent). Run on the dev box to confirm live GPU drainage still fits the frame budget.
+    "gpu_flow": [
+        "worldgen_terrain/tests/flow_spike_check.gd",
+    ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
@@ -47,22 +54,36 @@ CHECKS = {
 # inside tools/dem_pack breaks them -> false failures). This is its own suite so
 # "gate green" covers the Phase-5 Python work, not just the Godot render checks.
 PYTEST_SUITE = "pytest"
+PYTEST_FAST_SUITE = "pytest_fast"
+# Bounded fast profile: the port-critical composition-layer tests (seconds), for a quick
+# "did the Slice-3 core regress?" gate. The Rust parity oracles (recipe_noise/array_ops/recipes/
+# biome_compose) live in `cargo test` and are fast there. `pytest` runs the FULL ~10min synthesis
+# suite; `pytest_fast` runs just these.
+PYTEST_FAST_PATHS = [
+    "tools/dem_pack/test_biome_compose.py",
+    "tools/dem_pack/test_biome_registry.py",
+]
 
 
-def run_pytest_suite() -> int:
-    """Run the dem_pack pytest suite from the repo root. Returns process rc (0 = all pass).
-
-    cwd is the REPO ROOT (PROJECT is wg-10/, but tools/dem_pack/ lives at the repo root, and the
-    tests use repo-root-relative fixture paths — running from anywhere else collects nothing / fails).
-    """
+def run_pytest_suite(fast: bool = False) -> int:
+    """Run the dem_pack pytest suite from the repo ROOT (PROJECT is wg-10/, but tools/dem_pack/ is
+    at the repo root + tests use root-relative fixture paths). fast=True = bounded port-critical
+    subset (seconds); else the full suite (~10min). Both have a timeout so the gate can't hang."""
     repo_root = Path(__file__).resolve().parents[1]
-    cmd = [sys.executable, "-m", "pytest", "tools/dem_pack/", "-q"]
-    res = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True)
+    label = PYTEST_FAST_SUITE if fast else PYTEST_SUITE
+    targets = PYTEST_FAST_PATHS if fast else ["tools/dem_pack/"]
+    timeout = 180 if fast else 900
+    cmd = [sys.executable, "-m", "pytest", *targets, "-q"]
+    try:
+        res = subprocess.run(cmd, cwd=str(repo_root), capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"[gate] suite={label} fail=1 (TIMEOUT >{timeout}s)")
+        return 1
     sys.stdout.write(res.stdout[-3000:])
     if res.returncode != 0:
         sys.stderr.write(res.stderr[-3000:])
     fail = res.returncode != 0
-    print(f"[gate] suite=pytest fail={1 if fail else 0} (dem_pack pytest, from repo root)")
+    print(f"[gate] suite={label} fail={1 if fail else 0} (dem_pack pytest from repo root)")
     return res.returncode
 
 
@@ -75,10 +96,13 @@ def godot_bin() -> str:
 
 def ensure_extension_imported(godot: str) -> None:
     """Editor import pass so the GDExtension is discovered and loaded."""
-    res = subprocess.run(
-        [godot, "--headless", "--import", "--path", str(PROJECT)],
-        capture_output=True, text=True,
-    )
+    try:
+        res = subprocess.run(
+            [godot, "--headless", "--import", "--path", str(PROJECT)],
+            capture_output=True, text=True, timeout=180,
+        )
+    except subprocess.TimeoutExpired:
+        raise SystemExit("[gate] extension import pass timed out (>180s) — Godot may be hung")
     # --import can exit non-zero for unrelated import warnings; only treat a
     # missing/failed extension as fatal.
     if "GDExtension dynamic library not found" in (res.stdout + res.stderr):
@@ -90,21 +114,39 @@ def ensure_extension_imported(godot: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--suite", choices=sorted(list(CHECKS) + [PYTEST_SUITE]), default="fast")
+    ap.add_argument("--suite", choices=sorted(list(CHECKS) + [PYTEST_SUITE, PYTEST_FAST_SUITE]), default="fast")
     args = ap.parse_args()
     if args.suite == PYTEST_SUITE:
-        return run_pytest_suite()
-    headless = args.suite not in ("gpu", "m3")   # GPU compute (RenderingDevice) needs a windowed device
+        return run_pytest_suite(fast=False)
+    if args.suite == PYTEST_FAST_SUITE:
+        return run_pytest_suite(fast=True)
+    headless = args.suite not in ("gpu", "m3", "gpu_flow")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0
     skips = 0
+    # Per-check wall timeout so a hung Godot can never stall the gate indefinitely (a hung process
+    # is a FAIL with its output tailed, not an infinite wait). gpu/m3/gpu_flow do real GPU work + can
+    # be slower, so they get a longer ceiling than the headless CPU checks.
+    per_check_timeout = 240 if not headless else 120
     for script in CHECKS[args.suite]:
         cmd = [godot]
         if headless:
             cmd.append("--headless")
         cmd += ["--path", str(PROJECT), "--script", f"res://{script}"]
-        res = subprocess.run(cmd, capture_output=True, text=True)
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=per_check_timeout)
+        except subprocess.TimeoutExpired as exc:
+            # Kill the hung Godot, tail whatever it printed, count it a failure (NOT a hang).
+            failures += 1
+            out = (exc.stdout or "")
+            err = (exc.stderr or "")
+            out = out.decode() if isinstance(out, bytes) else out
+            err = err.decode() if isinstance(err, bytes) else err
+            print(f"[gate] check={script} status=fail rc=TIMEOUT (>{per_check_timeout}s)")
+            sys.stdout.write(out[-2000:])
+            sys.stderr.write(err[-2000:])
+            continue
         rc = res.returncode
         if rc == 0:
             tag = "pass"

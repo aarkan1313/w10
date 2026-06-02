@@ -165,6 +165,13 @@ pub fn compose_biomes(
     cols: usize,
     cfg: &BlendConfig,
 ) -> Vec<f64> {
+    // STRICT mode validation (mirrors the Python fix): an unknown/typo'd mode must NOT silently
+    // fall through to height_favored. Only the two known modes are accepted.
+    assert!(
+        cfg.mode == "height_favored" || cfg.mode == "field",
+        "BlendConfig.mode must be \"height_favored\" or \"field\", got {:?}",
+        cfg.mode
+    );
     assert_eq!(
         fields.len(),
         weights.len(),
@@ -190,7 +197,7 @@ pub fn compose_biomes(
 
     let mut acc = fields[0].clone();
     let mut acc_w = weights[0].clone();
-    let use_favored = (cfg.mode != "field") && (fields.len() == 2);
+    let use_favored = (cfg.mode == "height_favored") && (fields.len() == 2);
 
     for (f, w) in fields.iter().skip(1).zip(weights.iter().skip(1)) {
         // w_acc = acc_w / (acc_w + w + 1e-12): weight on the accumulator vs the new recipe.

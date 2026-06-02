@@ -2,6 +2,15 @@
 //! (DESIGN §6.3). Turns the grammar's family-weight blend into elevation by
 //! tiled-sampling per-family kernels, slope-moderating amplitude, and composing.
 //! Consumes `grammar::family_weights`; the grammar never reads kernel data.
+//!
+//! ⚠ LEGACY / SCAFFOLDING — being REPLACED at Slice 4. `sample_kernel`/`height` are the OLD
+//! kernel-tiling formula (the "blobby/tiling" look the worldgen-core rebuild supersedes). They are
+//! still the LIVE per-point formula behind `facts_api::base_height` until the Slice-4 page-path swap
+//! routes the runtime through the accepted 11-biome composition stack (recipes_*.rs + biome_compose.rs,
+//! all parity-ported to Rust). KNOWN BUG carried by this legacy path (do NOT build new work on it):
+//! `sample * relief_m` uses z-score DEM kernels with the FULL height_range_m as `relief_m`, which
+//! over-amplifies relief (DESIGN §"z-score"; LOOSE_ENDS_LEDGER). The fix is the Slice-4 replacement,
+//! not patching this scaffolding. Kept only so M0-M4 parity gates + facts keep working pre-swap.
 
 use crate::grammar;
 use crate::pack::FamilyKernel;

@@ -3,6 +3,10 @@
 
 // WorldGen10 height page — writes height into an R32F image for one page region.
 // Page variant of height_field.glsl: same formula, different I/O.
+// LEGACY / SCAFFOLDING — being REPLACED at Slice 4 (GLSL mirror of the accepted 11-biome
+// composition stack will replace this kernel-tiling formula here, in the grid-shaped page path,
+// and the 25MB kernel atlas gets removed). Carries the same z-score relief over-amplification bug
+// as height.rs (sample * relief_m with relief_m = full height_range_m). Do NOT build on it.
 // EDIT BOTH SIDES: height_at() must stay in sync with height_field.glsl main()
 // height computation. The M2 parity gate (gpu_parity_check.gd) proves the values;
 // this shader reuses the identical math, only restructured for image output.
