@@ -14,7 +14,24 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
-Updated: 2026-06-01 (**TERRAIN-EDIT FRAMEWORK — latest; this is the fresh-session pickup.** `STATUS.md` top
+Updated: 2026-06-02 (**BIOME-COMPOSITION LAYER + SCALE CONTRACT done; SLICE-3 RUST PORT UNBLOCKED + IN PROGRESS.**
+This supersedes the older "Slice 3 BLOCKED" framing below — that was true at the session START but the keeper
+fork was resolved (v2 accepted) and the offline biome stack was built + accepted since. `STATUS.md` top
+("▶ CURRENT") is the live authority. Read order for a new chat: STATUS.md top → ROADMAP "▶ YOU ARE HERE" box →
+memory `worldgen10-biome-composition-layer` + `worldgen10-gpu-rust-first-principle` → Slice-3 plan
+`docs/superpowers/plans/2026-06-01-slice3-rust-port-plan.md` (Task 1 = the FROZEN port contract).
+**STATE (2026-06-02):** all 11 biomes seam-safe (pytest green); biome-composition layer (compose/registry/
+seam_safe) built; scale contract resolved (on-foot real-metre; "towering" is a future detail layer, not a slope
+fudge). Slice-3 CPU foundation PORTED + parity machine-exact: `recipe_noise.rs` + `array_ops.rs` (cargo 126
+green). An owner audit found real issues — composition seam-safety (registry apron / compose blur / tautological
+seam test) FIXED (89e4758), page_pool lifecycle crash/leak FIXED (ce61449, gpu gate green). NEXT in the port:
+GPU-flow feasibility gate (flow_accumulation is a sequential sweep — wavefront/baked-facts fallback known) →
+11 recipe compositions → compose_biomes → replace `sample_kernel`. **NOTE on tree state:** the worktree is
+intentionally dirty (large in-flight Phase-5 work + pre-existing dirty files that are NOT ours — stage BY NAME,
+never `git add -A`). Commits are local unless the owner pushed.
+(Below: the session-START pointer, now history — Slice 3 was BLOCKED then, is not now.)
+
+Updated: 2026-06-01 (**TERRAIN-EDIT FRAMEWORK — [history; superseded by the 2026-06-02 addendum above].** `STATUS.md` top
 ("▶ CURRENT (2026-06-01)") is the live authority; this is the pointer. Read order for a new chat:
 STATUS.md top → ROADMAP "▶ YOU ARE HERE" box → spec `docs/superpowers/specs/2026-06-01-worldgen-terrain-edit-framework-design.md`
 §9 → memory `worldgen10-tier3-corridor-built-mountain-gap` (top section = the resolved framework + the full
