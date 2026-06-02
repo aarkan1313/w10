@@ -96,7 +96,7 @@ fn recipe_noise_matches_python_oracle() {
                 );
                 track(&mut max_delta, &mut worst, "domain_warp.x", inp, gx, f(exp, "out_x"));
                 track(&mut max_delta, &mut worst, "domain_warp.z", inp, gz, f(exp, "out_z"));
-                checked += 1; // counts as one record (two components)
+                // two output components, but still one fixture record (counted below).
             }
             "recursive_domain_warp" => {
                 let (gx, gz) = rn::recursive_domain_warp(
@@ -106,7 +106,7 @@ fn recipe_noise_matches_python_oracle() {
                 );
                 track(&mut max_delta, &mut worst, "recursive_domain_warp.x", inp, gx, f(exp, "out_x"));
                 track(&mut max_delta, &mut worst, "recursive_domain_warp.z", inp, gz, f(exp, "out_z"));
-                checked += 1;
+                // two output components, but still one fixture record (counted below).
             }
             "cellular_edges" => {
                 let got = rn::cellular_edges(

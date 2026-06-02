@@ -18,6 +18,11 @@
 //! descent flow). It is not part of the seam-safe local f(x,z) path, so it is out of
 //! scope for this oracle.
 
+// These primitives are the parity oracle; the biome recipes that consume them are not
+// ported yet, so several are exercised only by the parity test. Silence "never used"
+// until the recipes land.
+#![allow(dead_code)]
+
 const MASK_31: i64 = 0x7fff_ffff;
 
 /// Integer lattice hash -> [0,1). Mirror of worldgen_proto `_hash2`.
@@ -158,8 +163,8 @@ pub fn domain_warp(wx: f64, wz: f64, warp_amount: f64, warp_freq: f64, seed: i64
     if warp_amount == 0.0 {
         return (wx, wz);
     }
-    let dx = fbm(wx, wz, warp_freq, 3, seed + 17, 0.5, 2.0);
-    let dz = fbm(wx, wz, warp_freq, 3, seed + 43, 0.5, 2.0);
+    let dx = fbm(wx, wz, warp_freq, 3, seed.wrapping_add(17), 0.5, 2.0);
+    let dz = fbm(wx, wz, warp_freq, 3, seed.wrapping_add(43), 0.5, 2.0);
     (wx + warp_amount * dx, wz + warp_amount * dz)
 }
 
@@ -191,8 +196,8 @@ pub fn recursive_domain_warp(
     let mut amount = warp_amount;
     let mut freq = warp_freq;
     for i in 0..steps as i64 {
-        let dx = fbm(out_x, out_z, freq, 3, seed + 101 + i * 37, 0.5, 2.0);
-        let dz = fbm(out_x, out_z, freq, 3, seed + 151 + i * 37, 0.5, 2.0);
+        let dx = fbm(out_x, out_z, freq, 3, seed.wrapping_add(101).wrapping_add(i.wrapping_mul(37)), 0.5, 2.0);
+        let dz = fbm(out_x, out_z, freq, 3, seed.wrapping_add(151).wrapping_add(i.wrapping_mul(37)), 0.5, 2.0);
         out_x += amount * dx;
         out_z += amount * dz;
         amount *= decay;
