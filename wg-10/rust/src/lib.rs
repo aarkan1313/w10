@@ -32,6 +32,7 @@ mod recipes_tundra;
 mod recipes_rainforest;
 mod recipes_coast;
 mod recipes_wetland;
+mod biome_compose;
 mod flow_spike;
 
 #[cfg(test)]
@@ -82,6 +83,8 @@ mod recipes_rainforest_tests;
 mod recipes_coast_tests;
 #[cfg(test)]
 mod recipes_wetland_tests;
+#[cfg(test)]
+mod biome_compose_tests;
 
 struct Wg10Terrain;
 
