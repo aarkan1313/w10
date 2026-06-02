@@ -277,7 +277,28 @@ plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-
 
 ### Phase 5 — Worldgen core rebuild (ACTIVE) — 85%-target geography engine
 
-> **▶ YOU ARE HERE (2026-06-01) — Phase 5, tunable TERRAIN-EDIT framework BUILT + OWNER-ACCEPTED (traversability is its first use).** Plain-language state:
+> **▶ YOU ARE HERE (2026-06-01, late) — Phase 5: BIOME-COMPOSITION LAYER (Fork B) + SCALE CONTRACT done; Slice-3 UNBLOCKED.** Plain-language state:
+> - **Milestones 0–4 DONE** (engine machinery). The height CONTENT is what Phase 5 proves offline before the Rust port.
+> - **The biome-composition layer is BUILT** (the "shouldn't the height not be bound to kernels?" insight): an
+>   edit-free layer that turns "grammar places biome(s) at (x,z)" → one seam-exact height. `biome_compose`
+>   (`compose_biomes` + tunable `height_favored` blend), `biome_registry` (name→recipe), `seam_safe` (shared
+>   apron/affine helpers). **Fork B** (probe-decided): each biome keeps its own recipe (Fork A "one v2 engine"
+>   was DEAD — v2 can't make mountains); recipes are made seam-safe + composed.
+> - **ALL 11 BIOMES SEAM-SAFE + committed; full suite 238 passed.** Each: apron_px path + affine_remap + nearest
+>   blurs + REAL MFD flow-accumulation connected drainage + crop; seam <1e-3 (visually-seamless, not bit-exact —
+>   global flow can't be bit-exact across windows); legacy path byte-identical. Owner flew the seam-safe mountain
+>   (true-scale) + accepted. Commits af921c7…42079ca.
+> - **SCALE CONTRACT resolved** (spec `…/2026-06-01-worldgen-scale-contract-design.md`): the long "not tall enough"
+>   was an OVERVIEW-vs-ON-FOOT illusion. On-foot real-metre anchor (mountain ~3.5km/1000m slope~0.29 … wetland
+>   ~9km/110m; ~30km regions); real mountains are BROAD swells at true scale (correct) — "towering" is a future
+>   detail layer (cliffs/crags, Phase 6), NOT a slope fudge. Content scale authoritative; presentation scales
+>   (review/camera/page) decoupled + display-only. Fast Python render-first loop replaced the slow JSON→Godot loop.
+> - **NEXT: Slice-3 Rust port** — plan written + reviewed (`…/plans/2026-06-01-slice3-rust-port-plan.md`), top
+>   de-risk = the live GPU flow-accumulation cost gate. Or further biome look-tuning / Phase-6 materials (where
+>   biome color-identity + up-close "towering" detail come from). Memory `worldgen10-biome-composition-layer`,
+>   `worldgen10-gpu-rust-first-principle`. STATUS.md top = live.
+>
+> **(history) ▶ 2026-06-01 — tunable TERRAIN-EDIT framework BUILT + OWNER-ACCEPTED (traversability is its first use).** Plain-language state:
 > - **Milestones 0–4 are DONE** (engine machinery: toolchain, CPU worldgen, GPU parity, render pipeline, Facts
 >   API). Phases 6–9 have NOT started — they're all gated on Phase 5 accepting a live height core.
 > - **Phase 5 is about the terrain CONTENT** (what the height *looks like*), proven offline in Python before any
