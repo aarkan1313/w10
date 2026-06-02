@@ -31,11 +31,21 @@ Required apron (computed as sum of chained kernel reaches along the deepest path
   - ``_lowland_mask``: blur σ=7.0 → reach 28 px
   - flow pre-blur σ=1.15 → reach 5; channel width blur σ≤4.0 → reach 16; chain = 28+5+16 = 49
   - floor blur σ≤5.6 → reach 23; input depth max(28, 49) = 49; chain = 49+23 = 72
-  - final blend blur σ=1.2 → reach 5; total = 72+5 = 77
-  → ``MOUNTAIN_APRON_PX = 80`` (>=77 reach budget; the dominant residual is the
-    flow-accumulation convergence error, 1.7e-10 at 80 — sub-float32-epsilon).
-    NOT inflated to 200 for literal 0.0: that doubles per-window compute for a
-    sub-epsilon difference (perf pillar).
+  - final blend blur σ=1.2 → reach 5; total = 72+5 = 77 (blur-reach budget)
+
+The blur-reach budget alone is ~77, BUT the dominant residual is the REAL flow-accumulation
+convergence error, which is SCALE-DEPENDENT: a border cell's drainage depends on upstream area
+that grows with world size, so no fixed apron is ever bit-exact for an arbitrarily large world.
+Measured (export_godot_mountain_seamsafe_chunks): worst adjacent-chunk seam delta over a 7x7 /
+175 km world was ~1e-4 normalized at apron 160 (≈0.17 m at base_height_scale 1700 — invisible);
+at apron 80 the same many-window world hit ~1.3e-2 (a VISIBLE ~22 m step). An earlier single-seam
+probe at apron 80 read 1.7e-10, which was misleadingly optimistic — it did not cross sensitive
+drainage. So:
+  → ``MOUNTAIN_APRON_PX = 160`` — holds the VISUALLY-SEAMLESS bar (seam << relief) across a
+    many-window world. Seam-safety here means "no visible/trippable seam", NOT bit-exact: global
+    flow-accumulation connected drainage cannot be bit-exact across arbitrary windows (a fundamental
+    limit, owner-accepted: "doesn't have to be exact if it's seamless and looks good"). Apron 160 is
+    the perf/quality balance (vs ~80 for a small world, or ever-larger for an ever-bigger one).
 """
 
 from __future__ import annotations
@@ -55,7 +65,7 @@ import seam_safe as ss
 # must supply when calling generate(apron_px=MOUNTAIN_APRON_PX).
 # See module docstring for the derivation.
 # ---------------------------------------------------------------------------
-MOUNTAIN_APRON_PX: int = 80
+MOUNTAIN_APRON_PX: int = 160
 
 # ---------------------------------------------------------------------------
 # Affine-remap constants (replace per-window zscore / norm01).

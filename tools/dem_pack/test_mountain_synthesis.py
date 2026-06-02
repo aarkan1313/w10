@@ -74,19 +74,23 @@ def test_mountain_generate_seam_exact():
         border coordinates. (Independent linspace/arange calls on different spans produce
         different float64 representations of the same world position.)
       - After generate(apron_px=APRON), height is cropped to the core; assert the shared
-        border column matches to within float32 epsilon (< 1e-7).
+        border column matches to within the VISUALLY-SEAMLESS bar (see below).
 
-    Tolerance note (why < 1e-7, not == 0.0):
-      The seam-safe path now carves valleys with REAL multiple-flow-direction (MFD)
-      accumulation, which is a GLOBAL operation (a cell's discharge depends on all
-      upstream cells).  On a finite apron the border is not bit-exact, but it CONVERGES
-      to bit-exact as the apron grows — the probe (probe_flow_seam_real.py) measured the
-      final-height border delta at 1.7e-10 (apron 80), 5.6e-17 (128), 0.0 (200).  1.7e-10
-      is far below float32 epsilon (~1.19e-7), so on the GPU (float32) the seam is
-      bit-identical at apron 80.  We assert < 1e-7 rather than inflate the apron to 200
-      for a literal 0.0 (that doubles per-window compute for a sub-epsilon difference).
-      The earlier local-DoG proxy WAS literally 0.0 but produced disconnected/soft
-      valleys; real flow accumulation gives connected drainage, which the owner requires.
+    Tolerance note (the bar is VISUALLY SEAMLESS, not bit-exact):
+      The seam-safe path carves valleys with REAL multiple-flow-direction (MFD) accumulation,
+      a GLOBAL operation (a cell's discharge depends on all upstream cells). This CANNOT be
+      made bit-exact across arbitrarily many windows: a border cell's drainage depends on
+      upstream area that grows with world size, so no fixed apron captures all of it. The
+      residual is SCALE-DEPENDENT — a single 2-window seam (like this test) converges very
+      small at apron 160, but a many-window 175 km world reaches ~1e-4 normalized (measured in
+      export_godot_mountain_seamsafe_chunks). The real bar (owner-accepted: "doesn't have to be
+      exact if it's seamless and looks good") is delta SMALL RELATIVE TO RELIEF: the field std
+      ~1 maps to ~1700 m at game scale, so a NORMALIZED delta < 1e-3 is < ~1.7 m at game scale —
+      invisible/untrippable on hundred-metre mountains. We assert < 1e-3 (visually seamless),
+      which also still catches REAL breakage (wrong feature_span, apron far too small, origin
+      bug → deltas 1e-2+). The earlier local-DoG proxy was literally 0.0 but gave disconnected/
+      soft valleys; real flow accumulation gives the connected drainage the owner requires, at
+      the cost of bit-exactness — an accepted trade.
     """
     N = 64
     S = 60_000.0
@@ -134,11 +138,15 @@ def test_mountain_generate_seam_exact():
     assert b_core.shape == (N, N), f"B core shape {b_core.shape} != ({N}, {N})"
 
     # The shared border: A's rightmost column vs B's leftmost column.
-    # Asserts < 1e-7 (float32 epsilon): global flow accumulation converges to bit-exact
-    # as the apron grows; at apron 80 the residual (~1.7e-10) is sub-float32-epsilon, so
-    # the GPU (float32) sees a bit-identical seam. See docstring for the convergence probe.
+    # Bar = VISUALLY SEAMLESS (< 1e-3 normalized ≈ < ~1.7 m at game scale): global flow
+    # accumulation cannot be bit-exact across windows (scale-dependent residual); the owner-
+    # accepted bar is "seamless + looks good", not bit-identical. < 1e-3 still catches real
+    # breakage (wrong feature_span / apron too small / origin bug). See docstring.
+    SEAM_BAR = 1e-3
     border_delta = float(np.max(np.abs(a_core[:, -1] - b_core[:, 0])))
-    print(f"Seam border delta (max |A[:,-1] - B[:,0]|) = {border_delta:.6e}")
-    assert border_delta < 1e-7, (
-        f"Seam NOT exact to float32 epsilon: max border delta = {border_delta:.6e} (>= 1e-7)"
+    print(f"Seam border delta (max |A[:,-1] - B[:,0]|) = {border_delta:.6e}  "
+          f"(~{border_delta * 1700.0:.3f} m at base_height_scale 1700)")
+    assert border_delta < SEAM_BAR, (
+        f"Seam NOT visually seamless: max border delta = {border_delta:.6e} (>= {SEAM_BAR:.0e}) "
+        f"= ~{border_delta * 1700.0:.1f} m at game scale — a visible seam (real breakage?)"
     )
