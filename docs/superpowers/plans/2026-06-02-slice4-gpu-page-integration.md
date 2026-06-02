@@ -808,6 +808,32 @@ GIT_TERMINAL_PROMPT=0 git push origin main
 
 > 4b mirrors the CPU recipe-port fan-out. Each biome reuses 4a's primitives + the apron pass pipeline; only the per-biome math + constants differ (ALL 10 share `APRON_PX = 160` like mountain — verified 2026-06-02). The 11 CPU recipes are `recipes_{volcanic,glacial,karst,grassland,desert,temperate,tundra,rainforest,coast,wetland}.rs` + mountain. Each is parity-gated against its own committed fixture, same shape as 4a.5 Step 3.
 
+> **▶ STRUCTURAL FINDING (2026-06-02, from reading grassland/desert/tundra/temperate recipes) — a biome port is
+> a FRAGMENT + a SCHEDULE, not just a fragment.** Every biome follows the SAME SKELETON (pointwise warp → 2-6
+> biome-specific noise fields → gaussian-blur sub-fields into masks → optional whole-field `_field()` sub-pipelines
+> like grassland's sandhills/escarpments or desert's dunes/yardangs → flow-channel pass(es) on a biome-specific
+> flow-source surface → weighted assemble → floor/final blend → crop). BUT the field DAG differs per biome:
+> grassland has macro/secondary/swells/pans/sandhills/escarpments; mountain has regional/ranges/massif/lowland;
+> tundra has macro/polygons/stripes/fringe/foothills; etc. So the PASS SET + the Rust DISPATCH SCHEDULE (which
+> field feeds which gaussian feeds which mask, what sigmas, how many flow passes) is BIOME-SHAPED. **Therefore each
+> biome port = (a) `biome_<name>.glsl` fragment implementing `biome_pass()` with that biome's field math + its
+> biome-private PASS_* codes, AND (b) a Rust `schedule_<name>()` dispatch function** (the per-biome pass sequence,
+> ~30-60 dispatch calls), both selected by the `biome` arg. The mountain schedule (currently inline in `run_inner`)
+> becomes `schedule_mountain()`; `generate_core_page` matches `biome` → schedule fn. The GENERIC passes (gaussian
+> separable, flow relax/discharge, crop, meshgrid, copy, acc_init) + the kernel/buffer infra are SHARED and reused
+> by every schedule. Pillars: adaptable (new biome = fragment + schedule fn, no engine surgery), quality (each
+> parity-gates in isolation), no-shortcut (a real per-biome schedule, NOT a fake one-size engine — Fork-B at the
+> recipe level). Biome-private PASS_* codes start at 32 (per 4b.0's interface note) so the shared 0-24 stay stable.
+
+> **▶ BUFFER-SET CAVEAT for schedules:** mountain uses a fixed set of intermediate field buffers (regional, ranges,
+> massif, lowland, base, ridge_detail, near_detail, range_envelope, primary_mask, tributary_mask, high_mask,
+> valley_mask, floor_mask, height, flow_pre, acc_a, acc_b, gauss_in/mid/out, wx, wz, core_out). Biomes with MORE
+> sub-fields (grassland's 6+, desert's dunes/yardangs/mesas) may need more scratch buffers. Two clean options: (a) a
+> generic POOL of N reusable f32 field buffers the schedule binds by index (biome-agnostic Rust, fragment names them
+> via copy_sel-style codes), or (b) per-biome buffer sets. Decide at the first easy port; (a) is more adaptable. The
+> whole-field `_field()` sub-pipelines (sandhills/dunes/etc.) are themselves warp+rmf+blur → they become sub-schedules
+> reusing the same generic passes into scratch buffers.
+
 > **▶ ARCHITECTURE DECISION (2026-06-02, pillars: adaptable + quality) — CONCAT-SELECTION, not a biome_id switch.**
 > The proven mountain shader (`biome_page_4a.glsl`) mixes (a) GENERIC pass-machine infra (the PASS_* state machine,
 > gaussian/flow/crop passes, the push constant, the leaf helpers cell_idx/affine_remap/ss/clip01/rotated0/warp/rmf)
