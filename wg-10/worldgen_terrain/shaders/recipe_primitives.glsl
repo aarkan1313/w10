@@ -20,6 +20,18 @@
 // Only the FINAL `& 0x7fffffff` collapses to 32 bits, but the `>>13` happens on the FULL
 // signed 64-bit intermediate (the ix*A+iz*B+seed*C sum can exceed 32 bits and its high
 // bits feed the low bits after the shift), so the full low-64 wrapping math is required.
+//
+// GAUSSIAN (array_ops.rs::gaussian_filter_nearest) IS NOT HERE. It is the one operator the
+// recipes need that is NOT a per-point function: it is a SEPARABLE whole-field blur (blur
+// down axis 0, then across axis 1; scipy mode='nearest' = clamp-to-edge; truncate=4.0;
+// radius = int(truncate*sigma + 0.5); kernel normalized to sum 1). On the GPU it is realized
+// as multi-pass dispatches over the apron grid INSIDE the page pipeline (Task 4a.5's
+// biome_page shader), with the 1-D kernel built CPU-side per distinct sigma and uploaded
+// (the kernel depends only on sigma, not on data). The mountain recipe uses sigmas
+// {1.15, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, floor_smooth_px}. The CPU kernel
+// build MUST match array_ops.rs::gaussian_kernel1d exactly (same radius / truncate / phi /
+// normalization) or the Tier-2 height parity drifts. Flow accumulation is likewise NOT here
+// (it is the iterative relaxation in flow_accum_spike.glsl, reused by the page pipeline).
 
 // ----------------------------------------------------------------------------
 // int64 emulation as uvec2(x = high 32 bits, y = low 32 bits)

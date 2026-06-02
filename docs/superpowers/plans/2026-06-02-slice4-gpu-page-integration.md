@@ -616,23 +616,25 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 
 The gaussian is a SEPARABLE whole-field operator (`array_ops.rs:41-67`: blur axis 0 then axis 1, scipy `mode='nearest'`, `truncate=4.0`, radius `int(truncate*sigma+0.5)`). On the GPU this is a multi-pass operation over the apron grid, NOT a per-point function. The mountain recipe uses gaussians at sigma 1.15/1.2/1.8/2.0/5.0/7.0 (see `recipes.rs`). DECISION for 4a: implement the gaussian as GPU passes inside the page pipeline (Task 4a.5), with the kernel built CPU-side and uploaded (the kernel only depends on sigma, not data). This task just verifies the fixture has what the parity gate needs.
 
-- [ ] **Step 1: Verify the mountain fixture contents**
+- [ ] **Step 1: Verify the mountain fixture contents (DONE 2026-06-02 — schema confirmed below)**
 
-Read `tools/dem_pack/fixtures/recipe_mountain_fixture.json`. Confirm it stores: `spacing`, `ox`, `oz`, `apron_px`, `seed`, `feature_span_m`, the padded `rows`/`cols`, and the CORE-cropped `height` array (the f64 oracle output). Per memory `worldgen10-biome-composition-layer` the fixtures are compact (`{spacing,ox,oz,apron_px}` + rebuild meshgrid analytically; core ~24×24). If any of these are missing, extend the exporter.
+VERIFIED SCHEMA (no exporter change needed). `recipe_mountain_fixture.json` top-level: `{generator_version:"recipe_fixtures/v1", source, note, records:[...]}`. Each entry in `records` (there are 2 cases, seed 0 + another) has EXACTLY these keys:
+- `recipe` = `"mountain_seamsafe"`, `style_key` = `"alpine_branching"` (STYLES[0])
+- `seed` (int), `feature_span_m` (float, e.g. 90000.0), `apron_px` (int, 160)
+- `core_rows`, `core_cols` (24 each — the small parity core), `padded_rows`, `padded_cols` (344 = 24 + 2*160)
+- `grid` = `{spacing, ox, oz}` (floats) — the meshgrid is rebuilt analytically: `xs[c]=(c-apron_px)*spacing+ox`, `zs[r]=(r-apron_px)*spacing+oz`, then numpy meshgrid (note field documents this)
+- `height` = flat row-major f64 list of length `core_rows*core_cols` (576) — the CORE-cropped oracle output (NORMALIZED recipe units, pre-relief-multiply)
 
-Run: `python -c "import json; d=json.load(open('tools/dem_pack/fixtures/recipe_mountain_fixture.json')); print(sorted(d.keys()))"`
-Expected: keys include spacing/ox/oz/apron_px/seed/feature_span_m/rows/cols and the height array. If not, go to Step 2; else skip to Step 3.
+IMPORTANT dimension note for 4a.5: the FIXTURE uses a tiny 24-core / 344-padded grid (fast exact parity). The COST measurement spike (4a.1/4a.2) uses the real 256-core / 576-padded production page. The 4a.5 GPU parity gate must rebuild the grid at the FIXTURE's dims (read `padded_rows`/`padded_cols`/`apron_px`/`grid` per record), NOT the production 576.
 
-- [ ] **Step 2: (If needed) extend the mountain fixture exporter**
+Run: `python -c "import json; d=json.load(open('tools/dem_pack/fixtures/recipe_mountain_fixture.json')); r=d['records'][0]; print(sorted(r.keys()))"`
+Expected: `['apron_px','core_cols','core_rows','feature_span_m','grid','height','padded_cols','padded_rows','recipe','seed','style_key']`. (Confirmed present — no Step 2 needed.)
 
-Edit `tools/dem_pack/export_recipe_mountain_fixture.py` to also store the apron-meshgrid params + padded dims so the GPU can rebuild the exact grid. Re-run it; verify the Rust `recipes_tests.rs` mountain parity still passes (the stored height must be byte-identical to before — only metadata is added).
+- [ ] **Step 2: (NOT NEEDED — fixture already complete)** The verified schema above stores every apron-meshgrid param + padded dims + core height the GPU parity gate needs. No exporter change; the Rust `recipes_tests.rs` parity stays untouched.
 
-Run: `python tools/dem_pack/export_recipe_mountain_fixture.py && env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain recipes_tests 2>&1 | tail -5`
-Expected: exporter writes; `recipes_tests` PASS (parity unaffected).
+- [ ] **Step 3: Document the gaussian-pass approach in the shader header (DONE 2026-06-02)**
 
-- [ ] **Step 3: Document the gaussian-pass approach in the shader header**
-
-Add a comment block to `recipe_primitives.glsl` documenting that gaussian-nearest is realized as separable GPU passes (axis0 then axis1, clamp-to-edge, CPU-built kernel uploaded by sigma) inside the page pipeline — NOT a per-point function — and that the kernel construction must match `array_ops.rs::gaussian_kernel1d` (radius `int(truncate*sigma+0.5)`, `truncate=4.0`, normalized). No code change to primitives beyond the comment; the passes live in the page shader (4a.5).
+Done in `recipe_primitives.glsl` header: gaussian-nearest is realized as separable GPU passes (axis0 then axis1, clamp-to-edge, CPU-built kernel uploaded per sigma) inside the page pipeline — NOT a per-point function — and the CPU kernel build must match `array_ops.rs::gaussian_kernel1d` (radius `int(truncate*sigma+0.5)`, `truncate=4.0`, normalized). Mountain sigmas documented: {1.15, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, floor_smooth_px}.
 
 - [ ] **Step 4: Commit**
 
@@ -685,17 +687,24 @@ Expose a `#[func] generate_core_page(...) -> PackedFloat64Array` test entry that
 
 - [ ] **Step 3: Write the two-tier parity gate (GPU page vs fixture)**
 
-Create `wg-10/worldgen_terrain/tests/biome_page_parity_check.gd`. Copy `gpu_parity_check.gd` two-tier shape but compare against the FIXTURE (the owner-approved oracle):
+Create `wg-10/worldgen_terrain/tests/biome_page_parity_check.gd`. Copy `gpu_parity_check.gd` two-tier shape but compare against the FIXTURE (the owner-approved oracle). NOTE the REAL fixture schema verified in 4a.4: top-level `{records:[...]}`, each record has `grid={spacing,ox,oz}`, `padded_rows`, `padded_cols`, `core_rows`, `core_cols`, `apron_px`, `seed`, `feature_span_m`, `style_key`, and a flat `height` list of `core_rows*core_cols` f64 in NORMALIZED recipe units (pre-relief, values ~[-0.5,0.5]). The gate loops over ALL records:
 
 ```gdscript
 extends SceneTree
 
 # Slice-4a two-tier parity: GPU mountain page vs the committed f64 fixture (the oracle the
-# CPU port is proven against). Tier-1: structural (apron dims/seed/span echoed exactly).
-# Tier-2: composed core height within metres tolerance relative to relief. WINDOWED only.
+# CPU port is proven against). Tier-1 (structural) = the GPU rebuilds the grid from the
+# record's exact apron/grid params (a wrong dim/seed -> size mismatch or gross delta).
+# Tier-2 = core height within a NORMALIZED-unit epsilon (the fixture is pre-relief units).
+# WINDOWED only (local RD null headless -> skip rc 2). The flow contribution is the
+# approximated part (spec 4 Tier-2); widen NORM_EPS only with a recorded justification.
 
-const FIXTURE := "res://worldgen_terrain/fixtures/recipe_mountain_fixture.json"  # symlink/copy of tools fixture
-const ABS_EPS_M := 1.0e-2     # M2 budget (gpu_parity_check.gd). Widen only with recorded justification.
+const FIXTURE := "res://worldgen_terrain/fixtures/recipe_mountain_fixture.json"
+# Normalized recipe units (NOT metres): height ~[-0.5,0.5]. The M2 metres budget 1e-2 over
+# ~1000m relief maps to ~1e-5 normalized, but the flow-relaxation APPROXIMATION (spec 4) is
+# coarser than the exact CPU sweep, so start at 1e-2 normalized and tighten/justify after the
+# first real run measures the actual flow-driven delta. Record the achieved maxd in the spec.
+const NORM_EPS := 1.0e-2
 
 func _init() -> void:
 	quit(_run())
@@ -710,33 +719,45 @@ func _run() -> int:
 	var f := FileAccess.open(FIXTURE, FileAccess.READ)
 	if f == null: push_error("[wg10-biome-parity] missing fixture"); return 1
 	var fx: Dictionary = JSON.parse_string(f.get_as_text())
-	var rows := int(fx["rows"]); var cols := int(fx["cols"]); var apron := int(fx["apron_px"])
-	var core_rows := rows - 2*apron; var core_cols := cols - 2*apron
-	var expected: Array = fx["height"]   # core-cropped f64
+	var records: Array = fx.get("records", [])
+	if records.is_empty(): push_error("[wg10-biome-parity] no records in fixture"); return 1
 
 	var gpu: Object = ClassDB.instantiate("Wg10BiomePageCompute")
-	# generate_core_page rebuilds the apron meshgrid from these params (Tier-1: exact echo).
-	var got: PackedFloat64Array = gpu.call("generate_core_page",
-		float(fx["spacing"]), float(fx["ox"]), float(fx["oz"]),
-		rows, cols, apron, int(fx["seed"]), float(fx["feature_span_m"]))
-	if got.size() != core_rows * core_cols:
-		push_error("[wg10-biome-parity] size mismatch got=%d exp=%d" % [got.size(), core_rows*core_cols]); return 1
+	gpu.call("load_shaders",
+		ProjectSettings.globalize_path("res://worldgen_terrain/shaders/recipe_primitives.glsl"),
+		ProjectSettings.globalize_path("res://worldgen_terrain/shaders/biome_page_4a.glsl"))
 
-	var max_d := 0.0; var fails := 0
-	for i in range(got.size()):
-		var d: float = absf(got[i] - float(expected[i]))
-		max_d = maxf(max_d, d)
-		if d > ABS_EPS_M:
-			fails += 1
-			if fails <= 5: push_error("[wg10-biome-parity] core[%d] gpu=%f exp=%f d=%g" % [i, got[i], expected[i], d])
-	if fails > 0:
-		print("[wg10-biome-parity] status=fail core=%d fails=%d maxd=%g" % [got.size(), fails, max_d]); return 1
-	if max_d != max_d:  # NaN guard: a NaN delta means a degenerate page -> FAIL, never silent-pass
-		push_error("[wg10-biome-parity] NaN in delta (degenerate page)"); return 1
-	print("[wg10-biome-parity] status=pass biome=mountain core=%d maxd=%g eps=%g" % [got.size(), max_d, ABS_EPS_M]); return 0
+	var overall_max := 0.0
+	var rec_i := 0
+	for rec in records:
+		var grid: Dictionary = rec["grid"]
+		var prows := int(rec["padded_rows"]); var pcols := int(rec["padded_cols"])
+		var apron := int(rec["apron_px"])
+		var core_rows := int(rec["core_rows"]); var core_cols := int(rec["core_cols"])
+		var expected: Array = rec["height"]
+		# generate_core_page rebuilds the apron meshgrid from these PADDED dims (Tier-1 echo).
+		var got: PackedFloat64Array = gpu.call("generate_core_page",
+			float(grid["spacing"]), float(grid["ox"]), float(grid["oz"]),
+			prows, pcols, apron, int(rec["seed"]), float(rec["feature_span_m"]))
+		if got.size() != core_rows * core_cols:
+			push_error("[wg10-biome-parity] rec=%d size got=%d exp=%d" % [rec_i, got.size(), core_rows*core_cols]); return 1
+		var max_d := 0.0; var fails := 0
+		for i in range(got.size()):
+			var d: float = absf(got[i] - float(expected[i]))
+			max_d = maxf(max_d, d)
+			if d > NORM_EPS:
+				fails += 1
+				if fails <= 5: push_error("[wg10-biome-parity] rec=%d core[%d] gpu=%f exp=%f d=%g" % [rec_i, i, got[i], expected[i], d])
+		if max_d != max_d:
+			push_error("[wg10-biome-parity] rec=%d NaN delta (degenerate page)" % rec_i); return 1
+		if fails > 0:
+			print("[wg10-biome-parity] status=fail rec=%d core=%d fails=%d maxd=%g" % [rec_i, got.size(), fails, max_d]); return 1
+		overall_max = maxf(overall_max, max_d)
+		rec_i += 1
+	print("[wg10-biome-parity] status=pass biome=mountain records=%d overall_maxd=%g eps=%g" % [records.size(), overall_max, NORM_EPS]); return 0
 ```
 
-Note: the fixture stores NORMALIZED height (the recipe output before the relief multiply). The comparison is in those same normalized units — `ABS_EPS_M` here is in the recipe's output units; document that the relief-relative metres tolerance (spec §4 Tier-2) maps to this normalized epsilon as `eps_norm = ABS_EPS_M / relief_m`. If the recipe output is already metres, compare directly. Resolve which by reading the fixture units in Task 4a.4 and set the epsilon accordingly with a comment.
+NOTE: `generate_core_page` signature is `(spacing, ox, oz, padded_rows, padded_cols, apron_px, seed, feature_span_m) -> PackedFloat64Array` and the Rust side uses `style = ALPINE_BRANCHING` (matches every record's `style_key="alpine_branching"`). The `load_shaders(primitives_path, page_path)` two-arg shape mirrors `Wg10PrimitiveProbe::load_shader` (the page shader concatenates `recipe_primitives.glsl` + `biome_page_4a.glsl` before compile, same as the probe). Units are NORMALIZED (pre-relief) — `NORM_EPS` is in those units; the spec §4 metres-relative tolerance is `NORM_EPS * relief_m`. After the first real run, record the achieved `overall_maxd` in the spec and tighten `NORM_EPS` toward it (the flow-approximation delta is the floor).
 
 Add `biome_page_parity_check.gd` to the `biome_page` suite in `tools/gate.py`.
 
