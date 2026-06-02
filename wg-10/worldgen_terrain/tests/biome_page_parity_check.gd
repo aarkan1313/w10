@@ -9,7 +9,10 @@ extends SceneTree
 
 const FIXTURE := "res://worldgen_terrain/fixtures/recipe_mountain_fixture.json"
 const PRIM_GLSL := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
-const PAGE_GLSL := "res://worldgen_terrain/shaders/biome_page_4a.glsl"
+# Slice-4b concat-selection: the GENERIC machine + the selected per-biome FRAGMENT. The machine
+# is loaded once (with primitives) via load_shaders; the fragment is passed per generate_core_page.
+const MACHINE_GLSL := "res://worldgen_terrain/shaders/biome_page.glsl"
+const MOUNTAIN_GLSL := "res://worldgen_terrain/shaders/biome_mountain.glsl"
 # Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12
 # (2026-06-02): the GPU mountain page matches the f64 fixture to overall_maxd = 1.89e-6 over
 # both fixture records — the 128-iter flow relaxation converged essentially exactly to the CPU
@@ -44,7 +47,7 @@ func _run() -> int:
 	var gpu: Object = ClassDB.instantiate("Wg10BiomePageCompute")
 	var err: String = str(gpu.call("load_shaders",
 		ProjectSettings.globalize_path(PRIM_GLSL),
-		ProjectSettings.globalize_path(PAGE_GLSL)))
+		ProjectSettings.globalize_path(MACHINE_GLSL)))
 	if err != "":
 		push_error("[wg10-biome-parity] shader load failed: %s" % err)
 		return 1
@@ -59,10 +62,12 @@ func _run() -> int:
 		var core_rows := int(rec["core_rows"])
 		var core_cols := int(rec["core_cols"])
 		var expected: Array = rec["height"]
-		# generate_core_page rebuilds the apron meshgrid from these PADDED dims (Tier-1 echo).
+		# generate_core_page rebuilds the apron meshgrid from these PADDED dims (Tier-1 echo)
+		# and concatenates the selected biome FRAGMENT (mountain) onto the machine per call.
 		var got: PackedFloat64Array = gpu.call("generate_core_page",
 			float(grid["spacing"]), float(grid["ox"]), float(grid["oz"]),
-			prows, pcols, apron, int(rec["seed"]), float(rec["feature_span_m"]))
+			prows, pcols, apron, int(rec["seed"]), float(rec["feature_span_m"]),
+			ProjectSettings.globalize_path(MOUNTAIN_GLSL))
 		if got.size() != core_rows * core_cols:
 			push_error("[wg10-biome-parity] rec=%d size got=%d exp=%d" % [rec_i, got.size(), core_rows * core_cols])
 			return 1

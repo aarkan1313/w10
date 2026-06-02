@@ -1,9 +1,13 @@
 //! WorldGen10 Slice-4a: GPU apron PAGE pipeline for the MOUNTAIN seam-safe recipe.
 //!
 //! `Wg10BiomePageCompute` mirrors `recipes.rs::mountain::generate_seamsafe` (the f64 parity
-//! ORACLE) as a MULTI-DISPATCH GPU pipeline: it concatenates `recipe_primitives.glsl` (the
-//! proven f32 noise/warp leaves) + `biome_page_4a.glsl` (the recipe pass chain), compiles
-//! one compute shader, and dispatches it once per pass with a different `pass` push-constant.
+//! ORACLE) as a MULTI-DISPATCH GPU pipeline. Slice-4b concat-selection: it concatenates three
+//! GLSL parts -- `recipe_primitives.glsl` (proven f32 noise/warp leaves) + `biome_page.glsl`
+//! (the GENERIC pass machine: bindings, leaf helpers, generic passes + main()) + the selected
+//! per-biome FRAGMENT `biome_<name>.glsl` (the biome-specific `biome_pass()` body) -- compiles
+//! one compute shader per biome, and dispatches it once per pass with a different `pass`
+//! push-constant. The primitives + machine are the STABLE two parts (loaded once via
+//! `load_shaders`); the fragment is selected + concatenated per `generate_core_page` call.
 //!
 //! The whole-field operators become their own passes:
 //!   * gaussian = separable (COPY src -> gauss_in, AXIS0 down rows, AXIS1 across cols),
@@ -25,7 +29,7 @@ use godot::classes::{
 };
 
 // ---------------------------------------------------------------------------
-// pass selector codes -- MUST match biome_page_4a.glsl PASS_* consts.
+// pass selector codes -- MUST match biome_page.glsl PASS_* consts.
 // ---------------------------------------------------------------------------
 const PASS_MESHGRID: i32 = 0;
 const PASS_POINTWISE: i32 = 1;
@@ -53,7 +57,7 @@ const PASS_FLOW_PRE_FROM_GAUSS: i32 = 22;
 const PASS_MASSIF_WRITEBACK: i32 = 23;
 const PASS_ACC_INIT: i32 = 24;
 
-// copy_sel codes -- MUST match biome_page_4a.glsl CP_* consts.
+// copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
 const CP_VALLEY: i32 = 2;
@@ -132,7 +136,7 @@ fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
 }
 
 /// Build the 96-byte push constant (std430): 12 i32 (48B) then 12 f32 (48B).
-/// Layout MUST match biome_page_4a.glsl Params.
+/// Layout MUST match biome_page.glsl Params.
 #[allow(clippy::too_many_arguments)]
 fn build_push(
     pass: i32,
@@ -184,35 +188,38 @@ fn mountain_sigmas() -> Vec<f64> {
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
     primitives_src: Option<String>,
-    page_src: Option<String>,
+    /// The GENERIC machine (biome_page.glsl): bindings + leaf helpers + generic passes + main().
+    /// One of the two STABLE parts (the other being primitives); loaded once via load_shaders.
+    machine_src: Option<String>,
     base: Base<RefCounted>,
 }
 
 #[godot_api]
 impl IRefCounted for Wg10BiomePageCompute {
     fn init(base: Base<RefCounted>) -> Self {
-        Self { primitives_src: None, page_src: None, base }
+        Self { primitives_src: None, machine_src: None, base }
     }
 }
 
 #[godot_api]
 impl Wg10BiomePageCompute {
-    /// Load BOTH GLSL files (primitives helpers + the page pass chain) from OS paths and keep
-    /// them; they are concatenated (primitives first) before compile (Godot GLSL has no
-    /// #include). Returns "" on success, an error string otherwise. Mirrors
-    /// `Wg10PrimitiveProbe::load_shader`.
+    /// Load the two STABLE GLSL parts (primitives helpers + the GENERIC machine) from OS paths
+    /// and keep them. The per-biome FRAGMENT is loaded separately, per call, by
+    /// `generate_core_page` (it selects which biome to bake). At compile time all three are
+    /// concatenated as primitives + machine + fragment (Godot GLSL has no #include). Returns ""
+    /// on success, an error string otherwise. Mirrors `Wg10PrimitiveProbe::load_shader`.
     #[func]
-    pub fn load_shaders(&mut self, primitives_path: GString, page_path: GString) -> GString {
+    pub fn load_shaders(&mut self, primitives_path: GString, machine_path: GString) -> GString {
         let prim = match std::fs::read_to_string(primitives_path.to_string()) {
             Ok(s) => s,
             Err(e) => return GString::from(format!("primitives glsl: {e}").as_str()),
         };
-        let page = match std::fs::read_to_string(page_path.to_string()) {
+        let machine = match std::fs::read_to_string(machine_path.to_string()) {
             Ok(s) => s,
-            Err(e) => return GString::from(format!("page glsl: {e}").as_str()),
+            Err(e) => return GString::from(format!("machine glsl: {e}").as_str()),
         };
         self.primitives_src = Some(prim);
-        self.page_src = Some(page);
+        self.machine_src = Some(machine);
         GString::new()
     }
 
@@ -233,6 +240,7 @@ impl Wg10BiomePageCompute {
         apron_px: i64,
         seed: i64,
         feature_span_m: f64,
+        biome_fragment_path: GString,
     ) -> PackedFloat64Array {
         let rows = padded_rows as usize;
         let cols = padded_cols as usize;
@@ -245,8 +253,17 @@ impl Wg10BiomePageCompute {
             godot_error!("Wg10BiomePageCompute::generate_core_page: seed {seed} outside i32 range (GPU hash is 32-bit-seed); CPU oracle is i64 -> parity impossible. Use a seed in i32 range.");
             return PackedFloat64Array::new();
         }
+        // Load the selected per-biome FRAGMENT (the biome_pass() body) for this call.
+        let fragment = match std::fs::read_to_string(biome_fragment_path.to_string()) {
+            Ok(s) => s,
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::generate_core_page: biome fragment glsl: {e}");
+                return PackedFloat64Array::new();
+            }
+        };
         match self.run_inner(
             spacing as f32, ox as f32, oz as f32, rows, cols, apron, seed as i32, feature_span_m as f32,
+            &fragment,
         ) {
             Ok(core) => {
                 let mut out = PackedFloat64Array::new();
@@ -276,12 +293,13 @@ impl Wg10BiomePageCompute {
         apron: usize,
         seed: i32,
         feature_span_m: f32,
+        biome_fragment: &str,
     ) -> Result<Vec<f32>, String> {
         if rows <= 2 * apron || cols <= 2 * apron {
             return Err(format!("apron {apron} too large for padded {rows}x{cols}"));
         }
         let prim = self.primitives_src.as_deref().ok_or("no GLSL source loaded")?;
-        let page = self.page_src.as_deref().ok_or("no GLSL source loaded")?;
+        let machine = self.machine_src.as_deref().ok_or("no GLSL source loaded")?;
         let n = rows * cols;
         let core_rows = rows - 2 * apron;
         let core_cols = cols - 2 * apron;
@@ -293,9 +311,13 @@ impl Wg10BiomePageCompute {
                 "create_local_rendering_device returned null (headless / no device)".to_string()
             })?;
 
-        // --- compile: concat primitives + page, strip #[...] lines AND hoist #version to line 1
-        // (the page fragment carries #version but is concatenated AFTER the helpers fragment) ---
-        let glsl_stripped = crate::primitive_probe::concat_glsl_hoist_version(prim, page);
+        // --- compile: concat primitives + machine + biome fragment, strip #[...] lines AND hoist
+        // #version to line 1. The machine (NOT the primitives helpers, NOT the fragment) carries
+        // the single #version; concat_glsl_hoist_version scans the WHOLE joined text and pulls the
+        // first #version to line 1, so passing (primitives, machine + "\n" + fragment) keeps the
+        // machine's #version as the first non-helper line and appends the fragment last. ---
+        let machine_plus_fragment = format!("{machine}\n{biome_fragment}");
+        let glsl_stripped = crate::primitive_probe::concat_glsl_hoist_version(prim, &machine_plus_fragment);
         let mut src = RdShaderSource::new_gd();
         src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
         let spirv = match rd.shader_compile_spirv_from_source(&src) {
