@@ -34,6 +34,12 @@ CHECKS = {
     "gpu_flow": [
         "worldgen_terrain/tests/flow_spike_check.gd",
     ],
+    # Slice-4a per-page cost MEASUREMENT gate (windowed). Decides spec 3.1 pipeline
+    # (per-page-live vs coarse-drainage-fact). Measurement gate: succeeds at producing a
+    # non-degenerate number; both pipeline outcomes are valid (device-dependent perf).
+    "page_measure": [
+        "worldgen_terrain/tests/page_measure_check.gd",
+    ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
@@ -120,7 +126,7 @@ def main() -> int:
         return run_pytest_suite(fast=False)
     if args.suite == PYTEST_FAST_SUITE:
         return run_pytest_suite(fast=True)
-    headless = args.suite not in ("gpu", "m3", "gpu_flow")   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0
