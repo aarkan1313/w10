@@ -36,6 +36,7 @@ mod biome_compose;
 pub(crate) mod flow_spike;
 mod page_measure;
 mod primitive_probe;
+mod biome_page_compute;
 
 #[cfg(test)]
 mod hash_tests;

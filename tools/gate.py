@@ -47,6 +47,10 @@ CHECKS = {
     # PARITY gate (device-independent), but RenderingDevice compute is windowed-only here.
     "biome_page": [
         "worldgen_terrain/tests/primitive_parity_check.gd",
+        # Task 4a.5 two-tier parity: the full GLSL mountain apron PAGE pipeline (noise/warp +
+        # gaussian + flow relaxation + crop) vs the committed f64 fixture, per record. WINDOWED
+        # (RenderingDevice compute). Tier-2 height within a normalized-unit epsilon.
+        "worldgen_terrain/tests/biome_page_parity_check.gd",
     ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
