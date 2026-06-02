@@ -5,6 +5,21 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ CURRENT (2026-06-01, late) — BIOME-COMPOSITION LAYER (Fork B) + SCALE CONTRACT done; Slice-3 unblocked.**
+> The "shouldn't be bound to kernels" insight → a full biome-composition layer: `biome_compose` (compose_biomes
+> + height_favored blend), `biome_registry` (name→recipe), `seam_safe` (shared apron/affine helpers). **All 11
+> biomes made seam-safe** (apron_px path + affine_remap + nearest blurs + REAL MFD flow-accumulation connected
+> drainage + crop; seam <1e-3 visually-seamless; legacy path byte-identical). **Full suite 238 passed.** Probes
+> killed "biomes = one v2 engine" (Fork A dead) and proved cross-recipe blend is tractable. **Scale contract
+> resolved** (spec `…/2026-06-01-worldgen-scale-contract-design.md`): on-foot real-metre anchor (mountain
+> ~3.5km/1000m slope~0.29 … wetland ~9km/110m; ~30km regions); the "not tall enough" struggle was an
+> overview-vs-on-foot ILLUSION — real mountains are broad swells at true scale (correct); "towering" is a future
+> detail layer (cliffs/crags, Phase 6), not a slope fudge; content scale authoritative, presentation scales
+> decoupled. Fast Python render-first loop replaced the slow JSON→Godot loop. Commits af921c7…44b88c1.
+> **Slice-3 Rust port plan written + reviewed** (`…/plans/2026-06-01-slice3-rust-port-plan.md`, gated on this
+> offline stack; the GPU-flow-accumulation cost gate is its top de-risk). Memory `worldgen10-biome-composition-layer`,
+> `worldgen10-gpu-rust-first-principle`. **NEXT: Slice-3 Rust port** (or further biome look-tuning/materials if owner wants).
+
 > **▶ BASE STACK ACCEPTED — `v2` (2026-06-01, owner flew A|B|v2 + accepted v2).** The roadmap's Slice-3 blocker
 > (accept a BASE height stack to port) is RESOLVED. Owner flew `rough_world_abv_review.tscn` (keys 1/2/3) and
 > accepted **v2** ("it looks good") — the owner-eye acceptance the gate can't give (DESIGN §7.3). This unblocks
