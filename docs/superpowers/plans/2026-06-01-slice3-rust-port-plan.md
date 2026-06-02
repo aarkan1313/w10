@@ -241,15 +241,15 @@ Treat seams as a visual and gameplay contract:
 
 ### Task 1: Freeze the Accepted Offline Contract
 
-- [ ] Record the owner-accepted offline commit/fixture version.
-- [ ] List recipes included in the first runtime port.
-- [ ] Record `BlendConfig` defaults and allowed fallback modes.
-- [ ] Record whether drainage/flow facts are required for acceptance.
-- [ ] Record all units: normalized recipe height, metres scale, feature span,
-  relief scale, and biome-weight conventions.
+**FROZEN (2026-06-01, owner decisions):**
+- **Offline version:** seam-safe biome stack at commit `c9f79bf` (all 11 biomes seam-safe; full suite 238 passed). Modules: `biome_compose.py`, `biome_registry.py`, `seam_safe.py`, the 11 `*_synthesis.py` seam-safe paths.
+- **Recipes in the port:** ALL 11 — mountain, volcanic, glacial, karst, temperate, rainforest, grassland, tundra, desert, coast, wetland (owner: "all 11").
+- **BlendConfig:** mode `height_favored` primary (favor_strength 2.0, relief_sigma_px 6.0, relief_confidence_floor 1e-3), `field` fallback. N=2 exact; N>2 folds via field blend (order-independent).
+- **Drainage/flow:** REQUIRED (the seam-safe recipes use real MFD flow-accumulation for connected drainage — the accepted look). It is ITERATIVE and is the #1 GPU-cost risk → **the GPU-flow feasibility gate runs EARLY** (owner: "pillars, GPU"): port shared primitives + compose + stateless parts first, spike live-GPU-flow BEFORE committing drainage into the 11 recipes' runtime formula; if it fails, adopt a fallback (capped-reach / baked drainage facts) before porting drainage. See the "Early De-Risk Gate" section.
+- **Units / scale:** content scale is REAL METRES per the scale contract (`…/2026-06-01-worldgen-scale-contract-design.md`): per-biome `feature_span_m` + `relief_m` (mountain 3.5km/1000m slope~0.29 … wetland 9km/110m); biome weights are a smooth `f(world pos)` partition-of-unity from the grammar; seam bar = visually-seamless (<1e-3 normalized), NOT bit-exact (global flow can't be).
+- **KNOWN-OPEN (not a port blocker):** the DISPLAY amplitude / "reads tall at review scale" look is NOT finalized (real-metre relief reads tiny over a big review world; the liked-earlier versions were exaggerated). Per-biome relief RATIOS are good; absolute display scale is a per-game knob to be judged IN-ENGINE after the port (live, no bake). The port carries the contract numbers + ratios; final scale look is post-port.
 
-Exit: a small contract note in the plan or status docs says exactly what Rust is
-porting. No code starts before this is known.
+Exit: this frozen contract is the authority for what Rust ports. Code may start.
 
 ### Task 2: Build Python Fixture Export
 
