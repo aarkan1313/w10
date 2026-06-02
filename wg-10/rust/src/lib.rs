@@ -22,6 +22,16 @@ mod facts_api;
 mod recipe_noise;
 mod array_ops;
 mod recipes;
+mod recipes_volcanic;
+mod recipes_glacial;
+mod recipes_karst;
+mod recipes_grassland;
+mod recipes_desert;
+mod recipes_temperate;
+mod recipes_tundra;
+mod recipes_rainforest;
+mod recipes_coast;
+mod recipes_wetland;
 mod flow_spike;
 
 #[cfg(test)]
@@ -52,6 +62,26 @@ mod recipe_noise_tests;
 mod array_ops_tests;
 #[cfg(test)]
 mod recipes_tests;
+#[cfg(test)]
+mod recipes_volcanic_tests;
+#[cfg(test)]
+mod recipes_glacial_tests;
+#[cfg(test)]
+mod recipes_karst_tests;
+#[cfg(test)]
+mod recipes_grassland_tests;
+#[cfg(test)]
+mod recipes_desert_tests;
+#[cfg(test)]
+mod recipes_temperate_tests;
+#[cfg(test)]
+mod recipes_tundra_tests;
+#[cfg(test)]
+mod recipes_rainforest_tests;
+#[cfg(test)]
+mod recipes_coast_tests;
+#[cfg(test)]
+mod recipes_wetland_tests;
 
 struct Wg10Terrain;
 
