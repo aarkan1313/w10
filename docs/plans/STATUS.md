@@ -5,6 +5,18 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ ALL 11 BIOME RECIPES PORTED TO RUST (2026-06-02) — Slice-3 CPU port bulk DONE.** Every seam-safe biome
+> recipe (mountain/volcanic/glacial/karst/grassland/desert/temperate/tundra/rainforest/coast/wetland) ported to
+> Rust as an apron-grid pipeline on `recipe_noise` + `array_ops`, each **parity machine-exact vs its Python
+> original** (1e-12 to 1e-16; volcanic's 1e-12 = porting numpy PCG64+ziggurat for vent placement). Fixture-gated
+> per biome (compact fixtures: store {spacing,ox,oz,apron_px}, rebuild meshgrid analytically). Shared
+> `recipes::helpers` (affine_remap/smoothstep/rotated/flow_channels_seam_safe/apron_meshgrid/noise wrappers) reused;
+> per-biome divergences caught + handled (glacial sigma=1.85, karst weight_gain=1.62, grassland freq_mul=1.70,
+> rainforest steps=4 + dual-mask drainage, temperate two-spread valley, etc). Wired into lib.rs: **full cargo test
+> = 148 passed, 0 failed.** Commits b556fa7…1fa2568 (pushed). **NEXT (Slice-3 finish):** port `compose_biomes` +
+> the grammar biome-weight field to Rust → replace `sample_kernel` in `height.rs` → CPU integration parity gate →
+> then Slice 4 (GLSL/render + remove kernel atlas). Memory `worldgen10-biome-composition-layer`.
+
 > **▶ GPU-FLOW GATE PASSED (2026-06-02) — Slice-3 #1 risk retired on real hardware.** The drainage operator
 > (`flow_accumulation_mfd`, a sequential CPU sweep) reformulated as iterative PULL relaxation in a GLSL compute
 > shader (`flow_accum_spike.glsl`), measured on RTX 5090/D3D12 windowed: **~1.9 ms for a 256² page at 128 iters**
