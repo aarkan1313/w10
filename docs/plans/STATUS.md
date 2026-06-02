@@ -5,6 +5,22 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ SLICE 4a BUILT — mountain terrain on the GPU, behind a flag, parity-gated (2026-06-02).** The GPU page
+> integration begins: the accepted MOUNTAIN recipe now runs as a multi-pass GLSL compute pipeline on the apron
+> grid, parity-gated against the committed f64 fixture. DONE (all GPU-free validation green): **4a.1** per-page
+> cost measurement spike (`Wg10PageMeasure`, commit c50f19d); **4a.2** measurement gate + `page_measure` suite
+> (3c017a0); **4a.3** GLSL noise/warp primitives with an **i64-emulated lattice hash cross-proven to 2.8e-8 vs the
+> f64 oracle** + `primitive_parity_check.gd` (`biome_page` suite) (0e38ffd); **4a.4** verified the mountain fixture
+> schema (records[] + apron meshgrid params) + documented the gaussian-as-GPU-passes approach (5cc3c1d); **4a.5**
+> the 25-pass mountain page pipeline (`biome_page_4a.glsl` + `Wg10BiomePageCompute`) + two-tier parity check vs the
+> fixture (0114b26). **cargo test = 165 passed, 0 failed.** The GLSL body compiles clean (glslangValidator). The
+> legacy `height_page.glsl` + kernel atlas remain the runtime default — nothing flipped. **PENDING (OWNER-RUN
+> WINDOWED, needs editor closed + rebuilt dll):** the 3 windowed gates that PROVE 4a on real hardware —
+> `python tools/gate.py --suite page_measure` (records the §3.1 per-page-live-vs-coarse-fact decision) and
+> `--suite biome_page` (primitive parity + mountain page parity). Until those pass, 4a is built-but-unproven.
+> NEXT after the windowed proof: Slice 4b (10 recipes + compose_biomes + grammar weights, same pattern). Plan:
+> `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`. Memory `worldgen10-biome-composition-layer`.
+
 > **▶ ALL 11 BIOME RECIPES PORTED TO RUST (2026-06-02) — Slice-3 CPU port bulk DONE.** Every seam-safe biome
 > recipe (mountain/volcanic/glacial/karst/grassland/desert/temperate/tundra/rainforest/coast/wetland) ported to
 > Rust as an apron-grid pipeline on `recipe_noise` + `array_ops`, each **parity machine-exact vs its Python

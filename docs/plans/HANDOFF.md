@@ -14,6 +14,23 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
+Updated: 2026-06-02 PM (**SLICE 4a BUILT on branch `slice4-gpu-page-integration` — mountain terrain on the GPU,
+behind a flag, parity-gated; PENDING the owner windowed proof.** This is the live pickup. Slice 3 (CPU Rust port
+of all 11 recipes + array_ops/recipe_noise + compose) is DONE; Slice 4 mirrors that stack to GLSL on the render
+path. Slice-4 spec: `docs/superpowers/specs/2026-06-02-worldgen-slice4-gpu-page-integration-design.md`; plan:
+`docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md` (executing via subagent-driven-development).
+**4a DONE (GPU-free validation green, on the branch, not merged):** measurement spike + gate (`Wg10PageMeasure`,
+`page_measure` suite) · GLSL noise/warp primitives, i64-emulated hash cross-proven 2.8e-8 vs f64 oracle
+(`primitive_parity_check.gd`) · 25-pass GLSL mountain page pipeline (`biome_page_4a.glsl` + `Wg10BiomePageCompute`)
++ two-tier parity vs the committed f64 fixture (`biome_page_parity_check.gd`). cargo test 165/0. Legacy
+`height_page.glsl`+atlas still the runtime default — NOTHING flipped. **IMMEDIATE NEXT ACTION = OWNER WINDOWED RUN**
+(editor closed, rebuilt dll): `python tools/gate.py --suite page_measure` (records §3.1 per-page-live-vs-coarse-fact
+decision) then `--suite biome_page` (primitive + mountain page parity). If biome_page parity FAILS only in channel
+regions → raise `STABLE_ITERS` (flow under-converged); if large everywhere → a pass bug, debug pass-by-pass. After
+the proof passes: Slice 4b (the other 10 recipes + compose_biomes + grammar weights, same pattern). The big
+uncommitted Phase-5 pile from earlier sessions is STILL on the working tree, untouched (we branched from it; stage
+BY NAME only). — older Slice-3-in-progress framing below is now history.)
+
 Updated: 2026-06-02 (**BIOME-COMPOSITION LAYER + SCALE CONTRACT done; SLICE-3 RUST PORT UNBLOCKED + IN PROGRESS.**
 This supersedes the older "Slice 3 BLOCKED" framing below — that was true at the session START but the keeper
 fork was resolved (v2 accepted) and the offline biome stack was built + accepted since. `STATUS.md` top
