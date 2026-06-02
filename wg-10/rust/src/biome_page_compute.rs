@@ -181,6 +181,18 @@ const KS_FLOOR_MASK: i32 = 49;
 const KS_FLOOR_BLEND: i32 = 50;
 const KS_FINAL: i32 = 51;
 
+// TEMPERATE biome-private PASS_* codes (start at 32) -- MUST match biome_temperate.glsl TE_*.
+const TE_POINTWISE: i32 = 32;
+const TE_RIDGES: i32 = 33;
+const TE_HILLS: i32 = 34;
+const TE_UPLAND: i32 = 35;
+const TE_FLOW_PRE: i32 = 36;
+const TE_VALLEYS: i32 = 37;
+const TE_BROAD_VALLEYS: i32 = 38;
+const TE_ROUNDED_PRE: i32 = 39;
+const TE_ASSEMBLE: i32 = 40;
+const TE_FINAL: i32 = 41;
+
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
@@ -466,6 +478,26 @@ fn karst_sigmas() -> Vec<f64> {
     vec![0.95, 1.15, tower_width, doline_width, floor_smooth, 3.8, 5.8]
 }
 
+/// Distinct gaussian sigmas the TEMPERATE recipe uses (recipes_temperate.rs::generate_seamsafe),
+/// in a FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's
+/// blurs (read directly from the oracle, style = appalachian_ridges: smoothing_px=1.8):
+///   * ridges       = smoothstep(gaussian(folded_remap,           1.1))
+///   * hills        = clip(affine(gaussian(hills_raw,             2.4)))
+///   * upland       = smoothstep(gaussian(macro,                  4.2))
+///   * discharge    = flow_discharge(power=0.43): PRE-BLUR 1.15 -> MFD -> log1p (NO spread)
+///   * valleys      = smoothstep(gaussian(discharge,              1.8))   [first spread]
+///   * broad_valleys= smoothstep(gaussian(discharge,              4.2))   [second spread; dedups upland]
+///   * rounded      = gaussian(rounded_inner, max(smoothing_px=1.8,0.2) = 1.8)   [dedups valleys]
+///   * final blend  = gaussian(height,                            1.0)
+/// Deduped: 1.0, 1.1, 1.15, 1.8, 2.4, 4.2. TEMPERATE DIVERGENCE: the RAW-discharge flow uses the
+/// SHARED pre-blur 1.15 (NOT a glacial-style custom pre-blur), so 1.15 MUST be present; the
+/// two-spread sequencing is what's new, not the pre-blur.
+fn temperate_sigmas() -> Vec<f64> {
+    let smoothing_px = 1.8_f64.max(0.2);    // appalachian_ridges.smoothing_px (rounded blur; dedups valleys 1.8)
+    let _ = smoothing_px;                    // identical to valleys spread 1.8; not a distinct slot
+    vec![1.0, 1.1, 1.15, 1.8, 2.4, 4.2]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -478,6 +510,7 @@ fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
         "tundra" => Some(tundra_sigmas()),
         "glacial" => Some(glacial_sigmas()),
         "karst" => Some(karst_sigmas()),
+        "temperate" => Some(temperate_sigmas()),
         _ => None,
     }
 }
@@ -624,7 +657,31 @@ impl<'a> Scheduler<'a> {
     /// old `flow_channels` otherwise (pre-blur -> K relax -> log1p discharge -> spread
     /// gaussian(width)). `preblur_sigma` MUST be present in the biome's `*_sigmas()` list so
     /// `kparams` pre-validation covers it (the `gauss(preblur_sigma)` below resolves a kernel slot).
+    ///
+    /// Now decomposed into `flow_discharge` (the common prefix: pre-blur -> relax -> DISCHARGE,
+    /// leaving the raw log1p discharge in gauss_in) + the trailing single spread `gauss(width)`.
+    /// This is a PURE refactor: the dispatch sequence for the 8 proven biomes is byte-identical
+    /// (flow_discharge emits exactly the same PASS_FLOW_PRE_PREBLUR_IN .. PASS_DISCHARGE dispatches
+    /// the old inline body did, in the same order, with the same push-constant values).
     fn flow_channels_ex(&mut self, power: f32, width: f64, preblur_sigma: f64) {
+        self.flow_discharge(power, preblur_sigma);
+        // spread sigma = max(width, 0.1) (all widths here are >= 0.1)
+        self.gauss(width.max(0.1));
+    }
+
+    /// flow_channels_seam_safe WITHOUT the trailing spread blur: the common PREFIX of
+    /// `flow_channels_ex`, up to AND INCLUDING the PASS_DISCHARGE dispatch (which writes the raw
+    /// log1p discharge into gauss_in). It does NOT do the final spread `gauss`.
+    ///
+    /// TEMPERATE needs this because it spreads the RAW discharge at TWO different sigmas (1.8 for
+    /// `valleys`, 4.2 for `broad_valleys`), so it cannot use the single-spread flow_channels_ex.
+    /// After `flow_discharge`, the raw discharge lives in gauss_in. The generic gaussian
+    /// (`gauss(sigma)`) reads gauss_in (AXIS0 -> gauss_mid) then gauss_mid (AXIS1 -> gauss_out) and
+    /// NEVER writes gauss_in, so temperate can call `gauss(1.8)` (read the spread from gauss_out),
+    /// then `gauss(4.2)` (which re-reads the SAME intact gauss_in). No pool staging of the raw
+    /// discharge is required. `preblur_sigma` MUST be present in the biome's `*_sigmas()` list so
+    /// `kparams` pre-validation covers the `gauss(preblur_sigma)` below.
+    fn flow_discharge(&mut self, power: f32, preblur_sigma: f64) {
         // pre-blur sigma=preblur_sigma (1.15 for the shared path; 1.85 for glacial)
         self.dispatch_full(PASS_FLOW_PRE_PREBLUR_IN, 0, 0, 0.0);
         self.gauss(preblur_sigma);
@@ -652,9 +709,8 @@ impl<'a> Scheduler<'a> {
             1 - ((STABLE_ITERS as i32 - 1) % 2),
             "discharge_fd must read the buffer the LAST relax step wrote"
         );
+        // raw log1p discharge -> gauss_in (NO trailing spread here; the caller spreads it).
         self.dispatch_full(PASS_DISCHARGE, 0, discharge_fd, 0.0);
-        // spread sigma = max(width, 0.1) (all widths here are >= 0.1)
-        self.gauss(width.max(0.1));
     }
 }
 
@@ -1229,6 +1285,71 @@ fn schedule_karst(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+/// The TEMPERATE dispatch schedule (style = appalachian_ridges). Mirrors the field DAG of
+/// recipes_temperate.rs::generate_seamsafe ONE-FOR-ONE: warp+macro/folded_remap/hills_raw/fine ->
+/// ridges (blur folded_remap 1.1) -> hills (blur hills_raw 2.4) -> upland (blur macro 4.2) ->
+/// flow_source -> RAW discharge (flow_discharge, pre-blur 1.15, NO trailing spread) -> valleys
+/// (spread discharge 1.8) + broad_valleys (spread the SAME raw discharge 4.2) -> rounded (blur of
+/// affine combo, smoothing_px=1.8) -> assemble -> final. All intermediate fields live in the
+/// GENERIC scratch POOL (pool0..pool11; see biome_temperate.glsl for the slot map). The sigmas
+/// (1.0, 1.1, 1.15, 1.8, 2.4, 4.2) are all in temperate_sigmas().
+///
+/// TEMPERATE DIVERGENCE (the two-spread crux): temperate's drainage uses `flow_discharge(0.43,
+/// 1.15)` (the common PREFIX of flow_channels_ex up to + including PASS_DISCHARGE -- leaving the
+/// raw log1p discharge in gauss_in), NOT the single-spread flow_channels/flow_channels_ex the 8
+/// proven biomes use. It then spreads that RAW discharge at TWO sigmas: gauss(1.8) -> TE_VALLEYS
+/// reads gauss_out (-> pool9), then gauss(4.2) -> TE_BROAD_VALLEYS reads gauss_out (-> pool10). The
+/// second gauss(4.2) re-reads the SAME intact gauss_in (the generic gaussian only writes
+/// gauss_mid/gauss_out, never gauss_in), so no pool staging of the raw discharge is needed. This is
+/// the byte-flow that keeps the 8 proven biomes untouched while temperate gets its dual spread.
+fn schedule_temperate(s: &mut Scheduler) {
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; macro=pool2 ; folded_remap=pool3 ;
+    //    hills_raw=pool4 ; fine=pool5
+    s.dispatch_full(TE_POINTWISE, 0, 0, 0.0);
+
+    // 2) ridges = smoothstep(0.40,0.82, gaussian(folded_remap, 1.1))
+    s.gauss_pool(3, 1.1);                            // gauss_out = gaussian(folded_remap, 1.1)
+    s.dispatch_full(TE_RIDGES, 0, 0, 0.0);           // pool6 = ridges
+
+    // 3) hills = clip(affine(gaussian(hills_raw, 2.4), HILLS))
+    s.gauss_pool(4, 2.4);                            // gauss_out = gaussian(hills_raw, 2.4)
+    s.dispatch_full(TE_HILLS, 0, 0, 0.0);            // pool7 = hills
+
+    // 4) upland = smoothstep(0.50,0.82, gaussian(macro, 4.2))
+    s.gauss_pool(2, 4.2);                            // gauss_out = gaussian(macro, 4.2)
+    s.dispatch_full(TE_UPLAND, 0, 0, 0.0);           // pool8 = upland
+
+    // 5) flow_source = affine(0.72*macro + 0.32*ridges + 0.28*hills + 0.26*upland, FLOW_SRC) -> flow_pre
+    s.dispatch_full(TE_FLOW_PRE, 0, 0, 0.0);         // flow_pre <- flow_source (NO clip)
+
+    // 6) RAW discharge: flow_discharge(power=0.43, pre-blur 1.15) leaves the raw log1p discharge in
+    //    gauss_in (NO trailing spread). Then spread it at TWO sigmas (gauss never clobbers gauss_in):
+    s.flow_discharge(0.43_f32, 1.15);                // gauss_in = raw log1p discharge
+    s.gauss(1.8);                                    // gauss_out = gaussian(discharge, 1.8)
+    s.dispatch_full(TE_VALLEYS, 0, 0, 0.0);          // pool9 = valleys (reads gauss_out)
+    s.gauss(4.2);                                    // gauss_out = gaussian(discharge, 4.2) (re-reads gauss_in)
+    s.dispatch_full(TE_BROAD_VALLEYS, 0, 0, 0.0);    // pool10 = broad_valleys (reads gauss_out)
+
+    // 7) rounded = gaussian(affine(0.52*macro + 0.48*hills, ROUNDED), max(smoothing_px,0.2)=1.8)
+    s.dispatch_full(TE_ROUNDED_PRE, 0, 0, 0.0);      // pool11 = rounded_inner
+    s.gauss_pool(11, 1.8);                           // gauss_out = gaussian(pool11, 1.8)
+    s.dispatch_pool(PASS_POOL_FROM_GAUSS, 11);       // pool11 = rounded
+
+    // 8) assemble height (hills/ridges/upland - valleys/broad_valleys + fine; then 0.76*h + 0.24*rounded)
+    s.dispatch_full(TE_ASSEMBLE, 0, 0, 0.0);
+
+    // 9) final: height_blur = gaussian(height, 1.0); final_blend = 0.85*h + 0.15*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(1.0);                                    // gauss_out = gaussian(height, 1.0)
+    s.dispatch_full(TE_FINAL, 0, 0, 0.0);
+
+    // 10) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1545,6 +1666,7 @@ impl Wg10BiomePageCompute {
             "tundra" => schedule_tundra(&mut sched),
             "glacial" => schedule_glacial(&mut sched),
             "karst" => schedule_karst(&mut sched),
+            "temperate" => schedule_temperate(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -1924,5 +2046,46 @@ mod biome_page_compute_tests {
     #[test]
     fn karst_sigmas_is_known_biome() {
         assert!(biome_sigmas("karst").is_some());
+    }
+
+    #[test]
+    fn temperate_sigmas_fit_stride() {
+        for &sg in &temperate_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn temperate_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_temperate asks for must be present (kparams panics otherwise).
+        // The schedule's gauss(...)/gauss_pool(...) calls + flow_discharge(power=0.43) PRE-BLUR(1.15)
+        // and the TWO independent spreads (1.8 for valleys, 4.2 for broad_valleys). TEMPERATE uses
+        // the RAW-discharge flow_discharge (NO single trailing spread); the two spreads ARE the
+        // distinct sigmas. ridges=1.1, hills=2.4, upland/broad_valleys=4.2, valleys/rounded=1.8,
+        // final=1.0.
+        let smoothing_px = 1.8_f64.max(0.2); // rounded blur (dedups against valleys spread 1.8)
+        let s = temperate_sigmas();
+        for need in [1.0_f64, 1.1, 2.4, 4.2, 1.15, 1.8, smoothing_px] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+        // TEMPERATE uses the SHARED pre-blur 1.15 (NOT a glacial-style custom pre-blur). Assert it
+        // is present, proving the valley flow rides the proven flow_discharge(.., 1.15) prefix.
+        assert!(s.iter().any(|&v| (v - 1.15).abs() < 1e-9), "temperate shared pre-blur 1.15 missing");
+        // The TWO spread sigmas (1.8 and 4.2) MUST BOTH be present AND distinct -- that is the
+        // two-spread crux of the temperate port (one raw discharge, spread twice).
+        assert!(s.iter().any(|&v| (v - 1.8).abs() < 1e-9), "temperate valleys spread 1.8 missing");
+        assert!(s.iter().any(|&v| (v - 4.2).abs() < 1e-9), "temperate broad_valleys spread 4.2 missing");
+    }
+
+    #[test]
+    fn pool_slots_matches_temperate_pool_map() {
+        // temperate's biome_temperate.glsl uses pool0..pool11 (12 slots). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 12, "POOL_SLOTS {POOL_SLOTS} < temperate's 12 pool slots");
+    }
+
+    #[test]
+    fn temperate_sigmas_is_known_biome() {
+        assert!(biome_sigmas("temperate").is_some());
     }
 }
