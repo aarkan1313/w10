@@ -122,6 +122,19 @@ const WL_FLAT_BASE_PRE: i32 = 41;
 const WL_ASSEMBLE: i32 = 42;
 const WL_FINAL: i32 = 43;
 
+// TUNDRA biome-private PASS_* codes (start at 32) -- MUST match biome_tundra.glsl TU_*.
+const TU_POINTWISE: i32 = 32;
+const TU_PLAIN_PRE: i32 = 33;
+const TU_PLAIN: i32 = 34;
+const TU_PATTERN_PRE: i32 = 35;
+const TU_PATTERN: i32 = 36;
+const TU_FRINGE: i32 = 37;
+const TU_FLOW_PRE: i32 = 38;
+const TU_DRAINAGE: i32 = 39;
+const TU_BASE_PRE: i32 = 40;
+const TU_ASSEMBLE: i32 = 41;
+const TU_FINAL: i32 = 42;
+
 // copy_sel codes -- MUST match biome_page.glsl CP_* consts.
 const CP_RANGES: i32 = 0;
 const CP_MASSIF: i32 = 1;
@@ -338,6 +351,23 @@ fn wetland_sigmas() -> Vec<f64> {
     vec![1.15, 1.20, flow_spread, 2.20, smoothing_px, 5.20, 5.80]
 }
 
+/// Distinct gaussian sigmas the TUNDRA recipe uses (recipes_tundra.rs::generate_seamsafe), in a
+/// FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's
+/// blurs (read directly from the oracle):
+///   * plain        = gaussian(1 - |macro - 0.46|,    5.8)
+///   * pattern      = gaussian(0.56*polygons + 0.44*stripes, 1.2)
+///   * fringe       = gaussian(fringe_ridges,          1.8)
+///   * channels     = flow_channels_seam_safe(flow_source, width=2.0, power=0.48):
+///                    pre-blur 1.15 + spread max(2.0,0.1)=2.0
+///   * base         = gaussian(base_inner,             smoothing_px = 5.0)
+///   * final blend  = gaussian(height,                 1.1)
+/// Deduped: 1.10, 1.15, 1.20, 1.80, 2.00, 5.00, 5.80.
+fn tundra_sigmas() -> Vec<f64> {
+    let smoothing_px = 5.0_f64;             // arctic_plain.smoothing_px (base blur)
+    let flow_spread = 2.0_f64.max(0.1);     // flow_channels width.max(0.1) = 2.0
+    vec![1.10, 1.15, 1.20, 1.80, flow_spread, smoothing_px, 5.80]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -347,6 +377,7 @@ fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
         "desert" => Some(desert_sigmas()),
         "coast" => Some(coast_sigmas()),
         "wetland" => Some(wetland_sigmas()),
+        "tundra" => Some(tundra_sigmas()),
         _ => None,
     }
 }
@@ -841,6 +872,64 @@ fn schedule_wetland(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+/// The TUNDRA dispatch schedule (style = arctic_plain). Mirrors the field DAG of
+/// recipes_tundra.rs::generate_seamsafe ONE-FOR-ONE: warp+macro/polygons/stripes/fringe_ridges/
+/// foothills/fine -> plain (blur 1-|macro-0.46|) -> pattern (blur 0.56*polygons+0.44*stripes, then
+/// *plain) -> fringe (blur fringe_ridges) -> flow_source -> drainage (flow channels) -> base (blur
+/// of affine combo) -> assemble -> final. All intermediate fields live in the GENERIC scratch POOL
+/// (pool0..pool12; see biome_tundra.glsl for the slot map). The sigmas (5.8, 1.2, 1.8, flow
+/// pre-blur 1.15 + spread 2.0, smoothing_px=5.0, final 1.1) are all in tundra_sigmas(). Same
+/// PATTERN as schedule_grassland/desert/coast/wetland: pointwise passes write pool slots; blur a
+/// slot via gauss_pool(slot,sigma) then read gauss_out (or POOL_FROM_GAUSS to stash); flow channels
+/// reuse the proven flow_channels().
+fn schedule_tundra(s: &mut Scheduler) {
+    let smoothing_px = 5.0_f64;          // arctic_plain.smoothing_px (base blur)
+
+    // 0) meshgrid
+    s.dispatch_full(PASS_MESHGRID, 0, 0, 0.0);
+
+    // 1) pointwise: warp -> pool0=w_x, pool1=w_z ; macro=pool2 ; polygons=pool3 ; stripes=pool4 ;
+    //    fringe_ridges=pool5 ; foothills=pool6 ; fine=pool7
+    s.dispatch_full(TU_POINTWISE, 0, 0, 0.0);
+
+    // 2) plain = smoothstep(0.36,0.76, gaussian(1 - |macro - 0.46|, 5.8))
+    s.dispatch_full(TU_PLAIN_PRE, 0, 0, 0.0);        // gauss_in <- 1 - |macro - 0.46|
+    s.gauss(5.8);                                    // gauss_out = gaussian(., 5.8)
+    s.dispatch_full(TU_PLAIN, 0, 0, 0.0);            // pool8 = plain
+
+    // 3) pattern = smoothstep(0.46,0.86, gaussian(0.56*polygons + 0.44*stripes, 1.2)) * plain
+    s.dispatch_full(TU_PATTERN_PRE, 0, 0, 0.0);      // gauss_in <- 0.56*polygons + 0.44*stripes
+    s.gauss(1.2);                                    // gauss_out = gaussian(., 1.2)
+    s.dispatch_full(TU_PATTERN, 0, 0, 0.0);          // pool9 = pattern
+
+    // 4) fringe = smoothstep(0.42,0.84, gaussian(fringe_ridges, 1.8))
+    s.gauss_pool(5, 1.8);                            // gauss_out = gaussian(fringe_ridges, 1.8)
+    s.dispatch_full(TU_FRINGE, 0, 0, 0.0);           // pool10 = fringe
+
+    // 5) drainage: flow_source = affine(0.62*macro+0.26*foothills+0.22*fringe-0.22*plain,
+    //    FLOW_SOURCE) -> flow_pre ; channels = flow_channels_seam_safe(flow_source, width=2.0,
+    //    power=0.48) ; drainage = smoothstep(0.58,0.94, channels)
+    s.dispatch_full(TU_FLOW_PRE, 0, 0, 0.0);         // flow_pre <- flow_source (NO clip)
+    s.flow_channels(0.48_f32, 2.0);                  // gauss_out = spread discharge
+    s.dispatch_full(TU_DRAINAGE, 0, 0, 0.0);         // pool11 = drainage
+
+    // 6) base = gaussian(affine(0.74*macro + 0.26*foothills, BASE), smoothing_px)
+    s.dispatch_full(TU_BASE_PRE, 0, 0, 0.0);         // pool12 = base_inner
+    s.gauss_pool(12, smoothing_px);                  // gauss_out = gaussian(pool12, smoothing_px)
+    s.dispatch_pool(PASS_POOL_FROM_GAUSS, 12);       // pool12 = base
+
+    // 7) assemble height (macro_zsc/pattern/fringe/foothills/drainage/fine + base blend)
+    s.dispatch_full(TU_ASSEMBLE, 0, 0, 0.0);
+
+    // 8) final: height_blur = gaussian(height, 1.1); final_blend = 0.86*h + 0.14*blur; affine(FINAL)
+    s.dispatch_full(PASS_COPY, CP_HEIGHT, 0, 0.0);   // gauss_in <- height
+    s.gauss(1.1);                                    // gauss_out = gaussian(height, 1.1)
+    s.dispatch_full(TU_FINAL, 0, 0, 0.0);
+
+    // 9) crop core (over core cells)
+    s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1154,6 +1243,7 @@ impl Wg10BiomePageCompute {
             "desert" => schedule_desert(&mut sched),
             "coast" => schedule_coast(&mut sched),
             "wetland" => schedule_wetland(&mut sched),
+            "tundra" => schedule_tundra(&mut sched),
             other => {
                 // drop the Scheduler's &mut borrow before freeing the RD.
                 let _ = sched;
@@ -1326,6 +1416,7 @@ mod biome_page_compute_tests {
         assert!(biome_sigmas("desert").is_some());
         assert!(biome_sigmas("coast").is_some());
         assert!(biome_sigmas("wetland").is_some());
+        assert!(biome_sigmas("tundra").is_some());
         assert!(biome_sigmas("nope").is_none());
     }
 
@@ -1415,5 +1506,33 @@ mod biome_page_compute_tests {
         ] {
             assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
         }
+    }
+
+    #[test]
+    fn tundra_sigmas_fit_stride() {
+        for &sg in &tundra_sigmas() {
+            let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
+            assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    #[test]
+    fn tundra_sigmas_cover_all_pipeline_blurs() {
+        // every sigma schedule_tundra asks for must be present (kparams panics otherwise).
+        // The schedule's gauss(...)/gauss_pool(...) calls + flow_channels(power, 2.0)
+        // pre-blur(1.15)/spread(2.0). plain=5.8, pattern=1.2, fringe=1.8, base=smoothing_px=5.0,
+        // final=1.1.
+        let smoothing_px = 5.0_f64;
+        let flow_spread = 2.0_f64.max(0.1);
+        let s = tundra_sigmas();
+        for need in [5.8_f64, 1.2, 1.8, 1.15, flow_spread, smoothing_px, 1.1] {
+            assert!(s.iter().any(|&v| (v - need).abs() < 1e-9), "missing sigma {need}");
+        }
+    }
+
+    #[test]
+    fn pool_slots_matches_tundra_pool_map() {
+        // tundra's biome_tundra.glsl uses pool0..pool12 (13 slots). POOL_SLOTS must cover it.
+        assert!(POOL_SLOTS >= 13, "POOL_SLOTS {POOL_SLOTS} < tundra's 13 pool slots");
     }
 }

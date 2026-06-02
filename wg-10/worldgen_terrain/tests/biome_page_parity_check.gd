@@ -45,6 +45,11 @@ const BIOMES := [
 		"fixture": "res://worldgen_terrain/fixtures/recipe_wetland_fixture.json",
 		"fragment": "res://worldgen_terrain/shaders/biome_wetland.glsl",
 	},
+	{
+		"name": "tundra",
+		"fixture": "res://worldgen_terrain/fixtures/recipe_tundra_fixture.json",
+		"fragment": "res://worldgen_terrain/shaders/biome_tundra.glsl",
+	},
 ]
 
 # Normalized recipe units (NOT metres): height ~[-0.5,0.5]. MEASURED on RTX 5090/D3D12
