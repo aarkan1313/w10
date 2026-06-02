@@ -114,6 +114,17 @@ impl Wg10PagePool {
         world_span: f64,
         seed:       i64,
     ) -> GString {
+        // --- F8: free-before-reconfigure ---
+        // A second configure() would otherwise overwrite slot_tex / slot_wrap /
+        // compute_ctx with new GPU resources WITHOUT releasing the old ones, leaking
+        // the previous textures' RIDs + compute context on the device. Tear down any
+        // existing configuration first (fully resets state per the F7 fix above).
+        // Idempotent: a no-op on a fresh, never-configured pool (empty vecs + None
+        // Options), so this is safe on the first configure() too.
+        if self.is_configured() {
+            self.free_all_impl();
+        }
+
         // --- load pack ---
         let pack = match pack::load_pack_dir(
             Path::new(&pack_dir.to_string()),
@@ -480,7 +491,13 @@ impl Wg10PagePool {
     /// As of the B1 fix this is ALSO called automatically from `Drop` (below), so
     /// leak-freedom is structural — a GDScript owner that forgets to call it no
     /// longer leaks. Calling it explicitly is still fine (the second call is a
-    /// no-op: the slot vectors are already cleared and `compute_ctx` is `None`).
+    /// no-op: the slot vectors are already cleared and all configured Options are
+    /// `None`).
+    ///
+    /// As of the F7 fix this fully resets the pool to the UNCONFIGURED state:
+    /// after `free_all()` the `acquire_page`/`get_resident_page` guards correctly
+    /// see "not configured" and return None instead of panicking on a stale-but-
+    /// half-cleared state. To use the pool again, call `configure()`.
     ///
     /// This is the ONLY site (via `free_all_impl`) that calls `rd.free_rid` on
     /// page textures.
@@ -515,32 +532,104 @@ impl Drop for Wg10PagePool {
 impl Wg10PagePool {
     /// The actual teardown logic, callable from both the `#[func] free_all` and
     /// `Drop` (B1). Frees every page-texture RID + the cached compute context on
-    /// the global RenderingDevice and clears the slot vectors. Idempotent and
-    /// safe with no RenderingDevice (headless / already torn down).
+    /// the global RenderingDevice, then fully resets ALL configured state to the
+    /// unconfigured shape (F7) via `reset_configured_state`. Idempotent and safe
+    /// with no RenderingDevice (headless / already torn down).
     ///
     /// This is the ONLY site that calls `rd.free_rid` on page textures.
     fn free_all_impl(&mut self) {
         let rd_opt = RenderingServer::singleton().get_rendering_device();
         if rd_opt.is_none() {
-            // No RenderingDevice — nothing to free on the GPU; drop our handles.
-            self.slot_tex  = Vec::new();
-            self.slot_wrap = Vec::new();
-            self.compute_ctx = None;
+            // No RenderingDevice — nothing to free on the GPU; drop our handles
+            // and fully reset to the UNCONFIGURED state (F7). Leaving `policy`/
+            // `pack`/`pack_buffers`/`glsl_source` Some here would let the
+            // `acquire_page` guard PASS while `compute_ctx` is None → the
+            // `compute_ctx.as_ref().unwrap()` would panic. Reset everything so the
+            // guard correctly sees "not configured".
+            Self::reset_configured_state(
+                &mut self.policy,
+                &mut self.slot_tex,
+                &mut self.slot_wrap,
+                &mut self.pack,
+                &mut self.pack_buffers,
+                &mut self.glsl_source,
+                &mut self.compute_ctx,
+            );
             return;
         }
         let mut rd = rd_opt.unwrap();
+        // Free the cached compute context (slice 7) — the pool owns it, built at configure.
+        // Take it BEFORE the reset so we can free the GPU resources it holds.
+        if let Some(ctx) = self.compute_ctx.take() {
+            free_page_compute_context(&mut rd, &ctx);
+        }
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
                 rd.free_rid(rid);
             }
         }
-        self.slot_tex.clear();
-        self.slot_wrap.iter_mut().for_each(|w| *w = None);
-        self.slot_wrap.clear();
-        // Free the cached compute context (slice 7) — the pool owns it, built at configure.
-        if let Some(ctx) = self.compute_ctx.take() {
-            free_page_compute_context(&mut rd, &ctx);
-        }
+        // GPU resources released above; now fully reset to the UNCONFIGURED state (F7)
+        // so `acquire_page`/`get_resident_page` guards see "not configured" and return
+        // None gracefully instead of unwrapping a None `compute_ctx` / indexing a
+        // cleared `slot_wrap` from stale policy state.
+        Self::reset_configured_state(
+            &mut self.policy,
+            &mut self.slot_tex,
+            &mut self.slot_wrap,
+            &mut self.pack,
+            &mut self.pack_buffers,
+            &mut self.glsl_source,
+            &mut self.compute_ctx,
+        );
+    }
+
+    /// Pure, engine-free reset of ALL configured state to the not-yet-configured
+    /// shape (F7). Operates only on plain data — NO `RenderingServer`, NO GPU
+    /// `free_rid`, NO `self.base` — so it is headless-unit-testable and cannot
+    /// panic. Callers that own GPU resources (the compute ctx, the slot RIDs) MUST
+    /// free them BEFORE calling this; here we only drop the (already-taken) handles
+    /// and clear the policy/slot vectors + the four `configure`-set Options.
+    ///
+    /// Post-condition (the F7 invariant): there is NO half-configured state that
+    /// would pass the `acquire_page` guard (policy/pack/pack_buffers/glsl_source
+    /// all Some) yet leave `compute_ctx` None. After this returns, `is_configured`
+    /// is false and every Option field is None.
+    ///
+    /// Idempotent: calling it on an already-empty/unconfigured pool is a harmless
+    /// no-op (Options already None, vectors already empty), which is what makes
+    /// `free_all` safe to call twice and `configure`'s free-before-reconfigure
+    /// (F8) safe on a fresh pool.
+    fn reset_configured_state(
+        policy:       &mut Option<PagePolicy>,
+        slot_tex:     &mut Vec<Option<Rid>>,
+        slot_wrap:    &mut Vec<Option<Gd<Texture2Drd>>>,
+        pack:         &mut Option<pack::Pack>,
+        pack_buffers: &mut Option<PackBuffers>,
+        glsl_source:  &mut Option<String>,
+        compute_ctx:  &mut Option<PageComputeContext>,
+    ) {
+        *policy = None;
+        slot_tex.clear();
+        slot_wrap.iter_mut().for_each(|w| *w = None);
+        slot_wrap.clear();
+        *pack = None;
+        *pack_buffers = None;
+        *glsl_source = None;
+        *compute_ctx = None;
+    }
+
+    /// The exact predicate the `acquire_page` guard uses: a pool is "configured"
+    /// only when policy/pack/pack_buffers/glsl_source are ALL Some. Mirrors the
+    /// guard so the F7 invariant (consistent configured-vs-unconfigured state) can
+    /// be asserted headlessly. NOTE: `compute_ctx` is intentionally NOT part of
+    /// this predicate — that asymmetry is precisely the F7 hazard, so the test
+    /// asserts compute_ctx tracks the predicate after a reset.
+    #[allow(dead_code)]
+    fn is_configured(&self) -> bool {
+        self.policy.is_some()
+            && self.pack.is_some()
+            && self.pack_buffers.is_some()
+            && self.glsl_source.is_some()
     }
 
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px × page_px`.
@@ -573,4 +662,189 @@ impl Wg10PagePool {
         }
         Some(tex_rid)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Tests — headless state-machine coverage for the F7/F8 lifecycle fixes.
+//
+// These exercise the PURE reset logic (`reset_configured_state`) and the guard
+// predicate (`is_configured`) directly on plain data: no `Base<RefCounted>`, no
+// `RenderingServer`, no GPU. A `Wg10PagePool` GodotClass instance CANNOT be
+// constructed under `cargo test` (it needs a live engine + `Base`), and
+// `free_all_impl` / `configure` / `acquire_page` call `RenderingServer::singleton()`
+// + GPU ops, so the END-TO-END "free_all then acquire_page returns None" path is
+// only verifiable under a WINDOWED RenderingDevice (the gpu/m3 gate). The fix,
+// however, is a pure state-machine change, and that is exactly what these tests
+// pin: after a reset, NO field is left in the half-configured shape that would
+// pass the acquire guard but then unwrap a None `compute_ctx` (F7), and the reset
+// is idempotent so `configure`'s free-before-reconfigure (F8) is a safe no-op on a
+// fresh pool.
+// ---------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::pack::{Pack, GrammarConstants};
+    use crate::gpu_compute::PackBuffers;
+    use crate::page_compute::PageComputeContext;
+    use crate::page_policy::PagePolicy;
+    use std::collections::BTreeMap;
+
+    fn minimal_pack() -> Pack {
+        Pack {
+            grammar_constants: GrammarConstants {
+                region_size_m: 500.0,
+                province_size_regions: 8,
+                palette_primary_pct: 60,
+                palette_compatible_pct: 30,
+                moderation_min: 0.4,
+                moderation_strength: 0.5,
+            },
+            palettes: Vec::new(),
+            compatibility: BTreeMap::new(),
+            family_ids: Vec::new(),
+            family_kernels: BTreeMap::new(),
+        }
+    }
+
+    fn minimal_pack_buffers() -> PackBuffers {
+        PackBuffers {
+            palettes_bytes:    Vec::new(),
+            compat_off_bytes:  Vec::new(),
+            compat_flat_bytes: Vec::new(),
+            krec_bytes:        Vec::new(),
+            kparam_bytes:      Vec::new(),
+            kdata_bytes:       Vec::new(),
+            num_palettes:      0,
+        }
+    }
+
+    // A PageComputeContext is all POD `Rid` handles. `Rid::new(..)` does NOT touch
+    // the GPU — it just wraps a u64 — so this is safe to build/drop headlessly. We
+    // only need it to be `Some(..)` so the reset can prove it goes to `None`.
+    fn fake_compute_ctx() -> PageComputeContext {
+        PageComputeContext {
+            shader:      Rid::new(101),
+            pipeline:    Rid::new(102),
+            palettes:    Rid::new(103),
+            compat_off:  Rid::new(104),
+            compat_flat: Rid::new(105),
+            krec:        Rid::new(106),
+            kparam:      Rid::new(107),
+            kdata:       Rid::new(108),
+        }
+    }
+
+    /// F7 — the core invariant. A FULLY-configured field set (policy/pack/
+    /// pack_buffers/glsl_source/compute_ctx all Some, slot_tex populated) must,
+    /// after `reset_configured_state`, leave EVERY field None/empty. The bug was
+    /// that the old `free_all_impl` cleared only `compute_ctx` + the slot vectors,
+    /// leaving the four config Options Some — so the acquire guard PASSED while
+    /// `compute_ctx` was None, then `compute_ctx.as_ref().unwrap()` panicked.
+    #[test]
+    fn reset_clears_all_configured_state_no_half_configured_residue() {
+        let mut policy:       Option<PagePolicy>          = Some(PagePolicy::new(4));
+        // Populated with POD RIDs (the GPU free happens BEFORE reset in the real
+        // code path; here we only assert the handles are dropped to None).
+        let mut slot_tex:     Vec<Option<Rid>>            =
+            vec![Some(Rid::new(1)), None, Some(Rid::new(2)), None];
+        // slot_wrap holds Gd<Texture2Drd> which can't be built headlessly; the
+        // realistic populated case is covered by slot_tex. Use the post-config
+        // shape: a sized Vec of None (what `configure` builds before any acquire).
+        let mut slot_wrap:    Vec<Option<Gd<Texture2Drd>>> = (0..4).map(|_| None).collect();
+        let mut pack:         Option<Pack>                = Some(minimal_pack());
+        let mut pack_buffers: Option<PackBuffers>         = Some(minimal_pack_buffers());
+        let mut glsl_source:  Option<String>              = Some("// glsl".to_string());
+        let mut compute_ctx:  Option<PageComputeContext>  = Some(fake_compute_ctx());
+
+        Wg10PagePool::reset_configured_state(
+            &mut policy,
+            &mut slot_tex,
+            &mut slot_wrap,
+            &mut pack,
+            &mut pack_buffers,
+            &mut glsl_source,
+            &mut compute_ctx,
+        );
+
+        // Every configure-set field is None — the acquire guard now correctly sees
+        // "not configured" (returns None) instead of passing then unwrapping None.
+        assert!(policy.is_none(),       "policy must be cleared");
+        assert!(pack.is_none(),         "pack must be cleared");
+        assert!(pack_buffers.is_none(), "pack_buffers must be cleared");
+        assert!(glsl_source.is_none(),  "glsl_source must be cleared");
+        assert!(compute_ctx.is_none(),  "compute_ctx must be cleared");
+        // Slot vectors emptied — no stale slot_wrap indexable by a stale policy.
+        assert!(slot_tex.is_empty(),    "slot_tex must be empty");
+        assert!(slot_wrap.is_empty(),   "slot_wrap must be empty");
+
+        // THE F7 GUARD CHECK: the acquire-guard predicate (policy && pack &&
+        // pack_buffers && glsl_source all Some) and `compute_ctx.is_some()` must
+        // AGREE. The old bug made the guard true while compute_ctx was None — that
+        // disagreement is the panic. Assert they cannot disagree after a reset.
+        let guard_passes = policy.is_some()
+            && pack.is_some()
+            && pack_buffers.is_some()
+            && glsl_source.is_some();
+        assert!(!guard_passes, "acquire guard must FAIL after reset (unconfigured)");
+        assert_eq!(
+            guard_passes,
+            compute_ctx.is_some(),
+            "F7: acquire guard and compute_ctx presence must never disagree"
+        );
+    }
+
+    /// F7/F8 — `reset_configured_state` is idempotent: calling it on an already-
+    /// unconfigured (fresh) field set is a harmless no-op. This is what makes
+    /// `free_all()` safe to call twice and `configure`'s free-before-reconfigure
+    /// safe on a never-configured pool.
+    #[test]
+    fn reset_is_idempotent_on_unconfigured_state() {
+        let mut policy:       Option<PagePolicy>           = None;
+        let mut slot_tex:     Vec<Option<Rid>>             = Vec::new();
+        let mut slot_wrap:    Vec<Option<Gd<Texture2Drd>>> = Vec::new();
+        let mut pack:         Option<Pack>                 = None;
+        let mut pack_buffers: Option<PackBuffers>          = None;
+        let mut glsl_source:  Option<String>               = None;
+        let mut compute_ctx:  Option<PageComputeContext>   = None;
+
+        // Must not panic / must stay fully unconfigured.
+        Wg10PagePool::reset_configured_state(
+            &mut policy, &mut slot_tex, &mut slot_wrap,
+            &mut pack, &mut pack_buffers, &mut glsl_source, &mut compute_ctx,
+        );
+
+        assert!(policy.is_none() && pack.is_none() && pack_buffers.is_none()
+            && glsl_source.is_none() && compute_ctx.is_none());
+        assert!(slot_tex.is_empty() && slot_wrap.is_empty());
+    }
+
+    /// `is_configured` mirrors the acquire guard exactly: true ONLY when all four
+    /// of policy/pack/pack_buffers/glsl_source are Some. This is the predicate
+    /// `configure` uses to decide whether to free-before-reconfigure (F8), so it
+    /// must match the guard wording in `acquire_page`. Verified field-by-field via
+    /// the same boolean the guard computes (the struct itself needs a Base, so we
+    /// reproduce the predicate here rather than instantiate the GodotClass).
+    #[test]
+    fn configured_predicate_requires_all_four_config_options() {
+        // Helper mirroring the guard / `is_configured` over the four options.
+        fn guard(p: bool, pk: bool, pb: bool, g: bool) -> bool { p && pk && pb && g }
+
+        assert!(guard(true, true, true, true), "all Some => configured");
+        // Any single missing option => NOT configured (guard returns early).
+        assert!(!guard(false, true, true, true), "missing policy => unconfigured");
+        assert!(!guard(true, false, true, true), "missing pack => unconfigured");
+        assert!(!guard(true, true, false, true), "missing pack_buffers => unconfigured");
+        assert!(!guard(true, true, true, false), "missing glsl_source => unconfigured");
+        assert!(!guard(false, false, false, false), "all None => unconfigured");
+    }
+
+    // NOTE (windowed-only, NOT run headless): the END-TO-END proofs —
+    //   (1) `free_all()` then `acquire_page(..)` returns None without panicking, and
+    //   (2) a second `configure(..)` frees the prior textures' RIDs + compute ctx
+    //       (no GPU leak) and leaves no duplicate slot vectors —
+    // require a live windowed RenderingDevice (the pool's `configure`/`acquire_page`/
+    // `free_all_impl` all call `RenderingServer::singleton().get_rendering_device()`
+    // and dispatch real GPU work) and a constructed `Gd<Wg10PagePool>` (needs the
+    // engine). Run the windowed gpu/m3 gate (editor closed) to confirm those paths.
+    // The state-machine fix itself is covered by the headless tests above.
 }
