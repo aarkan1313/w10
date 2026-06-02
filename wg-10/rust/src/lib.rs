@@ -21,6 +21,7 @@ mod facts;
 mod facts_api;
 mod recipe_noise;
 mod array_ops;
+mod recipes;
 mod flow_spike;
 
 #[cfg(test)]
@@ -49,6 +50,8 @@ mod facts_tests;
 mod recipe_noise_tests;
 #[cfg(test)]
 mod array_ops_tests;
+#[cfg(test)]
+mod recipes_tests;
 
 struct Wg10Terrain;
 
