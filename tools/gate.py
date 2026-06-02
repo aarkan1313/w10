@@ -40,6 +40,14 @@ CHECKS = {
     "page_measure": [
         "worldgen_terrain/tests/page_measure_check.gd",
     ],
+    # Task 4a.3 GLSL noise/warp primitive PARITY gate (windowed). Proves the i64-emulated
+    # GLSL lattice hash (uvec2 64-bit wrapping math, since #version 450 has no int64) and
+    # the f32 primitives built on it match the f64 oracle (worldgen_proto.py) within an f32
+    # budget -- including negative-coord (arithmetic-shift) and large-coord (i64-wrap) paths.
+    # PARITY gate (device-independent), but RenderingDevice compute is windowed-only here.
+    "biome_page": [
+        "worldgen_terrain/tests/primitive_parity_check.gd",
+    ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
@@ -126,7 +134,7 @@ def main() -> int:
         return run_pytest_suite(fast=False)
     if args.suite == PYTEST_FAST_SUITE:
         return run_pytest_suite(fast=True)
-    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure")   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0

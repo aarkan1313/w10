@@ -35,6 +35,7 @@ mod recipes_wetland;
 mod biome_compose;
 pub(crate) mod flow_spike;
 mod page_measure;
+mod primitive_probe;
 
 #[cfg(test)]
 mod hash_tests;
