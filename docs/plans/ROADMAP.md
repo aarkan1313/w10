@@ -497,10 +497,12 @@ Research extract: `STRUCTURE_AUDIT_EXTRACT.md`.
       commit 08adceb): all 11 biomes, real-metre scale contract, GPU-flow gate EARLY. **CPU foundation PORTED +
       parity machine-exact:** `recipe_noise.rs` (worldgen_proto primitives — a DIFFERENT hash than the WG9
       `hash.rs`, ported separately; d2cfd04/6d728ab) + `array_ops.rs` (gaussian_filter mode=nearest + the
-      sequential flow_accumulation_mfd; 50c1592). cargo 126 green. **NEXT in the port:** GPU-flow feasibility gate
-      (flow_accumulation is a sequential sweep; same-height cells are independent → wavefront, or baked-facts
-      fallback) → port the 11 recipe compositions (apron-grid pipelines on recipe_noise+array_ops) → port
-      `compose_biomes` → replace `sample_kernel` in `height.rs` → CPU then GLSL parity gates. Plan:
+      sequential flow_accumulation_mfd; 50c1592). cargo 132 green. **GPU-FLOW GATE PASSED (4b392b6):** the #1
+      risk — can the sequential flow sweep run live on GPU? — is retired. Iterative pull-relaxation GLSL compute,
+      measured on real hardware = ~1.9 ms/256-page at 128 iters (bit-stable), under the 6 ms budget → drainage
+      goes LIVE on GPU, no baked-facts fallback needed. **NEXT in the port:** port the 11 recipe compositions
+      (apron-grid pipelines on recipe_noise+array_ops, fixture-gated) → port `compose_biomes` → replace
+      `sample_kernel` in `height.rs` → CPU then GLSL parity gates. Plan:
       `docs/superpowers/plans/2026-06-01-slice3-rust-port-plan.md`. The older "frozen-stack / don't-port-any-keeper"
       language below is HISTORY — the stack is the biome layer, frozen, and the port is underway.
 

@@ -5,6 +5,19 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
+> **▶ GPU-FLOW GATE PASSED (2026-06-02) — Slice-3 #1 risk retired on real hardware.** The drainage operator
+> (`flow_accumulation_mfd`, a sequential CPU sweep) reformulated as iterative PULL relaxation in a GLSL compute
+> shader (`flow_accum_spike.glsl`), measured on RTX 5090/D3D12 windowed: **~1.9 ms for a 256² page at 128 iters**
+> (converges bit-stable by 128 iters), linear ~0.0147 ms/iter. Comfortably under the 6 ms frame budget → **drainage
+> goes LIVE on GPU; no baked-facts fallback needed.** Commit 4b392b6 (cargo 132). Measurement gotcha recorded:
+> local-RD compute timestamps (`get_captured_timestamp_gpu_time`) are UNRELIABLE on this box (reported >wall-clock);
+> use wall-clock differential across iter counts. Also: local RenderingDevice must be `.free()`d each run (driver
+> slot exhaustion). **Slice-3 port shape now fully de-risked** — remaining: port the 11 recipe compositions
+> (apron-grid pipelines on recipe_noise+array_ops) → compose_biomes → replace `sample_kernel` → CPU then GLSL
+> parity gates. **Runevision erosion filter** (owner-flagged) banked as the lead candidate for the deferred
+> local-detail/erosion layer (Phase-6-detail/7A) — local, GPU single-pass, chunk-safe; COMPLEMENTARY to
+> flow_accumulation (structure) — memory `worldgen10-runevision-erosion-candidate`.
+
 > **▶ AUDIT RESPONSE (2026-06-02) — owner audit fixed + verified, pushed.** An owner audit found real issues
 > (validated against current code, not the stale snapshot). FIXED: F4 registry now forwards `apron_px` (seam-safe
 > path reachable through composition) · F5 `height_favored` blur → `mode='nearest'` (apron-safe) · F6 tautological
