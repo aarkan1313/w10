@@ -806,26 +806,57 @@ GIT_TERMINAL_PROMPT=0 git push origin main
 
 ## SLICE 4b — generalize to 10 biomes + compose + grammar weights
 
-> 4b mirrors the CPU recipe-port fan-out. Each biome reuses 4a's primitives + the apron pass pipeline; only the per-biome math + apron_px + constants differ. The 11 CPU recipes are `recipes_{volcanic,glacial,karst,grassland,desert,temperate,tundra,rainforest,coast,wetland}.rs` + mountain. Each is parity-gated against its own committed fixture, same shape as 4a.5 Step 3.
+> 4b mirrors the CPU recipe-port fan-out. Each biome reuses 4a's primitives + the apron pass pipeline; only the per-biome math + constants differ (ALL 10 share `APRON_PX = 160` like mountain — verified 2026-06-02). The 11 CPU recipes are `recipes_{volcanic,glacial,karst,grassland,desert,temperate,tundra,rainforest,coast,wetland}.rs` + mountain. Each is parity-gated against its own committed fixture, same shape as 4a.5 Step 3.
 
-### Task 4b.1 … 4b.10: Port each remaining recipe to GLSL + parity-gate
+> **▶ ARCHITECTURE DECISION (2026-06-02, pillars: adaptable + quality) — CONCAT-SELECTION, not a biome_id switch.**
+> The proven mountain shader (`biome_page_4a.glsl`) mixes (a) GENERIC pass-machine infra (the PASS_* state machine,
+> gaussian/flow/crop passes, the push constant, the leaf helpers cell_idx/affine_remap/ss/clip01/rotated0/warp/rmf)
+> with (b) MOUNTAIN-SPECIFIC constants + pointwise pass bodies. 4b.0 SPLITS these: `biome_page.glsl` = the generic
+> machine, `biome_mountain.glsl` = mountain's constants + its `biome_*` pass-body functions. Each biome is then its
+> OWN fragment file `biome_<name>.glsl` defining the SAME function names the machine calls (e.g.
+> `biome_pointwise(...)`, `biome_base(...)`, `biome_assemble(...)`, `biome_apron_offset()`, the biome's flow
+> orchestration hooks). **Selection happens at CONCAT TIME in Rust** — `Wg10BiomePageCompute` concatenates
+> `recipe_primitives.glsl + biome_page.glsl + biome_<selected>.glsl` (via `concat_glsl_hoist_version`) and compiles
+> a per-biome shader variant. NO GLSL `biome_id` switch, NO function pointers (GLSL has neither cleanly). WHY (pillars):
+> per-biome files are NON-OVERLAPPING → ports don't collide (the Slice-3 lib.rs-collision lesson) AND future biomes
+> drop in without touching the machine (adaptable); each biome compiles+parity-gates in isolation (quality, no
+> big-bang merge). COST: re-prove mountain parity after the 4b.0 split (one windowed `biome_page` run — now routine).
 
-For EACH biome in {volcanic, glacial, karst, grassland, desert, temperate, tundra, rainforest, coast, wetland} (one task each):
+### Task 4b.0 (do FIRST, serial) — restructure to concat-selection + re-prove mountain
+
+**Files:**
+- Create: `wg-10/worldgen_terrain/shaders/biome_page.glsl` (the GENERIC pass-machine: PASS_* consts, push constant, leaf helpers, gaussian/flow/discharge/crop/meshgrid passes, the `main()` that calls the biome `biome_*` hooks)
+- Create: `wg-10/worldgen_terrain/shaders/biome_mountain.glsl` (mountain's constants + the `biome_*` pass-body functions extracted from `biome_page_4a.glsl`)
+- Modify: `wg-10/rust/src/biome_page_compute.rs` (`load_shaders` now takes prim + machine + a biome fragment; `generate_core_page` gains a `biome: GString` arg selecting the fragment path; concat order = prim + machine + fragment)
+- Modify: `wg-10/worldgen_terrain/tests/biome_page_parity_check.gd` (pass `biome="mountain"` + its fragment path)
+- Delete (after parity re-proven): `wg-10/worldgen_terrain/shaders/biome_page_4a.glsl`
+
+**Define the biome-fragment INTERFACE** (the function names the machine calls, every biome defines them): decide from mountain's pass bodies — e.g. `void biome_pointwise(...)`, `void biome_base(...)`, `void biome_assemble(...)`, `int biome_flow_passes()` / the flow width/power/orchestration the machine needs, `float biome_final_scale()`, etc. Keep the interface SMALL and exactly what mountain needs; biomes that don't use a hook provide a trivial one. Document the interface contract at the top of `biome_page.glsl`.
+
+**Steps:**
+- [ ] Split `biome_page_4a.glsl`: generic machine → `biome_page.glsl`, mountain specifics → `biome_mountain.glsl`. Define + document the `biome_*` interface.
+- [ ] Update `biome_page_compute.rs` concat (prim + machine + fragment) + the `biome` selector arg; keep `concat_glsl_hoist_version`.
+- [ ] Update the parity check to pass the mountain fragment.
+- [ ] `cargo check` clean (isolated target). Re-run `--suite biome_page` WINDOWED — **mountain parity must still be ~1.89e-6** (the split must not change the math). Delete `biome_page_4a.glsl` once green.
+- [ ] Commit: `slice4b.0: restructure to concat-selection (machine + per-biome fragment), mountain re-proven`.
+
+### Task 4b.1 … 4b.10: Port each remaining recipe as its OWN fragment + parity-gate
+
+For EACH biome in {grassland, desert, coast, wetland, tundra (easy) → glacial, karst (custom flow) → temperate, rainforest, volcanic (tricky)} (one task each, in that difficulty order):
 
 **Files (per biome `<b>`):**
-- Modify: `wg-10/worldgen_terrain/shaders/biome_page.glsl` (add the `<b>` recipe pass branch; this file is the generalized successor to `biome_page_4a.glsl` — Task 4b.0 renames/promotes it)
-- Modify: `wg-10/rust/src/biome_page_compute.rs` (dispatch the `<b>` recipe by id)
-- Modify: `wg-10/worldgen_terrain/tests/biome_page_parity_check.gd` (loop over all biomes' fixtures, not just mountain)
-- Read: `wg-10/rust/src/recipes_<b>.rs` (the exact math to mirror), `tools/dem_pack/fixtures/recipe_<b>_fixture.json`
+- Create: `wg-10/worldgen_terrain/shaders/biome_<b>.glsl` (the `<b>` fragment: its constants + the `biome_*` interface functions, math mirrored EXACTLY from `recipes_<b>.rs`). NON-OVERLAPPING with other biomes — no collision.
+- Modify: `wg-10/worldgen_terrain/tests/biome_page_parity_check.gd` (add `<b>` + its fixture to the biome loop)
+- Possibly modify: `wg-10/worldgen_terrain/shaders/biome_page.glsl` ONLY if `<b>` needs a machine hook mountain didn't (e.g. rainforest's dual-mask, temperate's truncated flow, volcanic's RNG vents) — extend the interface minimally + KEEP mountain green.
+- Read: `wg-10/rust/src/recipes_<b>.rs` (exact math), `tools/dem_pack/fixtures/recipe_<b>_fixture.json` (the oracle)
 
 **Steps (each biome):**
-- [ ] Read `recipes_<b>.rs` — note its `APRON_PX`, affine-remap constants, style fields, and the assembly sequence (which passes it needs; some biomes skip flow channels).
-- [ ] Add the `<b>` pass branch(es) to `biome_page.glsl`, mirroring the Rust math exactly (constants → GLSL consts).
-- [ ] Add `<b>` to the parity check's biome loop (load `recipe_<b>_fixture.json`, generate, compare two-tier).
-- [ ] Run `--suite biome_page` WINDOWED; iterate to green for `<b>` at `ABS_EPS` (flow-region tolerance note if needed).
-- [ ] Commit: `slice4b: GLSL <b> recipe + parity (GPU vs f64 fixture)`.
-
-> **Task 4b.0 (do first):** promote `biome_page_4a.glsl` → `biome_page.glsl`; make the recipe selection a push-constant `biome_id` int so one shader dispatches any recipe. Keep mountain parity green after the rename (re-run `--suite biome_page`). Commit separately.
+- [ ] Read `recipes_<b>.rs` — its constants, style fields, assembly sequence, and flow specifics (width/power; or a CUSTOM flow: glacial/karst custom sigma, temperate truncates before the spread, rainforest emits TWO masks from one discharge, volcanic has a dedicated copy + PCG64 RNG vents — these need a machine-hook extension, not just a fragment).
+- [ ] Write `biome_<b>.glsl` implementing the `biome_*` interface with `<b>`'s math (constants → GLSL consts, exact seed offsets/weights).
+- [ ] Verify the FIXTURE exists + its schema (`records[]` + grid/apron/seed/feature_span/height) like mountain's; note any per-biome style_key.
+- [ ] Add `<b>` to the parity check's biome loop.
+- [ ] `cargo check` + `glslangValidator` the concatenated `<b>` variant (catch compile errors GPU-free). Then `--suite biome_page` WINDOWED; iterate to green at `NORM_EPS=1e-4` (record achieved maxd; if a custom flow needs more headroom, justify + note).
+- [ ] Commit: `slice4b: GLSL <b> recipe fragment + parity (GPU vs f64 fixture)`.
 
 ### Task 4b.11: GLSL `compose_biomes` + grammar biome-weight field + compose parity
 
