@@ -212,7 +212,7 @@ fn escarpment_field(
 /// with width_px=2.1 (the helper's `.max(0.1)` is a no-op since 2.1 > 0.1).
 #[inline]
 fn draw_channels_seam_safe(surface: &[f64], rows: usize, cols: usize) -> Vec<f64> {
-    h::flow_channels_seam_safe(surface, rows, cols, 2.1, 0.50)
+    h::flow_channels_seam_safe(surface, rows, cols, 2.1, 0.50, h::S_REF)
 }
 
 /// Port of `generate(..., apron_px=APRON_PX)` SEAM-SAFE path, returning the CORE-cropped

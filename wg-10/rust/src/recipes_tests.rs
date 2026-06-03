@@ -96,6 +96,8 @@ fn mountain_seamsafe_matches_python_oracle() {
             r.seed,
             r.feature_span_m,
             r.apron_px,
+            r.grid.spacing,
+            true,
         );
 
         assert_eq!(
@@ -167,6 +169,8 @@ fn mountain_seamsafe_matches_576_oracle() {
         r.seed,
         r.feature_span_m,
         r.apron_px,
+        r.grid.spacing,
+        true,
     );
     assert_eq!(got.len(), r.height.len(), "core len mismatch");
 

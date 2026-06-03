@@ -30,6 +30,20 @@ pub mod helpers {
     /// scipy's default gaussian truncate. All seam-safe blurs use it.
     pub const TRUNCATE: f64 = 4.0;
 
+    /// Reference spacing (metres/pixel) for world-anchored blur sigmas. MUST equal the Python S_REF
+    /// (mountain_synthesis.py). sigma_cells(sc, spacing) = sc*S_REF/max(spacing,1e-6) -> a blur covers
+    /// the same WORLD distance at any spacing -> macro structure identical across clipmap levels.
+    pub const S_REF: f64 = 32.0;
+
+    /// World-anchored blur sigma in CELLS. `sigma_cell_ref` is the reference cell sigma (the sigma at
+    /// `S_REF` metres/pixel); rescaling by `S_REF / spacing_m` keeps the blur covering the same world
+    /// distance at any spacing. At `spacing_m == S_REF` this is the identity, reproducing the
+    /// pre-scale-invariant recipe byte-for-byte.
+    #[inline]
+    pub fn sigma_cells(sigma_cell_ref: f64, spacing_m: f64) -> f64 {
+        (sigma_cell_ref * S_REF) / spacing_m.max(1e-6)
+    }
+
     /// Data-independent affine remap: `(field - center) * scale`.
     /// Mirror of `seam_safe.affine_remap`. The seam-safe replacement for per-window
     /// zscore / norm01: identical transform for every window keeps borders bit-exact.
@@ -77,11 +91,12 @@ pub mod helpers {
     /// Seam-safe CONNECTED-drainage discharge field. Mirror of
     /// `mountain_synthesis._flow_channels_seam_safe(surface, width_px, mode='nearest', power)`:
     ///
-    /// 1. pre-blur `surface` with gaussian sigma=1.15 (nearest),
+    /// 1. pre-blur `surface` with gaussian sigma=sigma_cells(1.15, spacing_m) (nearest),
     /// 2. real MFD flow accumulation (`array_ops::flow_accumulation_mfd`, given `power`),
     /// 3. FIXED-max normalize: `clip(log1p(acc) / log1p(acc.size), 0, 1)` (data-independent),
-    /// 4. spread with gaussian sigma=max(width_px, 0.1) (nearest), clip [0, 1].
+    /// 4. spread with gaussian sigma=sigma_cells(max(width_px, 0.1), spacing_m) (nearest), clip [0, 1].
     ///
+    /// `spacing_m` world-anchors both blur sigmas (pass `S_REF` for the reference-level identity).
     /// Reused verbatim by every biome that carves channels.
     pub fn flow_channels_seam_safe(
         surface: &[f64],
@@ -89,8 +104,10 @@ pub mod helpers {
         cols: usize,
         width_px: f64,
         power: f64,
+        spacing_m: f64,
     ) -> Vec<f64> {
-        let pre = array_ops::gaussian_filter_nearest(surface, rows, cols, 1.15, TRUNCATE);
+        let pre =
+            array_ops::gaussian_filter_nearest(surface, rows, cols, sigma_cells(1.15, spacing_m), TRUNCATE);
         let acc = array_ops::flow_accumulation_mfd(&pre, rows, cols, power);
         // log1p(acc.size): acc.size is the element count (rows*cols), matching numpy.
         let log_size = ((rows * cols) as f64).ln_1p();
@@ -98,7 +115,7 @@ pub mod helpers {
             .iter()
             .map(|&a| clip(a.ln_1p() / log_size, 0.0, 1.0))
             .collect();
-        let sigma = width_px.max(0.1);
+        let sigma = sigma_cells(width_px.max(0.1), spacing_m);
         discharge = array_ops::gaussian_filter_nearest(&discharge, rows, cols, sigma, TRUNCATE);
         for v in discharge.iter_mut() {
             *v = clip(*v, 0.0, 1.0);
@@ -264,8 +281,20 @@ pub mod mountain {
 
     /// Mirror of `_lowland_mask(range_field, regional, blur_mode='nearest')`.
     /// Returns the whole field. `broad_range` = gaussian(range_field, sigma=7.0).
-    fn lowland_mask(range_field: &[f64], regional: &[f64], rows: usize, cols: usize) -> Vec<f64> {
-        let broad_range = array_ops::gaussian_filter_nearest(range_field, rows, cols, 7.0, h::TRUNCATE);
+    fn lowland_mask(
+        range_field: &[f64],
+        regional: &[f64],
+        rows: usize,
+        cols: usize,
+        spacing_m: f64,
+    ) -> Vec<f64> {
+        let broad_range = array_ops::gaussian_filter_nearest(
+            range_field,
+            rows,
+            cols,
+            h::sigma_cells(7.0, spacing_m),
+            h::TRUNCATE,
+        );
         let n = rows * cols;
         let mut out = vec![0.0_f64; n];
         for i in 0..n {
@@ -293,6 +322,8 @@ pub mod mountain {
         style: &MountainStyle,
         feature_span_m: f64,
         apron_px: usize,
+        spacing_m: f64,
+        flow_on: bool,
     ) -> Vec<f64> {
         assert_eq!(wx.len(), rows * cols, "wx len != rows*cols");
         assert_eq!(wz.len(), rows * cols, "wz len != rows*cols");
@@ -330,19 +361,31 @@ pub mod mountain {
             near_detail[i] = h::affine_remap(nd, NEAR_DETAIL_CENTER, NEAR_DETAIL_SCALE);
         }
 
-        // --- range_envelope = smoothstep(0.24,0.58, gaussian(ranges, sigma=5.0)) ---
-        let ranges_blur5 = array_ops::gaussian_filter_nearest(&ranges, rows, cols, 5.0, h::TRUNCATE);
+        // --- range_envelope = smoothstep(0.24,0.58, gaussian(ranges, sigma=sigma_cells(5.0))) ---
+        let ranges_blur5 = array_ops::gaussian_filter_nearest(
+            &ranges,
+            rows,
+            cols,
+            h::sigma_cells(5.0, spacing_m),
+            h::TRUNCATE,
+        );
         let mut range_envelope = vec![0.0_f64; n];
         for i in 0..n {
             range_envelope[i] = h::smoothstep(0.24, 0.58, ranges_blur5[i]);
         }
 
         // --- lowland ---
-        let lowland = lowland_mask(&ranges, &regional, rows, cols);
+        let lowland = lowland_mask(&ranges, &regional, rows, cols, spacing_m);
 
         // --- massif ---
-        // massif_inner = 0.58*regional + 0.86*range_envelope + 0.28*gaussian(ranges, sigma=1.8)
-        let ranges_blur18 = array_ops::gaussian_filter_nearest(&ranges, rows, cols, 1.8, h::TRUNCATE);
+        // massif_inner = 0.58*regional + 0.86*range_envelope + 0.28*gaussian(ranges, sigma=sigma_cells(1.8))
+        let ranges_blur18 = array_ops::gaussian_filter_nearest(
+            &ranges,
+            rows,
+            cols,
+            h::sigma_cells(1.8, spacing_m),
+            h::TRUNCATE,
+        );
         let mut massif = vec![0.0_f64; n];
         for i in 0..n {
             let massif_inner =
@@ -350,8 +393,14 @@ pub mod mountain {
             // massif = clip(affine_remap(massif_inner, MASSIF_CENTER, MASSIF_SCALE), 0, 1)
             massif[i] = h::clip(h::affine_remap(massif_inner, MASSIF_CENTER, MASSIF_SCALE), 0.0, 1.0);
         }
-        // massif = gaussian(massif, sigma=2.0)
-        let massif = array_ops::gaussian_filter_nearest(&massif, rows, cols, 2.0, h::TRUNCATE);
+        // massif = gaussian(massif, sigma=sigma_cells(2.0))
+        let massif = array_ops::gaussian_filter_nearest(
+            &massif,
+            rows,
+            cols,
+            h::sigma_cells(2.0, spacing_m),
+            h::TRUNCATE,
+        );
 
         // --- base = affine_remap(uplift_gain*(1.50*massif + 0.18*ranges - 0.46*lowland), BASE) ---
         let mut base = vec![0.0_f64; n];
@@ -360,29 +409,42 @@ pub mod mountain {
             base[i] = h::affine_remap(inner, BASE_CENTER, BASE_SCALE);
         }
 
-        // --- primary channels ---
-        // primary = _flow_channels_seam_safe(base, width=valley_width_px, power=0.48)
-        let primary =
-            h::flow_channels_seam_safe(&base, rows, cols, style.valley_width_px, 0.48);
-        // primary_mask = smoothstep(PRIMARY_LO, PRIMARY_HI, primary)
+        // --- primary + tributary channel masks (flow_on gated) ---
+        // When flow_on == false (coarse clipmap levels) the two expensive
+        // flow_channels_seam_safe passes are SKIPPED and both masks are all-zeros,
+        // exactly like the Python `else: primary_mask = tributary_mask = zeros_like(base)`.
+        // The two `height -= ...` carve terms below then vanish -> MACRO surface.
         let mut primary_mask = vec![0.0_f64; n];
-        for i in 0..n {
-            primary_mask[i] = h::smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary[i]);
-        }
-
-        // --- tributaries ---
-        // rough_surface = base + 0.18 * affine_remap(ranges, RANGES_ZSCORE_CENTER, _SCALE)
-        let mut rough_surface = vec![0.0_f64; n];
-        for i in 0..n {
-            rough_surface[i] =
-                base[i] + 0.18 * h::affine_remap(ranges[i], RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE);
-        }
-        // tributary = _flow_channels_seam_safe(rough_surface, width=max(valley_width*0.42, 0.6), power=0.34)
-        let trib_width = (style.valley_width_px * 0.42).max(0.6);
-        let tributary = h::flow_channels_seam_safe(&rough_surface, rows, cols, trib_width, 0.34);
         let mut tributary_mask = vec![0.0_f64; n];
-        for i in 0..n {
-            tributary_mask[i] = h::smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary[i]);
+        if flow_on {
+            // primary = _flow_channels_seam_safe(base, width=valley_width_px, power=0.48)
+            let primary = h::flow_channels_seam_safe(
+                &base,
+                rows,
+                cols,
+                style.valley_width_px,
+                0.48,
+                spacing_m,
+            );
+            // primary_mask = smoothstep(PRIMARY_LO, PRIMARY_HI, primary)
+            for i in 0..n {
+                primary_mask[i] = h::smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary[i]);
+            }
+
+            // rough_surface = base + 0.18 * affine_remap(ranges, RANGES_ZSCORE_CENTER, _SCALE)
+            let mut rough_surface = vec![0.0_f64; n];
+            for i in 0..n {
+                rough_surface[i] = base[i]
+                    + 0.18 * h::affine_remap(ranges[i], RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE);
+            }
+            // tributary = _flow_channels_seam_safe(rough_surface, width=max(valley_width*0.42, 0.6), power=0.34)
+            let trib_width = (style.valley_width_px * 0.42).max(0.6);
+            let tributary =
+                h::flow_channels_seam_safe(&rough_surface, rows, cols, trib_width, 0.34, spacing_m);
+            for i in 0..n {
+                tributary_mask[i] =
+                    h::smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary[i]);
+            }
         }
 
         // --- high_mask / valley_mask (shared by both paths) ---
@@ -417,19 +479,25 @@ pub mod mountain {
         }
 
         // --- floor blend ---
-        // floor_mask = clip(smoothstep(0.48,0.86, gaussian(valley_mask, sigma=1.2)) + 0.24*lowland, 0,1)
-        let valley_blur = array_ops::gaussian_filter_nearest(&valley_mask, rows, cols, 1.2, h::TRUNCATE);
+        // floor_mask = clip(smoothstep(0.48,0.86, gaussian(valley_mask, sigma=sigma_cells(1.2))) + 0.24*lowland, 0,1)
+        let valley_blur = array_ops::gaussian_filter_nearest(
+            &valley_mask,
+            rows,
+            cols,
+            h::sigma_cells(1.2, spacing_m),
+            h::TRUNCATE,
+        );
         let mut floor_mask = vec![0.0_f64; n];
         for i in 0..n {
             floor_mask[i] =
                 h::clip(h::smoothstep(0.48, 0.86, valley_blur[i]) + 0.24 * lowland[i], 0.0, 1.0);
         }
-        // floor = gaussian(height, sigma=max(floor_smooth_px, 0.2))
+        // floor = gaussian(height, sigma=sigma_cells(max(floor_smooth_px, 0.2)))
         let floor = array_ops::gaussian_filter_nearest(
             &height,
             rows,
             cols,
-            style.floor_smooth_px.max(0.2),
+            h::sigma_cells(style.floor_smooth_px.max(0.2), spacing_m),
             h::TRUNCATE,
         );
         // height = height*(1 - 0.38*floor_mask) + floor*(0.38*floor_mask); height -= 0.18*floor_mask
@@ -439,9 +507,15 @@ pub mod mountain {
         }
 
         // --- final blend (seam-safe) ---
-        // final_blend = 0.74*height + 0.26*gaussian(height, sigma=1.20)
+        // final_blend = 0.74*height + 0.26*gaussian(height, sigma=sigma_cells(1.20))
         // height = affine_remap(final_blend, FINAL_CENTER, FINAL_SCALE)
-        let height_blur = array_ops::gaussian_filter_nearest(&height, rows, cols, 1.20, h::TRUNCATE);
+        let height_blur = array_ops::gaussian_filter_nearest(
+            &height,
+            rows,
+            cols,
+            h::sigma_cells(1.20, spacing_m),
+            h::TRUNCATE,
+        );
         for i in 0..n {
             let final_blend = 0.74 * height[i] + 0.26 * height_blur[i];
             height[i] = h::affine_remap(final_blend, FINAL_CENTER, FINAL_SCALE);
@@ -473,6 +547,10 @@ pub mod mountain {
 /// `wx`/`wz` are apron-padded world-coord grids (flat row-major, PADDED `rows*cols`);
 /// returns the inner core height (length `(rows-2*apron_px)*(cols-2*apron_px)`), exactly
 /// like the Python `generate(...)["height"]`. Uses `STYLES[0]` (alpine_branching).
+///
+/// `spacing_m` world-anchors every seam-safe blur sigma (pass `helpers::S_REF` for the
+/// reference-level identity). `flow_on` enables the drainage carve (pass `false` on coarse
+/// clipmap levels to skip the two flow passes -> MACRO surface, parallel to the Python).
 #[allow(clippy::too_many_arguments)]
 pub fn mountain_seamsafe(
     wx: &[f64],
@@ -482,6 +560,8 @@ pub fn mountain_seamsafe(
     seed: i64,
     feature_span_m: f64,
     apron_px: usize,
+    spacing_m: f64,
+    flow_on: bool,
 ) -> Vec<f64> {
     mountain::generate_seamsafe(
         wx,
@@ -492,5 +572,7 @@ pub fn mountain_seamsafe(
         &mountain::ALPINE_BRANCHING,
         feature_span_m,
         apron_px,
+        spacing_m,
+        flow_on,
     )
 }

@@ -119,7 +119,7 @@ pub const CLIFFED_HEADLANDS: CoastStyle = CoastStyle {
 /// no-op since 1.9 > 0.1).
 #[inline]
 fn flow_channels_seam_safe(surface: &[f64], rows: usize, cols: usize) -> Vec<f64> {
-    h::flow_channels_seam_safe(surface, rows, cols, 1.9, 0.47)
+    h::flow_channels_seam_safe(surface, rows, cols, 1.9, 0.47, h::S_REF)
 }
 
 /// Port of `generate(..., apron_px=APRON_PX)` SEAM-SAFE path, returning the CORE-cropped

@@ -192,7 +192,7 @@ fn yardang_field(
 /// no-op since 1.8 > 0.1).
 #[inline]
 fn wash_channels_seam_safe(surface: &[f64], rows: usize, cols: usize) -> Vec<f64> {
-    h::flow_channels_seam_safe(surface, rows, cols, 1.8, 0.43)
+    h::flow_channels_seam_safe(surface, rows, cols, 1.8, 0.43, h::S_REF)
 }
 
 /// Port of `generate(..., apron_px=APRON_PX)` SEAM-SAFE path, returning the CORE-cropped

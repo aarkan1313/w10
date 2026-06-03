@@ -152,7 +152,7 @@ fn meander_field_point(
 /// is a no-op since 1.8 > 0.1).
 #[inline]
 fn fine_flow_seam_safe(surface: &[f64], rows: usize, cols: usize) -> Vec<f64> {
-    h::flow_channels_seam_safe(surface, rows, cols, 1.8, 0.44)
+    h::flow_channels_seam_safe(surface, rows, cols, 1.8, 0.44, h::S_REF)
 }
 
 /// Port of `generate(..., apron_px=APRON_PX)` SEAM-SAFE path, returning the CORE-cropped
