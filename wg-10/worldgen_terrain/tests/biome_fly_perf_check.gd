@@ -79,7 +79,7 @@ func _run() -> int:
 		ProjectSettings.globalize_path(PRIM),
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, 1000.0, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, 1000.0, 2, SEED))
 	if err != "":
 		push_error("[wg10-biome-fly] pool configure_biome failed: %s" % err); return 1
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")

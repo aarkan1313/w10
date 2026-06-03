@@ -58,6 +58,11 @@ pub struct Wg10PagePool {
     use_biome_path:      bool,
     biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
     biome_feature_span_m: f64,
+    /// SCALE-INVARIANCE: the FIRST clipmap level (0 = finest) that bakes WITHOUT the drainage carve.
+    /// A page at `level` runs `flow_on = level < biome_flow_max_level`. Default 2 => flow on levels
+    /// 0,1 (near camera, where carved valleys read), off 2.. (coarse, where the macro surface
+    /// suffices and the two flow passes are too costly). Set by `configure_biome`.
+    biome_flow_max_level: i64,
 
     page_px:      i64,
     world_span:   f64,
@@ -86,6 +91,7 @@ impl IRefCounted for Wg10PagePool {
             use_biome_path:       false,
             biome_ctx:            None,
             biome_feature_span_m: 90000.0,
+            biome_flow_max_level: 2,
             page_px:      256,
             world_span:   1000.0,
             seed:         0,
@@ -220,6 +226,9 @@ impl Wg10PagePool {
         relief_m:   f64,                 // VERTICAL SCALE (metres): normalized recipe height * this -> metres
                                          // before the page texture write (the render shader expects metres).
                                          // The tunable vertical-scale knob (~1000 for mountain).
+        flow_max_level: i64,             // SCALE-INVARIANCE: first level (0=finest) baked WITHOUT the
+                                         // drainage carve. A page at `level` runs flow_on = level <
+                                         // flow_max_level. 2 => flow on levels 0,1; off 2.. (coarse).
         seed:       i64,
     ) -> GString {
         // --- F8: free-before-reconfigure (mirror `configure`) ---
@@ -272,6 +281,7 @@ impl Wg10PagePool {
         self.use_biome_path       = true;
         self.biome_ctx            = Some(ctx);
         self.biome_feature_span_m = feature_span_m;
+        self.biome_flow_max_level = flow_max_level;
 
         self.page_px    = page_px;
         self.world_span = world_span;
@@ -352,6 +362,11 @@ impl Wg10PagePool {
         let span_l = self.world_span * 2f64.powi(level as i32);
         let (ox, oz, ws, ppx, sd) =
             (origin_x, origin_z, span_l, self.page_px, self.seed);
+        // SCALE-INVARIANCE: this level's drainage-carve flag. `compute_biome_page_cached` derives its
+        // own spacing from (ws=span_l, ppx) -> each level bakes its blurs world-anchored to its span;
+        // flow_on gates the carve off on coarse levels (cheaper, macro surface). (Inert on the legacy
+        // kernel path, which ignores flow_on.)
+        let flow_on = level < self.biome_flow_max_level;
 
         match decision {
             // ----------------------------------------------------------------
@@ -382,7 +397,7 @@ impl Wg10PagePool {
                 let result = if self.use_biome_path {
                     let bctx = self.biome_ctx.as_ref().unwrap();
                     crate::biome_page_compute::compute_biome_page_cached(
-                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd,
+                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd, flow_on,
                     )
                 } else {
                     let ctx = self.compute_ctx.as_ref().unwrap();
@@ -428,7 +443,7 @@ impl Wg10PagePool {
                 let result = if self.use_biome_path {
                     let bctx = self.biome_ctx.as_ref().unwrap();
                     crate::biome_page_compute::compute_biome_page_cached(
-                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd,
+                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd, flow_on,
                     )
                 } else {
                     let ctx = self.compute_ctx.as_ref().unwrap();

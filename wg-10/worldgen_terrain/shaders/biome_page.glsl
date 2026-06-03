@@ -96,7 +96,8 @@ const int PASS_ACC_INIT            = 24; // [GENERIC] acc_a = acc_b = 1.0 (match
 const int PASS_COPY_POOL           = 25; // [GENERIC] gauss_in <- pool[pool_sel] (to blur a pool slot)
 const int PASS_POOL_FROM_GAUSS     = 26; // [GENERIC] pool[pool_sel] <- gauss_out (stash a blur)
 const int PASS_CROP_IMG            = 27; // [GENERIC] out_img[core] <- height[apron-offset] (RUNTIME crop-to-texture sibling of PASS_CROP; writes the R32F image at binding 41 instead of the core_out storage buffer. The readback TEST harness uses PASS_CROP; the runtime producer uses this.)
-// 28..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
+const int PASS_ZERO_FLOW_MASKS     = 28; // [GENERIC] primary_mask = tributary_mask = 0 (the flow_on==false branch: coarse clipmap levels SKIP the two flow_channels passes -> both masks all-zero, exactly the CPU `else: primary_mask = tributary_mask = zeros_like(base)`. The cached field buffers persist across pages, so a prior flow-ON page leaves non-zero masks; this explicitly re-zeros them before PASS_MASKS/PASS_ASSEMBLE read them.)
+// 29..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
 
 // ---------------------------------------------------------------------------
 // GENERIC COMPOSE passes (Slice-4b.11): the biome-AGNOSTIC blend layer that composes the OUTPUTS
@@ -484,6 +485,16 @@ void main() {
 
     if (pass == PASS_FLOW_PRE_BASE) {
         flow_pre.v[i] = base.v[i];
+        return;
+    }
+
+    if (pass == PASS_ZERO_FLOW_MASKS) {
+        // flow_on==false branch: both channel masks are all-zeros (CPU `else` path). The two carve
+        // terms in PASS_ASSEMBLE (-= carve_g*..*primary_mask, -= branch_g*..*tributary_mask) then
+        // vanish -> the MACRO surface. Re-zeroing matters because the cached buffers persist across
+        // pages (a prior flow-ON page leaves non-zero masks in these slots).
+        primary_mask.v[i] = 0.0;
+        tributary_mask.v[i] = 0.0;
         return;
     }
 

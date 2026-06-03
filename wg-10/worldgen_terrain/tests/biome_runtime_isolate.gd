@@ -31,7 +31,7 @@ func _run() -> int:
 	var err: String = str(pool.call("configure_biome",
 		ProjectSettings.globalize_path(PRIM), ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, 1000.0, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, 1000.0, 2, SEED))
 	if err != "":
 		push_error("[wg10-iso] configure_biome failed: %s" % err); return 1
 	print("[wg10-iso] configured biome_path=%s" % str(pool.call("uses_biome_path")))

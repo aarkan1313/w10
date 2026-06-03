@@ -59,6 +59,11 @@ const PASS_CROP: i32 = 20;
 /// biome-private codes which start at 32). The readback TEST harness uses PASS_CROP; the runtime
 /// producer (`compute_biome_page_cached`) uses this.
 const PASS_CROP_IMG: i32 = 27;
+/// flow_on==false branch (coarse clipmap levels): zero primary_mask + tributary_mask so the two
+/// carve terms in PASS_ASSEMBLE vanish -> the MACRO surface (CPU `else: primary_mask =
+/// tributary_mask = zeros_like(base)`). A GENERIC pass in the 28..31 reserved block. MUST match
+/// biome_page.glsl PASS_ZERO_FLOW_MASKS = 28.
+const PASS_ZERO_FLOW_MASKS: i32 = 28;
 const PASS_FLOW_PRE_PREBLUR_IN: i32 = 21;
 const PASS_FLOW_PRE_FROM_GAUSS: i32 = 22;
 const PASS_MASSIF_WRITEBACK: i32 = 23;
@@ -465,6 +470,51 @@ fn mountain_sigmas() -> Vec<f64> {
     vec![1.15, 1.20, 1.80, 2.00, 5.00, 7.00, valley_width_px, trib_width, floor_smooth]
 }
 
+/// SCALE-INVARIANCE (Task: per-level spacing kernel-anchoring). Build the packed gaussian-kernel
+/// buffer + `KernelParams` for ONE dispatch at `spacing_m`, world-anchoring every mountain blur via
+/// `recipes::helpers::sigma_cells(ref, spacing_m)` -- EXACTLY the CPU oracle's anchoring. The slot
+/// LOOKUP key stays the REFERENCE cell sigma (`mountain_sigmas()` values, what `schedule_mountain`
+/// passes to `gauss(...)`/`flow_channels(...)`), but the kernel CONTENT at that slot and its
+/// `kradius` reflect the ANCHORED sigma `sigma_cells(ref, spacing)` -- so the GLSL machine (which
+/// reads kradius/koffset from the push constant and taps the packed buffer) is UNCHANGED, it just
+/// runs the spacing-anchored kernels. At `spacing_m == S_REF` (32.0) this is the identity
+/// (sigma_cells == ref), reproducing the cell-sigma kernels byte-for-byte.
+///
+/// Returns `(packed_kernel_f32, KernelParams)` or an Err if an anchored kernel exceeds
+/// `KERNEL_STRIDE` (would happen only at a spacing far finer than S_REF -- the production finest
+/// level is ~32 m/px == S_REF, so the largest anchored sigma ~7.0 -> radius ~28 << 64; guarded
+/// regardless). The kernel content MUST match `array_ops::gaussian_filter_nearest` at the SAME
+/// anchored sigma bit-for-bit (same `gaussian_kernel1d` port, same TRUNCATE), or the 576 parity
+/// drifts -- this is the exact thing the windowed gate verifies.
+fn mountain_kernels_anchored(spacing_m: f64) -> Result<(Vec<f32>, KernelParams), String> {
+    let refs = mountain_sigmas();
+    let n_slots = refs.len();
+    let mut packed = vec![0.0_f32; n_slots * KERNEL_STRIDE];
+    let mut slots: Vec<(f64, i32, i32)> = Vec::with_capacity(n_slots);
+    for (slot, &ref_sigma) in refs.iter().enumerate() {
+        // ANCHOR: the blur covers the same WORLD distance at any spacing (macro structure identical
+        // across clipmap levels). Mirror of every CPU `h::sigma_cells(ref, spacing_m)` call.
+        let anchored = crate::recipes::helpers::sigma_cells(ref_sigma, spacing_m);
+        let k = gaussian_kernel1d(anchored, TRUNCATE);
+        if k.len() > KERNEL_STRIDE {
+            return Err(format!(
+                "mountain_kernels_anchored: anchored kernel len {} (ref sigma {ref_sigma} -> \
+                 anchored {anchored} at spacing {spacing_m}) > KERNEL_STRIDE {KERNEL_STRIDE}",
+                k.len()
+            ));
+        }
+        let base = slot * KERNEL_STRIDE;
+        packed[base..base + k.len()].copy_from_slice(&k);
+        // KEY by the REFERENCE sigma (the value the schedule looks up); CONTENT/RADIUS are anchored.
+        slots.push((
+            ref_sigma,
+            (slot * KERNEL_STRIDE) as i32,
+            gaussian_radius(anchored, TRUNCATE) as i32,
+        ));
+    }
+    Ok((packed, KernelParams { slots }))
+}
+
 /// Distinct gaussian sigmas the GRASSLAND recipe uses (recipes_grassland.rs::generate_seamsafe),
 /// in a FIXED order. Order defines koffset; the orchestrator looks each up by value. The recipe's
 /// blurs (read directly from the oracle):
@@ -769,6 +819,13 @@ pub(crate) struct Scheduler<'a> {
     /// (`generate_core_page_iters`) passes a swept value to find the real 576-production
     /// convergence count. Compose/blend engines never run flow -> they set it to STABLE_ITERS too.
     flow_iters: usize,
+    /// SCALE-INVARIANCE: enable the drainage carve. `true` reproduces the parity-proven schedule
+    /// (both flow_channels passes + the carve run). `false` (coarse clipmap levels) makes
+    /// `schedule_mountain` SKIP the two expensive flow_channels passes and instead zero the channel
+    /// masks (PASS_ZERO_FLOW_MASKS) -> the MACRO surface, mirroring the CPU oracle's `flow_on==false`
+    /// `else` branch. The readback test harnesses (`run_inner` etc.) and every non-mountain schedule
+    /// set this `true` so their parity-frozen dispatch sequence is byte-identical to before this flag.
+    flow_on: bool,
 }
 
 impl<'a> Scheduler<'a> {
@@ -995,15 +1052,24 @@ pub(crate) fn schedule_mountain(s: &mut Scheduler) {
     // 5) base
     s.dispatch_full(PASS_BASE, 0, 0, 0.0);
 
-    // 6) primary channels: flow_channels_seam_safe(base, valley_width, power=0.48)
-    s.dispatch_full(PASS_FLOW_PRE_BASE, 0, 0, 0.0);
-    s.flow_channels(0.48_f32, valley_width_px);
-    s.dispatch_full(PASS_PRIMARY_MASK, 0, 0, 0.0);
+    // 6 + 7) primary + tributary channels (flow_on gated). When flow_on==false (coarse clipmap
+    // levels) BOTH expensive flow_channels_seam_safe passes are SKIPPED and the two masks are
+    // zeroed -> the carve terms in PASS_ASSEMBLE vanish -> the MACRO surface. EXACTLY the CPU
+    // oracle's `if flow_on { ... } else { primary_mask = tributary_mask = zeros }` branch.
+    if s.flow_on {
+        // 6) primary channels: flow_channels_seam_safe(base, valley_width, power=0.48)
+        s.dispatch_full(PASS_FLOW_PRE_BASE, 0, 0, 0.0);
+        s.flow_channels(0.48_f32, valley_width_px);
+        s.dispatch_full(PASS_PRIMARY_MASK, 0, 0, 0.0);
 
-    // 7) tributaries: flow_channels_seam_safe(rough_surface, trib_width, power=0.34)
-    s.dispatch_full(PASS_FLOW_PRE_ROUGH, 0, 0, 0.0);
-    s.flow_channels(0.34_f32, trib_width);
-    s.dispatch_full(PASS_TRIB_MASK, 0, 0, 0.0);
+        // 7) tributaries: flow_channels_seam_safe(rough_surface, trib_width, power=0.34)
+        s.dispatch_full(PASS_FLOW_PRE_ROUGH, 0, 0, 0.0);
+        s.flow_channels(0.34_f32, trib_width);
+        s.dispatch_full(PASS_TRIB_MASK, 0, 0, 0.0);
+    } else {
+        // primary_mask = tributary_mask = 0 (the cached buffers persist across pages -> re-zero).
+        s.dispatch_full(PASS_ZERO_FLOW_MASKS, 0, 0, 0.0);
+    }
 
     // 8) high_mask / valley_mask
     s.dispatch_full(PASS_MASKS, 0, 0, 0.0);
@@ -2058,6 +2124,14 @@ pub(crate) fn free_biome_page_context(rd: &mut Gd<RenderingDevice>, ctx: &BiomeP
 /// `spacing = world_span / (page_px - 1)` (texel-CORNER convention: texel 0 -> origin, page_px-1
 /// -> origin+span), matching height_page.glsl:191-195. The apron-padded origin is
 /// `origin - apron_px*spacing` per axis (the meshgrid pass subtracts the apron back off).
+///
+/// SCALE-INVARIANCE: `spacing` is computed INTERNALLY (callers don't pass it) and world-anchors
+/// every gaussian kernel via `mountain_kernels_anchored(spacing)` -> the cached kernel buffer is
+/// RE-FILLED per dispatch (the buffer RID stays allocated; only its bytes change) so each clipmap
+/// LEVEL bakes its blurs at its OWN spacing -> the macro structure matches across levels (no
+/// geomorph warp). `flow_on` gates the drainage carve: `false` on coarse levels SKIPS the two
+/// flow_channels passes (cheaper) -> the MACRO surface, mirroring the CPU oracle. At
+/// `spacing == S_REF` (32.0) + `flow_on == true` this reproduces the parity-proven page byte-for-byte.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn compute_biome_page_cached(
     rd: &mut Gd<RenderingDevice>,
@@ -2069,6 +2143,7 @@ pub(crate) fn compute_biome_page_cached(
     page_px: i64,
     feature_span_m: f64,
     seed: i64,
+    flow_on: bool,
 ) -> Result<(), String> {
     if page_px as usize != ctx.core_px {
         return Err(format!(
@@ -2084,9 +2159,50 @@ pub(crate) fn compute_biome_page_cached(
             "compute_biome_page_cached: seed {seed} outside i32 range (GPU hash is 32-bit-seed)"
         ));
     }
-    let spacing = (world_span / (page_px as f64 - 1.0)) as f32;
+    // spacing computed INSIDE (texel-corner): callers pass world_span+page_px, not spacing.
+    let spacing_f64 = world_span / (page_px as f64 - 1.0);
+    let spacing = spacing_f64 as f32;
     let ox = (origin_x - ctx.apron_px as f64 * spacing as f64) as f32;
     let oz = (origin_z - ctx.apron_px as f64 * spacing as f64) as f32;
+
+    // SCALE-INVARIANCE: rebuild the WORLD-anchored gaussian kernels for THIS dispatch's spacing and
+    // re-fill the cached kernel buffer (binding 19) in place. `kparams_anchored` keeps the same slot
+    // LOOKUP keys (the reference cell sigmas `schedule_mountain` asks for) but with the anchored
+    // koffset/kradius; the GLSL machine is unchanged (it reads kradius/koffset from the push constant
+    // and taps the now-anchored packed buffer). Built BEFORE the compute list opens (a panic mid-list
+    // would leak the open list); the buffer_update is RECORDED on the global RD and auto-submitted
+    // before the compute dispatches, exactly like the create-time .data() upload.
+    let (packed_kernel, kparams_anchored) = mountain_kernels_anchored(spacing_f64)?;
+    let packed_pba = PackedByteArray::from(f32s_to_bytes(&packed_kernel).as_slice());
+    let upd = rd.buffer_update(
+        ctx.bufs.kernel,
+        0,
+        (packed_kernel.len() * 4) as u32,
+        &packed_pba,
+    );
+    if upd != godot::global::Error::OK {
+        return Err(format!(
+            "compute_biome_page_cached: buffer_update(kernel) failed: {upd:?}"
+        ));
+    }
+    // INVARIANT: the anchored kparams must key by the SAME reference sigmas (same slot LAYOUT) the
+    // context allocated -- only koffset/kradius differ with spacing. If the slot KEYS ever diverged
+    // the re-filled buffer would be indexed by a koffset the schedule never produced. (Also keeps
+    // the context's build-time `kparams` a live read, documenting the layout contract.)
+    debug_assert_eq!(
+        ctx.bufs.kparams.slots.len(),
+        kparams_anchored.slots.len(),
+        "anchored kparams slot count must match the context's allocated kernel layout"
+    );
+    debug_assert!(
+        ctx.bufs
+            .kparams
+            .slots
+            .iter()
+            .zip(kparams_anchored.slots.iter())
+            .all(|(a, b)| (a.0 - b.0).abs() < 1e-9 && a.1 == b.1),
+        "anchored kparams must key by the SAME reference sigmas at the SAME koffsets"
+    );
 
     // per-page uniform set: the cached buffers (0..40) + this page's image (41).
     let bindings = ctx.bufs.buffer_bindings();
@@ -2111,19 +2227,18 @@ pub(crate) fn compute_biome_page_cached(
     let wg_core_y = (core_rows as u32).div_ceil(16);
 
     // PRE-VALIDATE every sigma BEFORE the list opens (KernelParams::kp `.expect`s; a panic with an
-    // open list would leak). mountain_sigmas() are all in the context's kparams.
+    // open list would leak). The ANCHORED kparams key by the SAME reference sigmas mountain_sigmas()
+    // lists (only koffset/kradius differ), so every lookup the schedule makes resolves.
     for &sg in mountain_sigmas().iter() {
-        let _ = ctx.bufs.kparams.kp(sg);
+        let _ = kparams_anchored.kp(sg);
     }
 
     let cl = rd.compute_list_begin();
     rd.compute_list_bind_compute_pipeline(cl, ctx.pipeline);
 
-    // Scheduler over the cached buffers + open list. kparams is moved into the Scheduler, so clone
-    // the context's resolved slots (cheap: a small Vec of (f64,i32,i32)).
-    let kparams = KernelParams {
-        slots: ctx.bufs.kparams.slots.clone(),
-    };
+    // Scheduler over the cached buffers + open list. The ANCHORED kparams (built above from this
+    // dispatch's spacing) is moved into the Scheduler so the gauss passes use the anchored radii.
+    let kparams = kparams_anchored;
     let mut sched = Scheduler {
         rd,
         cl,
@@ -2146,6 +2261,7 @@ pub(crate) fn compute_biome_page_cached(
         wg_core_y,
         kparams,
         flow_iters: ctx.flow_iters,
+        flow_on, // SCALE-INVARIANCE: coarse levels pass false -> macro surface (no carve).
     };
     // Run the PROVEN mountain schedule (ends with PASS_CROP into the core storage buffer -- inert
     // here, we don't read it), then crop to the IMAGE.
@@ -2472,7 +2588,10 @@ impl Wg10BiomePageCompute {
         let origin_z = oz + apron as f64 * spacing;
 
         if let Err(e) = compute_biome_page_cached(
-            &mut rd, &ctx, tex, origin_x, origin_z, world_span, page_px, feature_span_m, seed,
+            // flow_on=true: the 576 PARITY readback must match the flow-ON f64 oracle. The
+            // spacing-anchored kernels are now built INSIDE from world_span/(page_px-1), so the
+            // regenerated oracle (at the SAME spacing) must match bit-for-bit (Tier-2).
+            &mut rd, &ctx, tex, origin_x, origin_z, world_span, page_px, feature_span_m, seed, true,
         ) {
             godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: {e}");
             rd.free_rid(tex);
@@ -2844,6 +2963,10 @@ impl Wg10BiomePageCompute {
             wg_core_y,
             kparams,
             flow_iters,
+            // READBACK harness: ALWAYS flow_on (the parity-frozen sequence the 576/biome gates prove
+            // against the flow-ON oracle). The flow_on=false coarse-level path is exercised ONLY via
+            // the runtime producer (compute_biome_page_cached) + the pool.
+            flow_on: true,
         };
         // Biome selector (derived from the fragment path stem in generate_core_page). Each biome
         // adds a `schedule_<name>()` + one match arm here + a `*_sigmas()` arm in `biome_sigmas`.
@@ -3072,6 +3195,7 @@ impl Wg10BiomePageCompute {
             wg_core_y: wg_full_y,
             kparams,
             flow_iters: STABLE_ITERS, // compose never runs flow; value is irrelevant but required
+            flow_on: true,            // compose never runs schedule_mountain; irrelevant but required
         };
 
         // ONE compose_biomes fold step: acc=height, acc_w=base, f=pool0, w=pool1 pre-loaded.
@@ -3333,6 +3457,7 @@ impl Wg10BiomePageCompute {
             favor_strength, relief_confidence_floor, relief_m: 0.0,
             wg_full_x, wg_full_y, wg_core_x: wg_full_x, wg_core_y: wg_full_y, kparams,
             flow_iters: STABLE_ITERS, // blend never runs flow
+            flow_on: true,            // blend never runs schedule_mountain; irrelevant but required
         };
         if use_favored { sched.blend_favored_step(); } else { sched.blend_field_step(); }
 
@@ -3409,6 +3534,53 @@ mod biome_page_compute_tests {
         for &sg in &mountain_sigmas() {
             let len = 2 * gaussian_radius(sg, TRUNCATE) + 1;
             assert!(len <= KERNEL_STRIDE, "sigma {sg} kernel len {len} > {KERNEL_STRIDE}");
+        }
+    }
+
+    /// SCALE-INVARIANCE identity: at spacing == S_REF (32.0), `sigma_cells` is the identity, so the
+    /// anchored kernels MUST equal the cell-sigma kernels (the parity-proven content) BYTE-for-byte,
+    /// and the kparams slot layout (key + koffset + kradius) MUST match `alloc_apron_buffers`'. This
+    /// pins the property the windowed 576 gate depends on: at the production finest level (~32 m/px)
+    /// the GPU kernels are unchanged from the cell-sigma path.
+    #[test]
+    fn anchored_kernels_identity_at_s_ref() {
+        use crate::recipes::helpers::S_REF;
+        let (packed, kp) = mountain_kernels_anchored(S_REF).expect("kernels fit at S_REF");
+        // Reference packed buffer (the cell-sigma path: gaussian_kernel1d(ref, TRUNCATE)).
+        let refs = mountain_sigmas();
+        for (slot, &ref_sigma) in refs.iter().enumerate() {
+            let want = gaussian_kernel1d(ref_sigma, TRUNCATE);
+            let base = slot * KERNEL_STRIDE;
+            for (j, &w) in want.iter().enumerate() {
+                assert_eq!(packed[base + j], w, "slot {slot} (sigma {ref_sigma}) tap {j} differs at S_REF");
+            }
+            // slot layout: keyed by the REFERENCE sigma, anchored koffset/kradius == cell-sigma ones.
+            let (ko, kr) = kp.kp(ref_sigma);
+            assert_eq!(ko, (slot * KERNEL_STRIDE) as i32, "koffset drift at S_REF");
+            assert_eq!(kr, gaussian_radius(ref_sigma, TRUNCATE) as i32, "kradius drift at S_REF");
+        }
+    }
+
+    /// Anchoring DIRECTION + lookup-key stability. At a COARSER spacing (> S_REF) every anchored
+    /// sigma SHRINKS (covers the same world distance with fewer cells) -> radius <= the cell radius;
+    /// the slot KEY stays the reference sigma (so `schedule_mountain`'s `gauss(5.0)` still resolves).
+    /// At the production finest level (~32) all kernels fit the stride; this also confirms the
+    /// over-stride guard only trips at an unrealistically fine spacing.
+    #[test]
+    fn anchored_kernels_shrink_and_key_by_reference_when_coarser() {
+        use crate::recipes::helpers::{sigma_cells, S_REF};
+        let coarse = S_REF * 4.0; // a coarse clipmap level (4x the reference spacing)
+        let (_packed, kp) = mountain_kernels_anchored(coarse).expect("coarse kernels fit");
+        for &ref_sigma in &mountain_sigmas() {
+            let anchored = sigma_cells(ref_sigma, coarse);
+            assert!(anchored < ref_sigma + 1e-12, "coarser spacing must shrink sigma");
+            // lookup by the REFERENCE sigma (the schedule's key) resolves to the ANCHORED radius.
+            let (_ko, kr) = kp.kp(ref_sigma);
+            assert_eq!(
+                kr,
+                gaussian_radius(anchored, TRUNCATE) as i32,
+                "kradius must reflect the anchored sigma, keyed by the reference sigma"
+            );
         }
     }
 

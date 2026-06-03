@@ -22,6 +22,9 @@ const FEATURE_SPAN_M := 3500.0  # scale-contract on-foot mountain. 90000 (a 90km
 								# gentle sliver per 8km page -> reads flat; 3500 = whole mountains per
 								# few pages = a real range (capture-verified 2026-06-03).
 const FLOW_ITERS := 192        # measured production convergence count (memory: 576^2 mountain ~192)
+# SCALE-INVARIANCE: first clipmap level (0=finest) baked WITHOUT the drainage carve. A page at
+# `level` runs flow_on = level < FLOW_MAX_LEVEL. 2 -> carve on levels 0,1 (near camera), off 2.. .
+const FLOW_MAX_LEVEL := 2
 # VERTICAL SCALE KNOB (metres): the biome page multiplies its NORMALIZED recipe height (~[-3.2,2.2])
 # by this before the texture write, so the render (VERTEX.y = h*relief_scale 0.25) sees metres. Default
 # 1000 -> ~1350m effective range. Live-tunable: R raises, F lowers (x1.25 / x0.8), reconfigures the pool.
@@ -150,7 +153,7 @@ func _configure_biome(pool: Object) -> String:
 		ProjectSettings.globalize_path(PRIM),
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, _relief_m, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
 
 # Configure the pool for the LEGACY (dem_v1 kernel atlas) path — the A/B comparison.
 func _configure_legacy(pool: Object) -> String:
