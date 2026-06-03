@@ -217,6 +217,7 @@ pub fn generate_seamsafe(
     // channels = _drainage_channels_seam_safe(flow_source, power=0.48)
     //   == shared helper: pre-blur sigma=1.15, MFD power=0.48, fixed-max log1p norm,
     //      spread blur sigma=max(width_px,0.1)=2.0, clip [0,1].
+    // trailing S_REF -> sigma_cells identity (tundra isn't level-anchored yet; byte-identical).
     let channels = h::flow_channels_seam_safe(&flow_source, rows, cols, 2.0, 0.48, h::S_REF);
     // drainage = smoothstep(0.58, 0.94, channels)
     let mut drainage = vec![0.0_f64; n];
