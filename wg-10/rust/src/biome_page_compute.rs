@@ -1763,7 +1763,7 @@ fn schedule_volcanic(s: &mut Scheduler) {
 /// `alloc_apron_buffers` and owned by `BiomePageComputeContext`. `kparams` resolves each sigma to
 /// its packed-kernel (koffset, kradius). The buffer ROLES + bindings are byte-identical to what
 /// `run_inner` allocates inline (same sizes, same zero-init, same kernel packing).
-struct AppronBuffers {
+struct ApronBuffers {
     /// bindings 0..=18 (wx, wz, regional, ranges, ridge_detail, near_detail, range_envelope,
     /// lowland, massif, base, primary_mask, tributary_mask, high_mask, valley_mask, height,
     /// floor_mask, gauss_in, gauss_mid, gauss_out) -- the 19 fixed named fields, in binding order.
@@ -1778,7 +1778,7 @@ struct AppronBuffers {
     kparams: KernelParams,
 }
 
-impl AppronBuffers {
+impl ApronBuffers {
     /// (binding, rid) pairs for the WHOLE machine uniform set EXCEPT the runtime output image
     /// (binding 41). Same binding map `run_inner` builds. The runtime uniform set appends the
     /// image; the test harness (run_inner) does not (and never dispatches PASS_CROP_IMG).
@@ -1825,6 +1825,9 @@ impl AppronBuffers {
 /// only proceeds on Ok, and on Err the few buffers already created are leaked only on a hard
 /// pre-list failure that aborts the whole context build, where the rd is the global one; we free
 /// what we hold via the returned-on-error path below). `biome` selects the sigma list.
+//
+// NOTE: run_inner allocates this SAME buffer set inline (parity-frozen path); keep the two in
+// sync until Task 4's 576 gate is green and run_inner can consume this helper.
 fn alloc_apron_buffers(
     rd: &mut Gd<RenderingDevice>,
     rows: usize,
@@ -1833,7 +1836,7 @@ fn alloc_apron_buffers(
     biome: &str,
     seed: i32,
     feature_span_m: f32,
-) -> Result<AppronBuffers, String> {
+) -> Result<ApronBuffers, String> {
     let n = rows * cols;
     let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
     let field_bytes = n * 4;
@@ -1916,7 +1919,7 @@ fn alloc_apron_buffers(
         .data(&vent_pba)
         .done(); // 40
 
-    Ok(AppronBuffers {
+    Ok(ApronBuffers {
         fields,
         kernel,
         flow_pre,
@@ -1930,7 +1933,7 @@ fn alloc_apron_buffers(
 }
 
 /// The per-page-INVARIANT GPU resources for the RUNTIME mountain page producer: the compiled
-/// shader, the compute pipeline, and the full apron buffer set (`AppronBuffers`). Built ONCE
+/// shader, the compute pipeline, and the full apron buffer set (`ApronBuffers`). Built ONCE
 /// (`build_biome_page_context`) on the GLOBAL rd and reused for every page; only the per-page
 /// uniform set (cached buffers + this page's image) + push constant vary. Mirrors
 /// page_compute.rs::PageComputeContext. Owns every RID -> `free_biome_page_context` frees them all.
@@ -1942,7 +1945,7 @@ fn alloc_apron_buffers(
 pub(crate) struct BiomePageComputeContext {
     pub shader: Rid,
     pub pipeline: Rid,
-    bufs: AppronBuffers,
+    bufs: ApronBuffers,
     pub apron_dim: usize,
     pub core_px: usize,
     pub apron_px: usize,
@@ -2629,6 +2632,8 @@ impl Wg10BiomePageCompute {
         }
 
         // --- allocate buffers ---
+        // NOTE: duplicates alloc_apron_buffers' recipe (kept inline so the 210 byte-identical
+        // readback tests stay frozen). Unify once the 576 parity gate is green.
         let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
         let field_bytes = n * 4;
         let zeros = vec![0.0_f32; n];
