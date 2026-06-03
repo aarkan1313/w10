@@ -56,6 +56,12 @@ CHECKS = {
         # so it is independent of recipe noise + grammar). WINDOWED (RenderingDevice compute).
         "worldgen_terrain/tests/biome_compose_parity_check.gd",
     ],
+    # Slice-4 DRAINAGE convergence MEASUREMENT (windowed). How many flow relaxation iters does the
+    # REAL 576 production page need to converge? Decides whether live-per-page flow fits the budget
+    # (-> no coarse-drainage-fact subsystem) or not. Measurement gate (non-degenerate number = pass).
+    "flow_converge": [
+        "worldgen_terrain/tests/page_flow_convergence_check.gd",
+    ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
@@ -142,7 +148,7 @@ def main() -> int:
         return run_pytest_suite(fast=False)
     if args.suite == PYTEST_FAST_SUITE:
         return run_pytest_suite(fast=True)
-    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page")   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page", "flow_converge")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0

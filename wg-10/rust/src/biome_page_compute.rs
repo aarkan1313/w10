@@ -704,6 +704,11 @@ struct Scheduler<'a> {
     wg_core_x: u32,
     wg_core_y: u32,
     kparams: KernelParams,
+    /// Flow PULL-relaxation step count for this run. The recipe page path passes STABLE_ITERS
+    /// (so it is byte-identical to the const-loop it replaced); the convergence-measurement entry
+    /// (`generate_core_page_iters`) passes a swept value to find the real 576-production
+    /// convergence count. Compose/blend engines never run flow -> they set it to STABLE_ITERS too.
+    flow_iters: usize,
 }
 
 impl<'a> Scheduler<'a> {
@@ -816,20 +821,21 @@ impl<'a> Scheduler<'a> {
         // step is i=STABLE_ITERS-1, fd=(STABLE_ITERS-1)%2, so it writes:
         //   STABLE_ITERS even -> last fd=1 -> final result in acc_a
         //   STABLE_ITERS odd  -> last fd=0 -> final result in acc_b
-        for i in 0..STABLE_ITERS {
+        let iters = self.flow_iters;
+        for i in 0..iters {
             let fd = if i % 2 == 0 { 0 } else { 1 };
             self.dispatch_full(PASS_FLOW_RELAX, 0, fd, power);
         }
         // PASS_DISCHARGE: here flow_dir selects the READ buffer holding the final acc
         // (OPPOSITE of PASS_FLOW_RELAX, where it selects the write target) -> fd=0 reads
         // acc_a, fd=1 reads acc_b. So discharge_fd must equal the parity of the LAST write:
-        //   STABLE_ITERS odd  -> final in acc_b -> discharge_fd=1
-        //   STABLE_ITERS even -> final in acc_a -> discharge_fd=0
-        // This trap is live ONLY if STABLE_ITERS changes (the flagged convergence knob).
-        let discharge_fd: i32 = if STABLE_ITERS % 2 == 1 { 1 } else { 0 };
+        //   iters odd  -> final in acc_b -> discharge_fd=1
+        //   iters even -> final in acc_a -> discharge_fd=0
+        // (The recipe page path passes iters=STABLE_ITERS=128 -> byte-identical to the old const loop.)
+        let discharge_fd: i32 = if iters % 2 == 1 { 1 } else { 0 };
         debug_assert_eq!(
             discharge_fd,
-            1 - ((STABLE_ITERS as i32 - 1) % 2),
+            1 - ((iters as i32 - 1) % 2),
             "discharge_fd must read the buffer the LAST relax step wrote"
         );
         // raw log1p discharge -> gauss_in (NO trailing spread here; the caller spreads it).
@@ -1784,7 +1790,7 @@ impl Wg10BiomePageCompute {
         let biome = biome_stem(&frag_path);
         match self.run_inner(
             spacing as f32, ox as f32, oz as f32, rows, cols, apron, seed as i32, feature_span_m as f32,
-            &fragment, &biome,
+            &fragment, &biome, STABLE_ITERS,
         ) {
             Ok(core) => {
                 let mut out = PackedFloat64Array::new();
@@ -1797,6 +1803,67 @@ impl Wg10BiomePageCompute {
             }
             Err(e) => {
                 godot_error!("Wg10BiomePageCompute::generate_core_page error: {e}");
+                PackedFloat64Array::new()
+            }
+        }
+    }
+
+    /// MEASUREMENT entry: `generate_core_page` with the flow PULL-relaxation step count made a
+    /// caller parameter (`flow_iters`), so a windowed harness can sweep it at the REAL 576
+    /// production apron to find the production convergence count (decides whether live-per-page
+    /// flow fits the budget, i.e. whether the coarse-drainage-fact subsystem is needed). NOT a
+    /// runtime entry; same readback-only caveat as `generate_core_page`. `generate_core_page`
+    /// itself passes STABLE_ITERS, so the parity-proven path is unchanged.
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn generate_core_page_iters(
+        &self,
+        spacing: f64,
+        ox: f64,
+        oz: f64,
+        padded_rows: i64,
+        padded_cols: i64,
+        apron_px: i64,
+        seed: i64,
+        feature_span_m: f64,
+        biome_fragment_path: GString,
+        flow_iters: i64,
+    ) -> PackedFloat64Array {
+        let rows = padded_rows as usize;
+        let cols = padded_cols as usize;
+        let apron = apron_px as usize;
+        if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
+            godot_error!("Wg10BiomePageCompute::generate_core_page_iters: seed {seed} outside i32 range");
+            return PackedFloat64Array::new();
+        }
+        if flow_iters < 1 {
+            godot_error!("Wg10BiomePageCompute::generate_core_page_iters: flow_iters must be >= 1");
+            return PackedFloat64Array::new();
+        }
+        let frag_path = biome_fragment_path.to_string();
+        let fragment = match std::fs::read_to_string(&frag_path) {
+            Ok(s) => s,
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::generate_core_page_iters: biome fragment glsl: {e}");
+                return PackedFloat64Array::new();
+            }
+        };
+        let biome = biome_stem(&frag_path);
+        match self.run_inner(
+            spacing as f32, ox as f32, oz as f32, rows, cols, apron, seed as i32, feature_span_m as f32,
+            &fragment, &biome, flow_iters as usize,
+        ) {
+            Ok(core) => {
+                let mut out = PackedFloat64Array::new();
+                out.resize(core.len());
+                let sl = out.as_mut_slice();
+                for i in 0..core.len() {
+                    sl[i] = core[i] as f64;
+                }
+                out
+            }
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::generate_core_page_iters error: {e}");
                 PackedFloat64Array::new()
             }
         }
@@ -1915,6 +1982,7 @@ impl Wg10BiomePageCompute {
         feature_span_m: f32,
         biome_fragment: &str,
         biome: &str,
+        flow_iters: usize,
     ) -> Result<Vec<f32>, String> {
         if rows <= 2 * apron || cols <= 2 * apron {
             return Err(format!("apron {apron} too large for padded {rows}x{cols}"));
@@ -2130,6 +2198,7 @@ impl Wg10BiomePageCompute {
             wg_core_x,
             wg_core_y,
             kparams,
+            flow_iters,
         };
         // Biome selector (derived from the fragment path stem in generate_core_page). Each biome
         // adds a `schedule_<name>()` + one match arm here + a `*_sigmas()` arm in `biome_sigmas`.
@@ -2351,6 +2420,7 @@ impl Wg10BiomePageCompute {
             wg_core_x: wg_full_x,
             wg_core_y: wg_full_y,
             kparams,
+            flow_iters: STABLE_ITERS, // compose never runs flow; value is irrelevant but required
         };
 
         // ONE compose_biomes fold step: acc=height, acc_w=base, f=pool0, w=pool1 pre-loaded.
@@ -2606,6 +2676,7 @@ impl Wg10BiomePageCompute {
             spacing: 0.0, ox: 0.0, oz: 0.0, feature_span_m: 0.0, vent_count: 0,
             favor_strength, relief_confidence_floor,
             wg_full_x, wg_full_y, wg_core_x: wg_full_x, wg_core_y: wg_full_y, kparams,
+            flow_iters: STABLE_ITERS, // blend never runs flow
         };
         if use_favored { sched.blend_favored_step(); } else { sched.blend_field_step(); }
 
