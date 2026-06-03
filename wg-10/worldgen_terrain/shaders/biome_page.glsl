@@ -97,6 +97,33 @@ const int PASS_COPY_POOL           = 25; // [GENERIC] gauss_in <- pool[pool_sel]
 const int PASS_POOL_FROM_GAUSS     = 26; // [GENERIC] pool[pool_sel] <- gauss_out (stash a blur)
 // 27..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
 
+// ---------------------------------------------------------------------------
+// GENERIC COMPOSE passes (Slice-4b.11): the biome-AGNOSTIC blend layer that composes the OUTPUTS
+// of N per-recipe height fields into one. A bit-close port of biome_compose.rs
+// (blend_field / blend_height_favored / compose_biomes). These are handled INLINE in main()
+// (they `return` BEFORE biome_pass()), so they never collide with any biome-private code, no
+// matter which biome FRAGMENT is concatenated. They live in a HIGH generic block (60..) to stay
+// clear of every biome-private code (currently <=53). Fixed compose buffer roles (compose runs
+// standalone -- no meshgrid/pointwise -- so it freely reuses the named buffers):
+//   acc      = height (binding 14)        -- the running accumulator (init = fields[0])
+//   acc_w    = base   (binding 9)         -- the running weight       (init = weights[0])
+//   f        = pool slot 0                -- the current recipe's field
+//   w        = pool slot 1                -- the current recipe's weight
+//   w_acc    = lowland (binding 7)        -- per-step blend weight acc_w/(acc_w+w+1e-12)
+//   relief_a = range_envelope (binding 6) -- |acc - gaussian_nearest(acc, relief_sigma_px)|
+//   relief_b = massif (binding 8)         -- |f   - gaussian_nearest(f,   relief_sigma_px)|
+// The relief proxy reuses the SAME separable gaussian (COPY src -> gauss_in, GAUSS_AXIS0/1 ->
+// gauss_out) the biomes use, sigma = relief_sigma_px = 6.0 (clamp-to-edge nearest, truncate 4.0).
+// Compose params arrive via spare push-constant float pads: P.pad0 = favor_strength,
+// P.pad1 = relief_confidence_floor (0 for every non-compose dispatch -> byte-identical push).
+const int PASS_COMPOSE_RELIEF_A_STORE = 60; // [GENERIC] range_envelope <- abs(height - gauss_out)
+const int PASS_COMPOSE_RELIEF_B_STORE = 61; // [GENERIC] massif <- abs(pool0 - gauss_out)
+const int PASS_COMPOSE_WACC           = 62; // [GENERIC] lowland <- base/(base+pool1+1e-12)
+const int PASS_COMPOSE_BLEND_FIELD    = 63; // [GENERIC] height <- lowland*height + (1-lowland)*pool0
+const int PASS_COMPOSE_BLEND_FAVORED  = 64; // [GENERIC] height <- favored-blend(height, pool0, lowland)
+const int PASS_COMPOSE_ACCW_ADD       = 65; // [GENERIC] base += pool1  (acc_w += w)
+const int PASS_COMPOSE_COPY_ACC       = 66; // [GENERIC] gauss_in <- height (to blur the accumulator)
+
 // copy_sel codes for PASS_COPY (which field buffer to copy into gauss_in)
 const int CP_RANGES   = 0;
 const int CP_MASSIF   = 1;
@@ -493,6 +520,71 @@ void main() {
         float n = float(rows) * float(cols);
         float log_size = log(1.0 + n);
         gauss_in.v[i] = clamp(log(1.0 + acc) / log_size, 0.0, 1.0);
+        return;
+    }
+
+    // ===== GENERIC COMPOSE passes (Slice-4b.11) -- handled inline so they never reach a biome
+    // fragment (collision-proof regardless of the concatenated biome). Bit-close port of
+    // biome_compose.rs. =====
+    if (pass == PASS_COMPOSE_COPY_ACC) {
+        // gauss_in <- accumulator (height), so the gaussian passes can blur it (relief proxy of acc).
+        gauss_in.v[i] = height.v[i];
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_RELIEF_A_STORE) {
+        // relief_a = |acc - gaussian_nearest(acc, relief_sigma_px)|. acc=height, blur=gauss_out.
+        range_envelope.v[i] = abs(height.v[i] - gauss_out.v[i]);
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_RELIEF_B_STORE) {
+        // relief_b = |f - gaussian_nearest(f, relief_sigma_px)|. f=pool0, blur=gauss_out.
+        massif.v[i] = abs(pool_read(0, i) - gauss_out.v[i]);
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_WACC) {
+        // w_acc = acc_w / (acc_w + w + 1e-12). acc_w=base, w=pool1, w_acc=lowland.
+        float aw = base.v[i];
+        float w  = pool_read(1, i);
+        lowland.v[i] = aw / (aw + w + 1e-12);
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_BLEND_FIELD) {
+        // out = w_acc*acc + (1-w_acc)*f. acc=height, f=pool0, w_acc=lowland.
+        float w = lowland.v[i];
+        height.v[i] = w * height.v[i] + (1.0 - w) * pool_read(0, i);
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_BLEND_FAVORED) {
+        // Relief-favored blend (bit-close to biome_compose::blend_height_favored). Term order:
+        //   total  = relief_a + relief_b
+        //   favor  = relief_a / (total + 1e-9)
+        //   signal = total / (total + relief_confidence_floor)
+        //   band   = 1 - |2*w_a - 1|
+        //   w_adj  = clip(w_a + (favor-0.5)*favor_strength*band*signal, 0, 1)
+        //   out    = w_adj*a + (1-w_adj)*b   (a=acc=height, b=f=pool0, w_a=w_acc=lowland)
+        float relief_a = range_envelope.v[i];
+        float relief_b = massif.v[i];
+        float total    = relief_a + relief_b;
+        float favor    = relief_a / (total + 1e-9);
+        float signal   = total / (total + P.pad1);   // P.pad1 = relief_confidence_floor
+        float w        = lowland.v[i];
+        float band     = 1.0 - abs(2.0 * w - 1.0);
+        float w_adj    = w + (favor - 0.5) * P.pad0 * band * signal;  // P.pad0 = favor_strength
+        w_adj          = clamp(w_adj, 0.0, 1.0);
+        float a = height.v[i];
+        float b = pool_read(0, i);
+        height.v[i] = w_adj * a + (1.0 - w_adj) * b;
+        return;
+    }
+
+    if (pass == PASS_COMPOSE_ACCW_ADD) {
+        // acc_w += w. acc_w=base, w=pool1.
+        base.v[i] = base.v[i] + pool_read(1, i);
         return;
     }
 

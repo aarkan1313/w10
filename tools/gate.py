@@ -51,6 +51,10 @@ CHECKS = {
         # gaussian + flow relaxation + crop) vs the committed f64 fixture, per record. WINDOWED
         # (RenderingDevice compute). Tier-2 height within a normalized-unit epsilon.
         "worldgen_terrain/tests/biome_page_parity_check.gd",
+        # Task 4b.11 COMPOSE parity: the GPU compose layer (blend_field / blend_height_favored /
+        # compose_biomes fold) vs the committed f64 fixture (input + weight fields stored directly,
+        # so it is independent of recipe noise + grammar). WINDOWED (RenderingDevice compute).
+        "worldgen_terrain/tests/biome_compose_parity_check.gd",
     ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",

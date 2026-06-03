@@ -62,6 +62,22 @@ const PASS_COPY_POOL: i32 = 25;       // gauss_in <- pool[pool_sel] (to blur a p
 /// for the levee DoG, and flat_base back into its slot). Matches biome_page.glsl PASS_POOL_FROM_GAUSS.
 const PASS_POOL_FROM_GAUSS: i32 = 26; // pool[pool_sel] <- gauss_out (stash a blur)
 
+// GENERIC COMPOSE pass codes (Slice-4b.11) -- MUST match biome_page.glsl PASS_COMPOSE_*. A high
+// generic block (60..) handled inline in the machine BEFORE biome_pass(), so they are
+// collision-proof against every biome-private code (currently <=53). The compose math is a
+// bit-close port of biome_compose.rs (blend_field / blend_height_favored / compose_biomes).
+const PASS_COMPOSE_RELIEF_A_STORE: i32 = 60; // range_envelope <- abs(height - gauss_out)
+const PASS_COMPOSE_RELIEF_B_STORE: i32 = 61; // massif <- abs(pool0 - gauss_out)
+const PASS_COMPOSE_WACC: i32 = 62;           // lowland <- base/(base+pool1+1e-12)
+const PASS_COMPOSE_BLEND_FIELD: i32 = 63;    // height <- lowland*height + (1-lowland)*pool0
+const PASS_COMPOSE_BLEND_FAVORED: i32 = 64;  // height <- favored-blend(height, pool0, lowland)
+const PASS_COMPOSE_ACCW_ADD: i32 = 65;       // base += pool1  (acc_w += w)
+const PASS_COMPOSE_COPY_ACC: i32 = 66;       // gauss_in <- height (to blur the accumulator)
+
+/// The relief-proxy gaussian sigma for the compose layer == BlendConfig::relief_sigma_px default.
+/// Mirrors biome_compose.rs GAUSSIAN_TRUNCATE-driven gaussian_filter_nearest(..., sigma=6.0).
+const COMPOSE_RELIEF_SIGMA: f64 = 6.0;
+
 // GRASSLAND biome-private PASS_* codes (start at 32) -- MUST match biome_grassland.glsl GL_*.
 const GL_POINTWISE: i32 = 32;
 const GL_COMBO: i32 = 33;
@@ -302,6 +318,17 @@ fn bytes_to_f32s(b: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+/// f32 slice -> PackedFloat64Array (the GPU result widened back to f64 for the GDScript caller).
+fn f32s_to_packed_f64(v: &[f32]) -> PackedFloat64Array {
+    let mut out = PackedFloat64Array::new();
+    out.resize(v.len());
+    let sl = out.as_mut_slice();
+    for i in 0..v.len() {
+        sl[i] = v[i] as f64;
+    }
+    out
+}
+
 /// Biome selector from a fragment path: the file stem with a leading `biome_` stripped.
 /// e.g. ".../biome_mountain.glsl" -> "mountain", ".../biome_grassland.glsl" -> "grassland".
 /// Falls back to the bare stem (then the whole string) if the conventions don't match, so the
@@ -329,6 +356,9 @@ fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
 /// `vent_count` occupies the former `ipad1` int slot (index 10). It is 0 for every non-volcanic
 /// biome (the 10 proven biomes pass vent_count=0 -> the exact bytes the hardcoded `0` produced
 /// before, so their push is byte-identical). VOLCANIC passes its actual vent count there.
+/// Compose params carried in the two leading float PADS (pad0 = favor_strength,
+/// pad1 = relief_confidence_floor). 0.0 for every non-compose dispatch -> the bytes are
+/// byte-identical to the former all-zero pad block, so the 11 proven biomes are unaffected.
 #[allow(clippy::too_many_arguments)]
 fn build_push(
     pass: i32,
@@ -347,17 +377,19 @@ fn build_push(
     oz: f32,
     feature_span_m: f32,
     flow_power: f32,
+    favor_strength: f32,         // -> pad0
+    relief_confidence_floor: f32, // -> pad1
 ) -> Vec<u8> {
     let mut b = Vec::with_capacity(96);
     // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count + 1 pad.
     for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, pool_sel, vent_count, 0] {
         b.extend_from_slice(&v.to_le_bytes());
     }
-    // 12 floats: spacing,ox,oz,feature_span_m,flow_power + 7 pad.
-    for v in [spacing, ox, oz, feature_span_m, flow_power] {
+    // 12 floats: spacing,ox,oz,feature_span_m,flow_power, pad0(favor_strength), pad1(relief_conf_floor) + 5 pad.
+    for v in [spacing, ox, oz, feature_span_m, flow_power, favor_strength, relief_confidence_floor] {
         b.extend_from_slice(&v.to_le_bytes());
     }
-    for _ in 0..7 {
+    for _ in 0..5 {
         b.extend_from_slice(&0.0_f32.to_le_bytes());
     }
     b
@@ -573,6 +605,12 @@ fn volcanic_sigmas() -> Vec<f64> {
     vec![0.85, 1.1, 1.15, 1.2, 2.6, 3.0]
 }
 
+/// The COMPOSE layer's only gaussian sigma: the relief proxy at relief_sigma_px=6.0 (the
+/// BlendConfig default). One slot in the packed kernel buffer. Used by `run_compose_inner`.
+fn compose_sigmas() -> Vec<f64> {
+    vec![COMPOSE_RELIEF_SIGMA]
+}
+
 /// Per-biome gaussian sigma list (FIXED order -> koffset). Add a biome's `*_sigmas()` arm here so
 /// `run_inner` builds + pre-validates the right packed kernel buffer for that biome's schedule.
 fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
@@ -657,6 +695,10 @@ struct Scheduler<'a> {
     /// VOLCANIC: active vents (forwarded into every dispatch's push constant). 0 for the 10
     /// non-volcanic biomes -> their push bytes are byte-identical to the pre-vent layout.
     vent_count: i32,
+    /// COMPOSE params, forwarded into every dispatch as pad0/pad1. 0.0/0.0 for the 11 biome
+    /// schedules (byte-identical push); the compose schedule sets them from the record's cfg.
+    favor_strength: f32,
+    relief_confidence_floor: f32,
     wg_full_x: u32,
     wg_full_y: u32,
     wg_core_x: u32,
@@ -687,7 +729,7 @@ impl<'a> Scheduler<'a> {
             build_push(
                 pass, self.rows, self.cols, self.apron, self.seed, kradius, copy_sel, flow_dir,
                 koffset, pool_sel, self.vent_count, self.spacing, self.ox, self.oz,
-                self.feature_span_m, flow_power,
+                self.feature_span_m, flow_power, self.favor_strength, self.relief_confidence_floor,
             )
             .as_slice(),
         );
@@ -792,6 +834,54 @@ impl<'a> Scheduler<'a> {
         );
         // raw log1p discharge -> gauss_in (NO trailing spread here; the caller spreads it).
         self.dispatch_full(PASS_DISCHARGE, 0, discharge_fd, 0.0);
+    }
+
+    // -------------------------------------------------------------------------
+    // COMPOSE layer (Slice-4b.11): bit-close GPU port of biome_compose.rs. The compose buffer
+    // roles (see biome_page.glsl): acc=height, acc_w=base, f=pool0, w=pool1, w_acc=lowland,
+    // relief_a=range_envelope, relief_b=massif. The caller pre-loads acc(height) and acc_w(base)
+    // = fields[0]/weights[0], then for each subsequent (f,w) loads pool0=f, pool1=w, calls
+    // compose_step, then accw_add. Standalone blend_field/blend_height_favored load height=a,
+    // pool0=b, lowland=w_a and call blend_field_step / blend_favored_step directly.
+    // -------------------------------------------------------------------------
+
+    /// Compute relief_a = |acc - gaussian_nearest(acc, 6.0)| into range_envelope. Blurs the
+    /// accumulator (height) via COPY_ACC -> gauss_in, gauss(6.0) -> gauss_out, then the abs-diff.
+    fn compose_relief_a(&mut self) {
+        self.dispatch_full(PASS_COMPOSE_COPY_ACC, 0, 0, 0.0);
+        self.gauss(COMPOSE_RELIEF_SIGMA);
+        self.dispatch_full(PASS_COMPOSE_RELIEF_A_STORE, 0, 0, 0.0);
+    }
+
+    /// Compute relief_b = |f - gaussian_nearest(f, 6.0)| into massif. Blurs f (pool0) via
+    /// COPY_POOL(0) -> gauss_in, gauss(6.0) -> gauss_out, then the abs-diff.
+    fn compose_relief_b(&mut self) {
+        self.dispatch_pool(PASS_COPY_POOL, 0);
+        self.gauss(COMPOSE_RELIEF_SIGMA);
+        self.dispatch_full(PASS_COMPOSE_RELIEF_B_STORE, 0, 0, 0.0);
+    }
+
+    /// w_acc = acc_w / (acc_w + w + 1e-12) into lowland (base=acc_w, pool1=w).
+    fn compose_wacc(&mut self) {
+        self.dispatch_full(PASS_COMPOSE_WACC, 0, 0, 0.0);
+    }
+
+    /// FIELD blend step: w_acc in lowland already set. height <- w_acc*height + (1-w_acc)*pool0.
+    fn blend_field_step(&mut self) {
+        self.dispatch_full(PASS_COMPOSE_BLEND_FIELD, 0, 0, 0.0);
+    }
+
+    /// FAVORED blend step: requires relief_a (range_envelope), relief_b (massif), w_acc (lowland)
+    /// pre-computed. favor_strength / relief_confidence_floor ride pad0/pad1 (Scheduler fields).
+    fn blend_favored_step(&mut self) {
+        self.compose_relief_a();
+        self.compose_relief_b();
+        self.dispatch_full(PASS_COMPOSE_BLEND_FAVORED, 0, 0, 0.0);
+    }
+
+    /// acc_w += w  (base += pool1).
+    fn compose_accw_add(&mut self) {
+        self.dispatch_full(PASS_COMPOSE_ACCW_ADD, 0, 0, 0.0);
     }
 }
 
@@ -1593,13 +1683,17 @@ pub struct Wg10BiomePageCompute {
     /// The GENERIC machine (biome_page.glsl): bindings + leaf helpers + generic passes + main().
     /// One of the two STABLE parts (the other being primitives); loaded once via load_shaders.
     machine_src: Option<String>,
+    /// A biome FRAGMENT (any -- mountain by convention) concatenated ONLY to satisfy the machine's
+    /// `biome_pass()` declaration during compose. The compose passes are inline in main() and never
+    /// reach the fragment, so the choice is irrelevant. Loaded once via `load_compose_fragment`.
+    compose_fragment: Option<String>,
     base: Base<RefCounted>,
 }
 
 #[godot_api]
 impl IRefCounted for Wg10BiomePageCompute {
     fn init(base: Base<RefCounted>) -> Self {
-        Self { primitives_src: None, machine_src: None, base }
+        Self { primitives_src: None, machine_src: None, compose_fragment: None, base }
     }
 }
 
@@ -1623,6 +1717,21 @@ impl Wg10BiomePageCompute {
         self.primitives_src = Some(prim);
         self.machine_src = Some(machine);
         GString::new()
+    }
+
+    /// Load the biome FRAGMENT used to satisfy the machine's `biome_pass()` declaration during
+    /// COMPOSE (any biome works -- mountain by convention; the compose passes are inline in main()
+    /// and never reach the fragment). Returns "" on success, an error string otherwise. Call once
+    /// before `compose_fields` / `blend_pair`.
+    #[func]
+    pub fn load_compose_fragment(&mut self, fragment_path: GString) -> GString {
+        match std::fs::read_to_string(fragment_path.to_string()) {
+            Ok(s) => {
+                self.compose_fragment = Some(s);
+                GString::new()
+            }
+            Err(e) => GString::from(format!("compose fragment glsl: {e}").as_str()),
+        }
     }
 
     /// Run the FULL mountain pass chain for ONE page (style = ALPINE_BRANCHING, matching the
@@ -1683,6 +1792,105 @@ impl Wg10BiomePageCompute {
             }
             Err(e) => {
                 godot_error!("Wg10BiomePageCompute::generate_core_page error: {e}");
+                PackedFloat64Array::new()
+            }
+        }
+    }
+
+    /// COMPOSE entry (Slice-4b.11): GPU port of `biome_compose::compose_biomes`. Composes
+    /// `n_fields` per-recipe height fields (concatenated row-major in `fields_flat`, each
+    /// `rows*cols` long) by their per-pixel weights (`weights_flat`, same layout) into one field.
+    /// `mode_is_field` chooses the blend mode (true="field", false="height_favored"); the favored
+    /// path is applied EXACTLY for n_fields==2 (the fold uses FIELD blend for 3+ -- mirrors the
+    /// oracle). Returns the composed field (length rows*cols) or an EMPTY array on error.
+    /// Readback ONLY here (test/gate entry). WINDOWED only (local RD null headless).
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn compose_fields(
+        &self,
+        fields_flat: PackedFloat64Array,
+        weights_flat: PackedFloat64Array,
+        n_fields: i64,
+        rows: i64,
+        cols: i64,
+        mode_is_field: bool,
+        favor_strength: f64,
+        relief_confidence_floor: f64,
+    ) -> PackedFloat64Array {
+        let rows = rows as usize;
+        let cols = cols as usize;
+        let n = rows * cols;
+        let nf = n_fields as usize;
+        if nf == 0 {
+            godot_error!("compose_fields: n_fields must be >= 1");
+            return PackedFloat64Array::new();
+        }
+        if fields_flat.len() != nf * n || weights_flat.len() != nf * n {
+            godot_error!(
+                "compose_fields: fields/weights flat len mismatch (got {}/{}, expected {})",
+                fields_flat.len(), weights_flat.len(), nf * n
+            );
+            return PackedFloat64Array::new();
+        }
+        // un-flatten into per-recipe f32 fields (the GPU is f32 throughout).
+        let ff = fields_flat.as_slice();
+        let wf = weights_flat.as_slice();
+        let mut fields: Vec<Vec<f32>> = Vec::with_capacity(nf);
+        let mut weights: Vec<Vec<f32>> = Vec::with_capacity(nf);
+        for k in 0..nf {
+            fields.push(ff[k * n..(k + 1) * n].iter().map(|&x| x as f32).collect());
+            weights.push(wf[k * n..(k + 1) * n].iter().map(|&x| x as f32).collect());
+        }
+        match self.run_compose_inner(
+            &fields, &weights, rows, cols, mode_is_field,
+            favor_strength as f32, relief_confidence_floor as f32,
+        ) {
+            Ok(out) => f32s_to_packed_f64(&out),
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::compose_fields error: {e}");
+                PackedFloat64Array::new()
+            }
+        }
+    }
+
+    /// BLEND-PAIR entry (Slice-4b.11): GPU port of `biome_compose::blend_field` (mode_is_field=true)
+    /// and `biome_compose::blend_height_favored` (mode_is_field=false). A SINGLE blend of `a`/`b`
+    /// at per-pixel weight `w_a` (NOT the running-accumulator fold -- w_a is used DIRECTLY, exactly
+    /// as the two standalone oracle functions do). Returns the blended field (length rows*cols) or
+    /// an EMPTY array on error. Readback ONLY here. WINDOWED only.
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn blend_pair(
+        &self,
+        a: PackedFloat64Array,
+        b: PackedFloat64Array,
+        w_a: PackedFloat64Array,
+        rows: i64,
+        cols: i64,
+        mode_is_field: bool,
+        favor_strength: f64,
+        relief_confidence_floor: f64,
+    ) -> PackedFloat64Array {
+        let rows = rows as usize;
+        let cols = cols as usize;
+        let n = rows * cols;
+        if a.len() != n || b.len() != n || w_a.len() != n {
+            godot_error!(
+                "blend_pair: a/b/w_a len mismatch (got {}/{}/{}, expected {})",
+                a.len(), b.len(), w_a.len(), n
+            );
+            return PackedFloat64Array::new();
+        }
+        let a32: Vec<f32> = a.as_slice().iter().map(|&x| x as f32).collect();
+        let b32: Vec<f32> = b.as_slice().iter().map(|&x| x as f32).collect();
+        let w32: Vec<f32> = w_a.as_slice().iter().map(|&x| x as f32).collect();
+        match self.run_blend_inner(
+            &a32, &b32, &w32, rows, cols, mode_is_field,
+            favor_strength as f32, relief_confidence_floor as f32,
+        ) {
+            Ok(out) => f32s_to_packed_f64(&out),
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::blend_pair error: {e}");
                 PackedFloat64Array::new()
             }
         }
@@ -1910,6 +2118,8 @@ impl Wg10BiomePageCompute {
             oz,
             feature_span_m,
             vent_count: vent_count as i32,
+            favor_strength: 0.0,           // biome path never composes -> 0 (byte-identical push)
+            relief_confidence_floor: 0.0,
             wg_full_x,
             wg_full_y,
             wg_core_x,
@@ -1966,6 +2176,450 @@ impl Wg10BiomePageCompute {
             return Err(format!("core readback: expected {core_n} f32, got {}", core.len()));
         }
         Ok(core)
+    }
+
+    /// COMPOSE engine (Slice-4b.11): the shared GPU setup for the compose layer. Allocates the SAME
+    /// machine binding set (0..40) as `run_inner` (the machine declares them all, so the uniform set
+    /// must satisfy every binding), uploads the compose initial buffers (height=acc0, base=acc_w0,
+    /// pool0=f, pool1=w), builds the kernel buffer with the single compose relief sigma (6.0), opens
+    /// one compute list, builds a Scheduler with the compose params, runs `op` (the fold/blend
+    /// sequence), then reads back `height` (the composed result -- compose has NO apron / crop, the
+    /// whole rows*cols field is the answer). WINDOWED only (local RD null headless). Concats the
+    /// MOUNTAIN fragment purely to satisfy the machine's `biome_pass()` declaration -- the compose
+    /// passes are handled INLINE in main() and never reach the fragment.
+    fn run_compose_engine(
+        &self,
+        rows: usize,
+        cols: usize,
+        favor_strength: f32,
+        relief_confidence_floor: f32,
+        acc0: &[f32],   // -> height  (binding 14)
+        accw0: &[f32],  // -> base    (binding 9)
+        f0: &[f32],     // -> pool0   (binding 24)
+        w0: &[f32],     // -> pool1   (binding 25)
+        use_favored: bool,
+    ) -> Result<(Vec<f32>, Vec<f32>), String> {
+        let n = rows * cols;
+        if acc0.len() != n || accw0.len() != n || f0.len() != n || w0.len() != n {
+            return Err(format!("compose engine: buffer len != rows*cols ({n})"));
+        }
+        let prim = self.primitives_src.as_deref().ok_or("no GLSL source loaded")?;
+        let machine = self.machine_src.as_deref().ok_or("no GLSL source loaded")?;
+        let fragment = self.compose_fragment.as_deref()
+            .ok_or("no compose fragment loaded (call load_compose_fragment)")?;
+
+        let mut rd: Gd<RenderingDevice> = RenderingServer::singleton()
+            .create_local_rendering_device()
+            .ok_or_else(|| {
+                "create_local_rendering_device returned null (headless / no device)".to_string()
+            })?;
+
+        // compile: machine + a fragment (mountain) so biome_pass() is defined (compose passes never
+        // reach it -- they're inline in main()).
+        let machine_plus_fragment = format!("{machine}\n{fragment}");
+        let glsl_stripped = crate::primitive_probe::concat_glsl_hoist_version(prim, &machine_plus_fragment);
+        let mut src = RdShaderSource::new_gd();
+        src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
+        let spirv = match rd.shader_compile_spirv_from_source(&src) {
+            Some(s) => s,
+            None => { rd.free(); return Err("shader_compile_spirv_from_source returned null".to_string()); }
+        };
+        {
+            let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
+            if !err.is_empty() { rd.free(); return Err(format!("GLSL compile error: {err}")); }
+        }
+        let shader = rd.shader_create_from_spirv(&spirv);
+        if shader.is_invalid() { rd.free(); return Err("shader_create_from_spirv returned invalid RID".into()); }
+
+        let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
+        let field_bytes = n * 4;
+        let zeros = vec![0.0_f32; n];
+        let zeros_pba = PackedByteArray::from(f32s_to_bytes(&zeros).as_slice());
+        let mk_zero = |rd: &mut Gd<RenderingDevice>| -> Rid {
+            rd.storage_buffer_create_ex(bsize(field_bytes)).data(&zeros_pba).done()
+        };
+        let mk_data = |rd: &mut Gd<RenderingDevice>, data: &[f32]| -> Rid {
+            let pba = PackedByteArray::from(f32s_to_bytes(data).as_slice());
+            rd.storage_buffer_create_ex(bsize(field_bytes)).data(&pba).done()
+        };
+
+        // Named buffers 0..18. Compose roles: 6=range_envelope(relief_a), 7=lowland(w_acc),
+        // 8=massif(relief_b), 9=base(acc_w), 14=height(acc). The rest are inert scratch (zeroed).
+        let mut named: Vec<Rid> = Vec::with_capacity(19);
+        for b in 0..19usize {
+            let rid = match b {
+                9 => mk_data(&mut rd, accw0),  // base = acc_w0
+                14 => mk_data(&mut rd, acc0),  // height = acc0
+                _ => mk_zero(&mut rd),
+            };
+            named.push(rid);
+        }
+
+        // kernel buffer (19): single compose relief sigma (6.0) at slot 0.
+        let sigmas = compose_sigmas();
+        let n_slots = sigmas.len();
+        let mut packed = vec![0.0_f32; n_slots * KERNEL_STRIDE];
+        for (slot, &sg) in sigmas.iter().enumerate() {
+            let k = gaussian_kernel1d(sg, TRUNCATE);
+            if k.len() > KERNEL_STRIDE {
+                rd.free_rid(shader); rd.free();
+                return Err(format!("compose kernel len {} (sigma {sg}) > KERNEL_STRIDE {KERNEL_STRIDE}", k.len()));
+            }
+            let base = slot * KERNEL_STRIDE;
+            packed[base..base + k.len()].copy_from_slice(&k);
+        }
+        let packed_pba = PackedByteArray::from(f32s_to_bytes(&packed).as_slice());
+        let b_kernel = rd.storage_buffer_create_ex(bsize(packed.len() * 4)).data(&packed_pba).done();
+        let kparams = KernelParams::from_sigmas(&sigmas);
+
+        let b_flow_pre = mk_zero(&mut rd); // 20
+        let b_acc_a = mk_zero(&mut rd);    // 21
+        let b_acc_b = mk_zero(&mut rd);    // 22
+
+        // core output (23): unused by compose (no CROP), but the binding must exist for the set.
+        let b_core = mk_zero(&mut rd);
+
+        // pool slots 24..39: pool0 = f, pool1 = w, the rest inert.
+        let mut b_pool: Vec<Rid> = Vec::with_capacity(POOL_SLOTS);
+        for slot in 0..POOL_SLOTS {
+            let rid = match slot {
+                0 => mk_data(&mut rd, f0),
+                1 => mk_data(&mut rd, w0),
+                _ => mk_zero(&mut rd),
+            };
+            b_pool.push(rid);
+        }
+
+        // vent buffer (40): inert for compose (machine declares the binding).
+        let vent_stride = crate::recipes_volcanic::volcanic::VENT_STRIDE;
+        let maxv = crate::recipes_volcanic::volcanic::MAX_VENTS;
+        let vent_zeros = vec![0.0_f32; maxv * vent_stride];
+        let vent_pba = PackedByteArray::from(f32s_to_bytes(&vent_zeros).as_slice());
+        let b_vents = rd.storage_buffer_create_ex(bsize(vent_zeros.len() * 4)).data(&vent_pba).done();
+
+        // uniform set (same binding map as run_inner).
+        let mut bindings: Vec<(i32, Rid)> = Vec::new();
+        for (b, &rid) in named.iter().enumerate() {
+            bindings.push((b as i32, rid));
+        }
+        bindings.push((19, b_kernel));
+        bindings.push((20, b_flow_pre));
+        bindings.push((21, b_acc_a));
+        bindings.push((22, b_acc_b));
+        bindings.push((23, b_core));
+        for (k, &rid) in b_pool.iter().enumerate() {
+            bindings.push((24 + k as i32, rid));
+        }
+        bindings.push((40, b_vents));
+        let mut uniforms: Array<Gd<RdUniform>> = Array::new();
+        for (bind, rid) in bindings.iter() {
+            uniforms.push(&make_storage_uniform(*bind, *rid));
+        }
+        let uset = rd.uniform_set_create(&uniforms, shader, 0);
+        let pipeline = rd.compute_pipeline_create(shader);
+
+        let wg_full_x = (cols as u32).div_ceil(16);
+        let wg_full_y = (rows as u32).div_ceil(16);
+
+        // pre-validate the compose sigma BEFORE the list opens (kp uses .expect()).
+        for &s in &sigmas { let _ = kparams.kp(s); }
+
+        let cl = rd.compute_list_begin();
+        rd.compute_list_bind_compute_pipeline(cl, pipeline);
+        let mut sched = Scheduler {
+            rd: &mut rd,
+            cl,
+            uset,
+            rows: rows as i32,
+            cols: cols as i32,
+            apron: 0,
+            seed: 0,
+            spacing: 0.0,
+            ox: 0.0,
+            oz: 0.0,
+            feature_span_m: 0.0,
+            vent_count: 0,
+            favor_strength,
+            relief_confidence_floor,
+            wg_full_x,
+            wg_full_y,
+            wg_core_x: wg_full_x,
+            wg_core_y: wg_full_y,
+            kparams,
+        };
+
+        // ONE compose_biomes fold step: acc=height, acc_w=base, f=pool0, w=pool1 pre-loaded.
+        //   w_acc = acc_w/(acc_w+w+1e-12) -> lowland
+        //   acc   = blend(acc, f, w_acc)  -> height
+        //   acc_w += w (PASS_COMPOSE_ACCW_ADD) -> base
+        // The engine reads back BOTH height (new acc) and base (new acc_w) for the next step.
+        sched.compose_wacc();
+        if use_favored {
+            sched.blend_favored_step();
+        } else {
+            sched.blend_field_step();
+        }
+        sched.compose_accw_add();
+
+        rd.compute_list_end();
+        rd.submit();
+        rd.sync();
+
+        // read back the composed accumulator (height) AND the updated acc_w (base). BlendPair
+        // callers ignore acc_w; the Fold path feeds it to the next step.
+        let height_pba = rd.buffer_get_data(named[14]);
+        let height = bytes_to_f32s(&height_pba.to_vec());
+        let accw_pba = rd.buffer_get_data(named[9]);
+        let accw = bytes_to_f32s(&accw_pba.to_vec());
+
+        for (_, rid) in bindings.iter() { rd.free_rid(*rid); }
+        rd.free_rid(pipeline);
+        rd.free_rid(shader);
+        rd.free();
+
+        if height.len() != n {
+            return Err(format!("compose readback: expected {n} f32, got {}", height.len()));
+        }
+        Ok((height, accw))
+    }
+
+    /// Run ONE compose fold step on the GPU and return (new_acc, new_acc_w). Thin wrapper over
+    /// `run_compose_engine` (which reads back both the new acc=height and the GPU-updated
+    /// acc_w=base via PASS_COMPOSE_ACCW_ADD). Used by `run_compose_inner` for the N>=2 case.
+    #[allow(clippy::too_many_arguments)]
+    fn run_compose_step(
+        &self,
+        rows: usize,
+        cols: usize,
+        favor_strength: f32,
+        relief_confidence_floor: f32,
+        acc: &[f32],
+        acc_w: &[f32],
+        f: &[f32],
+        w: &[f32],
+        use_favored: bool,
+    ) -> Result<(Vec<f32>, Vec<f32>), String> {
+        self.run_compose_engine(
+            rows, cols, favor_strength, relief_confidence_floor, acc, acc_w, f, w, use_favored,
+        )
+    }
+
+    /// COMPOSE fold (Slice-4b.11): GPU port of `biome_compose::compose_biomes`. Mirrors the oracle
+    /// fold EXACTLY: n==1 returns fields[0]; use_favored = (!mode_is_field) && (n==2); running
+    /// accumulator acc=fields[0], acc_w=weights[0], then for each subsequent (f,w):
+    /// w_acc=acc_w/(acc_w+w+1e-12), acc=blend(acc,f,w_acc), acc_w+=w. The N>2 fold uses FIELD blend
+    /// (use_favored is FALSE for n!=2), so each step is independent and can run as its own GPU
+    /// engine call (the per-step acc/acc_w are carried on the CPU between calls).
+    #[allow(clippy::too_many_arguments)]
+    fn run_compose_inner(
+        &self,
+        fields: &[Vec<f32>],
+        weights: &[Vec<f32>],
+        rows: usize,
+        cols: usize,
+        mode_is_field: bool,
+        favor_strength: f32,
+        relief_confidence_floor: f32,
+    ) -> Result<Vec<f32>, String> {
+        let n = rows * cols;
+        if fields.len() != weights.len() {
+            return Err(format!("compose: fields/weights count mismatch {} vs {}", fields.len(), weights.len()));
+        }
+        if fields.is_empty() {
+            return Err("compose requires at least one field".into());
+        }
+        if fields.len() == 1 {
+            // n==1: return fields[0] unchanged (oracle short-circuit; no GPU needed).
+            return Ok(fields[0].clone());
+        }
+        // use_favored EXACTLY for n==2 && height_favored mode (mirrors compose_biomes).
+        let use_favored = (!mode_is_field) && (fields.len() == 2);
+
+        let mut acc = fields[0].clone();
+        let mut acc_w = weights[0].clone();
+        for k in 1..fields.len() {
+            let (new_acc, new_acc_w) = self.run_compose_step(
+                rows, cols, favor_strength, relief_confidence_floor,
+                &acc, &acc_w, &fields[k], &weights[k], use_favored,
+            )?;
+            acc = new_acc;
+            acc_w = new_acc_w;
+        }
+        if acc.len() != n {
+            return Err(format!("compose result len {} != {n}", acc.len()));
+        }
+        Ok(acc)
+    }
+
+    /// BLEND-PAIR (Slice-4b.11): GPU port of `biome_compose::blend_field` / `blend_height_favored`.
+    /// A SINGLE blend with `w_a` used DIRECTLY (loaded into lowland=w_acc), NOT the accumulator
+    /// fold. acc=a (height), f=b (pool0).
+    #[allow(clippy::too_many_arguments)]
+    fn run_blend_inner(
+        &self,
+        a: &[f32],
+        b: &[f32],
+        w_a: &[f32],
+        rows: usize,
+        cols: usize,
+        mode_is_field: bool,
+        favor_strength: f32,
+        relief_confidence_floor: f32,
+    ) -> Result<Vec<f32>, String> {
+        // The engine loads height=acc0=a, pool0=f=b, and the BlendPair op uses lowland(=w_acc) as
+        // the blend weight DIRECTLY -- so pre-load w_a into lowland. The engine writes height=acc0
+        // and base=accw0; for BlendPair acc_w is irrelevant, so feed it zeros. We need w_a in
+        // lowland, which the engine does NOT take as a param -> use a dedicated load via accw0 slot?
+        // No: extend the engine call to also seed lowland. Simpler: the BlendPair op reads lowland,
+        // so seed it through a thin wrapper that uploads w_a into binding 7. We thread w_a via the
+        // engine's `accw0`? base is binding 9, not lowland. So run a SPECIALIZED engine path.
+        self.run_blend_engine(
+            rows, cols, favor_strength, relief_confidence_floor, a, b, w_a, !mode_is_field,
+        )
+    }
+
+    /// BLEND-PAIR engine: like `run_compose_engine` but seeds lowland (w_acc) = w_a DIRECTLY and
+    /// runs a single blend step (no acc_w fold). Kept separate so the compose Fold engine's buffer
+    /// roles stay clean (Fold computes w_acc from acc_w; BlendPair uses w_a verbatim).
+    #[allow(clippy::too_many_arguments)]
+    fn run_blend_engine(
+        &self,
+        rows: usize,
+        cols: usize,
+        favor_strength: f32,
+        relief_confidence_floor: f32,
+        a: &[f32],   // -> height (acc)
+        b: &[f32],   // -> pool0  (f)
+        w_a: &[f32], // -> lowland (w_acc, used directly)
+        use_favored: bool,
+    ) -> Result<Vec<f32>, String> {
+        let n = rows * cols;
+        if a.len() != n || b.len() != n || w_a.len() != n {
+            return Err(format!("blend engine: buffer len != rows*cols ({n})"));
+        }
+        let prim = self.primitives_src.as_deref().ok_or("no GLSL source loaded")?;
+        let machine = self.machine_src.as_deref().ok_or("no GLSL source loaded")?;
+        let fragment = self.compose_fragment.as_deref()
+            .ok_or("no compose fragment loaded (call load_compose_fragment)")?;
+
+        let mut rd: Gd<RenderingDevice> = RenderingServer::singleton()
+            .create_local_rendering_device()
+            .ok_or_else(|| "create_local_rendering_device returned null (headless / no device)".to_string())?;
+
+        let machine_plus_fragment = format!("{machine}\n{fragment}");
+        let glsl_stripped = crate::primitive_probe::concat_glsl_hoist_version(prim, &machine_plus_fragment);
+        let mut src = RdShaderSource::new_gd();
+        src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
+        let spirv = match rd.shader_compile_spirv_from_source(&src) {
+            Some(s) => s,
+            None => { rd.free(); return Err("shader_compile_spirv_from_source returned null".to_string()); }
+        };
+        {
+            let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
+            if !err.is_empty() { rd.free(); return Err(format!("GLSL compile error: {err}")); }
+        }
+        let shader = rd.shader_create_from_spirv(&spirv);
+        if shader.is_invalid() { rd.free(); return Err("shader_create_from_spirv returned invalid RID".into()); }
+
+        let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
+        let field_bytes = n * 4;
+        let zeros = vec![0.0_f32; n];
+        let zeros_pba = PackedByteArray::from(f32s_to_bytes(&zeros).as_slice());
+        let mk_zero = |rd: &mut Gd<RenderingDevice>| -> Rid {
+            rd.storage_buffer_create_ex(bsize(field_bytes)).data(&zeros_pba).done()
+        };
+        let mk_data = |rd: &mut Gd<RenderingDevice>, data: &[f32]| -> Rid {
+            let pba = PackedByteArray::from(f32s_to_bytes(data).as_slice());
+            rd.storage_buffer_create_ex(bsize(field_bytes)).data(&pba).done()
+        };
+
+        // Named 0..18: 7=lowland(w_a, direct), 14=height(a). The rest inert.
+        let mut named: Vec<Rid> = Vec::with_capacity(19);
+        for b_i in 0..19usize {
+            let rid = match b_i {
+                7 => mk_data(&mut rd, w_a),
+                14 => mk_data(&mut rd, a),
+                _ => mk_zero(&mut rd),
+            };
+            named.push(rid);
+        }
+
+        let sigmas = compose_sigmas();
+        let mut packed = vec![0.0_f32; sigmas.len() * KERNEL_STRIDE];
+        for (slot, &sg) in sigmas.iter().enumerate() {
+            let k = gaussian_kernel1d(sg, TRUNCATE);
+            if k.len() > KERNEL_STRIDE {
+                rd.free_rid(shader); rd.free();
+                return Err(format!("compose kernel len {} (sigma {sg}) > KERNEL_STRIDE", k.len()));
+            }
+            packed[slot * KERNEL_STRIDE..slot * KERNEL_STRIDE + k.len()].copy_from_slice(&k);
+        }
+        let packed_pba = PackedByteArray::from(f32s_to_bytes(&packed).as_slice());
+        let b_kernel = rd.storage_buffer_create_ex(bsize(packed.len() * 4)).data(&packed_pba).done();
+        let kparams = KernelParams::from_sigmas(&sigmas);
+
+        let b_flow_pre = mk_zero(&mut rd);
+        let b_acc_a = mk_zero(&mut rd);
+        let b_acc_b = mk_zero(&mut rd);
+        let b_core = mk_zero(&mut rd);
+
+        let mut b_pool: Vec<Rid> = Vec::with_capacity(POOL_SLOTS);
+        for slot in 0..POOL_SLOTS {
+            let rid = if slot == 0 { mk_data(&mut rd, b) } else { mk_zero(&mut rd) };
+            b_pool.push(rid);
+        }
+
+        let vent_stride = crate::recipes_volcanic::volcanic::VENT_STRIDE;
+        let maxv = crate::recipes_volcanic::volcanic::MAX_VENTS;
+        let vent_zeros = vec![0.0_f32; maxv * vent_stride];
+        let vent_pba = PackedByteArray::from(f32s_to_bytes(&vent_zeros).as_slice());
+        let b_vents = rd.storage_buffer_create_ex(bsize(vent_zeros.len() * 4)).data(&vent_pba).done();
+
+        let mut bindings: Vec<(i32, Rid)> = Vec::new();
+        for (b_i, &rid) in named.iter().enumerate() { bindings.push((b_i as i32, rid)); }
+        bindings.push((19, b_kernel));
+        bindings.push((20, b_flow_pre));
+        bindings.push((21, b_acc_a));
+        bindings.push((22, b_acc_b));
+        bindings.push((23, b_core));
+        for (k, &rid) in b_pool.iter().enumerate() { bindings.push((24 + k as i32, rid)); }
+        bindings.push((40, b_vents));
+        let mut uniforms: Array<Gd<RdUniform>> = Array::new();
+        for (bind, rid) in bindings.iter() { uniforms.push(&make_storage_uniform(*bind, *rid)); }
+        let uset = rd.uniform_set_create(&uniforms, shader, 0);
+        let pipeline = rd.compute_pipeline_create(shader);
+
+        let wg_full_x = (cols as u32).div_ceil(16);
+        let wg_full_y = (rows as u32).div_ceil(16);
+        for &s in &sigmas { let _ = kparams.kp(s); }
+
+        let cl = rd.compute_list_begin();
+        rd.compute_list_bind_compute_pipeline(cl, pipeline);
+        let mut sched = Scheduler {
+            rd: &mut rd, cl, uset,
+            rows: rows as i32, cols: cols as i32, apron: 0, seed: 0,
+            spacing: 0.0, ox: 0.0, oz: 0.0, feature_span_m: 0.0, vent_count: 0,
+            favor_strength, relief_confidence_floor,
+            wg_full_x, wg_full_y, wg_core_x: wg_full_x, wg_core_y: wg_full_y, kparams,
+        };
+        if use_favored { sched.blend_favored_step(); } else { sched.blend_field_step(); }
+
+        rd.compute_list_end();
+        rd.submit();
+        rd.sync();
+
+        let height_pba = rd.buffer_get_data(named[14]);
+        let height = bytes_to_f32s(&height_pba.to_vec());
+
+        for (_, rid) in bindings.iter() { rd.free_rid(*rid); }
+        rd.free_rid(pipeline);
+        rd.free_rid(shader);
+        rd.free();
+
+        if height.len() != n {
+            return Err(format!("blend readback: expected {n} f32, got {}", height.len()));
+        }
+        Ok(height)
     }
 }
 
@@ -2046,14 +2700,14 @@ mod biome_page_compute_tests {
 
     #[test]
     fn push_constant_is_96_bytes() {
-        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48);
+        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48, 0.0, 0.0);
         assert_eq!(p.len(), 96);
     }
 
     #[test]
     fn push_constant_packs_ints_then_floats() {
-        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count,spacing,ox,oz,span,power)
-        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 4, 3913.0, 12000.0, -31000.0, 90000.0, 0.34);
+        // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count,spacing,ox,oz,span,power,favor,floor)
+        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 4, 3913.0, 12000.0, -31000.0, 90000.0, 0.34, 0.0, 0.0);
         assert_eq!(i32::from_le_bytes([p[0], p[1], p[2], p[3]]), 7);
         assert_eq!(i32::from_le_bytes([p[4], p[5], p[6], p[7]]), 344);
         assert_eq!(i32::from_le_bytes([p[8], p[9], p[10], p[11]]), 343);
@@ -2078,9 +2732,57 @@ mod biome_page_compute_tests {
         // The 10 proven biomes pass vent_count=0 -> byte-identical to the former hardcoded `0` pad.
         // Build a representative mountain dispatch push with vent_count=0 and confirm the vent_count
         // int slot (bytes 40..44) is exactly zero (so mountain's 1.89e-6 parity is preserved).
-        let p = build_push(8, 344, 344, 160, 0, 0, 0, 0, 0, 0, 0, 2608.7, 12000.0, -31000.0, 60000.0, 0.0);
+        let p = build_push(8, 344, 344, 160, 0, 0, 0, 0, 0, 0, 0, 2608.7, 12000.0, -31000.0, 60000.0, 0.0, 0.0, 0.0);
         assert_eq!(i32::from_le_bytes([p[40], p[41], p[42], p[43]]), 0);
         assert_eq!(p.len(), 96);
+        // The two compose param floats (pad0=favor_strength, pad1=relief_conf_floor) are at bytes
+        // 68..72 and 72..76. For a non-compose dispatch they are 0.0 -> byte-identical to the former
+        // all-zero pad block, so the 11 proven biomes' push bytes are unchanged.
+        assert_eq!(f32::from_le_bytes([p[68], p[69], p[70], p[71]]), 0.0);
+        assert_eq!(f32::from_le_bytes([p[72], p[73], p[74], p[75]]), 0.0);
+    }
+
+    #[test]
+    fn push_constant_carries_compose_params_in_pads() {
+        // favor_strength -> pad0 (bytes 68..72), relief_confidence_floor -> pad1 (bytes 72..76).
+        let p = build_push(64, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 1e-3);
+        let favor = f32::from_le_bytes([p[68], p[69], p[70], p[71]]);
+        let floor = f32::from_le_bytes([p[72], p[73], p[74], p[75]]);
+        assert!((favor - 2.0).abs() < 1e-7, "favor_strength not in pad0");
+        assert!((floor - 1e-3).abs() < 1e-9, "relief_confidence_floor not in pad1");
+        // the remaining 4 float pads (bytes 76..96) stay zero.
+        for off in (76..96).step_by(4) {
+            assert_eq!(f32::from_le_bytes([p[off], p[off + 1], p[off + 2], p[off + 3]]), 0.0);
+        }
+        assert_eq!(p.len(), 96);
+    }
+
+    #[test]
+    fn compose_sigmas_has_relief_sigma() {
+        // The compose relief proxy uses exactly sigma = relief_sigma_px default = 6.0.
+        let s = compose_sigmas();
+        assert_eq!(s.len(), 1);
+        assert!((s[0] - 6.0).abs() < 1e-12);
+        // its kernel must fit the packed-kernel stride.
+        let len = 2 * gaussian_radius(s[0], TRUNCATE) + 1;
+        assert!(len <= KERNEL_STRIDE, "compose kernel len {len} > {KERNEL_STRIDE}");
+        // sigma 6.0 -> lw = int(4.0*6.0+0.5) = int(24.5) = 24 -> length 49.
+        assert_eq!(gaussian_radius(6.0, TRUNCATE), 24);
+        assert_eq!(len, 49);
+    }
+
+    #[test]
+    fn compose_kernel_matches_array_ops_relief_sigma() {
+        // The GPU relief proxy gaussian MUST use the SAME sigma=6.0 kernel as
+        // biome_compose.rs::GAUSSIAN_TRUNCATE-driven gaussian_filter_nearest. Verify the kernel
+        // sums to ~1 (normalized) and is symmetric (the array_ops contract).
+        let k = gaussian_kernel1d(6.0, TRUNCATE);
+        let sum: f32 = k.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-6, "compose relief kernel not normalized (sum={sum})");
+        let n = k.len();
+        for i in 0..n {
+            assert!((k[i] - k[n - 1 - i]).abs() < 1e-7, "compose relief kernel not symmetric at {i}");
+        }
     }
 
     #[test]
