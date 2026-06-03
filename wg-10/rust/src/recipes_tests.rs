@@ -46,6 +46,8 @@ struct Record {
     padded_rows: usize,
     padded_cols: usize,
     grid: Grid,
+    #[serde(default)]
+    flow_on: bool,
     height: Vec<f64>,
 }
 
@@ -191,5 +193,61 @@ fn mountain_seamsafe_matches_576_oracle() {
     assert!(
         max_delta < 1.0e-9,
         "CPU port DIVERGES from the 576 oracle ({max_delta:.3e}) -> the bug is in the PORT, not the GLSL/f32"
+    );
+}
+
+// Flow-OFF (MACRO) parity. The coarse clipmap levels render with flow_on=false (no drainage carve).
+// This proves the Rust flow-off path == the Python flow-off oracle, so "flow-off" is provably "macro
+// without the carve", not some other divergence. Modeled on the 576 test above; the ONLY differences
+// are the oracle file and flow_on=false. Both sides are f64, so the bar stays at the numerical floor.
+#[test]
+fn mountain_macro_matches_oracle() {
+    const ORACLE: &str =
+        include_str!("../../worldgen_terrain/fixtures/mountain_macro_oracle.json");
+    let doc: Doc = serde_json::from_str(ORACLE).expect("parse mountain_macro_oracle.json");
+    let r = &doc.records[0];
+    assert_eq!(r.core_rows, 256, "expected 256 core");
+    assert_eq!(r.padded_rows, 576, "expected 576 padded");
+    assert!(!r.flow_on, "macro oracle must be flow_on=false");
+
+    let (wx, wz) = helpers::apron_meshgrid(
+        r.padded_rows,
+        r.padded_cols,
+        r.apron_px,
+        r.grid.spacing,
+        r.grid.ox,
+        r.grid.oz,
+    );
+    let got = mountain_seamsafe(
+        &wx,
+        &wz,
+        r.padded_rows,
+        r.padded_cols,
+        r.seed,
+        r.feature_span_m,
+        r.apron_px,
+        r.grid.spacing,
+        false,
+    );
+    assert_eq!(got.len(), r.height.len(), "core len mismatch");
+
+    let mut max_delta = 0.0_f64;
+    let mut at = 0usize;
+    for (i, (&g, &w)) in got.iter().zip(r.height.iter()).enumerate() {
+        let d = (g - w).abs();
+        if d > max_delta {
+            max_delta = d;
+            at = i;
+        }
+    }
+    eprintln!(
+        "[recipe mountain macro parity] CPU-port flow-off vs Python flow-off oracle: max |delta| = {max_delta:.3e} at cell {at}"
+    );
+    // f64-vs-f64, flow_on=false: the masks (primary + tributary) are zeroed and the carve is skipped
+    // on BOTH sides, so this must match the numerical floor exactly. A large delta means the Rust
+    // flow-off gating diverges from Python's.
+    assert!(
+        max_delta < 1.0e-9,
+        "Rust flow-off DIVERGES from the macro oracle ({max_delta:.3e}) -> compare the mask-zeroing / flow-skip on both sides"
     );
 }
