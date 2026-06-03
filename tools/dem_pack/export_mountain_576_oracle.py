@@ -33,7 +33,7 @@ def main() -> None:
     pad_ox = OX - APRON_PX * cell
     pad_oz = OZ - APRON_PX * cell
     wx, wz = geo.grid(PADDED, pad_span, ox=pad_ox, oz=pad_oz)
-    res = mountain.generate(wx, wz, seed=SEED, feature_span_m=FEATURE_SPAN_M, apron_px=APRON_PX)
+    res = mountain.generate(wx, wz, seed=SEED, feature_span_m=FEATURE_SPAN_M, apron_px=APRON_PX, spacing_m=SPACING)
     h = np.asarray(res["height"], float)          # core-cropped 256x256, normalized pre-relief
     assert h.shape == (CORE_PX, CORE_PX), f"expected ({CORE_PX},{CORE_PX}) got {h.shape}"
     flat = h.reshape(-1)

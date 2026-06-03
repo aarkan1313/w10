@@ -109,6 +109,7 @@ def main():
             style=style,
             feature_span_m=feature_span_m,
             apron_px=apron_px,
+            spacing_m=spacing,
         )
         height = np.asarray(result["height"], dtype=np.float64)
         assert height.shape == (core_n, core_n), (
