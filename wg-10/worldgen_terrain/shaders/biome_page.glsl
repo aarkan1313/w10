@@ -118,6 +118,20 @@ const int PASS_POOL_FROM_GAUSS     = 26; // [GENERIC] pool[pool_sel] <- gauss_ou
 // P.pad1 = relief_confidence_floor (0 for every non-compose dispatch -> byte-identical push).
 const int PASS_COMPOSE_RELIEF_A_STORE = 60; // [GENERIC] range_envelope <- abs(height - gauss_out)
 const int PASS_COMPOSE_RELIEF_B_STORE = 61; // [GENERIC] massif <- abs(pool0 - gauss_out)
+// Relief-proxy f32 self-noise dead-zone. The oracle is f64, where gaussian(constant)==constant to
+// ~1e-15, so a FLAT field has relief==0 exactly and the favored nudge vanishes (signal==0 ->
+// w_adj==w_a -> a plain field blend). On the GPU the separable blur is f32: gaussian(constant c)
+// != c (the per-tap c*tap products round independently; this does NOT cancel and is NOT fixable by
+// renormalizing the kernel taps). That leaves a spurious relief ~= |c|*9.6e-7 on a flat field. Tiny
+// in itself, but signal = total/(total + relief_confidence_floor=1e-3) AMPLIFIES it, so the nudge no
+// longer vanishes and w_adj drifts ~1e-3 from w_a -> out = w_adj*a+(1-w_adj)*b is off by ~drift*|a-b|,
+// up to ~13 m / 2.76% when |a-b| ~ 900 (the windowed rec=4 favored_ramp_flat_flat failure). Fix: in
+// the relief STORE passes, snap relief that is below this RELATIVE floor (== pure blur self-noise) to
+// exactly 0, so a flat field reproduces the oracle's relief==0. The floor is ~10x the measured worst
+// self-noise (9.6e-7) and ~60x BELOW the smallest genuine local relief (a slope-0.01 m/px ramp gives
+// relief ~0.06 m), so structured/favored fields (rec=1/2/3/6) are untouched. This targets ONLY the
+// compose relief proxy; the 11 biome blurs (which read gauss_out directly) are byte-unchanged.
+const float COMPOSE_RELIEF_F32_FLOOR_REL = 1e-5;
 const int PASS_COMPOSE_WACC           = 62; // [GENERIC] lowland <- base/(base+pool1+1e-12)
 const int PASS_COMPOSE_BLEND_FIELD    = 63; // [GENERIC] height <- lowland*height + (1-lowland)*pool0
 const int PASS_COMPOSE_BLEND_FAVORED  = 64; // [GENERIC] height <- favored-blend(height, pool0, lowland)
@@ -534,13 +548,23 @@ void main() {
 
     if (pass == PASS_COMPOSE_RELIEF_A_STORE) {
         // relief_a = |acc - gaussian_nearest(acc, relief_sigma_px)|. acc=height, blur=gauss_out.
-        range_envelope.v[i] = abs(height.v[i] - gauss_out.v[i]);
+        // Snap pure f32-blur self-noise to 0 so a FLAT field matches the oracle's relief==0 (see
+        // COMPOSE_RELIEF_F32_FLOOR_REL). Genuine structured relief is far above this floor -> inert.
+        float fv = height.v[i];
+        float r  = abs(fv - gauss_out.v[i]);
+        if (r <= COMPOSE_RELIEF_F32_FLOOR_REL * max(abs(fv), 1.0)) r = 0.0;
+        range_envelope.v[i] = r;
         return;
     }
 
     if (pass == PASS_COMPOSE_RELIEF_B_STORE) {
         // relief_b = |f - gaussian_nearest(f, relief_sigma_px)|. f=pool0, blur=gauss_out.
-        massif.v[i] = abs(pool_read(0, i) - gauss_out.v[i]);
+        // Same f32-blur self-noise dead-zone as relief_a (the flat-field smoking gun was rec=4's
+        // relief_b on a flat 'b' surface; both proxies get the snap for symmetry / flat-acc cases).
+        float fv = pool_read(0, i);
+        float r  = abs(fv - gauss_out.v[i]);
+        if (r <= COMPOSE_RELIEF_F32_FLOOR_REL * max(abs(fv), 1.0)) r = 0.0;
+        massif.v[i] = r;
         return;
     }
 

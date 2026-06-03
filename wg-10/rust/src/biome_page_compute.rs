@@ -847,6 +847,11 @@ impl<'a> Scheduler<'a> {
 
     /// Compute relief_a = |acc - gaussian_nearest(acc, 6.0)| into range_envelope. Blurs the
     /// accumulator (height) via COPY_ACC -> gauss_in, gauss(6.0) -> gauss_out, then the abs-diff.
+    /// The STORE pass (biome_page.glsl PASS_COMPOSE_RELIEF_A_STORE) snaps pure f32-blur self-noise
+    /// to 0 (COMPOSE_RELIEF_F32_FLOOR_REL) so a FLAT field reproduces the f64 oracle's relief==0 --
+    /// the root-cause fix for the favored_ramp_flat_flat (rec=4) windowed failure (2.76% / ~13 m):
+    /// f32 gaussian(constant) != constant, and signal=total/(total+1e-3) amplified that spurious
+    /// relief into a w_adj drift times |a-b|. The snap is inert on structured relief (>> the floor).
     fn compose_relief_a(&mut self) {
         self.dispatch_full(PASS_COMPOSE_COPY_ACC, 0, 0, 0.0);
         self.gauss(COMPOSE_RELIEF_SIGMA);
