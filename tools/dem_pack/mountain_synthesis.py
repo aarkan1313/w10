@@ -143,6 +143,23 @@ SEAMSAFE_BRANCH_GAIN: float = 1.70
 SEAMSAFE_RIDGE_GAIN: float = 1.12
 SEAMSAFE_DETAIL_GAIN: float = 1.05
 
+# ---------------------------------------------------------------------------
+# Scale-invariant blur sigmas.
+# Reference spacing (metres/pixel) for world-anchored blur sigmas. A blur whose
+# sigma is `sc` CELLS at this spacing covers `sc * S_REF` METRES; at any other
+# spacing the cell-sigma is rescaled so the blur covers the SAME world distance
+# -> macro structure identical across clipmap levels.
+# MUST equal the Rust S_REF (recipes.rs, added in a later task). 32.0 = the live
+# scene's L0 spacing.
+# ---------------------------------------------------------------------------
+S_REF: float = 32.0
+
+
+def _sigma_cells(sigma_cell_ref: float, spacing_m: float) -> float:
+    """Reference CELL sigma -> cell sigma at `spacing_m` (fixed WORLD extent).
+    sigma_world_m = sigma_cell_ref * S_REF;  returns sigma_world_m / spacing_m."""
+    return (sigma_cell_ref * S_REF) / max(spacing_m, 1e-6)
+
 
 @dataclass(frozen=True)
 class MountainStyle:
@@ -308,6 +325,7 @@ def _flow_channels_seam_safe(
     *,
     mode: str = "nearest",
     power: float = 0.48,
+    spacing_m: float = S_REF,
 ) -> np.ndarray:
     """Seam-safe CONNECTED drainage: real MFD flow accumulation + FIXED-max normalization.
 
@@ -327,13 +345,13 @@ def _flow_channels_seam_safe(
     pass itself is global (its convergence error, not kernel reach, sets the apron);
     width blur σ=width_px≤4.0 → reach 16 px.
     """
-    pre = gaussian_filter(np.asarray(surface, dtype=np.float64), sigma=1.15, mode=mode)
+    pre = gaussian_filter(np.asarray(surface, dtype=np.float64), sigma=_sigma_cells(1.15, spacing_m), mode=mode)
     acc = skel._flow_accumulation_mfd(pre, power=float(power))
     # FIXED-max normalization (SEAM-SAFE: no per-window statistics).
     discharge = np.clip(np.log1p(acc) / np.log1p(float(acc.size)), 0.0, 1.0)
     # Spread channel extent (seam-safe nearest-mode blur).
     return np.clip(
-        gaussian_filter(discharge, sigma=max(float(width_px), 0.1), mode=mode),
+        gaussian_filter(discharge, sigma=_sigma_cells(max(float(width_px), 0.1), spacing_m), mode=mode),
         0.0,
         1.0,
     )
@@ -344,6 +362,7 @@ def _lowland_mask(
     regional: np.ndarray,
     *,
     blur_mode: str = "reflect",
+    spacing_m: float = S_REF,
 ) -> np.ndarray:
     """Broad non-range floor mask.
 
@@ -351,7 +370,7 @@ def _lowland_mask(
     low pockets and valley floors; use a soft inverse range envelope, modulated
     by regional lows, to protect those areas from ridge/detail noise.
     """
-    broad_range = gaussian_filter(range_field, sigma=7.0, mode=blur_mode)
+    broad_range = gaussian_filter(range_field, sigma=_sigma_cells(7.0, spacing_m), mode=blur_mode)
     low = smoothstep(0.48, 0.84, 1.0 - broad_range)
     regional_low = smoothstep(0.44, 0.78, 1.0 - regional)
     return np.clip(low * (0.35 + 0.65 * regional_low), 0.0, 1.0)
@@ -364,6 +383,8 @@ def generate(
     style: MountainStyle = STYLES[0],
     feature_span_m: float | None = None,
     apron_px: int = 0,
+    spacing_m: float | None = None,
+    flow_on: bool = True,
 ) -> dict[str, np.ndarray | MountainStyle]:
     """Generate one mountain-only candidate.
 
@@ -391,10 +412,24 @@ def generate(
         ``apron_px`` extra cells on every side.  The returned height (and all
         diagnostic fields) are cropped to the core before returning.
         Use ``MOUNTAIN_APRON_PX`` for the correct value.
+    spacing_m:
+        Metres-per-pixel of this grid.  All seam-safe gaussian blur sigmas
+        (specified as reference CELL sigmas) are rescaled via ``_sigma_cells``
+        so each blur covers the SAME world distance at any spacing -> macro
+        structure is identical across clipmap levels.  ``None`` (default)
+        resolves to ``S_REF`` (the reference spacing), giving byte-identical
+        output to the pre-scale-invariant recipe at the reference level.
+    flow_on:
+        When ``True`` (default) the expensive flow-carved drainage is computed.
+        When ``False`` the two ``_flow_channels_seam_safe`` passes are skipped
+        (primary/tributary masks set to zero) -> the MACRO surface with no
+        drainage carve, for coarse clipmap levels where drainage is near-field
+        detail only.
     """
     a = int(apron_px)
     seam_safe_mode = a > 0
     blur_mode = "nearest" if seam_safe_mode else "reflect"
+    spacing_m = float(spacing_m) if spacing_m is not None else S_REF
 
     if seam_safe_mode and feature_span_m is None:
         raise ValueError(
@@ -422,23 +457,29 @@ def generate(
         regional = np.clip(ss.affine_remap(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.88), 5, seed + 20, gain=0.56), REGIONAL_CENTER, REGIONAL_SCALE), 0.0, 1.0)
         ranges = _oriented_ridges(w_x, w_z, feature_span, style, seed, seam_safe_mode=True)
 
-        range_envelope = smoothstep(0.24, 0.58, gaussian_filter(ranges, sigma=5.0, mode=blur_mode))
-        lowland = _lowland_mask(ranges, regional, blur_mode=blur_mode)
+        range_envelope = smoothstep(0.24, 0.58, gaussian_filter(ranges, sigma=_sigma_cells(5.0, spacing_m), mode=blur_mode))
+        lowland = _lowland_mask(ranges, regional, blur_mode=blur_mode, spacing_m=spacing_m)
 
-        massif_inner = 0.58 * regional + 0.86 * range_envelope + 0.28 * gaussian_filter(ranges, sigma=1.8, mode=blur_mode)
+        massif_inner = 0.58 * regional + 0.86 * range_envelope + 0.28 * gaussian_filter(ranges, sigma=_sigma_cells(1.8, spacing_m), mode=blur_mode)
         massif = np.clip(ss.affine_remap(massif_inner, MASSIF_CENTER, MASSIF_SCALE), 0.0, 1.0)
-        massif = gaussian_filter(massif, sigma=2.0, mode=blur_mode)
+        massif = gaussian_filter(massif, sigma=_sigma_cells(2.0, spacing_m), mode=blur_mode)
 
         base = ss.affine_remap(style.uplift_gain * (1.50 * massif + 0.18 * ranges - 0.46 * lowland), BASE_CENTER, BASE_SCALE)
 
-        primary = _flow_channels_seam_safe(base, width_px=style.valley_width_px, mode=blur_mode, power=0.48)
-        # Real flow accumulation (fixed-max normalized) fires at a different scale than
-        # the legacy per-window-max flow channels, so use data-independent thresholds.
-        primary_mask = smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary)
+        if flow_on:
+            primary = _flow_channels_seam_safe(base, width_px=style.valley_width_px, mode=blur_mode, power=0.48, spacing_m=spacing_m)
+            # Real flow accumulation (fixed-max normalized) fires at a different scale than
+            # the legacy per-window-max flow channels, so use data-independent thresholds.
+            primary_mask = smoothstep(PRIMARY_THRESH_LO, PRIMARY_THRESH_HI, primary)
 
-        rough_surface = base + 0.18 * ss.affine_remap(ranges, RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE)
-        tributary = _flow_channels_seam_safe(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), mode=blur_mode, power=0.34)
-        tributary_mask = smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary)
+            rough_surface = base + 0.18 * ss.affine_remap(ranges, RANGES_ZSCORE_CENTER, RANGES_ZSCORE_SCALE)
+            tributary = _flow_channels_seam_safe(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), mode=blur_mode, power=0.34, spacing_m=spacing_m)
+            tributary_mask = smoothstep(TRIBUTARY_THRESH_LO, TRIBUTARY_THRESH_HI, tributary)
+        else:
+            # Coarse-level: skip the expensive flow-carved drainage entirely.
+            # The two carve terms below (height -= ...) then vanish -> MACRO surface.
+            primary_mask = np.zeros_like(base)
+            tributary_mask = np.zeros_like(base)
 
         ridge_detail = ss.affine_remap(wg.ridged_multifractal(w_x, w_z, 1.0 / (feature_span * 0.045), 5, seed + 40, gain=0.52), RIDGE_DETAIL_CENTER, RIDGE_DETAIL_SCALE)
         near_detail = ss.affine_remap(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.020), 4, seed + 50, gain=0.48), NEAR_DETAIL_CENTER, NEAR_DETAIL_SCALE)
@@ -453,12 +494,18 @@ def generate(
 
         base = zscore(style.uplift_gain * (1.50 * massif + 0.18 * ranges - 0.46 * lowland))
 
-        primary = _flow_channels(base, width_px=style.valley_width_px, power=0.48)
-        primary_mask = smoothstep(0.54, 0.94, primary)
+        if flow_on:
+            primary = _flow_channels(base, width_px=style.valley_width_px, power=0.48)
+            primary_mask = smoothstep(0.54, 0.94, primary)
 
-        rough_surface = base + 0.18 * zscore(ranges)
-        tributary = _flow_channels(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), power=0.34)
-        tributary_mask = smoothstep(0.44, 0.88, tributary)
+            rough_surface = base + 0.18 * zscore(ranges)
+            tributary = _flow_channels(rough_surface, width_px=max(style.valley_width_px * 0.42, 0.6), power=0.34)
+            tributary_mask = smoothstep(0.44, 0.88, tributary)
+        else:
+            # Coarse-level: skip the expensive flow-carved drainage (parallel to the
+            # seam-safe branch). The two carve terms below then vanish -> MACRO surface.
+            primary_mask = np.zeros_like(base)
+            tributary_mask = np.zeros_like(base)
 
         ridge_detail = zscore(wg.ridged_multifractal(w_x, w_z, 1.0 / (feature_span * 0.045), 5, seed + 40, gain=0.52))
         near_detail = zscore(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.020), 4, seed + 50, gain=0.48))
@@ -481,11 +528,11 @@ def generate(
     height -= branch_g * (0.18 + 0.42 * high_mask) * tributary_mask
 
     floor_mask = np.clip(
-        smoothstep(0.48, 0.86, gaussian_filter(valley_mask, sigma=1.2, mode=blur_mode)) + 0.24 * lowland,
+        smoothstep(0.48, 0.86, gaussian_filter(valley_mask, sigma=_sigma_cells(1.2, spacing_m), mode=blur_mode)) + 0.24 * lowland,
         0.0,
         1.0,
     )
-    floor = gaussian_filter(height, sigma=max(style.floor_smooth_px, 0.2), mode=blur_mode)
+    floor = gaussian_filter(height, sigma=_sigma_cells(max(style.floor_smooth_px, 0.2), spacing_m), mode=blur_mode)
     height = height * (1.0 - 0.38 * floor_mask) + floor * (0.38 * floor_mask)
     height -= 0.18 * floor_mask
 
