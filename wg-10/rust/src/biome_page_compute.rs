@@ -680,7 +680,7 @@ impl KernelParams {
 /// Per-dispatch state for one open compute list. Built once `run_inner` has the list open; the
 /// schedule fn drives it. `cl` matches the type `compute_list_begin()` returns (i64 in the
 /// Godot 4.6 bindings).
-struct Scheduler<'a> {
+pub(crate) struct Scheduler<'a> {
     rd: &'a mut Gd<RenderingDevice>,
     cl: i64,
     uset: Rid,
@@ -896,11 +896,16 @@ impl<'a> Scheduler<'a> {
     }
 }
 
-/// The MOUNTAIN dispatch schedule (style = ALPINE_BRANCHING). EXACTLY the pre-refactor sequence
-/// + params; this is the reference pattern every future biome `schedule_<biome>()` copies. The
-/// constants here (valley_width_px/trib_width/floor_smooth) mirror `mountain_sigmas()` so the
-/// gauss/flow widths resolve to pre-validated kernel slots.
-fn schedule_mountain(s: &mut Scheduler) {
+/// The mountain pass-dispatch SCHEDULE, extracted so the readback test harness (`run_inner`)
+/// AND the runtime producer run the SAME proven sequence (DRY -- one schedule, two hosts).
+/// Operates on an already-built `Scheduler` bound to the apron buffers; pure dispatch, no rd/buffer
+/// ownership. No math change vs the inline block it replaces.
+///
+/// Style = ALPINE_BRANCHING. EXACTLY the pre-refactor sequence + params; this is the reference
+/// pattern every future biome `schedule_<biome>()` copies. The constants here
+/// (valley_width_px/trib_width/floor_smooth) mirror `mountain_sigmas()` so the gauss/flow widths
+/// resolve to pre-validated kernel slots.
+pub(crate) fn dispatch_mountain_schedule(s: &mut Scheduler) {
     let valley_width_px = 2.4_f64;
     let trib_width = (valley_width_px * 0.42).max(0.6);
     let floor_smooth = 4.0_f64.max(0.2);
@@ -2203,7 +2208,7 @@ impl Wg10BiomePageCompute {
         // Biome selector (derived from the fragment path stem in generate_core_page). Each biome
         // adds a `schedule_<name>()` + one match arm here + a `*_sigmas()` arm in `biome_sigmas`.
         match biome {
-            "mountain" => schedule_mountain(&mut sched),
+            "mountain" => dispatch_mountain_schedule(&mut sched),
             "grassland" => schedule_grassland(&mut sched),
             "desert" => schedule_desert(&mut sched),
             "coast" => schedule_coast(&mut sched),
