@@ -14,8 +14,38 @@ the dated specs/plans under `docs/superpowers/`.
 > grow a fourth source of truth. WG9 died partly of ~20 contradictory docs — that is
 > the failure we are actively avoiding.
 
+Updated: 2026-06-02 LATE (**SLICE 4: ALL 11 BIOMES + COMPOSE run on the GPU, every one HARDWARE-PARITY-PROVEN;
+runtime-drainage DECIDED + spec written. New-session pickup below.** Branch `slice4-gpu-page-integration`,
+tip `6bb0771`, pushed. NOT merged to main — legacy `height_page.glsl`+atlas still the runtime default (all
+behind a flag). cargo 210/0; `biome_page` windowed suite GREEN on RTX 5090/D3D12 (11 biome pages + compose +
+primitives).
+**READ ORDER for a new chat:** STATUS.md top ("▶ CURRENT (2026-06-02 PM)") → this box → the 4 memories
+[`worldgen10-slice4a-proven`, `worldgen10-flow-convergence-production`, `worldgen10-coarse-drainage-refuted`,
+`worldgen10-godot46-string-format`] → the runtime-drainage spec
+`docs/superpowers/specs/2026-06-02-worldgen-runtime-drainage-design.md` (OWNER-REVIEW-PENDING) → the slice-4
+plan `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`.
+**WHAT'S DONE:** the GPU biome page architecture (machine + per-biome fragment + Scheduler seam + scratch pool +
+flow hooks + volcanic vent SSBO); all 11 biomes parity-proven; compose_biomes/blend GPU-proven (a flat-field
+f32 bug was caught+fixed by the windowed gate); the §3.1 drainage question MEASURED + DECIDED (on-demand
+full-res flow bake off-frame + per-region fact cache; coarse shortcuts refuted, exact solver parked).
+**IMMEDIATE NEXT (recommended order):** (1) OWNER reviews the runtime-drainage spec; (2) **4b.11 PART B** —
+port the grammar region/palette/family selection (legacy `height_page.glsl` lines ~90-180) into the biome path
+so a page picks its ACTIVE biomes + partition-of-unity weights, then composes them via the now-proven compose
+layer (smaller, unblocks real multi-biome terrain — do FIRST); (3) build the drainage subsystem per the approved
+spec; (4) Slice 4c (flip runtime to the biome path + remove the 25MB atlas + hardened perf gate + owner fly).
+**HOW TO RUN GATES (this session's recipe):** windowed suites need a real GPU + rebuilt dll. Rebuild:
+`$env:CARGO_TARGET_DIR=$null; cargo build -p wg10_terrain` from `wg-10/rust` (the gdextension loads
+`res://rust/target/debug/wg10_terrain.dll`, the DEFAULT target — NOT the isolated check target). Run:
+`$env:GODOT_BIN="C:\Godot\v4.6.2\...\Godot_v4.6.2-stable_mono_win64_console.exe"; python tools/gate.py --suite
+biome_page` (also `flow_converge`, `page_measure`). Isolated cargo check (editor-safe):
+`env -u CARGO_TARGET_DIR CARGO_TARGET_DIR=D:/tmp/wg10_check_target cargo test -p wg10_terrain`. Worktree
+isolation snapshots a STALE base here — port in the MAIN tree (append-only). The big pre-existing uncommitted
+pile (biome-synthesis/review scenes) is NOT ours — we branched from it; stage BY NAME only. — older
+Slice-4a-built framing below is now history.)
+
 Updated: 2026-06-02 PM (**SLICE 4a BUILT on branch `slice4-gpu-page-integration` — mountain terrain on the GPU,
-behind a flag, parity-gated; PENDING the owner windowed proof.** This is the live pickup. Slice 3 (CPU Rust port
+behind a flag, parity-gated; PENDING the owner windowed proof.** This is the (now superseded) earlier-session
+pickup. Slice 3 (CPU Rust port
 of all 11 recipes + array_ops/recipe_noise + compose) is DONE; Slice 4 mirrors that stack to GLSL on the render
 path. Slice-4 spec: `docs/superpowers/specs/2026-06-02-worldgen-slice4-gpu-page-integration-design.md`; plan:
 `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md` (executing via subagent-driven-development).

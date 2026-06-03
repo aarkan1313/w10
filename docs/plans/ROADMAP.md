@@ -277,26 +277,32 @@ plan → slice-by-slice → owner-flown acceptance cycle. Look-quality is owner-
 
 ### Phase 5 — Worldgen core rebuild (ACTIVE) — 85%-target geography engine
 
-> **▶ YOU ARE HERE (2026-06-01, late) — Phase 5: BIOME-COMPOSITION LAYER (Fork B) + SCALE CONTRACT done; Slice-3 UNBLOCKED.** Plain-language state:
-> - **Milestones 0–4 DONE** (engine machinery). The height CONTENT is what Phase 5 proves offline before the Rust port.
-> - **The biome-composition layer is BUILT** (the "shouldn't the height not be bound to kernels?" insight): an
->   edit-free layer that turns "grammar places biome(s) at (x,z)" → one seam-exact height. `biome_compose`
->   (`compose_biomes` + tunable `height_favored` blend), `biome_registry` (name→recipe), `seam_safe` (shared
->   apron/affine helpers). **Fork B** (probe-decided): each biome keeps its own recipe (Fork A "one v2 engine"
->   was DEAD — v2 can't make mountains); recipes are made seam-safe + composed.
-> - **ALL 11 BIOMES SEAM-SAFE + committed; full suite 238 passed.** Each: apron_px path + affine_remap + nearest
->   blurs + REAL MFD flow-accumulation connected drainage + crop; seam <1e-3 (visually-seamless, not bit-exact —
->   global flow can't be bit-exact across windows); legacy path byte-identical. Owner flew the seam-safe mountain
->   (true-scale) + accepted. Commits af921c7…42079ca.
-> - **SCALE CONTRACT resolved** (spec `…/2026-06-01-worldgen-scale-contract-design.md`): the long "not tall enough"
->   was an OVERVIEW-vs-ON-FOOT illusion. On-foot real-metre anchor (mountain ~3.5km/1000m slope~0.29 … wetland
->   ~9km/110m; ~30km regions); real mountains are BROAD swells at true scale (correct) — "towering" is a future
->   detail layer (cliffs/crags, Phase 6), NOT a slope fudge. Content scale authoritative; presentation scales
->   (review/camera/page) decoupled + display-only. Fast Python render-first loop replaced the slow JSON→Godot loop.
-> - **NEXT: Slice-3 Rust port** — plan written + reviewed (`…/plans/2026-06-01-slice3-rust-port-plan.md`), top
->   de-risk = the live GPU flow-accumulation cost gate. Or further biome look-tuning / Phase-6 materials (where
->   biome color-identity + up-close "towering" detail come from). Memory `worldgen10-biome-composition-layer`,
->   `worldgen10-gpu-rust-first-principle`. STATUS.md top = live.
+> **▶ YOU ARE HERE (2026-06-02, late) — Phase 5 / Slice 4: ALL 11 BIOMES + COMPOSE run on the GPU,
+> hardware-parity-proven; runtime-drainage DECIDED; PART B + drainage build + 4c remain.** Plain-language state
+> (STATUS.md top = the live detail; this is the roadmap pointer):
+> - **Slices 1–3 DONE** (engine machinery + the CPU Rust port of all 11 seam-safe recipes + array_ops/recipe_noise
+>   + compose, parity-exact). **Slice 4 (GPU page integration) is the active body of work.**
+> - **Slice 4a + 4b: every accepted biome now GENERATES on the GPU** as a per-biome page pipeline, each
+>   parity-exact to its f64 oracle on real hardware (RTX 5090/D3D12, `biome_page` suite green; maxd 3e-7…1.3e-5).
+>   Architecture: a generic GLSL pass-MACHINE + per-biome FRAGMENT (concat-selected) + a `Scheduler` dispatch seam
+>   + a scratch POOL + small additive flow hooks; volcanic's PCG64 vents computed CPU-side (no RNG in GLSL). The
+>   COMPOSE layer (blend/favored/fold) is also GPU-proven (a real flat-field f32 bug was caught+fixed by the
+>   windowed gate). cargo 210/0.
+> - **Runtime drainage DECIDED (data-grounded).** Live per-page flow is too slow at production scale (576² needs
+>   ~192 relax iters = 6.45ms, MEASURED); coarse shortcuts are proven-wrong (~800m valley-misplacement); the exact
+>   log-step solver is GPU-heavyweight (parked). Owner priority procedural-first/baking-fine → **on-demand FULL-RES
+>   flow bake off the hot frame, per-region drainage-fact cache (rides M3 page-pool LRU), pages sample it, evict
+>   far.** Spec `…/specs/2026-06-02-worldgen-runtime-drainage-design.md` (owner-review-pending).
+> - **NEXT:** owner reviews the drainage spec → 4b.11 PART B (grammar weight field → compose ACTIVE biomes per
+>   page; recommended first — unblocks real multi-biome terrain) → build the drainage subsystem → Slice 4c (flip
+>   runtime + remove the 25MB atlas + perf gate + owner fly). Branch `slice4-gpu-page-integration`. Memories:
+>   `worldgen10-slice4a-proven`, `worldgen10-flow-convergence-production`, `worldgen10-coarse-drainage-refuted`.
+>
+> **(history) ▶ 2026-06-01, late — BIOME-COMPOSITION LAYER (Fork B) + SCALE CONTRACT done; Slice-3 UNBLOCKED.**
+> Built the edit-free layer turning "grammar places biome(s)" → one seam-exact height (`biome_compose`/
+> `biome_registry`/`seam_safe`); all 11 biomes seam-safe in Python (full suite 238); scale contract resolved
+> (on-foot real-metre anchor; broad-swell mountains correct, "towering" = future detail layer). Then ported all
+> 11 to Rust (Slice 3) + to the GPU (Slice 4, above). Memory `worldgen10-biome-composition-layer`.
 >
 > **(history) ▶ 2026-06-01 — tunable TERRAIN-EDIT framework BUILT + OWNER-ACCEPTED (traversability is its first use).** Plain-language state:
 > - **Milestones 0–4 are DONE** (engine machinery: toolchain, CPU worldgen, GPU parity, render pipeline, Facts

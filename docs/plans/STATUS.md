@@ -5,21 +5,39 @@ manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole
 point — see DESIGN §7.3.)
 
-> **▶ SLICE 4b — ALL 11 BIOMES RUN ON THE GPU, EVERY ONE HARDWARE-PARITY-PROVEN (2026-06-02, RTX 5090/D3D12).**
-> The full accepted biome stack now generates as GPU page pipelines, each parity-exact to its f64 oracle fixture
-> (`biome_page` suite GREEN, NORM_EPS=1e-4): mountain 1.89e-6 · grassland 6.84e-7 · desert 1.30e-5 · coast 5.62e-6 ·
-> wetland 2.46e-6 · tundra 3.11e-7 · glacial 1.81e-6 · karst 2.00e-6 · temperate 1.69e-6 · rainforest 3.24e-6 ·
-> volcanic 3.01e-6. **cargo test 207/0.** Architecture: CONCAT-SELECTION (`biome_page.glsl` generic pass-MACHINE +
-> per-biome `biome_<name>.glsl` FRAGMENT, concatenated + compiled per biome) + a `Scheduler` seam
-> (`schedule_<biome>()` dispatch fns) + a 16-slot generic scratch POOL + a few additive machine hooks: `flow_channels_ex`
-> (parameterized pre-blur, for glacial's 1.85), `flow_discharge` (raw discharge for temperate/rainforest dual-spread),
-> a vent SSBO at binding 40 (volcanic's PCG64 vents computed CPU-side in Rust — RNG never entered GLSL). Each biome:
-> fragment + `schedule_<biome>()` + `<biome>_sigmas()` + a BIOMES parity row + its fixture. The legacy
-> `height_page.glsl` + kernel atlas are STILL the runtime default — nothing flipped (all behind the flag). **NEXT:
-> 4b.11** (compose_biomes + the grammar biome-weight field on GPU, so multiple biomes blend per page) + the
-> **coarse-drainage-fact bake/cache** the §3.1 measurement requires (live-per-page flow too slow at 576²). THEN
-> Slice 4c (flip runtime + remove atlas + perf gate + owner fly). Branch `slice4-gpu-page-integration`. Plan:
-> `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`. Memory `worldgen10-slice4a-proven`.
+> **▶ CURRENT (2026-06-02 PM) — SLICE 4: all 11 biomes + compose GPU-proven; runtime-drainage DECIDED; PART B +
+> drainage build + 4c remain.** Branch `slice4-gpu-page-integration` (pushed, tip `6bb0771`). **cargo 210/0.**
+> Work this session (all on the branch, NOT merged to main; legacy `height_page.glsl`+atlas still the runtime
+> default — nothing flipped):
+>
+> 1. **ALL 11 BIOMES run as GPU page pipelines, each hardware-parity-proven** (RTX 5090/D3D12, `biome_page` suite,
+>    NORM_EPS=1e-4): mountain 1.89e-6 · grassland 6.84e-7 · desert 1.30e-5 · coast 5.62e-6 · wetland 2.46e-6 ·
+>    tundra 3.11e-7 · glacial 1.81e-6 · karst 2.00e-6 · temperate 1.69e-6 · rainforest 3.24e-6 · volcanic 3.01e-6.
+>    Architecture: CONCAT-SELECTION (`biome_page.glsl` generic pass-MACHINE + per-biome `biome_<name>.glsl` FRAGMENT,
+>    concatenated+compiled per biome) + a `Scheduler` seam (`schedule_<biome>()`) + a 16-slot generic scratch POOL +
+>    additive hooks `flow_channels_ex` (glacial's 1.85 pre-blur), `flow_discharge` (raw discharge for temperate/
+>    rainforest dual-spread), a vent SSBO @binding 40 (volcanic's PCG64 vents computed CPU-side — RNG never entered
+>    GLSL). Each biome = fragment + schedule + `<biome>_sigmas()` + a BIOMES parity row + fixture.
+> 2. **COMPOSE layer (4b.11 PART A) GPU-proven** — blend_field / blend_height_favored / compose_biomes fold, parity
+>    vs the f64 fixture. The windowed gate CAUGHT+FIXED a real flat-field f32 bug (`gaussian(constant)!=constant`
+>    spurious relief amplified to 2.76%/13m → relief dead-zone snap → 5.6e-8). Compose passes 60-66 in the machine,
+>    cfg via spare push pads (11 biomes byte-identical).
+> 3. **RUNTIME-DRAINAGE DECISION (data-grounded, owner-priority).** §3.1 said live flow too slow; MEASURED on
+>    hardware: the 576² production page needs ~192 relax iters = 6.45ms (the small 344² fixture's ~64-iter
+>    convergence was a small-grid artifact — `flow_iters` is now a swept knob via `generate_core_page_iters` /
+>    `flow_converge` suite). PROBED the fixes vs the f64 oracle: coarse-upsample/coarse-cache = ~800m valley-
+>    misplacement (REFUTED parity-exact); operator-squaring solver = exact but GPU-heavyweight (parked). Owner
+>    priority: procedural-first, baking-fine. **DECISION: on-demand FULL-RES flow bake (proven look) OFF the hot
+>    frame, per-region drainage-fact cache riding the M3 page-pool LRU, pages sample it, evict far.** Spec written
+>    + owner-review-pending: `docs/superpowers/specs/2026-06-02-worldgen-runtime-drainage-design.md`.
+>
+> **NEXT (new session):** (a) owner reviews the drainage spec; (b) **4b.11 PART B** — port the grammar region/
+> palette/family selection so a page picks its ACTIVE biomes + partition-of-unity weights, then composes them
+> (the compose MATH is done; this is the integration that makes a page show real multi-biome terrain — recommended
+> FIRST, it's smaller + unblocks the look); (c) build the drainage subsystem per the approved spec; (d) Slice 4c
+> (flip runtime to the biome path + remove the 25MB atlas + hardened perf gate + owner fly). Plans:
+> `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md` (4b/4c). Memories: `worldgen10-slice4a-proven`,
+> `worldgen10-flow-convergence-production`, `worldgen10-coarse-drainage-refuted`, `worldgen10-godot46-string-format`.
 
 > **▶ SLICE 4a DONE + PROVEN ON HARDWARE — mountain terrain runs on the GPU, parity-exact, behind a flag
 > (2026-06-02, RTX 5090/D3D12 windowed).** The GPU page integration's first biome works: the accepted MOUNTAIN
