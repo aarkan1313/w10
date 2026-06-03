@@ -26,6 +26,7 @@ use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
 use crate::page_policy::{PagePolicy, PageKey, Decision};
 use crate::page_compute::{PageComputeContext, build_page_compute_context, free_page_compute_context, compute_page_cached};
+use crate::biome_page_compute;
 use std::path::Path;
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,15 @@ pub struct Wg10PagePool {
     pack_buffers: Option<PackBuffers>,
     glsl_source:  Option<String>,
     compute_ctx:  Option<PageComputeContext>,
+
+    // Biome GPU producer path (Slice-4, live mountain fly). Flag-gated; legacy kernel path is the
+    // DEFAULT (use_biome_path=false) for A/B + rollback. When true, acquire_page routes both
+    // producer sites through `compute_biome_page_cached` against `biome_ctx` instead of
+    // `compute_page_cached`. The biome path has NO pack/pack_buffers/glsl_source/compute_ctx.
+    use_biome_path:      bool,
+    biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
+    biome_feature_span_m: f64,
+
     page_px:      i64,
     world_span:   f64,
     seed:         i64,
@@ -73,6 +83,9 @@ impl IRefCounted for Wg10PagePool {
             pack_buffers: None,
             glsl_source:  None,
             compute_ctx:  None,
+            use_biome_path:       false,
+            biome_ctx:            None,
+            biome_feature_span_m: 90000.0,
             page_px:      256,
             world_span:   1000.0,
             seed:         0,
@@ -182,6 +195,101 @@ impl Wg10PagePool {
     }
 
     // -----------------------------------------------------------------------
+    // configure_biome  (Slice-4 GPU biome producer path)
+    // -----------------------------------------------------------------------
+
+    /// Configure the pool to produce pages via the GPU biome path (mountain, Slice-4 live-fly)
+    /// instead of the legacy kernel atlas. Sets `use_biome_path=true` and builds the biome compute
+    /// context on the global rd. Legacy `configure` stays the default path (flag off) for A/B +
+    /// rollback. Windowed-only (needs the global RenderingDevice), like `configure`.
+    ///
+    /// Returns `""` on success, or an error string on failure (leaving the pool not-ready).
+    #[func]
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_biome(
+        &mut self,
+        primitives_glsl_path: GString,   // res://.../recipe_primitives.glsl
+        machine_glsl_path:    GString,   // res://.../biome_page.glsl
+        mountain_glsl_path:   GString,   // res://.../biome_mountain.glsl  (the fragment)
+        capacity:   i64,
+        page_px:    i64,                 // core px (256) — the apron is added internally
+        apron_px:   i64,                 // 160 for mountain
+        world_span: f64,                 // world metres per page
+        feature_span_m: f64,             // 90000.0 for mountain
+        flow_iters: i64,                 // production convergence count (192 per memory)
+        seed:       i64,
+    ) -> GString {
+        // --- F8: free-before-reconfigure (mirror `configure`) ---
+        if self.is_configured() {
+            self.free_all_impl();
+        }
+
+        // --- read the 3 GLSL sources ---
+        let prim = match std::fs::read_to_string(primitives_glsl_path.to_string()) {
+            Ok(s)  => s,
+            Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
+        };
+        let machine = match std::fs::read_to_string(machine_glsl_path.to_string()) {
+            Ok(s)  => s,
+            Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
+        };
+        let mountain = match std::fs::read_to_string(mountain_glsl_path.to_string()) {
+            Ok(s)  => s,
+            Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
+        };
+
+        // --- global RenderingDevice (windowed-only) ---
+        let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
+            Some(r) => r,
+            None    => return GString::from("configure_biome: global RenderingDevice unavailable (windowed-only)"),
+        };
+
+        // --- build the cached biome compute context on the global rd ---
+        let ctx = match biome_page_compute::build_biome_page_context(
+            &mut rd0,
+            &prim,
+            &machine,
+            &mountain,
+            page_px as usize,
+            apron_px as usize,
+            flow_iters as usize,
+        ) {
+            Ok(c)  => c,
+            Err(e) => return GString::from(&format!("configure_biome: context: {e}")),
+        };
+
+        // --- init policy + slot vectors (same as configure) ---
+        let cap = capacity as usize;
+        self.policy    = Some(PagePolicy::new(cap));
+        self.slot_tex  = vec![None; cap];
+        self.slot_wrap = (0..cap).map(|_| None).collect();
+
+        // Biome path: NO pack/pack_buffers/glsl_source/compute_ctx (the kernel atlas is unused).
+        self.use_biome_path       = true;
+        self.biome_ctx            = Some(ctx);
+        self.biome_feature_span_m = feature_span_m;
+
+        self.page_px    = page_px;
+        self.world_span = world_span;
+        self.seed       = seed;
+
+        // reset stats on reconfigure
+        self.created     = 0;
+        self.reused      = 0;
+        self.recomputed  = 0;
+        self.full_events = 0;
+
+        GString::new()
+    }
+
+    /// True when the pool is producing pages via the GPU biome path (Slice-4). A perf/parity gate
+    /// asserts this to PROVE the biome producer is the one actually running (anti-fooling).
+    #[func]
+    pub fn uses_biome_path(&self) -> bool {
+        self.use_biome_path
+    }
+
+    // -----------------------------------------------------------------------
     // acquire_page
     // -----------------------------------------------------------------------
 
@@ -204,11 +312,10 @@ impl Wg10PagePool {
         origin_z: f64,
     ) -> Option<Gd<Texture2Drd>> {
         // --- guards ---
-        if self.policy.is_none()
-            || self.pack.is_none()
-            || self.pack_buffers.is_none()
-            || self.glsl_source.is_none()
-        {
+        // Accept EITHER configured path: legacy kernel (pack+pack_buffers+glsl_source+compute_ctx)
+        // OR biome (policy + biome_ctx). `is_configured()` is the single source of truth so the
+        // producer call sites' `.as_ref().unwrap()` can never unwrap a None ctx (the F7 lesson).
+        if !self.is_configured() {
             godot_error!("Wg10PagePool: acquire_page called before configure()");
             return None;
         }
@@ -267,16 +374,24 @@ impl Wg10PagePool {
 
                 // Dispatch into the new texture using the CACHED compute context (slice 7) —
                 // no shader recompile, no buffer re-upload; just a uniform set + push + dispatch.
-                let ctx = self.compute_ctx.as_ref().unwrap();
-                let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
-                let result = compute_page_cached(
-                    &mut rd,
-                    ctx,
-                    &self.pack.as_ref().unwrap().grammar_constants,
-                    num_palettes,
-                    tex_rid,
-                    ox, oz, ws, ppx, sd,
-                );
+                // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
+                let result = if self.use_biome_path {
+                    let bctx = self.biome_ctx.as_ref().unwrap();
+                    crate::biome_page_compute::compute_biome_page_cached(
+                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd,
+                    )
+                } else {
+                    let ctx = self.compute_ctx.as_ref().unwrap();
+                    let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
+                    compute_page_cached(
+                        &mut rd,
+                        ctx,
+                        &self.pack.as_ref().unwrap().grammar_constants,
+                        num_palettes,
+                        tex_rid,
+                        ox, oz, ws, ppx, sd,
+                    )
+                };
 
                 if let Err(e) = result {
                     godot_error!("Wg10PagePool: compute_page_cached failed (slot {slot}): {e}");
@@ -305,16 +420,24 @@ impl Wg10PagePool {
                 let tex_rid = self.slot_tex[slot]
                     .expect("AllocateEvicting: slot must be occupied");
 
-                let ctx = self.compute_ctx.as_ref().unwrap();
-                let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
-                let result = compute_page_cached(
-                    &mut rd,
-                    ctx,
-                    &self.pack.as_ref().unwrap().grammar_constants,
-                    num_palettes,
-                    tex_rid,
-                    ox, oz, ws, ppx, sd,
-                );
+                // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
+                let result = if self.use_biome_path {
+                    let bctx = self.biome_ctx.as_ref().unwrap();
+                    crate::biome_page_compute::compute_biome_page_cached(
+                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd,
+                    )
+                } else {
+                    let ctx = self.compute_ctx.as_ref().unwrap();
+                    let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
+                    compute_page_cached(
+                        &mut rd,
+                        ctx,
+                        &self.pack.as_ref().unwrap().grammar_constants,
+                        num_palettes,
+                        tex_rid,
+                        ox, oz, ws, ppx, sd,
+                    )
+                };
 
                 if let Err(e) = result {
                     godot_error!(
@@ -554,6 +677,8 @@ impl Wg10PagePool {
                 &mut self.pack_buffers,
                 &mut self.glsl_source,
                 &mut self.compute_ctx,
+                &mut self.use_biome_path,
+                &mut self.biome_ctx,
             );
             return;
         }
@@ -562,6 +687,12 @@ impl Wg10PagePool {
         // Take it BEFORE the reset so we can free the GPU resources it holds.
         if let Some(ctx) = self.compute_ctx.take() {
             free_page_compute_context(&mut rd, &ctx);
+        }
+        // Free the cached biome compute context (Slice-4) the SAME way — take BEFORE reset, free its
+        // GPU RIDs (all apron buffers + pipeline + shader). Miss this = B1 device leak on the biome
+        // path. The reset below then drops the (now-taken) None handle + clears use_biome_path.
+        if let Some(bctx) = self.biome_ctx.take() {
+            biome_page_compute::free_biome_page_context(&mut rd, &bctx);
         }
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
@@ -580,6 +711,8 @@ impl Wg10PagePool {
             &mut self.pack_buffers,
             &mut self.glsl_source,
             &mut self.compute_ctx,
+            &mut self.use_biome_path,
+            &mut self.biome_ctx,
         );
     }
 
@@ -599,14 +732,17 @@ impl Wg10PagePool {
     /// no-op (Options already None, vectors already empty), which is what makes
     /// `free_all` safe to call twice and `configure`'s free-before-reconfigure
     /// (F8) safe on a fresh pool.
+    #[allow(clippy::too_many_arguments)]
     fn reset_configured_state(
-        policy:       &mut Option<PagePolicy>,
-        slot_tex:     &mut Vec<Option<Rid>>,
-        slot_wrap:    &mut Vec<Option<Gd<Texture2Drd>>>,
-        pack:         &mut Option<pack::Pack>,
-        pack_buffers: &mut Option<PackBuffers>,
-        glsl_source:  &mut Option<String>,
-        compute_ctx:  &mut Option<PageComputeContext>,
+        policy:          &mut Option<PagePolicy>,
+        slot_tex:        &mut Vec<Option<Rid>>,
+        slot_wrap:       &mut Vec<Option<Gd<Texture2Drd>>>,
+        pack:            &mut Option<pack::Pack>,
+        pack_buffers:    &mut Option<PackBuffers>,
+        glsl_source:     &mut Option<String>,
+        compute_ctx:     &mut Option<PageComputeContext>,
+        use_biome_path:  &mut bool,
+        biome_ctx:       &mut Option<biome_page_compute::BiomePageComputeContext>,
     ) {
         *policy = None;
         slot_tex.clear();
@@ -616,20 +752,35 @@ impl Wg10PagePool {
         *pack_buffers = None;
         *glsl_source = None;
         *compute_ctx = None;
+        // Biome path: the GPU resources `biome_ctx` holds MUST already be freed (the caller does so
+        // BEFORE this reset, like compute_ctx); here we only drop the already-taken handle + the flag
+        // so the guard sees "not configured" via either path's conjunct.
+        *use_biome_path = false;
+        *biome_ctx = None;
     }
 
-    /// The exact predicate the `acquire_page` guard uses: a pool is "configured"
-    /// only when policy/pack/pack_buffers/glsl_source are ALL Some. Mirrors the
-    /// guard so the F7 invariant (consistent configured-vs-unconfigured state) can
-    /// be asserted headlessly. NOTE: `compute_ctx` is intentionally NOT part of
-    /// this predicate — that asymmetry is precisely the F7 hazard, so the test
-    /// asserts compute_ctx tracks the predicate after a reset.
+    /// The exact predicate the `acquire_page` guard uses: a pool is "configured" when `policy` is
+    /// Some AND EITHER the legacy kernel path is fully built (pack + pack_buffers + glsl_source +
+    /// compute_ctx all Some) OR the biome path is built (biome_ctx Some). Mirrors the guard so the
+    /// F7 invariant (consistent configured-vs-unconfigured state) can be asserted headlessly.
+    ///
+    /// NOTE: unlike the original legacy-only predicate, `compute_ctx` is now INSIDE the legacy
+    /// conjunct (not excluded) — so the guard can never pass while the legacy `compute_ctx` is None.
+    /// Whichever ctx the matching path needs (`compute_ctx` for legacy, `biome_ctx` for biome) is
+    /// Some exactly when its branch of this predicate is true, so the producer-site
+    /// `.as_ref().unwrap()` in `acquire_page` is unwrap-safe on either path.
     #[allow(dead_code)]
     fn is_configured(&self) -> bool {
         self.policy.is_some()
-            && self.pack.is_some()
-            && self.pack_buffers.is_some()
-            && self.glsl_source.is_some()
+            && (
+                // legacy kernel path: pack + buffers + glsl + compiled compute ctx
+                (self.pack.is_some()
+                    && self.pack_buffers.is_some()
+                    && self.glsl_source.is_some()
+                    && self.compute_ctx.is_some())
+                // OR biome path: the GPU biome producer context (no pack/glsl)
+                || self.biome_ctx.is_some()
+            )
     }
 
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px × page_px`.
@@ -755,6 +906,11 @@ mod tests {
         let mut pack_buffers: Option<PackBuffers>         = Some(minimal_pack_buffers());
         let mut glsl_source:  Option<String>              = Some("// glsl".to_string());
         let mut compute_ctx:  Option<PageComputeContext>  = Some(fake_compute_ctx());
+        // Biome path fields: a BiomePageComputeContext has private fields (a real ApronBuffers set)
+        // so it can't be faked headlessly; the legacy-path reset of these two is covered by passing
+        // a default flag/None here (the biome reset to None is trivial + asserted below).
+        let mut use_biome_path: bool = false;
+        let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
 
         Wg10PagePool::reset_configured_state(
             &mut policy,
@@ -764,6 +920,8 @@ mod tests {
             &mut pack_buffers,
             &mut glsl_source,
             &mut compute_ctx,
+            &mut use_biome_path,
+            &mut biome_ctx,
         );
 
         // Every configure-set field is None — the acquire guard now correctly sees
@@ -773,6 +931,8 @@ mod tests {
         assert!(pack_buffers.is_none(), "pack_buffers must be cleared");
         assert!(glsl_source.is_none(),  "glsl_source must be cleared");
         assert!(compute_ctx.is_none(),  "compute_ctx must be cleared");
+        assert!(!use_biome_path,        "use_biome_path must be cleared");
+        assert!(biome_ctx.is_none(),    "biome_ctx must be cleared");
         // Slot vectors emptied — no stale slot_wrap indexable by a stale policy.
         assert!(slot_tex.is_empty(),    "slot_tex must be empty");
         assert!(slot_wrap.is_empty(),   "slot_wrap must be empty");
@@ -806,15 +966,19 @@ mod tests {
         let mut pack_buffers: Option<PackBuffers>          = None;
         let mut glsl_source:  Option<String>               = None;
         let mut compute_ctx:  Option<PageComputeContext>   = None;
+        let mut use_biome_path: bool                       = false;
+        let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
 
         // Must not panic / must stay fully unconfigured.
         Wg10PagePool::reset_configured_state(
             &mut policy, &mut slot_tex, &mut slot_wrap,
             &mut pack, &mut pack_buffers, &mut glsl_source, &mut compute_ctx,
+            &mut use_biome_path, &mut biome_ctx,
         );
 
         assert!(policy.is_none() && pack.is_none() && pack_buffers.is_none()
             && glsl_source.is_none() && compute_ctx.is_none());
+        assert!(!use_biome_path && biome_ctx.is_none());
         assert!(slot_tex.is_empty() && slot_wrap.is_empty());
     }
 
@@ -836,6 +1000,39 @@ mod tests {
         assert!(!guard(true, true, false, true), "missing pack_buffers => unconfigured");
         assert!(!guard(true, true, true, false), "missing glsl_source => unconfigured");
         assert!(!guard(false, false, false, false), "all None => unconfigured");
+    }
+
+    /// A FRESH pool is configured on NEITHER path. `Wg10PagePool` is a GodotClass needing a live
+    /// `Base<RefCounted>`, so it cannot be constructed under `cargo test` (like every other test in
+    /// this module); we therefore mirror the new biome-aware `is_configured` predicate over plain
+    /// booleans — the exact shape a fresh `init()` produces: policy None, both legacy + biome ctx
+    /// absent. The end-to-end GodotClass path is the windowed m3 gate (Task 7). The point this pins:
+    /// adding the biome OR-branch must NOT make an UNconfigured pool report configured.
+    #[test]
+    fn fresh_pool_not_configured_either_path() {
+        // Mirror is_configured: policy && ( legacy(pack&buffers&glsl&compute_ctx) || biome(biome_ctx) ).
+        fn is_configured(
+            policy: bool, pack: bool, pack_buffers: bool, glsl: bool, compute_ctx: bool,
+            biome_ctx: bool,
+        ) -> bool {
+            policy && ((pack && pack_buffers && glsl && compute_ctx) || biome_ctx)
+        }
+
+        // Fresh pool (what `init()` sets): everything absent -> NOT configured on either path.
+        assert!(
+            !is_configured(false, false, false, false, false, false),
+            "fresh pool must be unconfigured on both paths"
+        );
+        // Policy alone (no producer ctx on EITHER path) is still unconfigured.
+        assert!(!is_configured(true, false, false, false, false, false), "policy alone => unconfigured");
+        // Legacy path fully built => configured.
+        assert!(is_configured(true, true, true, true, true, false), "full legacy => configured");
+        // Legacy path missing its compute_ctx => unconfigured (the F7 hazard, now guarded).
+        assert!(!is_configured(true, true, true, true, false, false), "legacy w/o compute_ctx => unconfigured");
+        // Biome path => configured with ONLY policy + biome_ctx (no pack/glsl).
+        assert!(is_configured(true, false, false, false, false, true), "biome path => configured");
+        // Biome ctx present but NO policy => unconfigured (policy is mandatory on both paths).
+        assert!(!is_configured(false, false, false, false, false, true), "biome ctx w/o policy => unconfigured");
     }
 
     // NOTE (windowed-only, NOT run headless): the END-TO-END proofs —
