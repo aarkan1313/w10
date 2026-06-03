@@ -314,6 +314,8 @@ def _oriented_ridges(
 
 
 def _flow_channels(surface: np.ndarray, width_px: float, power: float) -> np.ndarray:
+    # Legacy non-seam-safe twin of _flow_channels_seam_safe; intentionally NOT
+    # scale-anchored (single-window diagnostic path only, never feeds the clipmap).
     channels = wg.flow_accumulation_channels(gaussian_filter(surface, sigma=1.15), power=power)
     channels = gaussian_filter(channels, sigma=max(float(width_px), 0.1))
     return norm01(channels)
@@ -484,6 +486,8 @@ def generate(
         ridge_detail = ss.affine_remap(wg.ridged_multifractal(w_x, w_z, 1.0 / (feature_span * 0.045), 5, seed + 40, gain=0.52), RIDGE_DETAIL_CENTER, RIDGE_DETAIL_SCALE)
         near_detail = ss.affine_remap(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.020), 4, seed + 50, gain=0.48), NEAR_DETAIL_CENTER, NEAR_DETAIL_SCALE)
     else:
+        # Non-seam-safe (single-window diagnostic) path: bare sigmas, NOT scale-anchored
+        # by design -- never feeds the clipmap, so no spacing_m threading.
         regional = norm01(wg.fbm(w_x, w_z, 1.0 / (feature_span * 0.88), 5, seed + 20, gain=0.56))
         ranges = _oriented_ridges(w_x, w_z, feature_span, style, seed, seam_safe_mode=False)
 
