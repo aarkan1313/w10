@@ -537,7 +537,7 @@ def generate(
     height -= 0.18 * floor_mask
 
     if seam_safe_mode:
-        final_blend = 0.74 * height + 0.26 * gaussian_filter(height, sigma=1.20, mode=blur_mode)
+        final_blend = 0.74 * height + 0.26 * gaussian_filter(height, sigma=_sigma_cells(1.20, spacing_m), mode=blur_mode)
         height = ss.affine_remap(final_blend, FINAL_CENTER, FINAL_SCALE)
     else:
         height = zscore(0.74 * height + 0.26 * gaussian_filter(height, sigma=1.20))
