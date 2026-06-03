@@ -432,17 +432,19 @@ fn build_push(
     flow_power: f32,
     favor_strength: f32,         // -> pad0
     relief_confidence_floor: f32, // -> pad1
+    relief_m: f32,                // -> pad2 (RUNTIME crop-to-image height scale; 0 elsewhere)
 ) -> Vec<u8> {
     let mut b = Vec::with_capacity(96);
     // 12 ints: pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count + 1 pad.
     for v in [pass, rows, cols, apron_px, seed, kradius, copy_sel, flow_dir, koffset, pool_sel, vent_count, 0] {
         b.extend_from_slice(&v.to_le_bytes());
     }
-    // 12 floats: spacing,ox,oz,feature_span_m,flow_power, pad0(favor_strength), pad1(relief_conf_floor) + 5 pad.
-    for v in [spacing, ox, oz, feature_span_m, flow_power, favor_strength, relief_confidence_floor] {
+    // 12 floats: spacing,ox,oz,feature_span_m,flow_power, pad0(favor_strength), pad1(relief_conf_floor),
+    // pad2(relief_m) + 4 pad.
+    for v in [spacing, ox, oz, feature_span_m, flow_power, favor_strength, relief_confidence_floor, relief_m] {
         b.extend_from_slice(&v.to_le_bytes());
     }
-    for _ in 0..5 {
+    for _ in 0..4 {
         b.extend_from_slice(&0.0_f32.to_le_bytes());
     }
     b
@@ -752,6 +754,11 @@ pub(crate) struct Scheduler<'a> {
     /// schedules (byte-identical push); the compose schedule sets them from the record's cfg.
     favor_strength: f32,
     relief_confidence_floor: f32,
+    /// RUNTIME relief scale (metres): PASS_CROP_IMG multiplies the normalized recipe height by this
+    /// before the texture write, so the render shader sees METRES (like legacy `* relief_m`). 0.0 for
+    /// the readback test harness (it crops to the BUFFER via PASS_CROP, which ignores pad2 -> the
+    /// fixture parity is byte-identical). Set to the configured relief only on the runtime producer.
+    relief_m: f32,
     wg_full_x: u32,
     wg_full_y: u32,
     wg_core_x: u32,
@@ -788,6 +795,7 @@ impl<'a> Scheduler<'a> {
                 pass, self.rows, self.cols, self.apron, self.seed, kradius, copy_sel, flow_dir,
                 koffset, pool_sel, self.vent_count, self.spacing, self.ox, self.oz,
                 self.feature_span_m, flow_power, self.favor_strength, self.relief_confidence_floor,
+                self.relief_m,
             )
             .as_slice(),
         );
@@ -1950,6 +1958,10 @@ pub(crate) struct BiomePageComputeContext {
     pub core_px: usize,
     pub apron_px: usize,
     pub flow_iters: usize,
+    /// RUNTIME relief scale (metres): the normalized recipe height (~[-3,2]) is multiplied by this in
+    /// PASS_CROP_IMG before the page texture is written, so the render shader (VERTEX.y = h *
+    /// relief_scale) gets metres. Tunable via `configure_biome` (the vertical-scale knob).
+    pub relief_m: f32,
 }
 
 /// Build the cached runtime context ONCE on the GLOBAL `rd`: concat primitives + machine +
@@ -1967,6 +1979,7 @@ pub(crate) fn build_biome_page_context(
     core_px: usize,
     apron_px: usize,
     flow_iters: usize,
+    relief_m: f32,
 ) -> Result<BiomePageComputeContext, String> {
     let apron_dim = biome_apron_dim(core_px, apron_px);
     if apron_dim <= 2 * apron_px {
@@ -2022,6 +2035,7 @@ pub(crate) fn build_biome_page_context(
         core_px,
         apron_px,
         flow_iters,
+        relief_m,
     })
 }
 
@@ -2125,6 +2139,7 @@ pub(crate) fn compute_biome_page_cached(
         vent_count: 0, // mountain never reads vents
         favor_strength: 0.0,
         relief_confidence_floor: 0.0,
+        relief_m: ctx.relief_m, // RUNTIME: scale normalized height -> metres in PASS_CROP_IMG
         wg_full_x,
         wg_full_y,
         wg_core_x,
@@ -2138,9 +2153,14 @@ pub(crate) fn compute_biome_page_cached(
     sched.dispatch(PASS_CROP_IMG, 0, 0, 0, 0, 0.0, 0, wg_core_x, wg_core_y);
 
     rd.compute_list_end();
-    rd.submit();
-    rd.sync();
-
+    // RUNTIME (global RD): fire-and-forget — do NOT submit()/sync() here. This producer runs on the
+    // MAIN RenderingDevice (the one the renderer owns), where manual submit/sync is ILLEGAL
+    // ("Only local devices can submit and sync" — rendering_device.cpp:6551). The engine auto-submits
+    // the global RD's queued work at draw, exactly like the legacy `compute_page_cached`
+    // (page_compute.rs:166: "no submit/sync; the engine auto-submits at draw"). Intra-schedule
+    // ordering is enforced by the `compute_list_add_barrier` calls RECORDED INTO the list (Scheduler),
+    // which are honored at submission regardless of who submits. (The readback test entries use a
+    // LOCAL rd via create_local_rendering_device, where submit/sync IS legal — those keep theirs.)
     rd.free_rid(uset); // free ONLY the per-page uniform set; cached resources persist
     Ok(())
 }
@@ -2413,8 +2433,10 @@ impl Wg10BiomePageCompute {
         };
 
         // Build the cached runtime context (compile + pipeline + all buffers, on this local rd).
+        // relief_m = 1.0: the 576 PARITY readback must stay in NORMALIZED units to match the f64
+        // oracle (the runtime render path uses the configured metre relief; parity does not).
         let ctx = match build_biome_page_context(
-            &mut rd, prim, machine, &fragment, core_px, apron, flow_iters as usize,
+            &mut rd, prim, machine, &fragment, core_px, apron, flow_iters as usize, 1.0,
         ) {
             Ok(c) => c,
             Err(e) => {
@@ -2815,6 +2837,7 @@ impl Wg10BiomePageCompute {
             vent_count: vent_count as i32,
             favor_strength: 0.0,           // biome path never composes -> 0 (byte-identical push)
             relief_confidence_floor: 0.0,
+            relief_m: 0.0,                 // readback harness crops to BUFFER (PASS_CROP, ignores pad2)
             wg_full_x,
             wg_full_y,
             wg_core_x,
@@ -3042,6 +3065,7 @@ impl Wg10BiomePageCompute {
             vent_count: 0,
             favor_strength,
             relief_confidence_floor,
+            relief_m: 0.0,                 // compose engine never crops to the runtime image
             wg_full_x,
             wg_full_y,
             wg_core_x: wg_full_x,
@@ -3306,7 +3330,7 @@ impl Wg10BiomePageCompute {
             rd: &mut rd, cl, uset,
             rows: rows as i32, cols: cols as i32, apron: 0, seed: 0,
             spacing: 0.0, ox: 0.0, oz: 0.0, feature_span_m: 0.0, vent_count: 0,
-            favor_strength, relief_confidence_floor,
+            favor_strength, relief_confidence_floor, relief_m: 0.0,
             wg_full_x, wg_full_y, wg_core_x: wg_full_x, wg_core_y: wg_full_y, kparams,
             flow_iters: STABLE_ITERS, // blend never runs flow
         };
@@ -3408,14 +3432,14 @@ mod biome_page_compute_tests {
 
     #[test]
     fn push_constant_is_96_bytes() {
-        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48, 0.0, 0.0);
+        let p = build_push(0, 344, 344, 160, 0, 4, 0, 0, 0, 0, 0, 3913.04, 12000.0, -31000.0, 90000.0, 0.48, 0.0, 0.0, 0.0);
         assert_eq!(p.len(), 96);
     }
 
     #[test]
     fn push_constant_packs_ints_then_floats() {
         // build_push(pass,rows,cols,apron,seed,kradius,copy_sel,flow_dir,koffset,pool_sel,vent_count,spacing,ox,oz,span,power,favor,floor)
-        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 4, 3913.0, 12000.0, -31000.0, 90000.0, 0.34, 0.0, 0.0);
+        let p = build_push(7, 344, 343, 160, 5, 28, 2, 1, 128, 9, 4, 3913.0, 12000.0, -31000.0, 90000.0, 0.34, 0.0, 0.0, 0.0);
         assert_eq!(i32::from_le_bytes([p[0], p[1], p[2], p[3]]), 7);
         assert_eq!(i32::from_le_bytes([p[4], p[5], p[6], p[7]]), 344);
         assert_eq!(i32::from_le_bytes([p[8], p[9], p[10], p[11]]), 343);
@@ -3440,7 +3464,7 @@ mod biome_page_compute_tests {
         // The 10 proven biomes pass vent_count=0 -> byte-identical to the former hardcoded `0` pad.
         // Build a representative mountain dispatch push with vent_count=0 and confirm the vent_count
         // int slot (bytes 40..44) is exactly zero (so mountain's 1.89e-6 parity is preserved).
-        let p = build_push(8, 344, 344, 160, 0, 0, 0, 0, 0, 0, 0, 2608.7, 12000.0, -31000.0, 60000.0, 0.0, 0.0, 0.0);
+        let p = build_push(8, 344, 344, 160, 0, 0, 0, 0, 0, 0, 0, 2608.7, 12000.0, -31000.0, 60000.0, 0.0, 0.0, 0.0, 0.0);
         assert_eq!(i32::from_le_bytes([p[40], p[41], p[42], p[43]]), 0);
         assert_eq!(p.len(), 96);
         // The two compose param floats (pad0=favor_strength, pad1=relief_conf_floor) are at bytes
@@ -3453,7 +3477,7 @@ mod biome_page_compute_tests {
     #[test]
     fn push_constant_carries_compose_params_in_pads() {
         // favor_strength -> pad0 (bytes 68..72), relief_confidence_floor -> pad1 (bytes 72..76).
-        let p = build_push(64, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 1e-3);
+        let p = build_push(64, 32, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 1e-3, 0.0);
         let favor = f32::from_le_bytes([p[68], p[69], p[70], p[71]]);
         let floor = f32::from_le_bytes([p[72], p[73], p[74], p[75]]);
         assert!((favor - 2.0).abs() < 1e-7, "favor_strength not in pad0");

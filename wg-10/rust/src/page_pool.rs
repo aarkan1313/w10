@@ -217,6 +217,9 @@ impl Wg10PagePool {
         world_span: f64,                 // world metres per page
         feature_span_m: f64,             // 90000.0 for mountain
         flow_iters: i64,                 // production convergence count (192 per memory)
+        relief_m:   f64,                 // VERTICAL SCALE (metres): normalized recipe height * this -> metres
+                                         // before the page texture write (the render shader expects metres).
+                                         // The tunable vertical-scale knob (~1000 for mountain).
         seed:       i64,
     ) -> GString {
         // --- F8: free-before-reconfigure (mirror `configure`) ---
@@ -253,6 +256,7 @@ impl Wg10PagePool {
             page_px as usize,
             apron_px as usize,
             flow_iters as usize,
+            relief_m as f32,
         ) {
             Ok(c)  => c,
             Err(e) => return GString::from(&format!("configure_biome: context: {e}")),

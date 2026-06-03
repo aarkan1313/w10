@@ -69,6 +69,12 @@ CHECKS = {
     # a parity proof AND the convergence measurement (can't false-pass: 256 must reach 1e-4 or FAIL).
     "biome_fly": [
         "worldgen_terrain/tests/biome_page_576_parity_check.gd",
+        # Task 6 §B DID-REAL-WORK perf gate (windowed). Flies a ~1000 m/s synthetic path with the
+        # MOUNTAIN biome GPU producer (configure_biome -> inline flow relaxation at flow_iters)
+        # streaming through the M3 pipeline; records REAL GPU-time p99. The §5 drainage-priority
+        # MEASUREMENT: an over-budget p99 is a VALID result (not a fail) — the gate fails ONLY on
+        # degenerate/no-work (zero pages, black frame, biome path inactive, dead GPU timer).
+        "worldgen_terrain/tests/biome_fly_perf_check.gd",
     ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",

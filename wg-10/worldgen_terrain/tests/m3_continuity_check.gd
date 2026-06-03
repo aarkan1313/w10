@@ -224,6 +224,10 @@ func _run() -> int:
 	if held_changed > 0:
 		errs.append("hold-still shimmer: %d/%d static frames changed >%.0f%% pixels — tiles oscillating while stationary" % [held_changed, held_frames, HELD_CHANGE_CEIL * 100.0])
 
+	# Detach the ring materials from the page textures BEFORE freeing them, else the teardown draw
+	# rebuilds each tile material's uniform set against a freed page RID -> "Texture binding 1 not
+	# valid" flood (a harness teardown-ordering artifact; the gate metrics never saw it).
+	rings.call("unbind_all")
 	pool.call("free_all")
 
 	print("[wg10-m3-continuity] seam_e=%.5f seam_n=%.5f recompute_frac=%.3f (ceil %.2f) morph_jump=%.3f held_changed=%d/%d" % [

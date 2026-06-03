@@ -404,7 +404,12 @@ void main() {
         int core_rows = rows - 2 * a;
         if (cx >= core_cols || cy >= core_rows) return;
         int src = (cy + a) * cols + (cx + a);
-        imageStore(out_img, ivec2(cx, cy), vec4(height.v[src], 0.0, 0.0, 1.0));
+        // RUNTIME: scale the NORMALIZED recipe height (~[-3,2]) to METRES before the texture write,
+        // so the render shader (ring_displace: VERTEX.y = h * relief_scale) sees metres — exactly
+        // like the legacy page (height_page.glsl:140 `* relief_m`). P.pad2 = relief_m (0 in the
+        // readback test path, which uses PASS_CROP into the buffer, NOT this image crop). Without
+        // this the displayed terrain is ~flat (normalized * relief_scale 0.25 = ~+/-0.5 m).
+        imageStore(out_img, ivec2(cx, cy), vec4(height.v[src] * P.pad2, 0.0, 0.0, 1.0));
         return;
     }
 

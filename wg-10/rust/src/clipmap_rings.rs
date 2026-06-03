@@ -219,6 +219,37 @@ impl Wg10ClipmapRings {
         self.bound_keys[idx] = (sample_origin.x as i64, sample_origin.y as i64);
     }
 
+    /// Drop every tile material's reference to the pool's page textures, and hide all tiles.
+    ///
+    /// MUST be called BEFORE the pool's `free_all()` whenever the page textures are about to be
+    /// freed (scene teardown OR a live `free_all`+reconfigure, e.g. the relief/A-B toggles in the
+    /// review scene). Otherwise the tile materials still bind the now-freed page-texture RIDs at
+    /// `height_tex`/`coarse_height_tex` (binding 0/1), and the NEXT draw rebuilds each material's
+    /// render uniform set against a freed texture -> "Texture (binding 1) is not a valid texture" +
+    /// "uniform_set_set_invalidation_callback: us is null", once per page that was bound as a coarse
+    /// texture. The page textures are valid during the whole fly (proven: a per-bind validity probe
+    /// saw zero invalids); the ONLY time binding 1 is invalid is AFTER free_all, which is exactly
+    /// what this prevents. Clearing the params to a NIL Variant detaches the Texture2DRD so the
+    /// material holds no dangling page reference, and hiding the tile keeps the never-black contract
+    /// (the next configured page re-binds + re-shows it via `bind_tile`).
+    #[func]
+    pub fn unbind_all(&mut self) {
+        for mi in self.tiles.iter_mut() {
+            if let Some(mat_res) = mi.get_material_override() {
+                if let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() {
+                    // Detach the page textures (NIL Variant => the sampler param holds no texture),
+                    // so this material no longer references a soon-to-be-freed page RID.
+                    mat.set_shader_parameter("height_tex", &Variant::nil());
+                    mat.set_shader_parameter("coarse_height_tex", &Variant::nil());
+                }
+            }
+            mi.set_visible(false);
+        }
+        for k in self.bound_keys.iter_mut() {
+            *k = (i64::MIN, i64::MIN);
+        }
+    }
+
     /// Show/hide one tile. The view HIDES a tile whose own level page is not resident, so the
     /// coarser level's full 3x3 (drawn underneath, lower render_priority) shows through — the
     /// never-black blanket. A bound tile is shown; an unready one is hidden, NEVER left at a
