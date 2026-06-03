@@ -2172,6 +2172,11 @@ pub(crate) fn compute_biome_page_cached(
     // and taps the now-anchored packed buffer). Built BEFORE the compute list opens (a panic mid-list
     // would leak the open list); the buffer_update is RECORDED on the global RD and auto-submitted
     // before the compute dispatches, exactly like the create-time .data() upload.
+    // NOTE (deferred optimization): the packed kernel is rebuilt + re-uploaded PER PAGE (~2.3 KB =
+    // 9 slots * 64 taps * 4 B, non-stalling buffer_update). spacing takes only ~NUM_LEVELS distinct
+    // values across the whole clipmap, so a cache-by-spacing (build each level's kernels once, keep
+    // a small LUT, bind/select instead of re-upload) is the deferred optimization (scale-invariant
+    // plan) IF this ever shows on a perf profile. Kept simple-per-page until measured.
     let (packed_kernel, kparams_anchored) = mountain_kernels_anchored(spacing_f64)?;
     let packed_pba = PackedByteArray::from(f32s_to_bytes(&packed_kernel).as_slice());
     let upd = rd.buffer_update(
