@@ -87,15 +87,26 @@ the ~1000 m/s target. Present A/B (legacy flag-off vs mountain flag-on) so the o
 
 ## 4. Verification / parity bar
 
-### 4.1 576² cross-oracle parity (audit gap #6 — FOLDED IN, gates this slice)
-The existing biome parity is cross-oracle ONLY at the 344² fixture; the 576² convergence check is
-SELF-convergence (no CPU oracle). This slice runs the producer at the REAL 576² apron / 256 core, so we
-gate THAT against an independent Python f64 oracle generated at 256-core (the exact `flow_accumulation_mfd`
-sweep, `array_ops.rs:172`, is the oracle). A scale-dependent math divergence that 344² could not catch
-surfaces HERE — before the owner flies a possibly-wrong world. Deliverable: one 256-core mountain fixture
-record (`export_recipe_mountain_fixture.py` extended, or a sibling exporter) + one parity assertion in the
-windowed gate at `NORM_EPS = 1e-4` (the proven bar; record achieved maxd, tighten/justify per the
-established discipline).
+### 4.1 576² cross-oracle parity (audit gap #6 — FOLDED IN, gates this slice) — RESOLVED 2026-06-03
+The existing biome parity was cross-oracle ONLY at the 344² fixture. This slice gates the producer at the
+REAL 576² apron / 256 core against an independent Python f64 oracle (the exact `flow_accumulation_mfd`
+sweep, `array_ops.rs:172`). **It found a real scale-dependent divergence the 344² fixture hid (gap #6
+vindicated)** and the investigation RESOLVED it:
+- **RESULT (RTX 5090):** converged (192=256=…=512 iters stable) at maxd **2.42e-4** vs the f64 oracle.
+- **ROOT CAUSE (stage-bisection):** the TRIBUTARY flow accumulation (`PASS_FLOW_RELAX`). `rough_surface`
+  has near-tied neighbour heights; f32 resolves a near-tie at ONE drainage cell the opposite way to the
+  f64 exact-sweep oracle (numpy's arbitrary index tie-break) → one channel routes differently → a
+  converged-but-different fixed point. **Both routings are valid drainage** — the f64 oracle's choice is
+  numpy's sort order, not "more correct."
+- **Ruled out as a defect:** f64 iter-vs-sweep = 1e-16; full f32-chain height error = 5e-7; the CPU f64
+  PORT matches the 576 oracle to 1.58e-12 (`recipes_tests::mountain_seamsafe_matches_576_oracle`, kept).
+  So 2.42e-4 is the **f32 discrete-flow ROUTING floor at production scale** — exactly the spec Tier-2 flow
+  approximation. Impact ~0.4 m at one channel edge over 1000 m relief (~200× under the M3 shader detail).
+- **DECISION (owner, 2026-06-03):** accept as Tier-2. `NORM_EPS = 5e-4` (~2× the floor) with this recorded
+  justification in the gate. The flow_iters sweep stays, so a REAL regression (>>5e-4, a pointwise/gaussian/
+  assembly bug) still trips. Gate GREEN on hardware. Matching numpy's tie-break (to force ~1e-5) was
+  rejected as parity-theater (chasing an arbitrary choice, cost in the hot loop). Memory:
+  `worldgen10-576-parity-residual`.
 
 ### 4.2 Live did-real-work perf gate (anti-fooling baked in)
 A hardened gate (model on `m5_perf_hardened_check.gd`, memory `worldgen10-real-gpu-time` +

@@ -134,3 +134,58 @@ fn mountain_seamsafe_matches_python_oracle() {
         "mountain_seamsafe parity exceeded EPS={EPS:.1e}: max |delta|={max_delta:.3e} at {worst}"
     );
 }
+
+// Production-scale (256-core/576-padded) CPU-port parity. The recipe fixtures are 24-core/344-padded
+// (fast exact parity); this guards the recipe at the dimension the RUNTIME GPU producer renders. It
+// also documents WHY the GPU 576 parity bar is Tier-2 (~5e-4) while THIS f64-vs-f64 bar stays tight:
+// the CPU port matches the f64 oracle to the numerical floor at ANY scale, so the GPU's larger 576
+// residual is an f32 discrete-flow-routing effect (near-tied drainage cells resolved differently in
+// f32 vs f64), NOT a recipe-math error. See the 576 GPU gate (biome_page_576_parity_check.gd) +
+// memory worldgen10-576-parity-residual.
+#[test]
+fn mountain_seamsafe_matches_576_oracle() {
+    const ORACLE: &str =
+        include_str!("../../worldgen_terrain/fixtures/mountain_576_oracle.json");
+    let doc: Doc = serde_json::from_str(ORACLE).expect("parse mountain_576_oracle.json");
+    let r = &doc.records[0];
+    assert_eq!(r.core_rows, 256, "expected 256 core");
+    assert_eq!(r.padded_rows, 576, "expected 576 padded");
+
+    let (wx, wz) = helpers::apron_meshgrid(
+        r.padded_rows,
+        r.padded_cols,
+        r.apron_px,
+        r.grid.spacing,
+        r.grid.ox,
+        r.grid.oz,
+    );
+    let got = mountain_seamsafe(
+        &wx,
+        &wz,
+        r.padded_rows,
+        r.padded_cols,
+        r.seed,
+        r.feature_span_m,
+        r.apron_px,
+    );
+    assert_eq!(got.len(), r.height.len(), "core len mismatch");
+
+    let mut max_delta = 0.0_f64;
+    let mut at = 0usize;
+    for (i, (&g, &w)) in got.iter().zip(r.height.iter()).enumerate() {
+        let d = (g - w).abs();
+        if d > max_delta {
+            max_delta = d;
+            at = i;
+        }
+    }
+    eprintln!(
+        "[recipe mountain 576 parity] CPU-port vs Python oracle: max |delta| = {max_delta:.3e} at cell {at}"
+    );
+    // f64-vs-f64 at production scale: the exact-sweep flow has no f32, so this stays near the floor.
+    // A large delta here would mean the divergence is in the shared PORT, not the GLSL/f32 path.
+    assert!(
+        max_delta < 1.0e-9,
+        "CPU port DIVERGES from the 576 oracle ({max_delta:.3e}) -> the bug is in the PORT, not the GLSL/f32"
+    );
+}
