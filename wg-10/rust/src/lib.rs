@@ -90,6 +90,8 @@ mod recipes_wetland_tests;
 mod biome_compose_tests;
 #[cfg(test)]
 mod page_measure_tests;
+#[cfg(test)]
+mod biome_page_runtime_tests;
 
 struct Wg10Terrain;
 

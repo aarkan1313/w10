@@ -25,7 +25,8 @@
 use godot::prelude::*;
 use godot::classes::{
     RenderingServer, RdShaderSource, RdUniform, RenderingDevice,
-    rendering_device::{UniformType, ShaderStage},
+    RdTextureFormat, RdTextureView,
+    rendering_device::{UniformType, ShaderStage, DataFormat, TextureUsageBits},
 };
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,12 @@ const PASS_FLOOR_MASK: i32 = 17;
 const PASS_FLOOR_BLEND: i32 = 18;
 const PASS_FINAL: i32 = 19;
 const PASS_CROP: i32 = 20;
+/// RUNTIME crop-to-texture pass (sibling of PASS_CROP). Writes the core into the R32F output
+/// image at binding 41 instead of the core_out storage buffer. MUST match biome_page.glsl
+/// PASS_CROP_IMG = 27 (a GENERIC code in the 27..31 reserved block, collision-proof against the
+/// biome-private codes which start at 32). The readback TEST harness uses PASS_CROP; the runtime
+/// producer (`compute_biome_page_cached`) uses this.
+const PASS_CROP_IMG: i32 = 27;
 const PASS_FLOW_PRE_PREBLUR_IN: i32 = 21;
 const PASS_FLOW_PRE_FROM_GAUSS: i32 = 22;
 const PASS_MASSIF_WRITEBACK: i32 = 23;
@@ -300,6 +307,22 @@ pub fn apron_dim(core_px: usize, apron_px: usize) -> usize {
     core_px + 2 * apron_px
 }
 
+/// Apron working-grid dim for one page: core + an apron on EACH side (mountain: 256 + 2*160 = 576).
+/// The runtime producer (`build_biome_page_context` / `compute_biome_page_cached`) sizes every
+/// field/pool buffer to `biome_apron_dim^2`; the GPU rebuilds the padded meshgrid from this dim.
+/// (Same value as `apron_dim`; named for the runtime-producer call sites + its unit tests.)
+pub(crate) fn biome_apron_dim(core_px: usize, apron_px: usize) -> usize {
+    core_px + 2 * apron_px
+}
+
+/// Map a CORE (row, col) to its position on the apron working grid (offset by `apron_px` on each
+/// axis). PASS_CROP / PASS_CROP_IMG read `height[(r+apron)*cols + (c+apron)]` for core cell (r,c);
+/// this is the pure index-geometry the crop relies on, pinned by a unit test so the apron offset
+/// can never silently drift.
+pub(crate) fn core_to_apron_index(r: usize, c: usize, apron_px: usize) -> (usize, usize) {
+    (r + apron_px, c + apron_px)
+}
+
 // ---------------------------------------------------------------------------
 // byte helpers
 // ---------------------------------------------------------------------------
@@ -348,6 +371,36 @@ fn make_storage_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
     u.set_binding(binding);
     u.add_id(rid);
     u
+}
+
+/// Image-binding RdUniform (the RUNTIME producer binds the caller's R32F page texture at
+/// binding 41 via this). Same shape as page_compute.rs::make_image_uniform (replicated here --
+/// 6 lines -- rather than exposing that module-private helper cross-module).
+fn make_image_uniform(binding: i32, rid: Rid) -> Gd<RdUniform> {
+    let mut u = RdUniform::new_gd();
+    u.set_uniform_type(UniformType::IMAGE);
+    u.set_binding(binding);
+    u.add_id(rid);
+    u
+}
+
+/// Allocate a 1x1 R32F STORAGE image. The biome_page machine now DECLARES (and statically uses,
+/// in the PASS_CROP_IMG branch) a write-only image2D at binding 41 for the RUNTIME producer.
+/// Godot's `uniform_set_create` validates a set against EVERY binding the shader statically uses,
+/// so the THREE readback-only paths (run_inner / run_compose_engine / run_blend_inner) -- which
+/// never dispatch PASS_CROP_IMG -- must still BIND something at 41 or the set is rejected. They
+/// bind this throwaway 1x1 image: it is NEVER written (none of their passes touch out_img), so
+/// every readback (core_out / height) is byte-identical to before the PASS_CROP_IMG addition.
+/// The caller frees it alongside the other RIDs. (The runtime producer binds the REAL page
+/// texture at 41 instead; this scratch is only for the readback harness.)
+fn make_scratch_image_1x1(rd: &mut Gd<RenderingDevice>) -> Rid {
+    let mut fmt = RdTextureFormat::new_gd();
+    fmt.set_width(1);
+    fmt.set_height(1);
+    fmt.set_format(DataFormat::R32_SFLOAT);
+    fmt.set_usage_bits(TextureUsageBits::STORAGE_BIT | TextureUsageBits::CAN_COPY_FROM_BIT);
+    let view = RdTextureView::new_gd();
+    rd.texture_create(&fmt, &view)
 }
 
 /// Build the 96-byte push constant (std430): 12 i32 (48B) then 12 f32 (48B).
@@ -1691,6 +1744,404 @@ fn schedule_volcanic(s: &mut Scheduler) {
     s.dispatch(PASS_CROP, 0, 0, 0, 0, 0.0, 0, s.wg_core_x, s.wg_core_y);
 }
 
+// ===========================================================================
+// RUNTIME mountain page producer (Slice-4b, Task 3): the runtime sibling of the readback TEST
+// harness `run_inner`. Runs the SAME parity-proven `schedule_mountain` dispatch sequence, but on
+// the GLOBAL RenderingDevice with a CACHED context (compiled once, all buffers allocated once)
+// and writes each page into a CALLER-OWNED R32F texture (PASS_CROP_IMG -> binding 41) instead of
+// reading the core back. Mirrors page_compute.rs's PageComputeContext ownership model.
+//
+// The math is proven (the existing biome_page parity gate). This is the runtime PLUMBING. The
+// LATER windowed 576 parity gate (Task 4) is what PROVES the dispatch is correct (it asserts the
+// runtime texture matches the readback core); cargo-green here only proves it compiles + the pure
+// helpers + that the existing harness is byte-identical (the 210 stay green).
+// ===========================================================================
+
+/// All the per-page-INVARIANT apron working-grid buffers the machine's uniform set binds
+/// (the 19 named fields 0..18, the packed kernel buffer 19, flow_pre/acc_a/acc_b 20..22, the core
+/// 23, the POOL_SLOTS pool buffers 24..24+SLOTS-1, and the vent buffer 40). Allocated ONCE by
+/// `alloc_apron_buffers` and owned by `BiomePageComputeContext`. `kparams` resolves each sigma to
+/// its packed-kernel (koffset, kradius). The buffer ROLES + bindings are byte-identical to what
+/// `run_inner` allocates inline (same sizes, same zero-init, same kernel packing).
+struct AppronBuffers {
+    /// bindings 0..=18 (wx, wz, regional, ranges, ridge_detail, near_detail, range_envelope,
+    /// lowland, massif, base, primary_mask, tributary_mask, high_mask, valley_mask, height,
+    /// floor_mask, gauss_in, gauss_mid, gauss_out) -- the 19 fixed named fields, in binding order.
+    fields: Vec<Rid>,
+    kernel: Rid,    // binding 19 (packed gaussian kernels at slot*KERNEL_STRIDE)
+    flow_pre: Rid,  // binding 20
+    acc_a: Rid,     // binding 21
+    acc_b: Rid,     // binding 22
+    core: Rid,      // binding 23 (storage; schedule_mountain's trailing PASS_CROP writes it, inert)
+    pool: Vec<Rid>, // bindings 24..24+POOL_SLOTS-1
+    vents: Rid,     // binding 40
+    kparams: KernelParams,
+}
+
+impl AppronBuffers {
+    /// (binding, rid) pairs for the WHOLE machine uniform set EXCEPT the runtime output image
+    /// (binding 41). Same binding map `run_inner` builds. The runtime uniform set appends the
+    /// image; the test harness (run_inner) does not (and never dispatches PASS_CROP_IMG).
+    fn buffer_bindings(&self) -> Vec<(i32, Rid)> {
+        let mut b: Vec<(i32, Rid)> = Vec::with_capacity(24 + POOL_SLOTS + 1);
+        for (i, &rid) in self.fields.iter().enumerate() {
+            b.push((i as i32, rid)); // 0..=18
+        }
+        b.push((19, self.kernel));
+        b.push((20, self.flow_pre));
+        b.push((21, self.acc_a));
+        b.push((22, self.acc_b));
+        b.push((23, self.core));
+        for (k, &rid) in self.pool.iter().enumerate() {
+            b.push((24 + k as i32, rid));
+        }
+        b.push((40, self.vents));
+        b
+    }
+
+    /// Free every RID this owns. The B1 RID-leak lesson: miss none (19 fields + kernel +
+    /// flow_pre/acc_a/acc_b + core + POOL_SLOTS pool + vents).
+    fn free(&self, rd: &mut Gd<RenderingDevice>) {
+        for &rid in &self.fields {
+            rd.free_rid(rid);
+        }
+        rd.free_rid(self.kernel);
+        rd.free_rid(self.flow_pre);
+        rd.free_rid(self.acc_a);
+        rd.free_rid(self.acc_b);
+        rd.free_rid(self.core);
+        for &rid in &self.pool {
+            rd.free_rid(rid);
+        }
+        rd.free_rid(self.vents);
+    }
+}
+
+/// Allocate the full apron working-grid buffer set on `rd` (the SAME set `run_inner` allocates
+/// inline, in the same binding order with the same zero-init + kernel packing). Factored so the
+/// runtime context builder shares it; `run_inner` is left byte-identical (it still allocates
+/// inline -- not worth churning the parity-proven path). `n = rows*cols`, `core_n =
+/// core_rows*core_cols`. Returns the buffer set or an Err (freeing nothing partial -- the caller
+/// only proceeds on Ok, and on Err the few buffers already created are leaked only on a hard
+/// pre-list failure that aborts the whole context build, where the rd is the global one; we free
+/// what we hold via the returned-on-error path below). `biome` selects the sigma list.
+fn alloc_apron_buffers(
+    rd: &mut Gd<RenderingDevice>,
+    rows: usize,
+    cols: usize,
+    core_n: usize,
+    biome: &str,
+    seed: i32,
+    feature_span_m: f32,
+) -> Result<AppronBuffers, String> {
+    let n = rows * cols;
+    let bsize = |len: usize| -> u32 { u32::try_from(len).expect("buffer size exceeds u32") };
+    let field_bytes = n * 4;
+    let zeros = vec![0.0_f32; n];
+    let zeros_pba = PackedByteArray::from(f32s_to_bytes(&zeros).as_slice());
+    let mk_field = |rd: &mut Gd<RenderingDevice>| -> Rid {
+        rd.storage_buffer_create_ex(bsize(field_bytes)).data(&zeros_pba).done()
+    };
+
+    // 19 named fields (bindings 0..=18), in the SAME order as run_inner.
+    let mut fields: Vec<Rid> = Vec::with_capacity(19);
+    for _ in 0..19 {
+        fields.push(mk_field(rd));
+    }
+
+    // packed kernel buffer (19): all distinct biome sigmas' kernels at slot*KERNEL_STRIDE.
+    let helper_free = |rd: &mut Gd<RenderingDevice>, fields: &[Rid]| {
+        for &rid in fields {
+            rd.free_rid(rid);
+        }
+    };
+    let sigmas = match biome_sigmas(biome) {
+        Some(s) => s,
+        None => {
+            helper_free(rd, &fields);
+            return Err(format!("no sigma list for biome '{biome}' (add a biome_sigmas arm)"));
+        }
+    };
+    let n_slots = sigmas.len();
+    let mut packed = vec![0.0_f32; n_slots * KERNEL_STRIDE];
+    for (slot, &sg) in sigmas.iter().enumerate() {
+        let k = gaussian_kernel1d(sg, TRUNCATE);
+        if k.len() > KERNEL_STRIDE {
+            helper_free(rd, &fields);
+            return Err(format!(
+                "gaussian kernel len {} (sigma {sg}) > KERNEL_STRIDE {KERNEL_STRIDE}",
+                k.len()
+            ));
+        }
+        let base = slot * KERNEL_STRIDE;
+        packed[base..base + k.len()].copy_from_slice(&k);
+    }
+    let packed_pba = PackedByteArray::from(f32s_to_bytes(&packed).as_slice());
+    let kernel = rd
+        .storage_buffer_create_ex(bsize(packed.len() * 4))
+        .data(&packed_pba)
+        .done(); // 19
+    let kparams = KernelParams::from_sigmas(&sigmas);
+
+    let flow_pre = mk_field(rd); // 20
+    let acc_a = mk_field(rd); // 21
+    let acc_b = mk_field(rd); // 22
+
+    // core output (23)
+    let core_zeros = vec![0.0_f32; core_n];
+    let core_pba = PackedByteArray::from(f32s_to_bytes(&core_zeros).as_slice());
+    let core = rd
+        .storage_buffer_create_ex(bsize(core_n * 4))
+        .data(&core_pba)
+        .done(); // 23
+
+    // POOL (24..24+POOL_SLOTS-1)
+    let pool: Vec<Rid> = (0..POOL_SLOTS).map(|_| mk_field(rd)).collect();
+
+    // VENT buffer (40): zeroed for non-volcanic biomes (mountain never reads it).
+    let (vent_packed, _vent_count): (Vec<f32>, usize) = if biome == "volcanic" {
+        crate::recipes_volcanic::volcanic::packed_vents(
+            &crate::recipes_volcanic::volcanic::STRATOVOLCANO_CLUSTER,
+            seed as i64,
+            feature_span_m as f64,
+        )
+    } else {
+        let stride = crate::recipes_volcanic::volcanic::VENT_STRIDE;
+        let maxv = crate::recipes_volcanic::volcanic::MAX_VENTS;
+        (vec![0.0_f32; maxv * stride], 0)
+    };
+    let vent_pba = PackedByteArray::from(f32s_to_bytes(&vent_packed).as_slice());
+    let vents = rd
+        .storage_buffer_create_ex(bsize(vent_packed.len() * 4))
+        .data(&vent_pba)
+        .done(); // 40
+
+    Ok(AppronBuffers {
+        fields,
+        kernel,
+        flow_pre,
+        acc_a,
+        acc_b,
+        core,
+        pool,
+        vents,
+        kparams,
+    })
+}
+
+/// The per-page-INVARIANT GPU resources for the RUNTIME mountain page producer: the compiled
+/// shader, the compute pipeline, and the full apron buffer set (`AppronBuffers`). Built ONCE
+/// (`build_biome_page_context`) on the GLOBAL rd and reused for every page; only the per-page
+/// uniform set (cached buffers + this page's image) + push constant vary. Mirrors
+/// page_compute.rs::PageComputeContext. Owns every RID -> `free_biome_page_context` frees them all.
+///
+/// `apron_dim` is the padded working-grid dim (core + 2*apron); `core_px` the core dim;
+/// `apron_px` the apron each side; `flow_iters` the PULL-relaxation step count (STABLE_ITERS for
+/// the parity-proven path). The vent_count is fixed to 0 here (mountain is the only wired biome;
+/// volcanic would need its own context with the live vent count).
+pub(crate) struct BiomePageComputeContext {
+    pub shader: Rid,
+    pub pipeline: Rid,
+    bufs: AppronBuffers,
+    pub apron_dim: usize,
+    pub core_px: usize,
+    pub apron_px: usize,
+    pub flow_iters: usize,
+}
+
+/// Build the cached runtime context ONCE on the GLOBAL `rd`: concat primitives + machine +
+/// mountain fragment (EXACTLY as `run_inner` does, via `concat_glsl_hoist_version`), compile,
+/// create the pipeline, allocate the full apron buffer set. `core_px`/`apron_px` size the working
+/// grid (mountain: 256 / 160 -> apron_dim 576). Returns Err on any compile/create failure (freeing
+/// what it already allocated). The producer is wired for "mountain" only (the proven recipe); the
+/// biome string is hardcoded so the sigma list + schedule match.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_biome_page_context(
+    rd: &mut Gd<RenderingDevice>,
+    primitives_src: &str,
+    machine_src: &str,
+    mountain_fragment_src: &str,
+    core_px: usize,
+    apron_px: usize,
+    flow_iters: usize,
+) -> Result<BiomePageComputeContext, String> {
+    let apron_dim = biome_apron_dim(core_px, apron_px);
+    if apron_dim <= 2 * apron_px {
+        return Err(format!(
+            "build_biome_page_context: apron {apron_px} too large for core {core_px}"
+        ));
+    }
+    // concat primitives + (machine + "\n" + fragment), hoisting the machine's #version to line 1 --
+    // byte-identical to run_inner's compile path.
+    let machine_plus_fragment = format!("{machine_src}\n{mountain_fragment_src}");
+    let glsl_stripped =
+        crate::primitive_probe::concat_glsl_hoist_version(primitives_src, &machine_plus_fragment);
+    let mut src = RdShaderSource::new_gd();
+    src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
+    let spirv = rd
+        .shader_compile_spirv_from_source(&src)
+        .ok_or_else(|| {
+            "build_biome_page_context: shader_compile_spirv_from_source returned null".to_string()
+        })?;
+    {
+        let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
+        if !err.is_empty() {
+            return Err(format!("build_biome_page_context: GLSL compile error: {err}"));
+        }
+    }
+    let shader = rd.shader_create_from_spirv(&spirv);
+    if shader.is_invalid() {
+        return Err("build_biome_page_context: shader_create_from_spirv returned invalid RID".into());
+    }
+    let pipeline = rd.compute_pipeline_create(shader);
+    if pipeline.is_invalid() {
+        rd.free_rid(shader);
+        return Err(
+            "build_biome_page_context: compute_pipeline_create returned invalid RID".into(),
+        );
+    }
+
+    let core_n = core_px * core_px;
+    let bufs = match alloc_apron_buffers(rd, apron_dim, apron_dim, core_n, "mountain", 0, 0.0) {
+        Ok(b) => b,
+        Err(e) => {
+            rd.free_rid(pipeline);
+            rd.free_rid(shader);
+            return Err(format!("build_biome_page_context: {e}"));
+        }
+    };
+
+    Ok(BiomePageComputeContext {
+        shader,
+        pipeline,
+        bufs,
+        apron_dim,
+        core_px,
+        apron_px,
+        flow_iters,
+    })
+}
+
+/// Free EVERY RID the runtime context owns (all apron buffers, pipeline, shader). Per-page uniform
+/// sets are freed per page inside `compute_biome_page_cached`. The B1 RID-leak lesson: miss none.
+pub(crate) fn free_biome_page_context(rd: &mut Gd<RenderingDevice>, ctx: &BiomePageComputeContext) {
+    ctx.bufs.free(rd);
+    rd.free_rid(ctx.pipeline);
+    rd.free_rid(ctx.shader); // cascades any remaining uniform sets created against it
+}
+
+/// Dispatch ONE mountain page into `target_rid` (a caller-owned R32F texture) using the CACHED
+/// context. Per-page work only: build the uniform set (cached buffers + this page's image at
+/// binding 41), open a compute list, construct a `Scheduler` over the cached buffers + open list,
+/// run `schedule_mountain` (the SAME proven sequence the test harness runs -- its trailing
+/// PASS_CROP into the core storage buffer is inert here), then dispatch PASS_CROP_IMG (core
+/// workgroups) to write `target_rid`, submit + sync. NO readback. Frees ONLY the per-page uniform
+/// set; the cached shader/pipeline/buffers persist. `target_rid` is NOT freed (the caller owns it).
+///
+/// `spacing = world_span / (page_px - 1)` (texel-CORNER convention: texel 0 -> origin, page_px-1
+/// -> origin+span), matching height_page.glsl:191-195. The apron-padded origin is
+/// `origin - apron_px*spacing` per axis (the meshgrid pass subtracts the apron back off).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compute_biome_page_cached(
+    rd: &mut Gd<RenderingDevice>,
+    ctx: &BiomePageComputeContext,
+    target_rid: Rid,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: i64,
+    feature_span_m: f64,
+    seed: i64,
+) -> Result<(), String> {
+    if page_px as usize != ctx.core_px {
+        return Err(format!(
+            "compute_biome_page_cached: page_px {page_px} != context core_px {} (rebuild the context)",
+            ctx.core_px
+        ));
+    }
+    if page_px < 2 {
+        return Err(format!("compute_biome_page_cached: page_px {page_px} must be >= 2"));
+    }
+    if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
+        return Err(format!(
+            "compute_biome_page_cached: seed {seed} outside i32 range (GPU hash is 32-bit-seed)"
+        ));
+    }
+    let spacing = (world_span / (page_px as f64 - 1.0)) as f32;
+    let ox = (origin_x - ctx.apron_px as f64 * spacing as f64) as f32;
+    let oz = (origin_z - ctx.apron_px as f64 * spacing as f64) as f32;
+
+    // per-page uniform set: the cached buffers (0..40) + this page's image (41).
+    let bindings = ctx.bufs.buffer_bindings();
+    let mut uniforms: Array<Gd<RdUniform>> = Array::new();
+    for (bind, rid) in bindings.iter() {
+        uniforms.push(&make_storage_uniform(*bind, *rid));
+    }
+    uniforms.push(&make_image_uniform(41, target_rid));
+    let uset = rd.uniform_set_create(&uniforms, ctx.shader, 0);
+    if uset.is_invalid() {
+        return Err("compute_biome_page_cached: uniform_set_create returned invalid RID".into());
+    }
+
+    let rows = ctx.apron_dim;
+    let cols = ctx.apron_dim;
+    let apron = ctx.apron_px;
+    let core_rows = ctx.core_px;
+    let core_cols = ctx.core_px;
+    let wg_full_x = (cols as u32).div_ceil(16);
+    let wg_full_y = (rows as u32).div_ceil(16);
+    let wg_core_x = (core_cols as u32).div_ceil(16);
+    let wg_core_y = (core_rows as u32).div_ceil(16);
+
+    // PRE-VALIDATE every sigma BEFORE the list opens (KernelParams::kp `.expect`s; a panic with an
+    // open list would leak). mountain_sigmas() are all in the context's kparams.
+    for &sg in mountain_sigmas().iter() {
+        let _ = ctx.bufs.kparams.kp(sg);
+    }
+
+    let cl = rd.compute_list_begin();
+    rd.compute_list_bind_compute_pipeline(cl, ctx.pipeline);
+
+    // Scheduler over the cached buffers + open list. kparams is moved into the Scheduler, so clone
+    // the context's resolved slots (cheap: a small Vec of (f64,i32,i32)).
+    let kparams = KernelParams {
+        slots: ctx.bufs.kparams.slots.clone(),
+    };
+    let mut sched = Scheduler {
+        rd,
+        cl,
+        uset,
+        rows: rows as i32,
+        cols: cols as i32,
+        apron: apron as i32,
+        seed: seed as i32,
+        spacing,
+        ox,
+        oz,
+        feature_span_m: feature_span_m as f32,
+        vent_count: 0, // mountain never reads vents
+        favor_strength: 0.0,
+        relief_confidence_floor: 0.0,
+        wg_full_x,
+        wg_full_y,
+        wg_core_x,
+        wg_core_y,
+        kparams,
+        flow_iters: ctx.flow_iters,
+    };
+    // Run the PROVEN mountain schedule (ends with PASS_CROP into the core storage buffer -- inert
+    // here, we don't read it), then crop to the IMAGE.
+    schedule_mountain(&mut sched);
+    sched.dispatch(PASS_CROP_IMG, 0, 0, 0, 0, 0.0, 0, wg_core_x, wg_core_y);
+
+    rd.compute_list_end();
+    rd.submit();
+    rd.sync();
+
+    rd.free_rid(uset); // free ONLY the per-page uniform set; cached resources persist
+    Ok(())
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10BiomePageCompute {
@@ -1871,6 +2322,150 @@ impl Wg10BiomePageCompute {
                 PackedFloat64Array::new()
             }
         }
+    }
+
+    /// RUNTIME-producer readback entry (Slice-4b, Task 3): exercises the REAL runtime mountain
+    /// page producer (`build_biome_page_context` + `compute_biome_page_cached` + the crop-to-image
+    /// PASS_CROP_IMG path) end-to-end, but on a LOCAL RenderingDevice + a scratch R32F TEXTURE so
+    /// it is test-runnable from a WINDOWED gate. Builds a context, dispatches one page into the
+    /// scratch texture, reads the texture back (`texture_get_data`), frees the context + texture +
+    /// rd, and returns the CORE f64 height (length core_px*core_px). The LATER windowed 576 parity
+    /// gate (Task 4) compares THIS against `generate_core_page` to PROVE the runtime producer
+    /// matches the proven readback core bit-for-bit.
+    ///
+    /// Convention matches `generate_core_page`: `ox`/`oz` are the PADDED-grid origin and `spacing`
+    /// the metres/px. The runtime producer takes (origin, world_span, page_px) instead, so this
+    /// converts: `page_px = padded_rows - 2*apron_px`, `world_span = spacing*(page_px-1)`,
+    /// `origin = ox + apron_px*spacing` (the producer re-subtracts the apron). MOUNTAIN only.
+    /// Returns an EMPTY array on error (see godot_error log). WINDOWED only (local RD null headless).
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn generate_runtime_page_576(
+        &self,
+        spacing: f64,
+        ox: f64,
+        oz: f64,
+        padded_rows: i64,
+        padded_cols: i64,
+        apron_px: i64,
+        seed: i64,
+        feature_span_m: f64,
+        mountain_fragment_path: GString,
+    ) -> PackedFloat64Array {
+        if padded_rows != padded_cols {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: padded grid must be square (got {padded_rows}x{padded_cols})");
+            return PackedFloat64Array::new();
+        }
+        let apron = apron_px as usize;
+        let padded = padded_rows as usize;
+        if padded <= 2 * apron {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: apron {apron} too large for padded {padded}");
+            return PackedFloat64Array::new();
+        }
+        let core_px = padded - 2 * apron;
+        if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: seed {seed} outside i32 range");
+            return PackedFloat64Array::new();
+        }
+        let prim = match self.primitives_src.as_deref() {
+            Some(s) => s,
+            None => {
+                godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let machine = match self.machine_src.as_deref() {
+            Some(s) => s,
+            None => {
+                godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let frag_path = mountain_fragment_path.to_string();
+        let fragment = match std::fs::read_to_string(&frag_path) {
+            Ok(s) => s,
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: mountain fragment glsl: {e}");
+                return PackedFloat64Array::new();
+            }
+        };
+
+        // LOCAL rd (test entry; the production caller passes the GLOBAL rd instead).
+        let mut rd: Gd<RenderingDevice> = match RenderingServer::singleton().create_local_rendering_device() {
+            Some(d) => d,
+            None => {
+                godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: create_local_rendering_device returned null (headless / no device)");
+                return PackedFloat64Array::new();
+            }
+        };
+
+        // Build the cached runtime context (compile + pipeline + all buffers, on this local rd).
+        let ctx = match build_biome_page_context(
+            &mut rd, prim, machine, &fragment, core_px, apron, STABLE_ITERS,
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: {e}");
+                rd.free();
+                return PackedFloat64Array::new();
+            }
+        };
+
+        // Scratch R32F output texture (caller-owned model; here the test owns + frees it).
+        let mut fmt = RdTextureFormat::new_gd();
+        fmt.set_width(core_px as u32);
+        fmt.set_height(core_px as u32);
+        fmt.set_format(DataFormat::R32_SFLOAT);
+        fmt.set_usage_bits(
+            TextureUsageBits::STORAGE_BIT
+                | TextureUsageBits::SAMPLING_BIT
+                | TextureUsageBits::CAN_COPY_FROM_BIT,
+        );
+        let view = RdTextureView::new_gd();
+        let tex = rd.texture_create(&fmt, &view);
+        if tex.is_invalid() {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: texture_create returned invalid RID");
+            free_biome_page_context(&mut rd, &ctx);
+            rd.free();
+            return PackedFloat64Array::new();
+        }
+
+        // Reconcile the padded-origin convention to the producer's (origin, world_span, page_px).
+        let page_px = core_px as i64;
+        let world_span = spacing * (page_px as f64 - 1.0);
+        let origin_x = ox + apron as f64 * spacing;
+        let origin_z = oz + apron as f64 * spacing;
+
+        if let Err(e) = compute_biome_page_cached(
+            &mut rd, &ctx, tex, origin_x, origin_z, world_span, page_px, feature_span_m, seed,
+        ) {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: {e}");
+            rd.free_rid(tex);
+            free_biome_page_context(&mut rd, &ctx);
+            rd.free();
+            return PackedFloat64Array::new();
+        }
+
+        // Read the page texture back (layer 0). R32F -> 4 bytes/texel, core_px*core_px texels.
+        let raw = rd.texture_get_data(tex, 0);
+        let core = bytes_to_f32s(&raw.to_vec());
+
+        rd.free_rid(tex);
+        free_biome_page_context(&mut rd, &ctx);
+        rd.free();
+
+        let core_n = core_px * core_px;
+        if core.len() != core_n {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: texture readback expected {core_n} f32, got {}", core.len());
+            return PackedFloat64Array::new();
+        }
+        let mut out = PackedFloat64Array::new();
+        out.resize(core.len());
+        let sl = out.as_mut_slice();
+        for i in 0..core.len() {
+            sl[i] = core[i] as f64;
+        }
+        out
     }
 
     /// COMPOSE entry (Slice-4b.11): GPU port of `biome_compose::compose_biomes`. Composes
@@ -2154,6 +2749,14 @@ impl Wg10BiomePageCompute {
         for (bind, rid) in bindings.iter() {
             uniforms.push(&make_storage_uniform(*bind, *rid));
         }
+        // Scratch 1x1 image at binding 41 (machine declares out_img for the RUNTIME PASS_CROP_IMG;
+        // this readback path never dispatches it, so the image is never written -> core readback is
+        // byte-identical, but the uniform set must still satisfy binding 41). Pushed into `bindings`
+        // AFTER the storage-uniform loop so the trailing free loop frees its texture RID, while its
+        // uniform is added as an IMAGE (not a storage buffer) below.
+        let scratch_img = make_scratch_image_1x1(&mut rd);
+        uniforms.push(&make_image_uniform(41, scratch_img));
+        bindings.push((41, scratch_img));
         let uset = rd.uniform_set_create(&uniforms, shader, 0);
         let pipeline = rd.compute_pipeline_create(shader);
 
@@ -2393,6 +2996,11 @@ impl Wg10BiomePageCompute {
         for (bind, rid) in bindings.iter() {
             uniforms.push(&make_storage_uniform(*bind, *rid));
         }
+        // Scratch 1x1 image at binding 41 (machine declares out_img for PASS_CROP_IMG; compose
+        // never dispatches it -> result byte-identical, but the set must satisfy binding 41).
+        let scratch_img = make_scratch_image_1x1(&mut rd);
+        uniforms.push(&make_image_uniform(41, scratch_img));
+        bindings.push((41, scratch_img));
         let uset = rd.uniform_set_create(&uniforms, shader, 0);
         let pipeline = rd.compute_pipeline_create(shader);
 
@@ -2665,6 +3273,11 @@ impl Wg10BiomePageCompute {
         bindings.push((40, b_vents));
         let mut uniforms: Array<Gd<RdUniform>> = Array::new();
         for (bind, rid) in bindings.iter() { uniforms.push(&make_storage_uniform(*bind, *rid)); }
+        // Scratch 1x1 image at binding 41 (machine declares out_img for PASS_CROP_IMG; blend never
+        // dispatches it -> result byte-identical, but the set must satisfy binding 41).
+        let scratch_img = make_scratch_image_1x1(&mut rd);
+        uniforms.push(&make_image_uniform(41, scratch_img));
+        bindings.push((41, scratch_img));
         let uset = rd.uniform_set_create(&uniforms, shader, 0);
         let pipeline = rd.compute_pipeline_create(shader);
 

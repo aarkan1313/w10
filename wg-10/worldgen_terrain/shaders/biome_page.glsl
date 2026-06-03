@@ -95,7 +95,8 @@ const int PASS_MASSIF_WRITEBACK    = 23; // [BIOME]   massif <- gauss_out (the g
 const int PASS_ACC_INIT            = 24; // [GENERIC] acc_a = acc_b = 1.0 (matches CPU acc init)
 const int PASS_COPY_POOL           = 25; // [GENERIC] gauss_in <- pool[pool_sel] (to blur a pool slot)
 const int PASS_POOL_FROM_GAUSS     = 26; // [GENERIC] pool[pool_sel] <- gauss_out (stash a blur)
-// 27..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
+const int PASS_CROP_IMG            = 27; // [GENERIC] out_img[core] <- height[apron-offset] (RUNTIME crop-to-texture sibling of PASS_CROP; writes the R32F image at binding 41 instead of the core_out storage buffer. The readback TEST harness uses PASS_CROP; the runtime producer uses this.)
+// 28..31 reserved for future GENERIC passes. BIOME-private passes start at 32 (see fragments).
 
 // ---------------------------------------------------------------------------
 // GENERIC COMPOSE passes (Slice-4b.11): the biome-AGNOSTIC blend layer that composes the OUTPUTS
@@ -215,6 +216,18 @@ layout(set = 0, binding = 39, std430) restrict buffer Pool15 { float v[]; } pool
 const int VENT_STRIDE = 7;
 const int MAX_VENTS   = 8;
 layout(set = 0, binding = 40, std430) restrict readonly buffer Vents { float v[]; } vents;
+
+// ---------------------------------------------------------------------------
+// RUNTIME OUTPUT IMAGE (binding 41): the caller-owned R32F page texture the RUNTIME producer
+// writes via PASS_CROP_IMG (the crop-to-texture sibling of PASS_CROP). ADDITIVE -- binding 0 is
+// already taken by Wx here (unlike legacy height_page.glsl), so the image goes at binding 41.
+// The readback TEST harness (run_inner) does NOT bind this image and never dispatches
+// PASS_CROP_IMG, so a write-only image left unwritten in those dispatches is inert; the runtime
+// producer's uniform set DOES bind it (every binding the shader declares must be satisfied by
+// whatever uniform set a given pipeline uses -- so the runtime set provides binding 41, and the
+// test-harness set still provides 0..40 exactly as before, byte-identical).
+// ---------------------------------------------------------------------------
+layout(set = 0, binding = 41, r32f) writeonly uniform image2D out_img;
 
 // pool slot accessors. A small switch keeps the slot index data-driven (the `pool_sel` push
 // constant for the generic pool passes; a literal for biome fragments). Out-of-range slots are
@@ -378,6 +391,20 @@ void main() {
         // height[(cy+a)*cols + (cx+a)] -> core_out[cy*core_cols + cx]
         int src = (cy + a) * cols + (cx + a);
         core_out.v[cy * core_cols + cx] = height.v[src];
+        return;
+    }
+
+    // PASS_CROP_IMG: RUNTIME crop-to-texture. Same CORE iteration + apron-offset src index as
+    // PASS_CROP, but writes the R32F output image (binding 41) at (cx, cy) instead of the
+    // core_out storage buffer. The math is IDENTICAL to PASS_CROP -> the runtime texture matches
+    // the readback core bit-for-bit (the LATER windowed 576 parity gate proves this).
+    if (pass == PASS_CROP_IMG) {
+        int a = P.apron_px;
+        int core_cols = cols - 2 * a;
+        int core_rows = rows - 2 * a;
+        if (cx >= core_cols || cy >= core_rows) return;
+        int src = (cy + a) * cols + (cx + a);
+        imageStore(out_img, ivec2(cx, cy), vec4(height.v[src], 0.0, 0.0, 1.0));
         return;
     }
 
