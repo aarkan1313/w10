@@ -2340,6 +2340,11 @@ impl Wg10BiomePageCompute {
     /// the metres/px. The runtime producer takes (origin, world_span, page_px) instead, so this
     /// converts: `page_px = padded_rows - 2*apron_px`, `world_span = spacing*(page_px-1)`,
     /// `origin = ox + apron_px*spacing` (the producer re-subtracts the apron). MOUNTAIN only.
+    ///
+    /// `flow_iters` = the flow PULL-relaxation step count threaded into `build_biome_page_context`
+    /// (mirrors `generate_core_page_iters`). The 576 production page needs MORE than the recipe-path
+    /// STABLE_ITERS=128 to converge to the exact f64 sweep oracle (~192 measured), so the windowed
+    /// 576 parity gate sweeps this to separate UNDER-CONVERGENCE from a real divergence.
     /// Returns an EMPTY array on error (see godot_error log). WINDOWED only (local RD null headless).
     #[allow(clippy::too_many_arguments)]
     #[func]
@@ -2354,6 +2359,7 @@ impl Wg10BiomePageCompute {
         seed: i64,
         feature_span_m: f64,
         mountain_fragment_path: GString,
+        flow_iters: i64,
     ) -> PackedFloat64Array {
         if padded_rows != padded_cols {
             godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: padded grid must be square (got {padded_rows}x{padded_cols})");
@@ -2368,6 +2374,10 @@ impl Wg10BiomePageCompute {
         let core_px = padded - 2 * apron;
         if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
             godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: seed {seed} outside i32 range");
+            return PackedFloat64Array::new();
+        }
+        if flow_iters < 1 {
+            godot_error!("Wg10BiomePageCompute::generate_runtime_page_576: flow_iters must be >= 1");
             return PackedFloat64Array::new();
         }
         let prim = match self.primitives_src.as_deref() {
@@ -2404,7 +2414,7 @@ impl Wg10BiomePageCompute {
 
         // Build the cached runtime context (compile + pipeline + all buffers, on this local rd).
         let ctx = match build_biome_page_context(
-            &mut rd, prim, machine, &fragment, core_px, apron, STABLE_ITERS,
+            &mut rd, prim, machine, &fragment, core_px, apron, flow_iters as usize,
         ) {
             Ok(c) => c,
             Err(e) => {

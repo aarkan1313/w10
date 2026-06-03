@@ -62,6 +62,14 @@ CHECKS = {
     "flow_converge": [
         "worldgen_terrain/tests/page_flow_convergence_check.gd",
     ],
+    # Slice-4b Task 4 PRODUCTION-SCALE cross-oracle parity (windowed). The RUNTIME mountain page
+    # producer (build_biome_page_context + compute_biome_page_cached) at 256-core/576-padded vs the
+    # independent Python f64 EXACT-sweep oracle. Closes the audit gap that cross-engine parity was
+    # only ever proven at the tiny 344-padded fixture. Sweeps flow_iters [128,192,256] so it is BOTH
+    # a parity proof AND the convergence measurement (can't false-pass: 256 must reach 1e-4 or FAIL).
+    "biome_fly": [
+        "worldgen_terrain/tests/biome_page_576_parity_check.gd",
+    ],
     "m3": [
         "worldgen_terrain/tests/m3_slice1_check.gd",
         "worldgen_terrain/tests/m3_pool_check.gd",
@@ -148,7 +156,7 @@ def main() -> int:
         return run_pytest_suite(fast=False)
     if args.suite == PYTEST_FAST_SUITE:
         return run_pytest_suite(fast=True)
-    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page", "flow_converge")   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page", "flow_converge", "biome_fly")   # GPU compute (RenderingDevice) needs a windowed device
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0
