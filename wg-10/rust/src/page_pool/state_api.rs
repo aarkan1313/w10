@@ -101,6 +101,34 @@ impl Wg10PagePool {
             "pass_network_carved_frac",
             reference.pass_network_carved_frac,
         );
+        out.set("has_conditioning_stats", reference.has_conditioning_stats);
+        out.set(
+            "conditioning_source_min",
+            reference.conditioning_stats.source_min,
+        );
+        out.set(
+            "conditioning_source_max",
+            reference.conditioning_stats.source_max,
+        );
+        out.set(
+            "conditioning_source_ptp",
+            reference.conditioning_stats.source_ptp,
+        );
+        out.set("conditioning_p05", reference.conditioning_stats.p05);
+        out.set("conditioning_p50", reference.conditioning_stats.p50);
+        out.set("conditioning_p95", reference.conditioning_stats.p95);
+        out.set(
+            "conditioning_min",
+            reference.conditioning_stats.conditioned_min,
+        );
+        out.set(
+            "conditioning_max",
+            reference.conditioning_stats.conditioned_max,
+        );
+        out.set(
+            "conditioning_ptp",
+            reference.conditioning_stats.conditioned_ptp,
+        );
         out
     }
 

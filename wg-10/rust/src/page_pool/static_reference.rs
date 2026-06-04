@@ -33,6 +33,8 @@ pub(super) struct StaticHeightRuntime {
     pub(super) pass_network_routes: i64,
     pub(super) pass_network_walkable_frac: f64,
     pub(super) pass_network_carved_frac: f64,
+    pub(super) has_conditioning_stats: bool,
+    pub(super) conditioning_stats: StaticConditioningStats,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -41,6 +43,19 @@ pub(super) struct StaticMaterialHintFractions {
     pub(super) floor: f64,
     pub(super) rock: f64,
     pub(super) snow: f64,
+}
+
+#[derive(Clone, Copy, Default, Deserialize)]
+pub(super) struct StaticConditioningStats {
+    pub(super) source_min: f64,
+    pub(super) source_max: f64,
+    pub(super) source_ptp: f64,
+    pub(super) p05: f64,
+    pub(super) p50: f64,
+    pub(super) p95: f64,
+    pub(super) conditioned_min: f64,
+    pub(super) conditioned_max: f64,
+    pub(super) conditioned_ptp: f64,
 }
 
 #[derive(Clone)]
@@ -68,6 +83,7 @@ struct StaticPayload {
 struct StaticSeed {
     chunks: Vec<StaticChunk>,
     pass_network: Option<StaticPassNetwork>,
+    stats: Option<StaticConditioningStats>,
 }
 
 #[derive(Deserialize)]
@@ -317,6 +333,13 @@ impl StaticHeightRuntime {
         let pass_network_routes = pass_network.map(|p| p.routes).unwrap_or(0);
         let pass_network_walkable_frac = pass_network.map(|p| p.band_walkable_frac).unwrap_or(0.0);
         let pass_network_carved_frac = pass_network.map(|p| p.carved_frac).unwrap_or(0.0);
+        let (has_conditioning_stats, conditioning_stats) = match seed.stats {
+            Some(stats) => {
+                validate_conditioning_stats(stats)?;
+                (true, stats)
+            }
+            None => (false, StaticConditioningStats::default()),
+        };
         let has_corridor = corridor_grid.is_some();
         let material_hint_fracs = material_hints
             .as_ref()
@@ -344,6 +367,8 @@ impl StaticHeightRuntime {
             pass_network_routes,
             pass_network_walkable_frac,
             pass_network_carved_frac,
+            has_conditioning_stats,
+            conditioning_stats,
         })
     }
 
@@ -550,6 +575,44 @@ fn material_hint_fractions(hints: &StaticMaterialHintGrids) -> StaticMaterialHin
     }
 }
 
+fn validate_conditioning_stats(stats: StaticConditioningStats) -> Result<(), String> {
+    for (name, value) in [
+        ("source_min", stats.source_min),
+        ("source_max", stats.source_max),
+        ("source_ptp", stats.source_ptp),
+        ("p05", stats.p05),
+        ("p50", stats.p50),
+        ("p95", stats.p95),
+        ("conditioned_min", stats.conditioned_min),
+        ("conditioned_max", stats.conditioned_max),
+        ("conditioned_ptp", stats.conditioned_ptp),
+    ] {
+        if !value.is_finite() {
+            return Err(format!(
+                "static reference: conditioning stats {name} must be finite"
+            ));
+        }
+    }
+    if stats.source_min > stats.source_max {
+        return Err("static reference: conditioning stats source_min > source_max".into());
+    }
+    if stats.conditioned_min > stats.conditioned_max {
+        return Err(
+            "static reference: conditioning stats conditioned_min > conditioned_max".into(),
+        );
+    }
+    if stats.source_ptp <= 0.0 {
+        return Err("static reference: conditioning stats source_ptp must be > 0".into());
+    }
+    if stats.conditioned_ptp <= 0.0 {
+        return Err("static reference: conditioning stats conditioned_ptp must be > 0".into());
+    }
+    if stats.p05 > stats.p50 || stats.p50 > stats.p95 || stats.p95 <= stats.p05 {
+        return Err("static reference: conditioning stats percentiles must satisfy p05 <= p50 <= p95 with p95 > p05".into());
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -570,6 +633,17 @@ mod tests {
                     routes: 12,
                     band_walkable_frac: 0.75,
                     carved_frac: 0.25,
+                }),
+                stats: Some(StaticConditioningStats {
+                    source_min: -1.0,
+                    source_max: 2.0,
+                    source_ptp: 3.0,
+                    p05: -0.8,
+                    p50: 0.1,
+                    p95: 1.5,
+                    conditioned_min: -0.9,
+                    conditioned_max: 0.8,
+                    conditioned_ptp: 1.7,
                 }),
                 chunks: vec![StaticChunk {
                     chunk_x: 0,
@@ -611,6 +685,11 @@ mod tests {
         assert_eq!(rt.pass_network_routes, 12);
         assert!((rt.pass_network_walkable_frac - 0.75).abs() < 1.0e-12);
         assert!((rt.pass_network_carved_frac - 0.25).abs() < 1.0e-12);
+        assert!(rt.has_conditioning_stats);
+        assert!((rt.conditioning_stats.source_ptp - 3.0).abs() < 1.0e-12);
+        assert!((rt.conditioning_stats.p05 + 0.8).abs() < 1.0e-12);
+        assert!((rt.conditioning_stats.p95 - 1.5).abs() < 1.0e-12);
+        assert!((rt.conditioning_stats.conditioned_ptp - 1.7).abs() < 1.0e-12);
         assert!(rt.has_corridor);
         assert!((rt.corridor_frac - 0.5).abs() < 1.0e-12);
         assert!((rt.corridor_fraction_for_page(-5.0, -5.0, 10.0, 2) - 0.5).abs() < 1.0e-12);
@@ -628,6 +707,18 @@ mod tests {
             Err(err) => err,
         };
         assert!(err.contains("source_scope"));
+    }
+
+    #[test]
+    fn payload_invalid_conditioning_stats_are_rejected() {
+        let mut payload = one_chunk_payload(None);
+        payload.seeds[0].stats.as_mut().unwrap().p95 = -0.8;
+
+        let err = match StaticHeightRuntime::from_payload(payload) {
+            Ok(_) => panic!("invalid conditioning stats should be rejected"),
+            Err(err) => err,
+        };
+        assert!(err.contains("conditioning stats"));
     }
 
     #[test]

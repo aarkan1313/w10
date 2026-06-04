@@ -98,6 +98,10 @@ single rendered page:
    all-or-none payload contract, exposes whole-payload and page-sampled hint
    coverage, and lets REFERENCE rendering pick material color/mix from those
    page-level hints.
+   The same static-reference report now exposes the accepted full-field
+   conditioning stats (`source_ptp`, `p05/p50/p95`, and conditioned range) so
+   future live producers can be compared against the normalization/shape
+   contract instead of only against screenshots.
 
 5. **Gate in layers.**
    Required gates before owner acceptance:
@@ -138,6 +142,9 @@ single rendered page:
   too (`has_material_hints=true`, nonzero floor/rock coverage, and page-level
   floor/rock means), and the renderer consumes those page-level hints before
   falling back to corridor-only tinting.
+- `review_runtime` now proves the REFERENCE bridge loaded whole-field
+  conditioning facts too (`has_conditioning_stats=true`, positive source and
+  conditioned spans, and ordered `p05/p95` percentiles).
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:
