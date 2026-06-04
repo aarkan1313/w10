@@ -32,6 +32,7 @@ mod configure;
 mod lifecycle;
 mod producer;
 mod static_reference;
+mod static_reports;
 mod state_api;
 mod world_route;
 

@@ -58,6 +58,18 @@
 > mode 2 is the live producer to fix, and mode 3 remains a diagnostic WORLD preview
 > until multi-biome composition is made async/cached or given a cheaper preview
 > contract.
+> Follow-up report separation on 2026-06-04: accepted-baseline report surfaces moved
+> into `wg-10/rust/src/page_pool/static_reports.rs`. This owns
+> `mountain_world_layer_contract_report()`, `static_reference_report()`,
+> `static_reference_page_report(...)`, and the static page-fact helpers consumed by
+> the terrain view. `state_api.rs` dropped from 549 to 349 lines and now carries
+> generic pool state plus WORLD route diagnostics instead of the accepted static
+> baseline facts. Current proof: `cargo test -p wg10_terrain --lib` = 227/0,
+> `tools\build_rust.ps1` builds, `fast` = 8/8, `review_runtime` = 2/2,
+> `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. Latest scripted
+> motion numbers: REFERENCE `cpu_p99=34.839 ms`, MOUNTAIN `cpu_p99=9.369 ms`,
+> WORLD `cpu_p99=7.792 ms`, zero hide/show in all three; render p99 is
+> REFERENCE `0.326 ms`, MOUNTAIN `0.251 ms`, WORLD `0.470 ms`.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

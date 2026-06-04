@@ -144,6 +144,35 @@ Next refactor target: split static-reference report/diagnostic surfaces from `Wg
 state API, then keep moving producer details toward explicit producer implementations. Next visual
 target remains the live `MOUNTAIN` mountain-world-layer port.
 
+### Static-Reference Report Split Checkpoint - 2026-06-04
+
+Accepted-baseline report surfaces have now moved out of the generic page-pool state API. The new
+`page_pool/static_reports.rs` module owns:
+
+- `mountain_world_layer_contract_report()`.
+- `static_reference_report()`.
+- `static_reference_page_report(...)`.
+- static page corridor/material helper methods consumed by `Wg10TerrainView`.
+
+`state_api.rs` is reduced from 549 to 349 lines and now carries generic pool state/source-transform
+APIs plus WORLD route diagnostics, not the accepted static baseline facts.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99:
+  REFERENCE 34.839 ms, MOUNTAIN 9.369 ms, WORLD 7.792 ms, with zero hide/show in all three.
+  Latest render p99: REFERENCE 0.326 ms, MOUNTAIN 0.251 ms, WORLD 0.470 ms.
+
+Next refactor target: split WORLD route diagnostics out of `state_api.rs` if another
+behavior-neutral page-pool cleanup is needed. Next visual target is still higher priority:
+start porting the accepted mountain-world-layer facts into the live `MOUNTAIN` producer rather
+than tuning mode 3.
+
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
 readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0
