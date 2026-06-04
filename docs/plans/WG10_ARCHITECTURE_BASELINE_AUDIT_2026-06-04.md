@@ -119,7 +119,7 @@ Validation:
   non-vacuous (`diff=0.0124`), bounded, and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.076 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.078 ms.
 - `python tools\gate.py --suite fast`: 8/8 passed after extracting
   `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
   check locks the live review helper's default MOUNTAIN/network preset,
@@ -130,12 +130,15 @@ Validation:
   loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
   `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
   close-up debug scale (`feature_span_m=3500`), so the manual review scale is
-  visible in the HUD. Smoke log: `mode=MOUNTAIN runtime=single biome_path=true
-  preset=network_ref feature_span_m=90000 relief_m=1000`.
+  visible in the HUD. The default live review preset now uses `runtime_seed=177`,
+  `relief_m=1700`, and a MOUNTAIN/network-only view relief scale of `0.5`,
+  matching the accepted mountain-network seed/relief family without changing the
+  global renderer relief scale.
 - `python tools\gate.py --suite review_runtime`: 2/2 passed. This windowed
   gate instantiates the actual `mountain_fly_review.tscn` owner scene, waits for
   startup, then verifies `MOUNTAIN/network_ref`, runtime=`single`,
-  biome_path=`true`, and real page startup (`created=45`, `resident=45`). It also
+  biome_path=`true`, seed=`177`, relief_m=`1700`, view relief scale=`0.5`, and
+  real page startup (`created=45`, `resident=45`). It also
   runs `mountain_fly_visibility_churn_check.gd`, a sprint-speed motion gate over
   360 frames: `stream_events=24`, `resident=69`, `repage=72`, `hide=0`,
   `show=0`, `hidden_frames=0`, `max_hidden=0`. This specifically gates the
@@ -193,10 +196,11 @@ Follow-up live visual rerun:
   palette saw unscaled page metres while the geometry was drawn at the scaled
   height.
 - The corrected final capture still does not match
-  `mountain_network_chunks_review.tscn`. MOUNTAIN/network remains a raw live page
-  recipe over the current sampled region; the accepted baseline is a conditioned
-  270 km source field with connected pass-network carving, sliced into the
-  review scene.
+  `mountain_network_chunks_review.tscn`. The current MOUNTAIN/network capture now
+  has mountain-scale relief after the seed/relief review-preset calibration, but
+  it remains a raw live page recipe over the current sampled region; the accepted
+  baseline is a conditioned 270 km source field with connected pass-network
+  carving, sliced into the review scene.
 - The new REFERENCE capture restores the accepted mountain massifs through the
   same runtime page pool and clipmap renderer. That isolates the default live
   MOUNTAIN mismatch to the content/world-layer producer and material/dressing
@@ -413,6 +417,14 @@ Second implemented step: runtime renderer constants now live in
 view relief scale/ref, morph/detail defaults, shader globals, fog/loaded edge,
 and ring shader path. `review_runtime` and `review_runtime_visual` prove the
 owner scene and visual evidence still start after this split.
+
+Third implemented step: the live review producer now owns explicit world and
+mountain-reference seed constants through `runtime_seed()` (renamed away from the
+GDScript built-in `seed()`), default MOUNTAIN/network relief is `1700m`, and only
+the MOUNTAIN/network review preset overrides the renderer's default view relief
+scale to `0.5`. `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so
+the smoke gate validates the owner scene through a stable debug surface instead
+of reaching into private fields.
 
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 

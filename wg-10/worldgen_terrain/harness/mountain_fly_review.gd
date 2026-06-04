@@ -37,6 +37,7 @@ var _debug_mode := 0
 var _morph_enabled := false
 var _detail_on := false
 var _frame := 0
+var _last_config_error := ""
 
 func _ready() -> void:
 	if RenderingServer.get_rendering_device() == null:
@@ -50,6 +51,7 @@ func _ready() -> void:
 	_pool = pool   # keep a reference for deterministic teardown in _exit_tree (B1)
 	_producer = load(PRODUCERS).new()
 	var err: String = _configure_active_producer(pool)
+	_last_config_error = err
 	if err != "":
 		push_error("mountain_fly_review: pool configure failed: %s" % err); return
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
@@ -180,6 +182,7 @@ func _rebuild_runtime_pages(reason: String) -> void:
 		_rings.call("unbind_all")
 	_pool.call("free_all")
 	var err := _configure_active_producer(_pool)
+	_last_config_error = err
 	if err != "":
 		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
 		return
@@ -247,6 +250,7 @@ func _cycle_producer_mode() -> void:
 		_rings.call("unbind_all")
 	_pool.call("free_all")
 	var err := _configure_active_producer(_pool)
+	_last_config_error = err
 	if bool(_producer.is_legacy()):
 		_morph_enabled = true
 	else:
@@ -258,6 +262,62 @@ func _cycle_producer_mode() -> void:
 	# Reset the flip-log baseline so the post-reconfigure repage churn doesn't spam the HUD.
 	_prev_states = PackedInt64Array()
 	_print_biome_state()
+
+func debug_runtime_snapshot() -> Dictionary:
+	var stats := {}
+	var runtime_mode := "missing"
+	var biome_path := false
+	if _pool != null:
+		stats = _pool.call("stats")
+		runtime_mode = str(_pool.call("biome_runtime_mode"))
+		biome_path = bool(_pool.call("uses_biome_path"))
+
+	var mode := "missing"
+	var preset := "missing"
+	var seed := -1
+	var feature_span_m := 0.0
+	var relief_m := 0.0
+	var view_relief_scale := 0.0
+	var loaded_edge_m := 0.0
+	var is_world := false
+	var is_legacy := false
+	if _runtime != null:
+		loaded_edge_m = float(_runtime.loaded_edge_m())
+	if _producer != null:
+		mode = str(_producer.mode_label())
+		preset = str(_producer.preset_label())
+		seed = int(_producer.runtime_seed())
+		feature_span_m = float(_producer.feature_span_m())
+		relief_m = float(_producer.relief_m())
+		var default_relief_scale := float(_runtime.default_relief_scale()) if _runtime != null else 0.25
+		view_relief_scale = float(_producer.view_relief_scale(default_relief_scale))
+		is_world = bool(_producer.is_world())
+		is_legacy = bool(_producer.is_legacy())
+
+	return {
+		"last_config_error": _last_config_error,
+		"has_pool": _pool != null,
+		"has_producer": _producer != null,
+		"has_runtime": _runtime != null,
+		"has_view": _view != null,
+		"has_streamer": _streamer != null,
+		"has_rings": _rings != null,
+		"has_camera": _camera != null,
+		"runtime_mode": runtime_mode,
+		"biome_path": biome_path,
+		"stats": stats,
+		"mode": mode,
+		"preset": preset,
+		"seed": seed,
+		"feature_span_m": feature_span_m,
+		"relief_m": relief_m,
+		"view_relief_scale": view_relief_scale,
+		"loaded_edge_m": loaded_edge_m,
+		"is_world": is_world,
+		"is_legacy": is_legacy,
+		"morph_enabled": _morph_enabled,
+		"detail_on": _detail_on,
+	}
 
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:

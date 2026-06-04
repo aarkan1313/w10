@@ -16,12 +16,14 @@ const PAGE_PX := 256
 const APRON_PX := 160
 const CAPACITY := 96
 const BASE_SPAN := 8192.0
-const SEED := 1337
+const WORLD_SEED := 1337
+const MOUNTAIN_REVIEW_SEED := 177
 const FLOW_ITERS := 192
 const FLOW_MAX_LEVEL := 2
 const FEATURE_SPAN_NETWORK_M := 90000.0
 const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
-const RELIEF_M_DEFAULT := 1000.0
+const RELIEF_M_DEFAULT := 1700.0
+const MOUNTAIN_NETWORK_VIEW_RELIEF_SCALE := 0.5
 
 const MODE_WORLD := 0
 const MODE_MOUNTAIN := 1
@@ -91,6 +93,11 @@ func set_relief_m(value: float) -> void:
 func relief_m() -> float:
 	return _relief_m
 
+func runtime_seed() -> int:
+	if _mode == MODE_MOUNTAIN or _mode == MODE_REFERENCE:
+		return MOUNTAIN_REVIEW_SEED
+	return WORLD_SEED
+
 func feature_span_m() -> float:
 	if _mode == MODE_REFERENCE:
 		return FEATURE_SPAN_NETWORK_M
@@ -122,27 +129,31 @@ func is_reference() -> bool:
 	return _mode == MODE_REFERENCE
 
 func view_relief_scale(default_scale: float) -> float:
-	return 1.0 if _mode == MODE_REFERENCE else default_scale
+	if _mode == MODE_REFERENCE:
+		return 1.0
+	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
+		return MOUNTAIN_NETWORK_VIEW_RELIEF_SCALE
+	return default_scale
 
 func _configure_world(pool: Object) -> String:
 	return str(pool.call("configure_biome_world",
 		ProjectSettings.globalize_path(PACK_RES_DIR),
 		PACK_FILE,
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
 
 func _configure_mountain(pool: Object) -> String:
 	return str(pool.call("configure_biome",
 		ProjectSettings.globalize_path(PRIM),
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
 
 func _configure_reference(pool: Object) -> String:
 	return str(pool.call("configure_static_reference",
 		ProjectSettings.globalize_path(STATIC_REF_PAYLOAD),
-		CAPACITY, PAGE_PX, BASE_SPAN, SEED))
+		CAPACITY, PAGE_PX, BASE_SPAN, runtime_seed()))
 
 func _configure_legacy(pool: Object) -> String:
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
 	var glsl_os := ProjectSettings.globalize_path(GLSL)
-	return str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))
+	return str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, runtime_seed()))

@@ -41,7 +41,8 @@ func _run() -> int:
 	runtime.configure_rings(rings)
 	get_root().add_child(rings)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()))
+	var relief_scale := float(producer.view_relief_scale(float(runtime.default_relief_scale())))
+	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()), relief_scale)
 
 	var heading := Vector2(1.0, 0.0)
 	var pos := Vector2.ZERO

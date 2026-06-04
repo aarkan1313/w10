@@ -27,13 +27,14 @@
 > `m3` = **10/10 pass** after the display/prefetch scheduler split
 > (`m3_accept` p99 5.25 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.076 ms).
+> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.078 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
 > `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
-> `close_debug` scale (`feature_span_m=3500`). A direct scene smoke launch after
-> the DLL rebuild printed `mode=MOUNTAIN runtime=single biome_path=true
-> preset=network_ref feature_span_m=90000 relief_m=1000`, so the scene name now
-> matches the review target. `REFERENCE` is available through `B` as a static
+> `close_debug` scale (`feature_span_m=3500`). The default live review preset now
+> uses the accepted mountain-network seed family (`runtime_seed=177`), `relief_m=1700`,
+> and a MOUNTAIN/network-only view relief scale of `0.5`; `review_runtime` proves
+> runtime=`single`, biome_path=`true`, created=`45`, resident=`45`. `REFERENCE` is
+> available through `B` as a static
 > accepted-payload bridge, and `WORLD` remains available through `B` as the
 > biome-composition A/B path.
 >
@@ -73,11 +74,14 @@
 > is a visual-readability bridge, not final per-pixel biome material blending.
 > Follow-up shader fix: the palette now uses the same displayed height as
 > `VERTEX.y` (`(h + detail) * relief_scale`) instead of coloring against unscaled
-> page metres. This removed the misleading snow/gray wash, but the latest final
-> MOUNTAIN/network capture still reads as a broad low-relief live page field, not
+> page metres. This removed the misleading snow/gray wash. The follow-up producer
+> calibration also moved live MOUNTAIN/network to the accepted seed/relief family,
+> so the capture now shows mountain-scale relief instead of the earlier flat
+> carpet. It still reads as raw/faceted live page content and does not reproduce
 > the accepted static pass-network artifact. Presentation relief experiments
-> (`RELIEF_SCALE=0.5` and `1.0`) were rejected because they break close-debug/WORLD
-> captures by driving the camera into terrain or creating foreground spikes.
+> (`RELIEF_SCALE=0.5` and `1.0`) remain rejected because global display-scale tuning
+> breaks close-debug/WORLD captures by driving the camera into terrain or creating
+> foreground spikes.
 > Follow-up baseline bridge: the new REFERENCE runtime capture proves the
 > runtime renderer can show the accepted mountain-network geometry when fed the
 > accepted payload. The default live MOUNTAIN capture still remains flat by
@@ -158,11 +162,11 @@
 > REFERENCE streams 45 pages from `mountain_network_chunks.json` and visibly
 > restores the accepted mountain massifs through the runtime renderer.
 > MOUNTAIN/network_ref streams 45 pages but still does not match the accepted
-> `mountain_network_chunks_review.tscn` look; after the shader height-color fix it
-> reads as a broad low-relief field with sparse ridge breaks, not the conditioned
-> full-field/pass-network mountain artifact. MOUNTAIN/close_debug streams 45 pages
-> but is visibly faceted/lumpy at close range, so it remains a diagnostic scale,
-> not an acceptance target.
+> `mountain_network_chunks_review.tscn` look; after the review-preset seed/relief
+> calibration it has mountain-scale relief, but remains raw/faceted live page
+> content rather than the conditioned full-field/pass-network mountain artifact.
+> MOUNTAIN/close_debug streams 45 pages but is visibly faceted/lumpy at close range,
+> so it remains a diagnostic scale, not an acceptance target.
 > WORLD streams 45 composed pages and route colors are visible; the normal WORLD
 > material now carries a route-color tint, but final per-pixel materials/content
 > remain open. Treat the capture as evidence of a less samey live read, not as
@@ -190,7 +194,11 @@
 > Runtime renderer constants are now split into `mountain_fly_runtime_config.gd` and
 > locked by `mountain_fly_runtime_config_check.gd`; the owner scene and runtime visual
 > capture share levels, span, lead, morph/detail defaults, fog/loaded edge, shader path,
-> and view configuration. Current `fast` = **8/8 pass**.
+> and view configuration. Follow-up hardening: the producer helper exposes
+> `runtime_seed()` instead of `seed()` to avoid the GDScript built-in RNG seeder, and
+> `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so `review_runtime`
+> validates the actual owner scene through a stable debug surface instead of private
+> field reads. Current `fast` = **8/8 pass**.
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
 > the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual
