@@ -138,12 +138,39 @@ impl Wg10PagePool {
         self.create_r32_texture(rd, "height")
     }
 
-    /// Create a new R32F SAMPLING texture for static-reference material codes.
+    /// Renderer-facing material facts are deliberately lower resolution than height. The facts are
+    /// low-frequency presentation masks, while the synchronous owner fly must keep page-miss upload
+    /// work under frame budget.
+    pub(super) fn static_material_page_px(&self) -> i64 {
+        (self.page_px / 2).max(2)
+    }
+
+    /// Create a new RGBA32F SAMPLING texture for static-reference material facts.
     pub(super) fn create_static_material_texture(
         &self,
         rd: &mut Gd<RenderingDevice>,
     ) -> Option<Rid> {
-        self.create_r32_texture(rd, "static material")
+        let px = self.static_material_page_px() as u32;
+        let mut fmt = RdTextureFormat::new_gd();
+        fmt.set_width(px);
+        fmt.set_height(px);
+        fmt.set_format(DataFormat::R32G32B32A32_SFLOAT);
+        fmt.set_usage_bits(
+            TextureUsageBits::SAMPLING_BIT
+                | TextureUsageBits::CAN_COPY_FROM_BIT
+                | TextureUsageBits::CAN_UPDATE_BIT,
+        );
+
+        let view = RdTextureView::new_gd();
+        let tex_rid = rd.texture_create(&fmt, &view);
+        if tex_rid.is_invalid() {
+            godot_error!(
+                "Wg10PagePool: static material texture_create returned invalid RID (page_px={})",
+                self.page_px
+            );
+            return None;
+        }
+        Some(tex_rid)
     }
 
     fn create_r32_texture(&self, rd: &mut Gd<RenderingDevice>, label: &str) -> Option<Rid> {

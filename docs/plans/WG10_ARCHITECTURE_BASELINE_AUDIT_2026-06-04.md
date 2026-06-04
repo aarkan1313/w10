@@ -165,13 +165,16 @@ those controls. This removes another source of false "all modes look weird"
 manual reports; it does not promote WORLD or the raw close-debug mountain recipe
 to accepted content.
 
-Latest accepted-material presentation follow-up: the runtime bridge still uses
-the accepted static material facts, but the shader no longer treats the
-temporary one-channel material page as nearest-neighbor hard classes. It now
-linearly filters the code texture and blends corridor/rock/snow targets with
-soft class weights. This reduces the blocky material slabs visible in focus
-captures while preserving the same height/fact payload and the same
-REFERENCE/MOUNTAIN/WORLD bridge contracts.
+Latest accepted-material fact follow-up: the runtime bridge now preserves the
+accepted static material facts as a renderer-facing RGBA32F page instead of the
+temporary one-channel material code. Channels are R=low-pass/corridor, G=floor,
+B=rock, and A=snow; `ring_displace.gdshader` samples those channels directly
+and blends separate terrain targets. The material fact texture is lower
+resolution than height (`page_px / 2`) to keep synchronous owner-fly page misses
+under frame budget. Latest proof: `cargo test -p wg10_terrain --lib` = 231/0,
+`tools\build_rust.ps1` builds, `m3` = 10/10, `review_runtime_visual` = 2/2,
+and `review_runtime_modes` = 2/2. The mode gate dropped from the failing
+17-18 ms CPU p95 range to about 9.5 ms p95 with zero hide/show in modes 1/2/3.
 
 ## 2026-06-04 Deep-Dive Addendum
 

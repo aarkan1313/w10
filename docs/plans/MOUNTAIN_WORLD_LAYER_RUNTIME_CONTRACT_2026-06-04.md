@@ -59,12 +59,13 @@ diagnostics to normal material review state. The gate proves morph heatmap and
 cull-disabled experiments do not leak across modes 1/2/3. This makes manual
 visual comparison cleaner, while preserving the contract boundary above.
 
-Latest material-presentation status: the accepted material facts are still
-projected into a temporary one-channel runtime page, but the renderer now treats
-that code page as a soft presentation field: linear filtering plus blended
-corridor/rock/snow weights. This reduces blocky accepted-material slabs without
-changing height, fact reports, or the requirement for a real multi-channel
-material/facts layer later.
+Latest material-presentation status: the accepted material facts are now carried
+through the runtime bridge as a renderer-facing RGBA fact page instead of a
+temporary one-channel class code. Channels are R=low-pass/corridor, G=floor,
+B=rock, and A=snow. The shader blends those channels as separate terrain hints.
+The fact texture is intentionally lower resolution than height (`page_px / 2`)
+because these are low-frequency presentation masks and the owner fly still uses
+synchronous page misses.
 
 ## Contract
 
@@ -238,14 +239,14 @@ single rendered page:
   checks level, origin, world span, sample count, corridor coverage, and
   low/floor/rock/snow material hint means, so the bridge cannot drift to a
   different page-fact sample while still passing only screenshot-level checks.
-- Latest bridge proof after the material presentation fix: `fast` = 8/8,
-  `m3` = 10/10, `review_runtime` = 2/2, `review_runtime_visual` = 2/2,
-  and `review_runtime_modes` = 2/2. The latest
+- Latest bridge proof after the RGBA material-facts fix: `cargo test -p
+  wg10_terrain --lib` = 231/0, `tools\build_rust.ps1` builds, `m3` = 10/10,
+  `review_runtime_visual` = 2/2, and `review_runtime_modes` = 2/2. The latest
   mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 12.217/12.957 ms, MOUNTAIN 12.635/17.504 ms,
-  and WORLD 4.333/8.616 ms, with `acquired_max=1` and zero full events in all
-  three. Latest render p99 is REFERENCE 0.388 ms, MOUNTAIN 0.492 ms, and WORLD
-  0.215 ms. The latest visual capture shows MOUNTAIN/network matching the
+  motion CPU p99/max is REFERENCE 9.822/10.226 ms, MOUNTAIN 10.157/10.821 ms,
+  and WORLD 10.132/13.206 ms, with `acquired_max=1` and zero full events in all
+  three. Latest render p99 is REFERENCE 0.758 ms, MOUNTAIN 0.746 ms, and WORLD
+  0.747 ms. The latest visual capture shows MOUNTAIN/network matching the
   REFERENCE view at the reviewed frame and along the sprint path, while the
   material shader no longer uses the prior chalk-white static snow override.
 - The renderer page transition fade is now wall-clock based (`0.18 s`) instead
@@ -282,6 +283,7 @@ single rendered page:
 - `review_runtime` now also gates review-state reset: after deliberately
   enabling the morph heatmap and disabling culling, a mode switch restores
   normal material mode, culling, display detail, and default morph state.
-- `m3`, `review_runtime_visual`, and `review_runtime_modes` now prove the soft
-  accepted-material presentation remains render-safe and keeps the accepted
-  reference bridge comparisons within budget.
+- `m3`, `review_runtime_visual`, and `review_runtime_modes` now prove the RGBA
+  accepted-material fact presentation remains render-safe, stays within the
+  owner-fly frame budget, and keeps the accepted reference bridge comparisons
+  within visual budget.

@@ -7,7 +7,7 @@ render_mode unshaded, cull_disabled;
 // abutting pages return the identical boundary value -> the shared edge joins.
 uniform sampler2D height_tex : filter_linear, repeat_disable;        // this level's R32F page (pool Texture2DRD)
 uniform sampler2D coarse_height_tex : filter_linear, repeat_disable; // next-coarser level's page (for the morph)
-uniform sampler2D static_material_tex : filter_linear, repeat_disable; // static-reference material/corridor soft class codes
+uniform sampler2D static_material_tex : filter_linear, repeat_disable; // static-reference RGBA facts: low/pass, floor, rock, snow
 uniform float world_span = 8192.0;        // this level's page world span
 uniform float coarse_span = 8192.0;       // the coarser level's page world span
 uniform vec2 page_origin = vec2(0.0);     // this fine page's WORLD lower-XZ corner; page covers [origin, origin+world_span]
@@ -192,24 +192,22 @@ vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
 	return shaded * (1.0 - slope_shadow);
 }
 
-vec3 wg_static_reference_material(float code, vec3 base) {
-	// The R32F material page is a temporary presentation projection of separate accepted
-	// corridor/floor/rock/snow facts. Treat it as a soft code field so filtering blends class
-	// edges instead of drawing blocky categorical material slabs in the owner fly.
-	float corridor_w = clamp(1.0 - abs(code - 1.0), 0.0, 1.0);
-	float rock_w = clamp(1.0 - abs(code - 2.0), 0.0, 1.0);
-	float snow_w = clamp(1.0 - abs(code - 3.0), 0.0, 1.0);
-	corridor_w = corridor_w * corridor_w * (3.0 - 2.0 * corridor_w);
-	rock_w = rock_w * rock_w * (3.0 - 2.0 * rock_w);
-	snow_w = snow_w * snow_w * (3.0 - 2.0 * snow_w);
-	float total_w = corridor_w + rock_w + snow_w;
+vec3 wg_static_reference_material(vec4 facts, vec3 base) {
+	// The accepted payload owns separate material/fact descriptors. Keep that separation in the
+	// runtime page: R=low-pass/corridor, G=floor, B=rock, A=snow.
+	float low_pass_w = clamp(facts.r, 0.0, 1.0);
+	float floor_w = clamp(facts.g, 0.0, 1.0);
+	float rock_w = clamp(facts.b, 0.0, 1.0);
+	float snow_w = clamp(facts.a, 0.0, 1.0);
+	float total_w = low_pass_w + floor_w + rock_w + snow_w;
 	if (total_w <= 1e-5) {
 		return base;
 	}
-	vec3 corridor = vec3(0.18, 0.39, 0.33);
+	vec3 low_pass = vec3(0.18, 0.39, 0.33);
+	vec3 floor = mix(base, vec3(0.30, 0.43, 0.27), 0.45);
 	vec3 rock = mix(base, vec3(0.46, 0.45, 0.41), 0.70);
 	vec3 snow = mix(base, vec3(0.82, 0.84, 0.78), 0.64);
-	vec3 target = (corridor * corridor_w + rock * rock_w + snow * snow_w) / total_w;
+	vec3 target = (low_pass * low_pass_w + floor * floor_w + rock * rock_w + snow * snow_w) / total_w;
 	return mix(base, target, clamp(total_w, 0.0, 1.0));
 }
 
@@ -225,8 +223,8 @@ void fragment() {
 		vec3 material = wg_mountain_palette(v_render_height, v_slope) * (1.0 + v_detail_norm * 0.10);
 		float material_fade = clamp(page_fade, 0.0, 1.0);
 		float accepted_material_mix = static_material_mix * material_fade * 0.62;
-		float static_code = texture(static_material_tex, v_page_uv).r;
-		material = mix(material, wg_static_reference_material(static_code, material), clamp(accepted_material_mix, 0.0, 1.0));
+		vec4 static_facts = clamp(texture(static_material_tex, v_page_uv), vec4(0.0), vec4(1.0));
+		material = mix(material, wg_static_reference_material(static_facts, material), clamp(accepted_material_mix, 0.0, 1.0));
 		material = mix(material, biome_debug_color.rgb, clamp(biome_material_mix * material_fade, 0.0, 1.0));
 		ALBEDO = wg_apply_terrain_light(clamp(material, vec3(0.0), vec3(1.0)), v_terrain_normal, v_slope);
 	}

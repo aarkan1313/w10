@@ -6,6 +6,35 @@ current state, because much of the active WG10 work is presently untracked.
 
 ## Addendum - 2026-06-04 Stabilization
 
+### Accepted Material Fact Channels Checkpoint - 2026-06-04
+
+The accepted material bridge no longer collapses low-pass/corridor, floor, rock,
+and snow facts into a one-channel scalar class code. Static-reference material
+presentation now writes a renderer-facing RGBA32F fact page:
+R=low-pass/corridor, G=floor, B=rock, A=snow. `ring_displace.gdshader` samples
+those channels directly and blends separate terrain targets.
+
+To keep the synchronous owner fly under frame budget, the material fact page is
+lower resolution than height (`page_px / 2`). Height pages remain full
+resolution; material facts are low-frequency presentation masks.
+
+Current proof:
+
+- `cargo fmt -p wg10_terrain -- --check` passes.
+- `cargo test -p wg10_terrain --lib` = 231 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the
+  Godot extension.
+- `python tools\gate.py --suite m3` = 10/10.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. The mode suite
+  dropped from the failing `17-18 ms` CPU p95 range to REFERENCE `9.091 ms`,
+  MOUNTAIN `9.495 ms`, WORLD `9.524 ms`, with zero hide/show, zero full events,
+  and `acquired_max=1` in all three modes.
+
+This fixes the material-fact separation debt in the accepted bridge. It does not
+complete final procedural biome material synthesis; raw live MOUNTAIN still
+needs the accepted world-layer producer/fact contract.
+
 ### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
 
 The manual owner-fly complaint now has a dedicated windowed gate:
@@ -206,8 +235,8 @@ Owner-visual fixes landed in the review path:
 - the owner-scene smoke test proves static material page textures are bound.
 
 Static-reference separation is now underway: payload loading/validation has been split out first.
-Remaining static-reference seams are page sampling, material-code presentation, and
-report/diagnostic surfaces. After that, move producer selection out of `Wg10PagePool` into an
+Remaining static-reference seams are page sampling and report/diagnostic surfaces. After that,
+move producer selection out of `Wg10PagePool` into an
 explicit producer interface so REFERENCE, MOUNTAIN, WORLD, and LEGACY are not routed by one pool
 implementation.
 
@@ -276,7 +305,7 @@ mountain-world-layer contract before trying to tune biome palettes or add more b
 ### Static-Reference Sampling/Presentation Split Checkpoint - 2026-06-04
 
 The follow-up static-reference split is complete. Runtime sampling now lives in
-`page_pool/static_reference/sampling.rs`, and the temporary renderer-facing material-code
+`page_pool/static_reference/sampling.rs`, and the renderer-facing material-fact
 projection now lives in `page_pool/static_reference/presentation.rs`. The root
 `static_reference.rs` file is down to the runtime holder, JSON entrypoint, and height texture upload
 path (115 lines). Current split sizes:

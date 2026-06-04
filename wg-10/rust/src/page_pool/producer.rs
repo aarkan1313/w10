@@ -195,7 +195,7 @@ impl Wg10PagePool {
         origin_x: f64,
         origin_z: f64,
         world_span: f64,
-        page_px: i64,
+        _page_px: i64,
     ) -> Result<(), String> {
         if !self.has_active_presentation_materials() {
             return Ok(());
@@ -215,10 +215,17 @@ impl Wg10PagePool {
             }
         };
 
+        let material_page_px = self.static_material_page_px();
         let Some(material_ref) = self.active_material_reference() else {
             return Ok(());
         };
-        material_ref
-            .write_material_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px)
+        material_ref.write_material_page_texture(
+            rd,
+            tex_rid,
+            origin_x,
+            origin_z,
+            world_span,
+            material_page_px,
+        )
     }
 }

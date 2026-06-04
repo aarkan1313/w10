@@ -20,21 +20,25 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
-> Current proof after the latest owner-material fix: `fast` = 8/8,
-> `m3` = 10/10, `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
-> `review_runtime_visual` = 2/2. Latest mode gate reports zero hide/show in
-> REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
-> 12.217/12.957 ms, MOUNTAIN 12.635/17.504 ms, WORLD 4.333/8.616 ms, with
-> `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.388 ms, MOUNTAIN 0.492 ms, WORLD 0.215 ms. The REFERENCE vs
+> Current proof after the latest accepted-material fact fix: `cargo fmt -p
+> wg10_terrain -- --check` passes, `cargo test -p wg10_terrain --lib` =
+> 231/0, `tools\build_rust.ps1` builds, `m3` = 10/10,
+> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. Latest mode
+> gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
+> motion CPU p99/max is REFERENCE 9.822/10.226 ms, MOUNTAIN 10.157/10.821 ms,
+> WORLD 10.132/13.206 ms, with `acquired_max=1` and `full_events=0` in all
+> three. Latest render p99 is REFERENCE 0.758 ms, MOUNTAIN 0.746 ms, WORLD
+> 0.747 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
 > 0.000000/0.000000 at the captured review frame. The visual gate also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
 > 80/160/240: mean RGB deltas were 0.000043, 0.000286, and 0.000000, with p95
-> 0.000000, 0.001307, and 0.000000. The static-reference material override is
-> now restrained to terrain-like corridor/rock/snow tints and the unshaded ring
-> shader uses stronger directional/slope contrast, so the accepted bridge no
-> longer presents the material hint texture as chalk-white flats. The legacy
+> 0.000000, 0.001307, and 0.000000. The static-reference material page now
+> preserves the accepted facts as RGBA channels (`low_pass/corridor`, `floor`,
+> `rock`, `snow`) instead of collapsing them to a scalar class code. The material
+> fact texture is intentionally lower resolution than height (`page_px / 2`) to
+> keep synchronous owner-fly page misses under frame budget while preserving the
+> low-frequency material story. The legacy
 > `m3_accept` wall-time gate now initializes the shader globals it renders with,
 > and passes at p99 2.56 ms in the full `m3` suite. The page transition fade is wall-clock based (`0.18 s`),
 > and the owner fly now spreads page builds over more frames, so high-FPS review
@@ -74,6 +78,17 @@
 > `m3` = 10/10, `review_runtime_visual` = 2/2, and
 > `review_runtime_modes` = 2/2. Latest scripted mode run still has zero
 > hide/show in REFERENCE, MOUNTAIN, and WORLD with render p99 below 0.5 ms.
+> Follow-up accepted-material fact-channel fix: the temporary scalar material
+> code page has been replaced with a renderer-facing RGBA32F fact page:
+> R=low-pass/corridor, G=floor, B=rock, A=snow. The shader samples those
+> channels directly and blends separate terrain targets instead of decoding
+> nearest class codes. To avoid reintroducing owner-fly hitches, the material
+> fact texture is `page_px / 2` while height remains full resolution. Proof:
+> `cargo test -p wg10_terrain --lib` = 231/0, `tools\build_rust.ps1` builds,
+> `m3` = 10/10, `review_runtime_visual` = 2/2, and
+> `review_runtime_modes` = 2/2. This dropped the failing scripted mode CPU p95
+> from 17-18 ms to about 9.5 ms with zero hide/show and zero full events in
+> modes 1/2/3.
 > Follow-up WORLD owner-preview fix: `WORLD/network_ref` now keeps the
 > `configure_biome_world` route/weight diagnostics live, but binds the accepted
 > mountain reference payload for normal owner-facing height and material
@@ -139,17 +154,10 @@
 > CPU max below 14 ms, and render p99 about 0.746 ms. This targets the class of
 > owner reports where blue/yellow debug heatmaps or cull experiments made all
 > modes look wrong.
-> Follow-up accepted-material presentation fix: the runtime bridge still uses
-> the temporary one-channel static material page, but `ring_displace.gdshader`
-> now samples it with linear filtering and interprets class codes as soft
-> corridor/rock/snow weights instead of snapping to hard categorical slabs. The
-> focus capture is visibly less blocky in close mountain review, while height,
-> facts, page ownership, and the accepted reference payload are unchanged.
-> Proof: `m3` = 10/10, `review_runtime_visual` = 2/2, and
-> `review_runtime_modes` = 2/2. Latest modes 1/2/3 still have zero hide/show,
-> zero full events, `acquired_max=1`, CPU max <= 13.3 ms, and GPU p99 about
-> 0.745 ms. This is a renderer-presentation cleanup, not final procedural
-> mountain synthesis.
+> Superseded accepted-material presentation checkpoint: the interim soft scalar
+> code page reduced blocky class slabs, but it has now been replaced by the RGBA
+> fact-channel page described above. Keep the old result only as history: it was
+> a renderer-presentation cleanup, not final procedural mountain synthesis.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The
