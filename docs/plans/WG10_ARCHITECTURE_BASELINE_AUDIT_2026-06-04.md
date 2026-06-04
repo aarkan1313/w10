@@ -162,6 +162,13 @@ transform, resident page lookup, display pins, and generic pool stats. The
 public Godot method names did not change, and the split is proven by Rust lib
 tests plus `biome_world` and `review_runtime`.
 
+Follow-up WORLD producer split: WORLD route and weight-field adaptation now
+lives in `wg-10/rust/src/page_pool/world_producer.rs`. `producer.rs` still owns
+active producer classification and dispatch, but no longer owns WORLD
+page-center selection, page/probe weights, or per-texel weight-field helpers.
+This keeps the diagnostic reports, pure route math, and producer dispatch as
+separate seams while preserving the same Godot API and gate behavior.
+
 ## Current Checkpoint
 
 Branch: `slice4-gpu-page-integration`

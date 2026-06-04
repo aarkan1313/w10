@@ -191,6 +191,31 @@ Current proof after the split:
 - `python tools\gate.py --suite biome_world` = 1/1.
 - `python tools\gate.py --suite review_runtime` = 2/2.
 
+### WORLD Producer Helper Split Checkpoint - 2026-06-04
+
+The next WORLD-specific seam has moved out of generic active-producer dispatch.
+`page_pool/world_producer.rs` now adapts the configured `BiomeWorldRuntime` to
+pure `world_route` math:
+
+- page-center WORLD biome selection.
+- page-level WORLD biome weights.
+- probe-point WORLD biome weights.
+- per-texel WORLD weight-field construction.
+
+`page_pool/producer.rs` now owns active producer classification, page dispatch,
+and static material refresh only. It remains behavior-preserving: public Godot
+method names are unchanged, `world_reports.rs` still owns diagnostics, and WORLD
+page compute still receives the same weight field through the same dispatch
+call.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the
+  Godot extension.
+- `python tools\gate.py --suite biome_world` = 1/1.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+
 Next visual target is still higher priority than further page-pool cleanup:
 turn the reference-backed bridge into a generated world-layer producer or
 measured candidate equivalent, then prove its numeric/visual gap against

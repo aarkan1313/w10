@@ -56,6 +56,15 @@
 > Godot-visible WORLD preview reports at 160 lines. Proof: `cargo test -p
 > wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds, `biome_world` =
 > 1/1, and `review_runtime` = 2/2.
+> Follow-up behavior-preserving page-pool split: WORLD route and weight-field
+> producer adaptation moved from `wg-10/rust/src/page_pool/producer.rs` into
+> `wg-10/rust/src/page_pool/world_producer.rs`. `producer.rs` now owns active
+> producer classification, page dispatch, and static material refresh only
+> (203 lines); `world_producer.rs` owns the configured WORLD runtime bridge to
+> pure `world_route` math (82 lines). Public Godot methods and runtime behavior
+> are unchanged. Proof: `cargo test -p wg10_terrain --lib` = 227/0,
+> `tools\build_rust.ps1` builds, `biome_world` = 1/1, and `review_runtime` =
+> 2/2.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:
