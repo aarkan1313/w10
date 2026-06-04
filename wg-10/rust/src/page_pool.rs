@@ -27,6 +27,7 @@ use crate::biome_page_compute;
 use std::path::Path;
 
 mod acquire;
+mod configure;
 mod lifecycle;
 
 // ---------------------------------------------------------------------------
@@ -140,9 +141,7 @@ impl Wg10PagePool {
         // existing configuration first (fully resets state per the F7 fix above).
         // Idempotent: a no-op on a fresh, never-configured pool (empty vecs + None
         // Options), so this is safe on the first configure() too.
-        if self.is_configured() {
-            self.free_all_impl();
-        }
+        self.free_before_reconfigure();
 
         // --- load pack ---
         let pack = match pack::load_pack_dir(
@@ -176,26 +175,9 @@ impl Wg10PagePool {
             Err(e) => return GString::from(&format!("compute context: {e}")),
         };
 
-        // --- init policy + slot vectors ---
-        let cap = capacity as usize;
-        self.policy      = Some(PagePolicy::new(cap));
-        self.slot_tex    = vec![None; cap];
-        // Option<Gd<_>> is not Clone-defaultable via vec![None; cap]
-        self.slot_wrap   = (0..cap).map(|_| None).collect();
-
-        self.pack         = Some(pack);
-        self.pack_buffers = Some(pb);
-        self.glsl_source  = Some(glsl);
-        self.compute_ctx  = Some(ctx);
-        self.page_px      = page_px;
-        self.world_span   = world_span;
-        self.seed         = seed;
-
-        // reset stats on reconfigure
-        self.created     = 0;
-        self.reused      = 0;
-        self.recomputed  = 0;
-        self.full_events = 0;
+        self.install_legacy_configuration(
+            pack, pb, glsl, ctx, capacity, page_px, world_span, seed,
+        );
 
         GString::new()
     }
@@ -232,9 +214,7 @@ impl Wg10PagePool {
         seed:       i64,
     ) -> GString {
         // --- F8: free-before-reconfigure (mirror `configure`) ---
-        if self.is_configured() {
-            self.free_all_impl();
-        }
+        self.free_before_reconfigure();
 
         // --- read the 3 GLSL sources ---
         let prim = match std::fs::read_to_string(primitives_glsl_path.to_string()) {
@@ -271,27 +251,15 @@ impl Wg10PagePool {
             Err(e) => return GString::from(&format!("configure_biome: context: {e}")),
         };
 
-        // --- init policy + slot vectors (same as configure) ---
-        let cap = capacity as usize;
-        self.policy    = Some(PagePolicy::new(cap));
-        self.slot_tex  = vec![None; cap];
-        self.slot_wrap = (0..cap).map(|_| None).collect();
-
-        // Biome path: NO pack/pack_buffers/glsl_source/compute_ctx (the kernel atlas is unused).
-        self.use_biome_path       = true;
-        self.biome_ctx            = Some(ctx);
-        self.biome_feature_span_m = feature_span_m;
-        self.biome_flow_max_level = flow_max_level;
-
-        self.page_px    = page_px;
-        self.world_span = world_span;
-        self.seed       = seed;
-
-        // reset stats on reconfigure
-        self.created     = 0;
-        self.reused      = 0;
-        self.recomputed  = 0;
-        self.full_events = 0;
+        self.install_biome_configuration(
+            ctx,
+            capacity,
+            page_px,
+            world_span,
+            feature_span_m,
+            flow_max_level,
+            seed,
+        );
 
         GString::new()
     }
