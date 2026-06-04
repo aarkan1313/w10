@@ -14,6 +14,7 @@ const BASE_SPAN := 8192.0
 const CAPACITY := 16
 const SEED := 1337
 const ROUTE_LOD_LEVELS := 4
+const PARENT_SET_RADIUS := 4
 const MATERIAL_RUNNER_UP := 0.15
 
 func _init() -> void:
@@ -137,11 +138,19 @@ func _run() -> int:
 
 	var lod_route_samples := 0
 	var lod_route_mismatches := 0
+	var stable_child_mismatches := 0
+	var lod_samples_by_level := []
+	var lod_mismatches_by_level := []
+	for _level in range(ROUTE_LOD_LEVELS):
+		lod_samples_by_level.append(0)
+		lod_mismatches_by_level.append(0)
 	for ix in range(-route_radius, route_radius + 1, route_step):
 		for iz in range(-route_radius, route_radius + 1, route_step):
 			var child_ox: float = float(ix) * BASE_SPAN
 			var child_oz: float = float(iz) * BASE_SPAN
 			var child_name := str(pool.call("debug_world_biome_for_page", 0, child_ox, child_oz))
+			var child_report = pool.call("debug_world_biome_report_for_page", 0, child_ox, child_oz)
+			var child_corner_mismatches := int(child_report.get("corner_route_mismatches", 0))
 			var child_cx: float = child_ox + BASE_SPAN * 0.5
 			var child_cz: float = child_oz + BASE_SPAN * 0.5
 			for parent_level in range(1, ROUTE_LOD_LEVELS):
@@ -150,13 +159,96 @@ func _run() -> int:
 				var parent_oz: float = floor(child_cz / parent_span) * parent_span
 				var parent_name := str(pool.call("debug_world_biome_for_page", parent_level, parent_ox, parent_oz))
 				lod_route_samples += 1
+				lod_samples_by_level[parent_level] = int(lod_samples_by_level[parent_level]) + 1
 				if parent_name != child_name:
 					lod_route_mismatches += 1
+					lod_mismatches_by_level[parent_level] = int(lod_mismatches_by_level[parent_level]) + 1
+					if child_corner_mismatches == 0:
+						stable_child_mismatches += 1
 	var lod_route_ratio := float(lod_route_mismatches) / maxf(float(lod_route_samples), 1.0)
 	print("[wg10-biome-world] lod_route_mismatch=%d/%d ratio=%f" % [
 		lod_route_mismatches,
 		lod_route_samples,
 		lod_route_ratio,
+	])
+	var lod_parts := []
+	for parent_level in range(1, ROUTE_LOD_LEVELS):
+		var level_samples := int(lod_samples_by_level[parent_level])
+		var level_mismatches := int(lod_mismatches_by_level[parent_level])
+		var level_ratio := float(level_mismatches) / maxf(float(level_samples), 1.0)
+		lod_parts.append("L%d=%d/%d(%.6f)" % [
+			parent_level,
+			level_mismatches,
+			level_samples,
+			level_ratio,
+		])
+	print("[wg10-biome-world] lod_route_by_parent %s stable_child_mismatch=%d" % [
+		" ".join(lod_parts),
+		stable_child_mismatches,
+	])
+
+	var parent_child_parents := 0
+	var parent_child_mixed := 0
+	var parent_child_mismatched_children := 0
+	var parent_child_samples := 0
+	var parent_route_absent := 0
+	var max_child_routes := 0
+	var parent_child_parts := []
+	for parent_level in range(1, ROUTE_LOD_LEVELS):
+		var level_parents := 0
+		var level_mixed := 0
+		var level_mismatched_children := 0
+		var level_child_samples := 0
+		var level_parent_absent := 0
+		var level_max_child_routes := 0
+		var parent_span: float = BASE_SPAN * pow(2.0, parent_level)
+		var children_per_axis := int(pow(2.0, parent_level))
+		for pix in range(-PARENT_SET_RADIUS, PARENT_SET_RADIUS + 1):
+			for piz in range(-PARENT_SET_RADIUS, PARENT_SET_RADIUS + 1):
+				var parent_ox: float = float(pix) * parent_span
+				var parent_oz: float = float(piz) * parent_span
+				var parent_name := str(pool.call("debug_world_biome_for_page", parent_level, parent_ox, parent_oz))
+				var child_routes := {}
+				var mismatched_children := 0
+				for cx in range(children_per_axis):
+					for cz in range(children_per_axis):
+						var child_ox: float = parent_ox + float(cx) * BASE_SPAN
+						var child_oz: float = parent_oz + float(cz) * BASE_SPAN
+						var child_name := str(pool.call("debug_world_biome_for_page", 0, child_ox, child_oz))
+						child_routes[child_name] = int(child_routes.get(child_name, 0)) + 1
+						if child_name != parent_name:
+							mismatched_children += 1
+				level_parents += 1
+				level_child_samples += children_per_axis * children_per_axis
+				level_mismatched_children += mismatched_children
+				level_max_child_routes = max(level_max_child_routes, child_routes.size())
+				if child_routes.size() > 1:
+					level_mixed += 1
+				if not child_routes.has(parent_name):
+					level_parent_absent += 1
+		parent_child_parents += level_parents
+		parent_child_mixed += level_mixed
+		parent_child_mismatched_children += level_mismatched_children
+		parent_child_samples += level_child_samples
+		parent_route_absent += level_parent_absent
+		max_child_routes = max(max_child_routes, level_max_child_routes)
+		parent_child_parts.append("L%d=mixed:%d/%d child_mismatch:%d/%d parent_absent:%d max_routes:%d" % [
+			parent_level,
+			level_mixed,
+			level_parents,
+			level_mismatched_children,
+			level_child_samples,
+			level_parent_absent,
+			level_max_child_routes,
+		])
+	print("[wg10-biome-world] route_parent_child parents=%d mixed=%d child_mismatch=%d/%d parent_absent=%d max_child_routes=%d %s" % [
+		parent_child_parents,
+		parent_child_mixed,
+		parent_child_mismatched_children,
+		parent_child_samples,
+		parent_route_absent,
+		max_child_routes,
+		" | ".join(parent_child_parts),
 	])
 
 	print("[wg10-biome-world] step=acquire")

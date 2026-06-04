@@ -41,9 +41,12 @@ This explains the owner report:
   behavior, not the full accepted world/grammar architecture. It can now leave
   the all-mountain path, but the WORLD mode is page-center routing, not smooth
   per-pixel composition.
-- The pop-in and morph issues are renderer/LOD problems. The "ground looks bad /
-  all the same" issue is content architecture: the live path is not yet consuming
-  the accepted biome composition/grammar layer.
+- The pop-in and morph issues have two pieces: renderer scheduling still controls
+  hide/show and geomorph timing, but the current hard evidence points at producer
+  LOD incompatibility in WORLD mode. Whole pages are routed by page-center biome,
+  and coarser pages often cannot represent the multiple fine-page routes inside
+  them. The "ground looks bad / all the same" issue is content architecture: the
+  live path is not yet consuming the accepted biome composition/grammar layer.
 
 ## Current Checkpoint
 
@@ -92,6 +95,13 @@ Validation:
   runtime contexts, acquires one page, reads back a non-degenerate texture, and
   prints runtime=`world`, `biome_path=true`, nonzero=65536, min=-1196.652466,
   max=842.125366.
+- Follow-up `biome_world` route diagnostics now separate the pop-in mechanism:
+  `route_inpage corner_mixed=0` in the sampled level-0 window, but
+  `lod_route_by_parent L1=0/289 L2=63/289 L3=120/289`, and complete parent
+  child scans report `parents=243 mixed=153 child_mismatch=2472/6804
+  max_child_routes=6`. This means page-center routing is stable at level 1 in
+  the sample but breaks structurally at coarser levels; a single parent biome is
+  not a faithful low-detail representation of its children.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -148,10 +158,15 @@ Renderer/streaming failures:
 - geomorph can still expose cross-level mismatch when parent/child surfaces are
   not true low-pass relatives;
 - page hiding/showing, culling, and repage churn are renderer concerns.
+- in WORLD mode, those renderer transitions are currently fed by incompatible
+  whole-page biome selections at coarse levels, so the producer must stop using a
+  single page-center biome as the cross-LOD representation.
 
 Content/world failures:
 
 - WORLD mode is page-center dominant routing, not per-pixel multi-biome compose;
+- coarser WORLD pages often contain multiple fine-page routes, so parent/child
+  route disagreement is expected until grammar weights are composed per pixel;
 - accepted pass-network carving is not part of the live page world layer yet;
 - static review scale and live page scale are not reconciled.
 

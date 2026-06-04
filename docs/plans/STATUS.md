@@ -80,6 +80,16 @@
 > forward-motion artifact: the hard evidence points first at cross-LOD route changes,
 > while full compose remains required to consume non-dominant active weights and avoid
 > treating biome transitions as single-recipe pages.
+> New parent/child route breakdown from `biome_world`: `lod_route_by_parent
+> L1=0/289(0.000000) L2=63/289(0.217993) L3=120/289(0.415225)
+> stable_child_mismatch=183`. Complete child scans inside sampled parents report
+> `route_parent_child parents=243 mixed=153 child_mismatch=2472/6804
+> parent_absent=0 max_child_routes=6`, with L3 at `mixed:79/81`. So the pop-in
+> mechanism is now precise: level-1 parent routing is stable in this sample, but
+> coarser parents often contain multiple legitimate fine-page biome routes. A
+> single selected parent biome cannot represent those children without throwing
+> away real world variation; the aligned fix is runtime per-pixel grammar weights
+> feeding compose, not forcing children to inherit a coarser page route.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime
