@@ -1,6 +1,6 @@
 # WorldGen10 — Status
 
-> **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / SCALE-INVARIANCE PROOF DEBT.**
+> **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
@@ -9,31 +9,38 @@
 > (`mountain_fly_review.tscn`). Treat the former as the mountain visual/content baseline and
 > the latter as the streaming producer/renderer proving scene until the live runtime is
 > configured to reproduce the same world/scale assumptions.
-> The tracked source tree was clean at `0b0d8a0` before the stabilization edits. The June 3
-> scale-invariance chain is implemented through the GPU producer plumbing: Python oracle
-> world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
-> runtime kernel anchoring, and `flow_max_level` are committed. Latest editor-safe Rust proof:
-> `cargo test -p wg10_terrain --lib` = **217 passed / 0 failed** (same existing warnings:
-> `HashVal::Float` dead code, `FamilyWeights::is_empty` unused).
+> The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
+> oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
+> runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
+> `cargo test -p wg10_terrain --lib` = **217 passed / 0 failed**.
 >
-> Stabilization edits now add the missing spec gate wiring: `Wg10BiomePageCompute` exposes
-> `generate_runtime_page_flow(..., flow_on)` for readback-only proof runs, and
-> `worldgen_terrain/tests/biome_crosslevel_check.gd` is wired into the `biome_fly` suite after
-> the 576 parity gate. This is the T6 cross-level macro-agreement proof required by the
-> scale-invariant producer spec; it has not yet been windowed-run on hardware in this note.
+> Editor-closed/windowed hardware gates on 2026-06-04:
+> `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
+> loads), `m3` = **9/9 pass** after the new page-fade renderer change (`m3_accept` p99
+> 5.81 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass** (macro 576 maxd
+> 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002, cross-level macro ratio
+> 0.066665 <= 0.08, fly GPU p99 0.103 ms).
+> `mountain_fly_review.tscn` now starts on the accepted `network_ref` scale
+> (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug`
+> scale (`feature_span_m=3500`). A direct scene smoke launch after the DLL
+> rebuild printed `biome_path=true preset=network_ref feature_span_m=90000
+> relief_m=1000`, so the earlier 11-vs-12 `configure_biome` call error was a
+> stale loaded extension, not the current source.
 >
-> **Still not accepted / do not claim done:** T5 windowed 576 reproving on the rebuilt live DLL,
-> T6 windowed cross-level macro-agreement pass, and T7 owner re-fly of
-> `mountain_fly_review.tscn`. Slice 4c is also still open: runtime default flip, atlas-removal
-> audit, hardened perf gate, and owner acceptance are pending. Facts/collision still rely on
-> the legacy `height.rs` path until a follow-up facts story is designed or explicitly exempted.
+> **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
+> is pending, and the live BIOME path is still a single mountain producer proving scene, not
+> the accepted grammar/compose world architecture. Slice 4c is also still open: runtime default
+> flip, atlas-removal audit, hardened perf gate, and owner acceptance are pending.
+> Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is
+> designed or explicitly exempted.
 >
 > **Refactor state:** the former 3.6k-line `biome_page_compute.rs` has been split into
 > focused modules; current Rust hotspots are now mostly recipe-local (`recipes_glacial.rs` 452,
 > `biome_page_compute/local_compose.rs` 439, `recipes_desert.rs` 434, `recipes_karst.rs` 428).
-> Pause broad refactor until the scale-invariance gates and owner fly produce a stable visual
-> baseline; then continue at the producer boundary (`page_pool` routing, shader ABI manifest,
-> facts/render divergence).
+> Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
+> routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
+> the live all-mountain fly as a failed version of the accepted network-chunk baseline until
+> it is configured to reproduce the same world/scale assumptions.
 
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating

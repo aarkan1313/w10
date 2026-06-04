@@ -48,9 +48,10 @@ Backup made before this audit checkpoint:
 
 - `backup-slice4-pre-architecture-audit-20260604-e653a36`
 
-Checkpoint commit made during this audit:
+Checkpoint commits made during this audit:
 
 - `5ccb2cb fix(slice4): fade newly resident terrain pages`
+- `840f11d docs(slice4): record architecture baseline split`
 
 That commit only changes the shared clipmap renderer:
 
@@ -62,18 +63,25 @@ from the parent/coarse height and settling to the normal LOD/morph height. This
 targets the forward "hidden until resident, then snap on" pop separately from
 geomorph blending.
 
-Validation so far:
+Validation:
 
 - `cargo build -p wg10_terrain` into the Godot-loaded target: passed.
 - `cargo test -p wg10_terrain --lib`: 217 passed / 0 failed.
-
-Blocked verification:
-
-- `python tools/gate.py --suite m3` could not run because the Godot editor was
-  still running and the GDExtension hot-reload copy failed:
-  `Error copying library: ... wg10_terrain.dll`.
-- Do not force-close the editor without explicit owner approval because unsaved
-  scene/editor work could be lost.
+- `python tools\gate.py --suite review_static`: 1/1 passed. This suite is now
+  scoped to `mountain_network_chunks_review.tscn`, the accepted baseline. An
+  earlier attempt that also included `mountain_world_chunks_review_check.gd`
+  failed because that generic check is stale against its current
+  `biome_compose_world_v2_scale_contract` payload; do not use it as the accepted
+  network-baseline proof.
+- `python tools\gate.py --suite m3`: 9/9 passed after the page-fade renderer
+  change. `m3_accept` p99 = 5.81 ms against the 6.0 ms budget.
+- `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
+  maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.103 ms.
+- Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
+  loaded DLL. The scene now starts on the accepted `network_ref` scale
+  (`feature_span_m=90000`) and exposes `P` for the old close-up debug scale
+  (`feature_span_m=3500`), so the manual review scale is visible in the HUD.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -92,7 +100,7 @@ multiple accepted biome recipes into one world.
 
 The accepted network payload records `feature_span_m=90000.0`.
 
-The current live fly harness uses:
+The current live fly harness previously used:
 
 ```gdscript
 const FEATURE_SPAN_M := 3500.0
@@ -102,6 +110,11 @@ That may make individual pages read as mountains under close fly review, but it
 is not the same mountain artifact. It compresses the mountain vocabulary into a
 different content scale. Treat it as a diagnostic/live-page tuning knob, not as
 proof that runtime mountain scale matches the accepted static baseline.
+
+The harness now defaults to the accepted `network_ref` scale (`feature_span_m=90000`)
+and exposes the old 3.5 km behavior as the `close_debug` preset behind `P`. This
+does not solve the missing grammar/compose layer; it removes a review-harness
+ambiguity so owner fly feedback names the actual preset being reviewed.
 
 ### 3. The current BIOME runtime is all mountain everywhere
 
@@ -164,15 +177,16 @@ runtime path."
    - accepted visual baseline: `mountain_network_chunks_review.tscn`;
    - current live runtime: `mountain_fly_review.tscn`;
    - current runtime content limitation: all-mountain, no grammar compose;
-   - current renderer limitation: windowed fade/m3/biome gates pending.
+   - current renderer evidence: `m3` 9/9 passed after page fade; owner re-fly
+     is still required because gates do not prove the visual read.
 2. Add or update a smoke check for `mountain_network_chunks_review.tscn`.
    Existing `mountain_world_chunks_review_check.gd` checks the non-network
    scene; the network scene deserves its own check because it is now the owner
    baseline.
-3. Once the editor is closed, run:
-   - `python tools/gate.py --suite review_static`
-   - `python tools/gate.py --suite m3`
-   - `python tools/gate.py --suite biome_fly`
+3. Editor-closed gate results are now recorded above:
+   - `python tools/gate.py --suite review_static` -> 1/1 pass;
+   - `python tools/gate.py --suite m3` -> 9/9 pass;
+   - `python tools/gate.py --suite biome_fly` -> 4/4 pass.
 
 Exit: we know which view is the baseline, which path is live, and which gates
 are current.
@@ -272,7 +286,7 @@ Only after baseline/gate clarity:
 
 ## Immediate Next Commands
 
-After the owner closes the Godot editor:
+For future verification after renderer/runtime edits:
 
 ```powershell
 $env:CARGO_TARGET_DIR='D:\workflows\worldgen10\wg-10\rust\target'

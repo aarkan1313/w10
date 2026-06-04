@@ -8,19 +8,21 @@ extends Node3D
 # LAUNCH: run this scene (windowed). Fly with WASD (+ Shift to sprint to ~1000s m/s), mouse to
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
-# KEYS: K toggle cull-disable, M morph-band heatmap, O morph on/off, N detail on/off, and
-#       B toggles A/B between the BIOME mountain producer and the LEGACY dem_v1 kernel atlas (the
-#       streamer/view keep the same pool ref; on toggle we free_all + reconfigure live). Starts
-#       in BIOME mode. Prints "[fly] biome_path=<true/false>" on each toggle.
+# KEYS: K toggle cull-disable, M morph-band heatmap, O morph on/off, N detail on/off, P toggles
+#       mountain scale preset, and B toggles A/B between the BIOME mountain producer and the
+#       LEGACY dem_v1 kernel atlas. The streamer/view keep the same pool ref; on toggle we
+#       free_all + reconfigure live. Starts in BIOME mode. Prints the active path/preset on each
+#       relevant toggle.
 
 # --- BIOME (mountain GPU producer) constants — replaces the legacy PACK/GLSL trio ---
 const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
 const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
 const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
 const APRON_PX := 160
-const FEATURE_SPAN_M := 3500.0  # scale-contract on-foot mountain. 90000 (a 90km massif) shows only a
-								# gentle sliver per 8km page -> reads flat; 3500 = whole mountains per
-								# few pages = a real range (capture-verified 2026-06-03).
+const MOUNTAIN_PRESET_NETWORK := 0
+const MOUNTAIN_PRESET_CLOSE_DEBUG := 1
+const FEATURE_SPAN_NETWORK_M := 90000.0     # accepted static network-chunk baseline scale
+const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0  # close-up page/debug scale; not the accepted baseline
 const FLOW_ITERS := 192        # measured production convergence count (memory: 576^2 mountain ~192)
 # SCALE-INVARIANCE: first clipmap level (0=finest) baked WITHOUT the drainage carve. A page at
 # `level` runs flow_on = level < FLOW_MAX_LEVEL. 2 -> carve on levels 0,1 (near camera), off 2.. .
@@ -76,6 +78,7 @@ var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matc
 						  # baseline + the operator's "N enables detail" expectation; the scene used to
 						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
 var _biome_mode := true   # start in BIOME (mountain GPU producer); B toggles to legacy and back.
+var _mountain_preset := MOUNTAIN_PRESET_NETWORK
 var _frame := 0
 
 func _ready() -> void:
@@ -149,7 +152,7 @@ func _ready() -> void:
 	_dbg_label.position = Vector2(12, 360)
 	_dbg_label.add_theme_color_override("font_color", Color.YELLOW)
 	dbg_layer.add_child(_dbg_label)
-	print("[fly] biome_path=%s" % str(_pool.call("uses_biome_path")))
+	_print_biome_state()
 
 # Configure the pool for the BIOME (mountain GPU producer) path.
 func _configure_biome(pool: Object) -> String:
@@ -157,7 +160,7 @@ func _configure_biome(pool: Object) -> String:
 		ProjectSettings.globalize_path(PRIM),
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, _feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
 
 # Configure the pool for the LEGACY (dem_v1 kernel atlas) path — the A/B comparison.
 func _configure_legacy(pool: Object) -> String:
@@ -192,6 +195,8 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_N:
 		_detail_on = not _detail_on
 		RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP if _detail_on else 0.0)
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_P:
+		_toggle_mountain_preset()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		_toggle_biome()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
@@ -204,16 +209,49 @@ func _input(event: InputEvent) -> void:
 func _set_relief(v: float) -> void:
 	_relief_m = clampf(v, 50.0, 20000.0)
 	print("[fly] relief_m=%.0f m" % _relief_m)
-	if _pool != null and _biome_mode:
-		# Detach ring materials from the page textures before free_all (else the next draws flood
-		# "Texture binding 1 not valid" against the freed RIDs until pages re-stream).
-		if _rings != null:
-			_rings.call("unbind_all")
-		_pool.call("free_all")
-		var err := _configure_biome(_pool)
-		if err != "":
-			push_error("mountain_fly_review: relief reconfigure failed: %s" % err)
-		_prev_states = PackedInt64Array()
+	_rebuild_biome_pages("relief")
+
+func _feature_span_m() -> float:
+	if _mountain_preset == MOUNTAIN_PRESET_CLOSE_DEBUG:
+		return FEATURE_SPAN_CLOSE_DEBUG_M
+	return FEATURE_SPAN_NETWORK_M
+
+func _mountain_preset_label() -> String:
+	if _mountain_preset == MOUNTAIN_PRESET_CLOSE_DEBUG:
+		return "close_debug"
+	return "network_ref"
+
+func _toggle_mountain_preset() -> void:
+	if _mountain_preset == MOUNTAIN_PRESET_NETWORK:
+		_mountain_preset = MOUNTAIN_PRESET_CLOSE_DEBUG
+	else:
+		_mountain_preset = MOUNTAIN_PRESET_NETWORK
+	_rebuild_biome_pages("preset")
+	_print_biome_state()
+
+func _rebuild_biome_pages(reason: String) -> void:
+	if _pool == null or not _biome_mode:
+		return
+	# Detach ring materials from the page textures before free_all (else the next draws flood
+	# "Texture binding 1 not valid" against the freed RIDs until pages re-stream).
+	if _rings != null:
+		_rings.call("unbind_all")
+	_pool.call("free_all")
+	var err := _configure_biome(_pool)
+	if err != "":
+		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
+		return
+	_prev_states = PackedInt64Array()
+
+func _print_biome_state() -> void:
+	if _pool == null:
+		return
+	print("[fly] biome_path=%s preset=%s feature_span_m=%.0f relief_m=%.0f" % [
+		str(_pool.call("uses_biome_path")),
+		_mountain_preset_label(),
+		_feature_span_m(),
+		_relief_m,
+	])
 
 func _current_morph_region() -> float:
 	return MORPH_REGION_ON if _morph_enabled else MORPH_REGION_OFF
@@ -248,7 +286,7 @@ func _toggle_biome() -> void:
 	_reconfigure_view()
 	# Reset the flip-log baseline so the post-reconfigure repage churn doesn't spam the HUD.
 	_prev_states = PackedInt64Array()
-	print("[fly] biome_path=%s" % str(_pool.call("uses_biome_path")))
+	_print_biome_state()
 
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:
@@ -280,8 +318,10 @@ func _process(_delta: float) -> void:
 		_prev_states = states
 		while _flip_log.size() > 8:
 			_flip_log.pop_front()
-		_dbg_label.text = "mode %s (B toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s" % [
+		_dbg_label.text = "mode %s (B toggles) | preset %s %.0fkm (P toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s" % [
 			"BIOME" if _biome_mode else "LEGACY",
+			_mountain_preset_label(),
+			_feature_span_m() / 1000.0,
 			"DISABLED" if _cull_disabled else "on",
 			"on" if _morph_enabled else "off",
 			"\n".join(_flip_log)]
