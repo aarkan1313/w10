@@ -108,6 +108,12 @@ Validation:
   close-up debug scale (`feature_span_m=3500`), so the manual review scale is
   visible in the HUD. Smoke log: `mode=MOUNTAIN runtime=single biome_path=true
   preset=network_ref feature_span_m=90000 relief_m=1000`.
+- `python tools\gate.py --suite review_runtime`: 1/1 passed. This windowed
+  gate instantiates the actual `mountain_fly_review.tscn` owner scene, waits for
+  startup, then verifies `MOUNTAIN/network_ref`, runtime=`single`,
+  biome_path=`true`, and real page startup (`created=45`, `resident=45`). This
+  specifically gates the GDScript/Rust call signature and default scene wiring
+  that the proxy producer gates do not instantiate.
 - `python tools\gate.py --suite biome_world`: 1/1 passed when run outside the
   filesystem sandbox. The gate configures WORLD mode, builds the 11 cached
   runtime contexts plus the compose context, acquires one composed page, reads
@@ -315,7 +321,8 @@ constants, scale presets, relief state, or `configure_biome*` calls. Those live
 in `mountain_fly_producers.gd`; the scene still owns renderer setup, input, HUD,
 route diagnostics, and page-stream state. This does not complete Phase 2, but it
 removes one mixed concern from the live owner review scene and gives the mode
-state its own fast gate.
+state its own fast gate. The follow-up `review_runtime` gate now instantiates the
+actual owner scene so this separation is proven on the path the user flies.
 
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 
@@ -373,6 +380,7 @@ cargo build -p wg10_terrain
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'
 python tools\gate.py --suite review_static
 python tools\gate.py --suite review_static_visual
+python tools\gate.py --suite review_runtime
 python tools\gate.py --suite m3
 python tools\gate.py --suite biome_fly
 & $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/mountain_fly_review.tscn --quit-after 2

@@ -18,7 +18,9 @@
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
 > loads), `review_static_visual` = **1/1 pass** (captures the accepted static
-> baseline PNGs), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
+> baseline PNGs), `review_runtime` = **1/1 pass** (instantiates the owner
+> `mountain_fly_review.tscn` path and verifies `MOUNTAIN/network_ref` defaults),
+> `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
 > (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
 > cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.106 ms).
@@ -138,11 +140,12 @@
 > The live fly harness has started that separation: `mountain_fly_review.gd` now delegates
 > producer modes, scale presets, relief, and pool configure calls to
 > `mountain_fly_producers.gd`, with `mountain_fly_producers_check.gd` in the `fast`
-> suite to lock B/P/R state transitions. Continue refactor only at clear ownership
-> boundaries: renderer streaming/pop-in, producer routing/page compute, biome grammar/composition,
-> and review harness taxonomy. Do not treat the live WORLD fly as accepted just because it
-> now composes biome recipe heights; owner visual acceptance and the Slice 4c runtime/facts
-> story remain open.
+> suite to lock B/P/R state transitions. `review_runtime` now gates the actual owner
+> scene startup too, catching GDScript/Rust call-signature drift and default-preset drift.
+> Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
+> routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
+> the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual
+> acceptance and the Slice 4c runtime/facts story remain open.
 
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating

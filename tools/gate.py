@@ -107,6 +107,11 @@ CHECKS = {
     "review_static_visual": [
         "worldgen_terrain/tests/mountain_network_visual_capture.gd",
     ],
+    # Runtime owner-review scene smoke. This instantiates the actual fly scene
+    # so GDScript/Rust call-signature and default-preset drift are gated.
+    "review_runtime": [
+        "worldgen_terrain/tests/mountain_fly_review_smoke_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -119,6 +124,7 @@ WINDOWED_SUITES = {
     "biome_fly",
     "biome_world",
     "review_static_visual",
+    "review_runtime",
 }
 
 
