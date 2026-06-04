@@ -57,6 +57,16 @@
 > hide/show/full events with CPU p99 around 9.8 ms and render GPU p99 around
 > 0.75 ms, so the next visual/perf step must reproduce the manual flight path
 > rather than retuning a green scripted path.
+> Follow-up manual-path gate tightening on 2026-06-04: `review_runtime_stress`
+> now also compares the final rendered evidence frames for the same hand-style
+> speed-pulse/stop/turn path. For both morph off and morph on, it asserts
+> `REFERENCE` vs `MOUNTAIN/network_ref` and `REFERENCE` vs `WORLD` stay within
+> the same sampled RGB bridge budgets used by the visual gate. Latest proof:
+> `review_runtime_stress` = 1/1 with zero hide/show/full events across all six
+> mode/morph cases, CPU p99 below 10 ms, GPU p99 below 0.64 ms, and bridge
+> deltas `0.000000/0.000000` for MOUNTAIN and WORLD with morph off/on. This
+> improves coverage for the manual "modes 1/2/3 feel slow/weird" report; it
+> still does not make raw procedural MOUNTAIN or full WORLD composition accepted.
 > Current proof after the runtime-tile binding fix: `cargo test -p
 > wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
 > 8/0, `cargo test -p wg10_terrain --lib` = 233/0,

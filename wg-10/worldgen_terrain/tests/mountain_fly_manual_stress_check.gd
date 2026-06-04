@@ -25,6 +25,9 @@ const MIN_TERRAIN_FRAC := 0.62
 const SKY_DELTA := 0.06
 const MIN_STREAM_EVENTS := 1
 const MIN_REPAGES := 1
+const BRIDGE_SAMPLE_STRIDE := 4
+const BRIDGE_MEAN_RGB_DELTA_MAX := 0.0025
+const BRIDGE_P95_RGB_DELTA_MAX := 0.0200
 
 func _init() -> void:
 	quit(await _run())
@@ -43,7 +46,10 @@ func _run() -> int:
 	var runtime: Object = load(RUNTIME_CONFIG).new()
 	runtime.register_shader_globals(bool(runtime.default_detail_enabled()))
 	var errs: Array[String] = []
+	var captures_by_morph := {}
 	for morph_enabled in [false, true]:
+		var morph_key := "morph_on" if bool(morph_enabled) else "morph_off"
+		captures_by_morph[morph_key] = {}
 		for mode in MODES:
 			var result := await _run_case(runtime, str(mode), bool(morph_enabled))
 			if int(result.get("rc", 1)) != 0:
@@ -52,6 +58,32 @@ func _run() -> int:
 					"on" if bool(morph_enabled) else "off",
 					str(result.get("error", "failed")),
 				])
+			else:
+				var img: Image = result.get("image", null)
+				if img == null:
+					errs.append("%s morph=%s: missing final evidence image" % [
+						str(mode),
+						"on" if bool(morph_enabled) else "off",
+					])
+				else:
+					var mode_captures: Dictionary = captures_by_morph[morph_key]
+					mode_captures[str(mode)] = img
+					captures_by_morph[morph_key] = mode_captures
+
+	for morph_key in captures_by_morph.keys():
+		var captures: Dictionary = captures_by_morph[morph_key]
+		var reference: Image = captures.get("REFERENCE", null)
+		if reference == null:
+			errs.append("%s: missing REFERENCE image for bridge comparison" % str(morph_key))
+			continue
+		for mode in ["MOUNTAIN", "WORLD"]:
+			var candidate: Image = captures.get(mode, null)
+			if candidate == null:
+				errs.append("%s: missing %s image for bridge comparison" % [str(morph_key), mode])
+				continue
+			var bridge_err := _bridge_image_error(reference, candidate, "%s_%s" % [str(morph_key), mode.to_lower()])
+			if bridge_err != "":
+				errs.append(bridge_err)
 
 	if not errs.is_empty():
 		for e in errs:
@@ -260,7 +292,7 @@ func _run_case(runtime: Object, mode: String, morph_enabled: bool) -> Dictionary
 
 	if not errs.is_empty():
 		return {"rc": 1, "error": "; ".join(errs)}
-	return {"rc": 0, "error": ""}
+	return {"rc": 0, "error": "", "image": final_img}
 
 func _configure_producer(producer: Object, mode: String) -> String:
 	if not bool(producer.set_mode_label(mode)):
@@ -316,6 +348,29 @@ func _terrain_frac(img: Image, sky: Color) -> float:
 			if d > SKY_DELTA:
 				hit += 1
 	return float(hit) / float(maxi(samp, 1))
+
+func _bridge_image_error(reference: Image, candidate: Image, label: String) -> String:
+	if reference.get_size() != candidate.get_size():
+		return "%s bridge size mismatch %s vs %s" % [label, str(reference.get_size()), str(candidate.get_size())]
+	var size := reference.get_size()
+	var deltas: Array[float] = []
+	var total := 0.0
+	for y in range(0, size.y, BRIDGE_SAMPLE_STRIDE):
+		for x in range(0, size.x, BRIDGE_SAMPLE_STRIDE):
+			var a := reference.get_pixel(x, y)
+			var b := candidate.get_pixel(x, y)
+			var d := (absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)) / 3.0
+			deltas.append(d)
+			total += d
+	deltas.sort()
+	var mean := total / float(maxi(deltas.size(), 1))
+	var p95 := deltas[int(floor(float(deltas.size() - 1) * 0.95))]
+	if mean > BRIDGE_MEAN_RGB_DELTA_MAX or p95 > BRIDGE_P95_RGB_DELTA_MAX:
+		return "%s bridge mismatch mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+			label, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX]
+	print("[wg10-manual-stress] bridge_match label=%s samples=%d stride=%d mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+		label, deltas.size(), BRIDGE_SAMPLE_STRIDE, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
+	return ""
 
 func _percentile(samples: Array[float], fraction: float) -> float:
 	if samples.is_empty():

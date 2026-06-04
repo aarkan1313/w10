@@ -125,7 +125,8 @@ CHECKS = {
     # Owner manual-flight stress probe. This is heavier than the standard mode gate and follows a
     # hand-review style path with speed pulses, stops, turns, viewport rendering, and morph off/on.
     # It fails on hard owner-visible regressions (hide/show, full pool events, degenerate frames, or
-    # large hitches) and writes evidence PNGs under D:/tmp/wg10_biome_compose.
+    # large hitches), proves the REFERENCE-backed MOUNTAIN/WORLD preview visuals stay matched on
+    # that path, and writes evidence PNGs under D:/tmp/wg10_biome_compose.
     "review_runtime_stress": [
         "worldgen_terrain/tests/mountain_fly_manual_stress_check.gd",
     ],
