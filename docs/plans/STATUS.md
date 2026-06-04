@@ -65,6 +65,16 @@
 > are unchanged. Proof: `cargo test -p wg10_terrain --lib` = 227/0,
 > `tools\build_rust.ps1` builds, `biome_world` = 1/1, and `review_runtime` =
 > 2/2.
+> Latest owner-visible repage presentation fix: `ring_displace.gdshader` now
+> fades static-reference material pages and WORLD route tint by the same
+> `page_fade` used for newly resident page height. This targets the remaining
+> "stuff pops in while moving" class where geometry was already zero-hide but
+> material/tint changed instantly on REPAGE. Proof after the shader patch:
+> `review_runtime_modes` = 2/2 with zero hide/show in REFERENCE, MOUNTAIN, and
+> WORLD; latest CPU p99/max is REFERENCE 21.560/23.315 ms, MOUNTAIN
+> 21.969/23.291 ms, WORLD 6.592/14.465 ms. Render p99 remains below 0.5 ms in
+> all three modes, and `review_runtime_visual` = 1/1 with REFERENCE vs
+> MOUNTAIN/network still matching within bridge budgets along the sprint path.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:

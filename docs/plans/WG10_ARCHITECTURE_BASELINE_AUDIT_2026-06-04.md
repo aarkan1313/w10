@@ -84,6 +84,13 @@ This explains the owner report:
   through compose; any remaining "ground looks bad" report needs a fresh owner
   fly against this composed runtime.
 
+Latest renderer-presentation follow-up: height repage already faded from parent
+to newly resident fine page, but static material pages and WORLD route tint were
+still switching instantly. `ring_displace.gdshader` now multiplies those
+presentation mixes by `page_fade`, so material/tint changes fade over the same
+short window as height. This addresses visual pop during REPAGE without changing
+producer data, page ownership, scheduling, or facts.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

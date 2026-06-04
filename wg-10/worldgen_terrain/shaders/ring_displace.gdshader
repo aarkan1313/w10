@@ -216,9 +216,10 @@ void fragment() {
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
 		vec3 material = wg_mountain_palette(v_render_height, v_slope) * (1.0 + v_detail_norm * 0.10);
+		float material_fade = clamp(page_fade, 0.0, 1.0);
 		float static_code = texture(static_material_tex, v_page_uv).r;
-		material = mix(material, wg_static_reference_material(static_code, material), clamp(static_material_mix, 0.0, 1.0));
-		material = mix(material, biome_debug_color.rgb, clamp(biome_material_mix, 0.0, 1.0));
+		material = mix(material, wg_static_reference_material(static_code, material), clamp(static_material_mix * material_fade, 0.0, 1.0));
+		material = mix(material, biome_debug_color.rgb, clamp(biome_material_mix * material_fade, 0.0, 1.0));
 		ALBEDO = wg_apply_terrain_light(clamp(material, vec3(0.0), vec3(1.0)), v_terrain_normal, v_slope);
 	}
 }
