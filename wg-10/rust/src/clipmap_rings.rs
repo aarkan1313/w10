@@ -241,6 +241,8 @@ impl Wg10ClipmapRings {
         };
         mat.set_shader_parameter("height_tex", &height_tex.to_variant());
         mat.set_shader_parameter("coarse_height_tex", &coarse_tex.to_variant());
+        mat.set_shader_parameter("static_material_tex", &height_tex.to_variant());
+        mat.set_shader_parameter("static_material_mix", &0.0_f64.to_variant());
         mat.set_shader_parameter("world_span", &sample_span.to_variant());
         mat.set_shader_parameter("coarse_span", &coarse_span.to_variant());
         mat.set_shader_parameter("relief_scale", &relief_scale.to_variant());
@@ -286,6 +288,32 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("biome_material_mix", &material_mix.to_variant());
     }
 
+    #[func]
+    pub fn set_tile_static_material(
+        &mut self,
+        level: i64,
+        dx: i64,
+        dz: i64,
+        material_tex: Gd<godot::classes::Texture2D>,
+        material_mix: f64,
+    ) {
+        let idx = tile_index(level as i32, dx as i32, dz as i32);
+        if idx >= self.tiles.len() {
+            godot_error!("Wg10ClipmapRings::set_tile_static_material: ({level},{dx},{dz}) out of range");
+            return;
+        }
+        let Some(mat_res) = self.tiles[idx].get_material_override() else {
+            godot_error!("Wg10ClipmapRings::set_tile_static_material: tile has no material");
+            return;
+        };
+        let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
+            godot_error!("Wg10ClipmapRings::set_tile_static_material: material is not a ShaderMaterial");
+            return;
+        };
+        mat.set_shader_parameter("static_material_tex", &material_tex.to_variant());
+        mat.set_shader_parameter("static_material_mix", &material_mix.to_variant());
+    }
+
     /// Drop every tile material's reference to the pool's page textures, and hide all tiles.
     ///
     /// MUST be called BEFORE the pool's `free_all()` whenever the page textures are about to be
@@ -308,6 +336,8 @@ impl Wg10ClipmapRings {
                     // so this material no longer references a soon-to-be-freed page RID.
                     mat.set_shader_parameter("height_tex", &Variant::nil());
                     mat.set_shader_parameter("coarse_height_tex", &Variant::nil());
+                    mat.set_shader_parameter("static_material_tex", &Variant::nil());
+                    mat.set_shader_parameter("static_material_mix", &0.0_f64.to_variant());
                 }
             }
             mi.set_visible(false);

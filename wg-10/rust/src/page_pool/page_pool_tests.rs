@@ -69,6 +69,9 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     // realistic populated case is covered by slot_tex. Use the post-config
     // shape: a sized Vec of None (what `configure` builds before any acquire).
     let mut slot_wrap:    Vec<Option<Gd<Texture2Drd>>> = (0..4).map(|_| None).collect();
+    let mut slot_material_tex: Vec<Option<Rid>> =
+        vec![Some(Rid::new(11)), None, Some(Rid::new(12)), None];
+    let mut slot_material_wrap: Vec<Option<Gd<Texture2Drd>>> = (0..4).map(|_| None).collect();
     let mut pack:         Option<Pack>                = Some(minimal_pack());
     let mut pack_buffers: Option<PackBuffers>         = Some(minimal_pack_buffers());
     let mut glsl_source:  Option<String>              = Some("// glsl".to_string());
@@ -85,6 +88,8 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
         &mut policy,
         &mut slot_tex,
         &mut slot_wrap,
+        &mut slot_material_tex,
+        &mut slot_material_wrap,
         &mut pack,
         &mut pack_buffers,
         &mut glsl_source,
@@ -109,6 +114,8 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     // Slot vectors emptied — no stale slot_wrap indexable by a stale policy.
     assert!(slot_tex.is_empty(),    "slot_tex must be empty");
     assert!(slot_wrap.is_empty(),   "slot_wrap must be empty");
+    assert!(slot_material_tex.is_empty(), "slot_material_tex must be empty");
+    assert!(slot_material_wrap.is_empty(), "slot_material_wrap must be empty");
 
     // THE F7 GUARD CHECK: the acquire-guard predicate (policy && pack &&
     // pack_buffers && glsl_source all Some) and `compute_ctx.is_some()` must
@@ -135,6 +142,8 @@ fn reset_is_idempotent_on_unconfigured_state() {
     let mut policy:       Option<PagePolicy>           = None;
     let mut slot_tex:     Vec<Option<Rid>>             = Vec::new();
     let mut slot_wrap:    Vec<Option<Gd<Texture2Drd>>> = Vec::new();
+    let mut slot_material_tex: Vec<Option<Rid>> = Vec::new();
+    let mut slot_material_wrap: Vec<Option<Gd<Texture2Drd>>> = Vec::new();
     let mut pack:         Option<Pack>                 = None;
     let mut pack_buffers: Option<PackBuffers>          = None;
     let mut glsl_source:  Option<String>               = None;
@@ -147,6 +156,7 @@ fn reset_is_idempotent_on_unconfigured_state() {
     // Must not panic / must stay fully unconfigured.
     Wg10PagePool::reset_configured_state(
         &mut policy, &mut slot_tex, &mut slot_wrap,
+        &mut slot_material_tex, &mut slot_material_wrap,
         &mut pack, &mut pack_buffers, &mut glsl_source, &mut compute_ctx,
         &mut use_biome_path, &mut biome_ctx, &mut biome_world, &mut static_ref,
     );
@@ -159,7 +169,12 @@ fn reset_is_idempotent_on_unconfigured_state() {
             && biome_world.is_none()
             && static_ref.is_none()
     );
-    assert!(slot_tex.is_empty() && slot_wrap.is_empty());
+    assert!(
+        slot_tex.is_empty()
+            && slot_wrap.is_empty()
+            && slot_material_tex.is_empty()
+            && slot_material_wrap.is_empty()
+    );
 }
 
 /// `is_configured` mirrors the acquire guard exactly: true ONLY when all four

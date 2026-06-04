@@ -7,6 +7,7 @@ render_mode unshaded, cull_disabled;
 // abutting pages return the identical boundary value -> the shared edge joins.
 uniform sampler2D height_tex : filter_linear, repeat_disable;        // this level's R32F page (pool Texture2DRD)
 uniform sampler2D coarse_height_tex : filter_linear, repeat_disable; // next-coarser level's page (for the morph)
+uniform sampler2D static_material_tex : filter_nearest, repeat_disable; // static-reference material/corridor class codes
 uniform float world_span = 8192.0;        // this level's page world span
 uniform float coarse_span = 8192.0;       // the coarser level's page world span
 uniform vec2 page_origin = vec2(0.0);     // this fine page's WORLD lower-XZ corner; page covers [origin, origin+world_span]
@@ -21,12 +22,14 @@ uniform float relief_ref = 2000.0;        // color gradient normalization
 uniform float page_fade = 1.0;            // temporal fade for newly resident pages: 0 parent -> 1 fine
 uniform vec4 biome_debug_color : source_color = vec4(0.45, 0.45, 0.45, 1.0);
 uniform float biome_material_mix = 0.0;   // WORLD-only material tint from page route color.
+uniform float static_material_mix = 0.0;  // REFERENCE-only per-texel material/corridor override.
 
 varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
 varying float v_slope;             // displayed rise/run estimate for terrain material selection
 varying vec3 v_terrain_normal;      // manual lighting normal derived from the displayed height field
 varying float v_detail_norm;        // displayed world-space detail, normalized by wg_detail_amp
+varying vec2 v_page_uv;             // fine page UV for static-reference material/corridor texture
 // GLOBAL debug mode (one RenderingServer.global_shader_parameter for the whole scene, so a key in
 // the review scene flips it with no per-tile material access / no Rust rebuild):
 // 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
@@ -101,6 +104,7 @@ void vertex() {
 	// (Was VERTEX.xz/span + 0.5, which mapped edge vertices onto the texture BORDER, a half-texel
 	// off the texel centers, and abutting tiles read opposite-offset borders -> a visible wall.)
 	vec2 uv_fine = (world.xz - page_origin) / world_span;
+	v_page_uv = uv_fine;
 	float h_fine = texture(height_tex, uv_fine).r;
 
 	// Geomorph: blend to the coarser level ONLY at this LEVEL's true outer ring (the outward
@@ -188,6 +192,20 @@ vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
 	return shaded * (1.0 - slope_shadow);
 }
 
+vec3 wg_static_reference_material(float code, vec3 base) {
+	float cls = floor(code + 0.5);
+	if (cls < 0.5) {
+		return base;
+	}
+	if (cls < 1.5) {
+		return vec3(0.30, 0.52, 0.34);
+	}
+	if (cls < 2.5) {
+		return vec3(0.56, 0.50, 0.36);
+	}
+	return vec3(0.90, 0.88, 0.76);
+}
+
 void fragment() {
 	if (wg_dbg_mode > 1.5) {
 		ALBEDO = biome_debug_color.rgb;
@@ -198,6 +216,8 @@ void fragment() {
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
 		vec3 material = wg_mountain_palette(v_render_height, v_slope) * (1.0 + v_detail_norm * 0.10);
+		float static_code = texture(static_material_tex, v_page_uv).r;
+		material = mix(material, wg_static_reference_material(static_code, material), clamp(static_material_mix, 0.0, 1.0));
 		material = mix(material, biome_debug_color.rgb, clamp(biome_material_mix, 0.0, 1.0));
 		ALBEDO = wg_apply_terrain_light(clamp(material, vec3(0.0), vec3(1.0)), v_terrain_normal, v_slope);
 	}

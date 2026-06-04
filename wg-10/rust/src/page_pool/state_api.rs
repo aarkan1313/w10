@@ -504,6 +504,29 @@ impl Wg10PagePool {
         self.slot_wrap[slot].clone()
     }
 
+    pub(crate) fn get_resident_static_material_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+    ) -> Option<Gd<Texture2Drd>> {
+        if !self
+            .static_ref
+            .as_ref()
+            .is_some_and(|reference| reference.has_presentation_materials())
+        {
+            return None;
+        }
+        let policy = self.policy.as_ref()?;
+        let key = PageKey {
+            level: level as i32,
+            origin_x: origin_x as i64,
+            origin_z: origin_z as i64,
+        };
+        let slot = policy.slot_of(&key)?;
+        self.slot_material_wrap[slot].clone()
+    }
+
     /// Clear all display pins before the view re-pins currently bound pages.
     #[func]
     pub fn clear_display_pins(&mut self) {

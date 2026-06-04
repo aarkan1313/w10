@@ -22,6 +22,8 @@ impl Wg10PagePool {
         self.policy = Some(PagePolicy::new(cap));
         self.slot_tex = vec![None; cap];
         self.slot_wrap = (0..cap).map(|_| None).collect();
+        self.slot_material_tex = vec![None; cap];
+        self.slot_material_wrap = (0..cap).map(|_| None).collect();
     }
 
     pub(super) fn reset_stats(&mut self) {

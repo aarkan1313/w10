@@ -230,6 +230,21 @@ impl Wg10TerrainView {
                         Vector2::new(cco_x as f32, cco_z as f32), // coarse (parent) origin
                         Vector2::new(level_center_x as f32, level_center_z as f32), // this level's neighborhood centre
                     );
+                    let static_material_tex =
+                        self.pool
+                            .as_ref()
+                            .unwrap()
+                            .bind()
+                            .get_resident_static_material_page(level as i64, po_x, po_z);
+                    if let Some(material_tex) = static_material_tex {
+                        rings.bind_mut().set_tile_static_material(
+                            level as i64,
+                            dx as i64,
+                            dz as i64,
+                            material_tex.upcast::<godot::classes::Texture2D>(),
+                            1.0,
+                        );
+                    }
                     let debug_color =
                         debug_color_for_page(self.pool.as_ref().unwrap(), level as i64, po_x, po_z);
                     let material_mix = biome_material_mix_for_page(
@@ -304,22 +319,11 @@ fn biome_material_mix_for_page(
     if mode == "world" {
         0.34
     } else if mode == "static_reference" {
-        if let Some((low_pass, floor, rock, snow)) =
-            pool_ref.static_reference_material_hint_means_for_page(level, origin_x, origin_z, 17)
-        {
-            let hint_signal = low_pass.max(floor).max(rock).max(snow);
-            if hint_signal > 0.02 {
-                return (0.08 + hint_signal * 0.30).clamp(0.0, 0.36);
-            }
-        }
-        let corridor_frac = pool_ref
-            .static_reference_corridor_fraction_for_page(level, origin_x, origin_z, 17)
-            .unwrap_or(0.0);
-        if corridor_frac > 0.02 {
-            (0.10 + corridor_frac * 1.25).clamp(0.0, 0.32)
-        } else {
-            0.0
-        }
+        // Static-reference mode now binds per-texel material/corridor pages. Keep the older
+        // page-average debug tint out of normal material mode so it does not mute the accepted
+        // payload's local floor/rock/snow/corridor story.
+        let _ = (level, origin_x, origin_z);
+        0.0
     } else {
         0.0
     }

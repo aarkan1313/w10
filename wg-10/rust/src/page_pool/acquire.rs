@@ -66,7 +66,17 @@ impl Wg10PagePool {
                     self.dispatch_page_compute(&mut rd, tex_rid, ox, oz, ws, ppx, sd, flow_on)
                 {
                     godot_error!("Wg10PagePool: compute_page_cached failed (slot {slot}): {e}");
-                    self.rollback_failed_allocate(&mut rd, key, tex_rid);
+                    self.rollback_failed_allocate(&mut rd, key, slot, tex_rid);
+                    return None;
+                }
+
+                if let Err(e) =
+                    self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
+                {
+                    godot_error!(
+                        "Wg10PagePool: static material page failed (slot {slot}): {e}"
+                    );
+                    self.rollback_failed_allocate(&mut rd, key, slot, tex_rid);
                     return None;
                 }
 
@@ -87,6 +97,16 @@ impl Wg10PagePool {
                 {
                     godot_error!(
                         "Wg10PagePool: compute_page_cached failed on eviction (slot {slot}): {e}"
+                    );
+                    self.rollback_failed_eviction(&mut rd, key, slot);
+                    return None;
+                }
+
+                if let Err(e) =
+                    self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
+                {
+                    godot_error!(
+                        "Wg10PagePool: static material page failed on eviction (slot {slot}): {e}"
                     );
                     self.rollback_failed_eviction(&mut rd, key, slot);
                     return None;
@@ -189,6 +209,50 @@ impl Wg10PagePool {
         }
     }
 
+    fn refresh_static_material_texture(
+        &mut self,
+        rd: &mut Gd<RenderingDevice>,
+        slot: usize,
+        origin_x: f64,
+        origin_z: f64,
+        world_span: f64,
+        page_px: i64,
+    ) -> Result<(), String> {
+        let wants_material = self
+            .static_ref
+            .as_ref()
+            .is_some_and(|reference| reference.has_presentation_materials());
+        if !wants_material {
+            return Ok(());
+        }
+
+        let tex_rid = match self.slot_material_tex[slot] {
+            Some(rid) => rid,
+            None => {
+                let rid = self
+                    .create_static_material_texture(rd)
+                    .ok_or("static reference: material texture_create failed")?;
+                let mut wrap = Texture2Drd::new_gd();
+                wrap.set_texture_rd_rid(rid);
+                self.slot_material_tex[slot] = Some(rid);
+                self.slot_material_wrap[slot] = Some(wrap);
+                rid
+            }
+        };
+
+        let Some(static_ref) = self.static_ref.as_ref() else {
+            return Ok(());
+        };
+        static_ref.write_material_page_texture(
+            rd,
+            tex_rid,
+            origin_x,
+            origin_z,
+            world_span,
+            page_px,
+        )
+    }
+
     pub(super) fn select_world_biome_name(
         &self,
         world: &BiomeWorldRuntime,
@@ -272,9 +336,14 @@ impl Wg10PagePool {
         &mut self,
         rd: &mut Gd<RenderingDevice>,
         key: PageKey,
+        slot: usize,
         tex_rid: Rid,
     ) {
         rd.free_rid(tex_rid);
+        if let Some(material_rid) = self.slot_material_tex[slot].take() {
+            rd.free_rid(material_rid);
+        }
+        self.slot_material_wrap[slot] = None;
         self.policy.as_mut().unwrap().rollback(key);
     }
 
@@ -288,7 +357,11 @@ impl Wg10PagePool {
         if let Some(old_rid) = self.slot_tex[slot].take() {
             rd.free_rid(old_rid);
         }
+        if let Some(material_rid) = self.slot_material_tex[slot].take() {
+            rd.free_rid(material_rid);
+        }
         self.slot_wrap[slot] = None;
+        self.slot_material_wrap[slot] = None;
         self.policy.as_mut().unwrap().rollback(key);
     }
 }
