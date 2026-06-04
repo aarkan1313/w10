@@ -63,6 +63,11 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("detail_on", true)), "runtime default detail should be off", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 
+	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, errs)
+	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, errs)
+	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, errs)
+	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 0.5, errs)
+
 	scene.queue_free()
 	await process_frame
 
@@ -83,3 +88,38 @@ func _run() -> int:
 func _expect(condition: bool, message: String, errs: Array[String]) -> void:
 	if not condition:
 		errs.append(message)
+
+func _expect_mode_switch(
+	scene: Node,
+	mode: String,
+	expected_runtime: String,
+	expected_biome_path: bool,
+	expected_world: bool,
+	expected_legacy: bool,
+	expected_seed: int,
+	expected_view_relief_scale: float,
+	errs: Array[String],
+) -> void:
+	if not scene.has_method("_set_producer_mode"):
+		errs.append("scene missing _set_producer_mode")
+		return
+	scene.call("_set_producer_mode", mode)
+	for _i in range(30):
+		await process_frame
+	var snapshot := {}
+	if scene.has_method("debug_runtime_snapshot"):
+		snapshot = scene.call("debug_runtime_snapshot")
+	else:
+		errs.append("scene missing debug_runtime_snapshot after %s switch" % mode)
+		return
+
+	_expect(str(snapshot.get("last_config_error", "")) == "", "%s configure error: %s" % [mode, str(snapshot.get("last_config_error", ""))], errs)
+	_expect(str(snapshot.get("mode", "")) == mode, "expected mode %s, got %s" % [mode, str(snapshot.get("mode", ""))], errs)
+	_expect(str(snapshot.get("runtime_mode", "")) == expected_runtime, "%s expected runtime=%s, got %s" % [mode, expected_runtime, str(snapshot.get("runtime_mode", ""))], errs)
+	_expect(bool(snapshot.get("biome_path", false)) == expected_biome_path, "%s biome_path mismatch" % mode, errs)
+	_expect(bool(snapshot.get("is_world", false)) == expected_world, "%s is_world mismatch" % mode, errs)
+	_expect(bool(snapshot.get("is_legacy", false)) == expected_legacy, "%s is_legacy mismatch" % mode, errs)
+	_expect(int(snapshot.get("seed", 0)) == expected_seed, "%s expected seed=%d, got %d" % [mode, expected_seed, int(snapshot.get("seed", 0))], errs)
+	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - expected_view_relief_scale) < 0.001, "%s expected view relief scale %.3f, got %.3f" % [mode, expected_view_relief_scale, float(snapshot.get("view_relief_scale", 0.0))], errs)
+	var switched_stats: Dictionary = snapshot.get("stats", {})
+	_expect(int(switched_stats.get("resident", 0)) > 0, "%s expected resident pages after switch" % mode, errs)

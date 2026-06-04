@@ -9,6 +9,10 @@
 > (`mountain_fly_review.tscn`). Treat the former as the mountain visual/content baseline and
 > the latter as the streaming producer/renderer proving scene until the live runtime is
 > configured to reproduce the same world/scale assumptions.
+> Runtime mountain-world target: `docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md`
+> defines the required live producer facts: explicit source/display mapping, mountain
+> macro field, connected pass-network routes, route carving before conditioning,
+> page-stable conditioning, material/dressing hints, and a facts/collision story.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
@@ -212,6 +216,10 @@
 > field reads. The live page pool now also has an identity-default biome source
 > transform seam so review presets can separate display coordinates from source
 > synthesis coordinates without touching the renderer. Current `fast` = **8/8 pass**.
+> Current `review_runtime` also proves direct scene reconfiguration through
+> MOUNTAIN -> REFERENCE -> WORLD -> LEGACY -> MOUNTAIN, then runs the sprint churn
+> gate. This locks the four live architectures as explicit review modes instead
+> of hidden toggles.
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
 > the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual
