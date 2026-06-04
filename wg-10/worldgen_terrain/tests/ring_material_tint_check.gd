@@ -30,6 +30,12 @@ func _run() -> int:
 	_expect(shader_source.contains("float material_fade = clamp(page_fade, 0.0, 1.0);"), "shader should derive material_fade from page_fade", errs)
 	_expect(shader_source.contains("static_material_mix * material_fade"), "static material mix should fade with page_fade", errs)
 	_expect(shader_source.contains("biome_material_mix * material_fade"), "WORLD route tint should fade with page_fade", errs)
+	_expect(shader_source.contains("vec3(0.24, 0.48, 0.35)"), "static corridor material should use restrained terrain green", errs)
+	_expect(shader_source.contains("vec3(0.44, 0.45, 0.40)"), "static rock material should use muted rock tint", errs)
+	_expect(shader_source.contains("vec3(0.74, 0.78, 0.72)"), "static snow material should avoid chalk-white override", errs)
+	_expect(not shader_source.contains("vec3(0.90, 0.88, 0.76)"), "static snow material should not use chalk-white override", errs)
+	_expect(shader_source.contains("float lit = 0.50 + 0.50 * ndl;"), "terrain lighting should keep stronger directional contrast", errs)
+	_expect(shader_source.contains("0.26);"), "terrain lighting should keep stronger slope shadow", errs)
 
 	rings.queue_free()
 	if not errs.is_empty():

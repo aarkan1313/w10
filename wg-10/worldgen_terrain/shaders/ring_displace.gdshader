@@ -184,11 +184,11 @@ vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
 	// relief readability to the normal view. This changes presentation only, not page data.
 	vec3 light_dir = normalize(vec3(-0.45, 0.78, -0.35));
 	float ndl = max(dot(normalize(n), light_dir), 0.0);
-	float lit = 0.58 + 0.42 * ndl;
+	float lit = 0.50 + 0.50 * ndl;
 	vec3 shaded = base * lit;
 	float cool_shadow = clamp(1.0 - ndl, 0.0, 1.0) * 0.16;
 	shaded = mix(shaded, vec3(shaded.r * 0.88, shaded.g * 0.94, shaded.b * 1.05), cool_shadow);
-	float slope_shadow = clamp((slope - 0.42) / 0.65, 0.0, 0.18);
+	float slope_shadow = clamp((slope - 0.42) / 0.65, 0.0, 0.26);
 	return shaded * (1.0 - slope_shadow);
 }
 
@@ -198,12 +198,12 @@ vec3 wg_static_reference_material(float code, vec3 base) {
 		return base;
 	}
 	if (cls < 1.5) {
-		return vec3(0.30, 0.52, 0.34);
+		return vec3(0.24, 0.48, 0.35);
 	}
 	if (cls < 2.5) {
-		return vec3(0.56, 0.50, 0.36);
+		return vec3(0.44, 0.45, 0.40);
 	}
-	return vec3(0.90, 0.88, 0.76);
+	return vec3(0.74, 0.78, 0.72);
 }
 
 void fragment() {

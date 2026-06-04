@@ -20,18 +20,23 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
-> Current proof after the latest owner-runtime fix: `fast` = 8/8,
-> `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
+> Current proof after the latest owner-material fix: `fast` = 8/8,
+> `m3` = 10/10, `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
 > `review_runtime_visual` = 2/2. Latest mode gate reports zero hide/show in
 > REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
-> 12.073/12.672 ms, MOUNTAIN 12.226/12.806 ms, WORLD 4.497/8.850 ms, with
+> 12.217/12.957 ms, MOUNTAIN 12.635/17.504 ms, WORLD 4.333/8.616 ms, with
 > `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.238 ms, MOUNTAIN 0.398 ms, WORLD 0.212 ms. The REFERENCE vs
+> REFERENCE 0.388 ms, MOUNTAIN 0.492 ms, WORLD 0.215 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
-> 0.000000/0.000000 at the captured review frame. The visual gate now also
+> 0.000000/0.000000 at the captured review frame. The visual gate also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
-> 80/160/240: mean RGB deltas were 0.002011, 0.000351, and 0.000000, with p95
-> 0.010458, 0.002614, and 0.000000. The page transition fade is wall-clock based (`0.18 s`),
+> 80/160/240: mean RGB deltas were 0.000043, 0.000286, and 0.000000, with p95
+> 0.000000, 0.001307, and 0.000000. The static-reference material override is
+> now restrained to terrain-like corridor/rock/snow tints and the unshaded ring
+> shader uses stronger directional/slope contrast, so the accepted bridge no
+> longer presents the material hint texture as chalk-white flats. The legacy
+> `m3_accept` wall-time gate now initializes the shader globals it renders with,
+> and passes at p99 2.56 ms in the full `m3` suite. The page transition fade is wall-clock based (`0.18 s`),
 > and the owner fly now spreads page builds over more frames, so high-FPS review
 > no longer compresses REPAGE transitions into a near-hard snap or piles multiple
 > synchronous page builds into one update.

@@ -35,8 +35,10 @@ mountain payload beside the live producer as a fact/material/height reference.
 The contract report can see pass-network routes, route carving, page-stable
 conditioning, corridor facts, and material hints from that reference, and the
 renderer can use the bound reference for both height and material page
-presentation. This is a reference-backed visual recovery bridge, not final
-procedural synthesis: the report uses
+presentation. The current renderer now treats those material hints as restrained
+terrain tints instead of bright categorical overlays, improving readability
+without changing the reference height/fact contract. This is still a
+reference-backed visual recovery bridge, not final procedural synthesis: the report uses
 `contract_kind=single_mountain_world_layer_reference_bridge`,
 `height_source=bound_world_layer_reference_payload`, and
 `procedural_world_layer_height=false`.
@@ -213,14 +215,16 @@ single rendered page:
   checks level, origin, world span, sample count, corridor coverage, and
   low/floor/rock/snow material hint means, so the bridge cannot drift to a
   different page-fact sample while still passing only screenshot-level checks.
-- Latest bridge proof after rebuild: `fast` = 8/8, `review_runtime` = 2/2,
-  `review_runtime_visual` = 2/2, and `review_runtime_modes` = 2/2. The latest
+- Latest bridge proof after the material presentation fix: `fast` = 8/8,
+  `m3` = 10/10, `review_runtime` = 2/2, `review_runtime_visual` = 2/2,
+  and `review_runtime_modes` = 2/2. The latest
   mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 12.073/12.672 ms, MOUNTAIN 12.226/12.806 ms,
-  and WORLD 4.497/8.850 ms, with `acquired_max=1` and zero full events in all
-  three. Latest render p99 is REFERENCE 0.238 ms, MOUNTAIN 0.398 ms, and WORLD
-  0.212 ms. The latest visual capture shows MOUNTAIN/network matching the
-  REFERENCE view at the reviewed frame and along the sprint path.
+  motion CPU p99/max is REFERENCE 12.217/12.957 ms, MOUNTAIN 12.635/17.504 ms,
+  and WORLD 4.333/8.616 ms, with `acquired_max=1` and zero full events in all
+  three. Latest render p99 is REFERENCE 0.388 ms, MOUNTAIN 0.492 ms, and WORLD
+  0.215 ms. The latest visual capture shows MOUNTAIN/network matching the
+  REFERENCE view at the reviewed frame and along the sprint path, while the
+  material shader no longer uses the prior chalk-white static snow override.
 - The renderer page transition fade is now wall-clock based (`0.18 s`) instead
   of frame-count based. This targets owner-visible REPAGE snap at high review
   FPS without changing page data, reference facts, or WORLD composition.
@@ -229,8 +233,8 @@ single rendered page:
   `0.002500` / `0.020000`.
 - Latest path bridge proof in `review_runtime_visual`: REFERENCE and
   MOUNTAIN/network were compared along an 8000 m/s page-boundary path at frames
-  80/160/240. Mean RGB deltas were `0.002011`, `0.000351`, and `0.000000`, and
-  p95 stayed within budget at `0.010458`, `0.002614`, and `0.000000`.
+  80/160/240. Mean RGB deltas were `0.000043`, `0.000286`, and `0.000000`, and
+  p95 stayed within budget at `0.000000`, `0.001307`, and `0.000000`.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:

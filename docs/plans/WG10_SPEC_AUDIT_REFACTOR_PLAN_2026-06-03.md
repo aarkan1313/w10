@@ -6,6 +6,39 @@ current state, because much of the active WG10 work is presently untracked.
 
 ## Addendum - 2026-06-04 Stabilization
 
+### Owner Material Presentation Checkpoint - 2026-06-04
+
+The latest owner-visible fix is scoped to renderer presentation and stale gate setup, not page
+data. `ring_displace.gdshader` now maps static-reference material codes to restrained terrain
+tints (`corridor/floor`, muted `rock`, cooler `snow`) instead of the prior chalk-white snow
+override, and the manual unshaded lighting has stronger directional/slope contrast. This targets
+the owner report that modes 1/2 looked washed out and material-flat even though the bridge was
+height-correct.
+
+The old M3 wall-time acceptance test also now initializes the shader globals it renders with and
+unbinds ring materials before freeing page textures. Before this cleanup, the check could fail from
+missing-global warning spam while reporting zero page computes, which obscured whether runtime was
+actually slow.
+
+Current proof after this checkpoint:
+
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite m3` = 10/10, with `m3_accept` p99 `2.56 ms` and hardened GPU p99
+  `0.082 ms`.
+- `python tools\gate.py --suite review_runtime` = 2/2; owner sprint churn remains zero hide/show.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99/max:
+  REFERENCE `12.217/12.957 ms`, MOUNTAIN `12.635/17.504 ms`, WORLD `4.333/8.616 ms`; all three have
+  `acquired_max=1`, `full_events=0`, and zero hide/show. Latest render p99: REFERENCE `0.388 ms`,
+  MOUNTAIN `0.492 ms`, WORLD `0.215 ms`.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2. REFERENCE vs MOUNTAIN/network is
+  still byte/visual-aligned at the main capture (`mean=0.000000`, `p95=0.000000`) and stays within
+  the sprint-path budgets at frames 80/160/240 (`mean=0.000043/0.000286/0.000000`,
+  `p95=0.000000/0.001307/0.000000`).
+
+This improves the accepted bridge readability for modes 1/2. It does not promote mode 3: `WORLD`
+is still a bounded diagnostic preview with page-scale composition artifacts until multi-biome
+composition is backgrounded/cached or given a cheaper preview contract.
+
 ### Current Owner-Visual Checkpoint - 2026-06-04
 
 The windowed scale-invariance and owner-runtime gates have now run on hardware. Current proof:

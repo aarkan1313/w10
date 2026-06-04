@@ -43,6 +43,10 @@ func _run() -> int:
 		push_error("Wg10TerrainView not registered"); return 1
 	if RenderingServer.get_rendering_device() == null:
 		print("[wg10-m3-accept] status=skip reason=no-render-device"); return 2
+	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_set("wg_dbg_mode", 0.0)
+	RenderingServer.global_shader_parameter_set("wg_detail_amp", 0.0)
 
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 
@@ -151,6 +155,7 @@ func _run() -> int:
 	if compute_ms_max > COMPUTE_CEIL_MS:
 		errs.append("compute-frame spike %.2f ms > %.1f ms (per-page rebuild regressed? caching broken)" % [compute_ms_max, COMPUTE_CEIL_MS])
 
+	rings.call("unbind_all")
 	pool.call("free_all")
 
 	print("[wg10-m3-accept] p99=%.2fms mean=%.2fms max=%.2fms speed=%dm/s frames=%d" % [p99, mean, mx, int(SPEED), MEASURE_FRAMES])
