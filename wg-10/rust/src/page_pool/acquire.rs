@@ -163,6 +163,25 @@ impl Wg10PagePool {
         origin_z: f64,
         world_span: f64,
     ) -> Result<&'a crate::biome_page_compute::BiomePageComputeContext, String> {
+        let selected = self.select_world_biome_name(world, origin_x, origin_z, world_span);
+        world
+            .contexts
+            .get(&selected)
+            .or_else(|| world.contexts.get("mountain"))
+            .ok_or_else(|| {
+                format!(
+                    "select_world_biome_context: no context for selected biome '{selected}' and no mountain fallback"
+                )
+            })
+    }
+
+    pub(super) fn select_world_biome_name(
+        &self,
+        world: &BiomeWorldRuntime,
+        origin_x: f64,
+        origin_z: f64,
+        world_span: f64,
+    ) -> String {
         let cx = origin_x + world_span * 0.5;
         let cz = origin_z + world_span * 0.5;
         let weights = grammar::family_weights(cx, cz, self.seed, &world.pack);
@@ -177,20 +196,12 @@ impl Wg10PagePool {
             }
         }
 
-        let selected = by_biome
+        by_biome
             .iter()
             .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(biome, _)| *biome)
-            .unwrap_or("mountain");
-        world
-            .contexts
-            .get(selected)
-            .or_else(|| world.contexts.get("mountain"))
-            .ok_or_else(|| {
-                format!(
-                    "select_world_biome_context: no context for selected biome '{selected}' and no mountain fallback"
-                )
-            })
+            .unwrap_or("mountain")
+            .to_string()
     }
 
     /// Roll back a failed compute into a newly-created texture.

@@ -41,6 +41,25 @@ func _run() -> int:
 		push_error("[wg10-biome-world] uses_biome_path=false after world configure")
 		return 1
 
+	var route_counts := {}
+	var route_radius := 64
+	var route_step := 8
+	for ix in range(-route_radius, route_radius + 1, route_step):
+		for iz in range(-route_radius, route_radius + 1, route_step):
+			var name := str(pool.call(
+				"debug_world_biome_for_page",
+				0,
+				float(ix) * BASE_SPAN,
+				float(iz) * BASE_SPAN))
+			if name == "":
+				push_error("[wg10-biome-world] debug_world_biome_for_page returned empty")
+				return 1
+			route_counts[name] = int(route_counts.get(name, 0)) + 1
+	if route_counts.size() < 2:
+		push_error("[wg10-biome-world] world routing collapsed to one biome: %s" % str(route_counts))
+		return 1
+	print("[wg10-biome-world] routes=%s" % str(route_counts))
+
 	print("[wg10-biome-world] step=acquire")
 	var tex = pool.call("acquire_page", 0, 0.0, 0.0)
 	if tex == null:

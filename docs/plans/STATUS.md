@@ -20,7 +20,7 @@
 > loads), `m3` = **9/9 pass** after the new page-fade renderer change (`m3_accept` p99
 > 5.81 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass** (macro 576 maxd
 > 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002, cross-level macro ratio
-> 0.066665 <= 0.08, fly GPU p99 0.103 ms).
+> 0.066665 <= 0.08, fly GPU p99 0.106 ms after the live material update).
 > `mountain_fly_review.tscn` now starts on the accepted `network_ref` scale
 > (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug`
 > scale (`feature_span_m=3500`). A direct scene smoke launch after the DLL
@@ -41,15 +41,26 @@
 > `cargo build --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain`
 > passes. The new `biome_world` windowed gate is **1/1 pass** when run outside
 > the sandbox (`python tools\gate.py --suite biome_world`): runtime=`world`,
-> `biome_path=true`, nonzero=65536, min=-1196.652466, max=842.125366. Important
-> run rule: Godot gates must run outside the filesystem sandbox because the
-> sandbox cannot write `user://` AppData logs and Godot crashes before scripts run.
+> `biome_path=true`, route diversity across the sampled page window includes
+> rainforest/wetland/tundra/volcanic/temperate/desert/grassland/coast/mountain/glacial/karst,
+> nonzero=65536, min=-1196.652466, max=842.125366. Important run rule: Godot
+> gates must run outside the filesystem sandbox because the sandbox cannot write
+> `user://` AppData logs and Godot crashes before scripts run.
+>
+> Visual renderer fix in this pass: the live streaming shader no longer uses the
+> blue/yellow height-debug ramp as the normal material. `ring_displace.gdshader`
+> now derives a mountain-style palette from displayed height plus a slope estimate,
+> while `M` still switches to the morph heatmap. This does not solve per-biome
+> materials or per-pixel compose, but it removes one major reason the live fly
+> looked nothing like the accepted mountain-network review even when the height
+> producer was correct.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
-> is pending, and the live `WORLD` path is page-center biome routing, not the
-> accepted per-pixel grammar/compose world architecture. Slice 4c is also still
-> open: runtime default flip, atlas-removal audit, hardened perf gate, and owner
-> acceptance are pending.
+> is pending, the reported forward-motion pop-in still needs an owner/runtime
+> capture after the material change, and the live `WORLD` path is page-center
+> biome routing, not the accepted per-pixel grammar/compose world architecture.
+> Slice 4c is also still open: runtime default flip, atlas-removal audit,
+> hardened perf gate, and owner acceptance are pending.
 > Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is
 > designed or explicitly exempted.
 >

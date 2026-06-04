@@ -27,6 +27,24 @@ impl Wg10PagePool {
         }
     }
 
+    /// Diagnostic: return the runtime biome selected for a world-routed page.
+    ///
+    /// This mirrors the exact page-center selector used by `acquire_page`. It is deliberately
+    /// read-only and does not allocate or dispatch page compute.
+    #[func]
+    pub fn debug_world_biome_for_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+    ) -> GString {
+        let Some(world) = self.biome_world.as_ref() else {
+            return GString::new();
+        };
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        GString::from(&self.select_world_biome_name(world, origin_x, origin_z, world_span))
+    }
+
     /// Unprotect a page, marking it LRU-eligible for eviction.
     #[func]
     pub fn release_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {

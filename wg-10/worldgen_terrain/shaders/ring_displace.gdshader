@@ -22,6 +22,7 @@ uniform float page_fade = 1.0;            // temporal fade for newly resident pa
 
 varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
+varying float v_slope;             // displayed rise/run estimate for terrain material selection
 // GLOBAL debug mode (one RenderingServer.global_shader_parameter for the whole scene, so a key in
 // the review scene flips it with no per-tile material access / no Rust rebuild):
 // 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
@@ -123,7 +124,48 @@ void vertex() {
 	// v_render_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
 	// facts/collision height: collision reads the separate CPU facts path, not this varying.
 	v_render_height = h + detail;
+
+	ivec2 page_size = textureSize(height_tex, 0);
+	float page_steps = max(float(page_size.x - 1), 1.0);
+	vec2 duv = vec2(1.0 / page_steps, 0.0);
+	vec2 dvv = vec2(0.0, 1.0 / page_steps);
+	float h_l = texture(height_tex, uv_fine - duv).r;
+	float h_r = texture(height_tex, uv_fine + duv).r;
+	float h_d = texture(height_tex, uv_fine - dvv).r;
+	float h_u = texture(height_tex, uv_fine + dvv).r;
+	float cell_m = max(world_span / page_steps, 1.0);
+	float sx = ((h_r - h_l) * relief_scale) / (2.0 * cell_m);
+	float sz = ((h_u - h_d) * relief_scale) / (2.0 * cell_m);
+	v_slope = length(vec2(sx, sz));
 	VERTEX.y = (h + detail) * relief_scale;
+}
+
+vec3 wg_mountain_palette(float h, float slope) {
+	float t = clamp(h / relief_ref * 0.5 + 0.5, 0.0, 1.0);
+	vec3 valley = vec3(0.15, 0.31, 0.24);
+	vec3 grass = vec3(0.27, 0.43, 0.24);
+	vec3 dry = vec3(0.53, 0.47, 0.33);
+	vec3 rock = vec3(0.45, 0.44, 0.40);
+	vec3 snow = vec3(0.82, 0.84, 0.78);
+
+	vec3 base = valley;
+	if (t < 0.35) {
+		base = mix(valley, grass, t / 0.35);
+	} else if (t < 0.62) {
+		base = mix(grass, dry, (t - 0.35) / 0.27);
+	} else if (t < 0.82) {
+		base = mix(dry, rock, (t - 0.62) / 0.20);
+	} else if (t < 0.94) {
+		base = mix(rock, snow, (t - 0.82) / 0.12);
+	} else {
+		base = snow;
+	}
+
+	float rock_mix = clamp((slope - 0.22) / 0.28, 0.0, 0.72);
+	base = mix(base, rock, rock_mix);
+	float cliff_mix = clamp((slope - 0.46) / 0.36, 0.0, 0.45);
+	base = mix(base, vec3(0.31, 0.31, 0.29), cliff_mix);
+	return base;
 }
 
 void fragment() {
@@ -133,7 +175,6 @@ void fragment() {
 		// geomorph shows a WIDE green gradient where fine eases into coarse.
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
-		float t = clamp(v_render_height / relief_ref * 0.5 + 0.5, 0.0, 1.0);
-		ALBEDO = vec3(t, t * 0.8 + 0.1, 1.0 - t);
+		ALBEDO = wg_mountain_palette(v_render_height, v_slope);
 	}
 }
