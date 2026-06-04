@@ -15,6 +15,7 @@ use crate::biome_page_compute::f32s_to_bytes;
 #[derive(Clone)]
 pub(super) struct StaticHeightRuntime {
     grid: Vec<f32>,
+    corridor_grid: Option<Vec<u8>>,
     grid_n: usize,
     origin_x_m: f64,
     origin_z_m: f64,
@@ -242,9 +243,11 @@ impl StaticHeightRuntime {
             .map(|p| p.band_walkable_frac)
             .unwrap_or(0.0);
         let pass_network_carved_frac = pass_network.map(|p| p.carved_frac).unwrap_or(0.0);
+        let has_corridor = corridor_grid.is_some();
 
         Ok(Self {
             grid,
+            corridor_grid,
             grid_n,
             origin_x_m: min_x,
             origin_z_m: min_z,
@@ -254,7 +257,7 @@ impl StaticHeightRuntime {
             source_scope: payload.source_scope,
             height_scale_m: payload.height_scale_m,
             feature_span_m: payload.feature_span_m,
-            has_corridor: corridor_grid.is_some(),
+            has_corridor,
             corridor_frac,
             pass_network_routes,
             pass_network_walkable_frac,
@@ -294,6 +297,45 @@ impl StaticHeightRuntime {
     }
 
     fn sample(&self, x_m: f64, z_m: f64) -> f32 {
+        let (x0, z0, x1, z1, tx, tz) = self.sample_indices(x_m, z_m);
+        let h00 = self.grid[z0 * self.grid_n + x0];
+        let h10 = self.grid[z0 * self.grid_n + x1];
+        let h01 = self.grid[z1 * self.grid_n + x0];
+        let h11 = self.grid[z1 * self.grid_n + x1];
+        let hx0 = h00 + (h10 - h00) * tx;
+        let hx1 = h01 + (h11 - h01) * tx;
+        hx0 + (hx1 - hx0) * tz
+    }
+
+    pub(super) fn corridor_fraction_for_page(
+        &self,
+        page_origin_x: f64,
+        page_origin_z: f64,
+        world_span: f64,
+        samples_px: usize,
+    ) -> f64 {
+        let Some(corridor) = self.corridor_grid.as_ref() else {
+            return 0.0;
+        };
+        let samples_px = samples_px.clamp(2, 65);
+        let denom = (samples_px - 1) as f64;
+        let mut count = 0usize;
+        for z in 0..samples_px {
+            let wz = page_origin_z + world_span * z as f64 / denom;
+            for x in 0..samples_px {
+                let wx = page_origin_x + world_span * x as f64 / denom;
+                let (x0, z0, x1, z1, tx, tz) = self.sample_indices(wx, wz);
+                let ix = if tx >= 0.5 { x1 } else { x0 };
+                let iz = if tz >= 0.5 { z1 } else { z0 };
+                if corridor[iz * self.grid_n + ix] != 0 {
+                    count += 1;
+                }
+            }
+        }
+        count as f64 / (samples_px * samples_px) as f64
+    }
+
+    fn sample_indices(&self, x_m: f64, z_m: f64) -> (usize, usize, usize, usize, f32, f32) {
         let u = ((x_m - self.origin_x_m) / self.span_x_m).clamp(0.0, 1.0);
         let v = ((z_m - self.origin_z_m) / self.span_z_m).clamp(0.0, 1.0);
         let gx = u * (self.grid_n - 1) as f64;
@@ -304,13 +346,7 @@ impl StaticHeightRuntime {
         let z1 = (z0 + 1).min(self.grid_n - 1);
         let tx = (gx - x0 as f64) as f32;
         let tz = (gz - z0 as f64) as f32;
-        let h00 = self.grid[z0 * self.grid_n + x0];
-        let h10 = self.grid[z0 * self.grid_n + x1];
-        let h01 = self.grid[z1 * self.grid_n + x0];
-        let h11 = self.grid[z1 * self.grid_n + x1];
-        let hx0 = h00 + (h10 - h00) * tx;
-        let hx1 = h01 + (h11 - h01) * tx;
-        hx0 + (hx1 - hx0) * tz
+        (x0, z0, x1, z1, tx, tz)
     }
 }
 
@@ -362,6 +398,7 @@ mod tests {
         assert!((rt.pass_network_carved_frac - 0.25).abs() < 1.0e-12);
         assert!(rt.has_corridor);
         assert!((rt.corridor_frac - 0.5).abs() < 1.0e-12);
+        assert!((rt.corridor_fraction_for_page(-5.0, -5.0, 10.0, 2) - 0.5).abs() < 1.0e-12);
         assert_eq!(rt.sample(-5.0, -5.0), 0.0);
         assert_eq!(rt.sample(5.0, 5.0), 300.0);
     }

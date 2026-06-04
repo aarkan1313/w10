@@ -96,6 +96,51 @@ impl Wg10PagePool {
         out
     }
 
+    pub(crate) fn static_reference_corridor_fraction_for_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+        samples_px: usize,
+    ) -> Option<f64> {
+        let reference = self.static_ref.as_ref()?;
+        if !reference.has_corridor {
+            return None;
+        }
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        Some(reference.corridor_fraction_for_page(origin_x, origin_z, world_span, samples_px))
+    }
+
+    /// Diagnostic report for accepted static-reference facts sampled over one runtime page.
+    ///
+    /// Empty when the active producer is not `configure_static_reference`.
+    #[func]
+    pub fn static_reference_page_report(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+        samples_px: i64,
+    ) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        let Some(reference) = self.static_ref.as_ref() else {
+            return out;
+        };
+        let samples = samples_px.clamp(2, 65) as usize;
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        out.set("level", level);
+        out.set("origin_x", origin_x);
+        out.set("origin_z", origin_z);
+        out.set("world_span_m", world_span);
+        out.set("samples_px", samples as i64);
+        out.set("has_corridor", reference.has_corridor);
+        out.set(
+            "corridor_frac",
+            reference.corridor_fraction_for_page(origin_x, origin_z, world_span, samples),
+        );
+        out
+    }
+
     /// Diagnostic: return the strongest page-center runtime biome for a world-routed page.
     ///
     /// This is deliberately read-only and does not allocate or dispatch page compute. Runtime

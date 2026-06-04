@@ -224,7 +224,12 @@ impl Wg10TerrainView {
                         po_x,
                         po_z,
                     );
-                    let material_mix = biome_material_mix_for_page(self.pool.as_ref().unwrap());
+                    let material_mix = biome_material_mix_for_page(
+                        self.pool.as_ref().unwrap(),
+                        level as i64,
+                        po_x,
+                        po_z,
+                    );
                     rings.bind_mut().set_tile_debug_color(
                         level as i64,
                         dx as i64,
@@ -254,6 +259,15 @@ fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, orig
             .debug_world_biome_for_page(level, origin_x, origin_z)
             .to_string();
         biome_route_color(&biome)
+    } else if mode == "static_reference" {
+        let corridor_frac = pool_ref
+            .static_reference_corridor_fraction_for_page(level, origin_x, origin_z, 17)
+            .unwrap_or(0.0);
+        if corridor_frac > 0.02 {
+            Color::from_rgba(0.24, 0.48, 0.35, 1.0)
+        } else {
+            biome_route_color("mountain")
+        }
     } else if mode == "single" {
         biome_route_color("mountain")
     } else {
@@ -261,10 +275,25 @@ fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, orig
     }
 }
 
-fn biome_material_mix_for_page(pool: &Gd<Wg10PagePool>) -> f64 {
-    let mode = pool.bind().biome_runtime_mode().to_string();
+fn biome_material_mix_for_page(
+    pool: &Gd<Wg10PagePool>,
+    level: i64,
+    origin_x: f64,
+    origin_z: f64,
+) -> f64 {
+    let pool_ref = pool.bind();
+    let mode = pool_ref.biome_runtime_mode().to_string();
     if mode == "world" {
         0.34
+    } else if mode == "static_reference" {
+        let corridor_frac = pool_ref
+            .static_reference_corridor_fraction_for_page(level, origin_x, origin_z, 17)
+            .unwrap_or(0.0);
+        if corridor_frac > 0.02 {
+            (0.10 + corridor_frac * 1.25).clamp(0.0, 0.32)
+        } else {
+            0.0
+        }
     } else {
         0.0
     }
