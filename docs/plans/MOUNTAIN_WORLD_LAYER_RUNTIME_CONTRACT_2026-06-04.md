@@ -102,6 +102,11 @@ single rendered page:
    conditioning stats (`source_ptp`, `p05/p50/p95`, and conditioned range) so
    future live producers can be compared against the normalization/shape
    contract instead of only against screenshots.
+   Follow-up runtime-facing step: `Wg10PagePool.mountain_world_layer_contract_report()`
+   now exposes a compact contract/fact summary for every active producer. It
+   distinguishes the accepted static-reference visual baseline from the explicit
+   live `MOUNTAIN` candidate and from WORLD/LEGACY, and it keeps the current
+   blocking gaps machine-visible instead of burying them in screenshots.
 
 5. **Gate in layers.**
    Required gates before owner acceptance:
@@ -149,6 +154,11 @@ single rendered page:
 - `review_runtime` now proves the REFERENCE bridge loaded whole-field
   conditioning facts too (`has_conditioning_stats=true`, positive source and
   conditioned spans, and ordered `p05/p95` percentiles).
+- `review_runtime` now also proves `mountain_world_layer_contract_report()`
+  classifies startup `REFERENCE` as
+  `accepted_static_reference_visual_baseline`, classifies live `MOUNTAIN` as
+  `single_seam_safe_mountain_page_recipe`, and does not let any current mode
+  claim `satisfies_mountain_world_layer_contract=true`.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:
@@ -160,4 +170,5 @@ single rendered page:
   covering the accepted corridor mask.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
-  producer.
+  producer. The contract report now makes that explicit by requiring its
+  `blocking_gap` to name the missing pass-network work.

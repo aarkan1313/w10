@@ -63,6 +63,17 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("detail_on", true)), "runtime default detail should be off", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 	_expect_reference_contract(snapshot, "default", errs)
+	_expect_world_layer_contract_report(
+		snapshot,
+		"default",
+		"accepted_static_reference_visual_baseline",
+		true,
+		false,
+		true,
+		true,
+		true,
+		errs
+	)
 
 	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 0.5, errs)
 	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, errs)
@@ -115,6 +126,33 @@ func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array
 	_expect(float(center_page.get("floor_hint_mean", -1.0)) >= 0.0, "%s REFERENCE center page expected floor hint mean" % label, errs)
 	_expect(float(center_page.get("rock_hint_mean", -1.0)) >= 0.0, "%s REFERENCE center page expected rock hint mean" % label, errs)
 
+func _expect_world_layer_contract_report(
+	snapshot: Dictionary,
+	label: String,
+	expected_kind: String,
+	expected_accepted_baseline: bool,
+	expected_live_candidate: bool,
+	expected_pass_network: bool,
+	expected_conditioning: bool,
+	expected_material_hints: bool,
+	errs: Array[String],
+) -> void:
+	var report: Dictionary = snapshot.get("mountain_world_layer_contract", {})
+	_expect(str(report.get("runtime_mode", "")) == str(snapshot.get("runtime_mode", "")), "%s contract report runtime mismatch" % label, errs)
+	_expect(str(report.get("contract_kind", "")) == expected_kind, "%s expected contract kind %s, got %s" % [label, expected_kind, str(report.get("contract_kind", ""))], errs)
+	_expect(bool(report.get("accepted_visual_baseline", false)) == expected_accepted_baseline, "%s accepted baseline flag mismatch" % label, errs)
+	_expect(bool(report.get("explicit_live_candidate", false)) == expected_live_candidate, "%s live candidate flag mismatch" % label, errs)
+	_expect(bool(report.get("has_pass_network_routes", false)) == expected_pass_network, "%s pass-network fact flag mismatch" % label, errs)
+	_expect(bool(report.get("has_route_carving", false)) == expected_pass_network, "%s route-carving fact flag mismatch" % label, errs)
+	_expect(bool(report.get("has_page_stable_conditioning", false)) == expected_conditioning, "%s conditioning fact flag mismatch" % label, errs)
+	_expect(bool(report.get("has_material_hints", false)) == expected_material_hints, "%s material hint flag mismatch" % label, errs)
+	_expect(not bool(report.get("satisfies_mountain_world_layer_contract", true)), "%s should not claim full live mountain contract yet" % label, errs)
+	_expect(str(report.get("blocking_gap", "")) != "", "%s expected an explicit blocking gap string" % label, errs)
+	if expected_kind == "single_seam_safe_mountain_page_recipe":
+		_expect(str(report.get("blocking_gap", "")).contains("pass-network"), "%s live MOUNTAIN gap should name pass-network" % label, errs)
+	if expected_kind == "accepted_static_reference_visual_baseline":
+		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
+
 func _expect_mode_switch(
 	scene: Node,
 	mode: String,
@@ -152,7 +190,13 @@ func _expect_mode_switch(
 		_expect(absf(float(source_transform.get("source_scale", 0.0)) - 3.515625) < 0.000001, "MOUNTAIN expected source scale=3.515625", errs)
 		_expect(absf(float(source_transform.get("source_offset_x_m", 0.0)) - 207000.0) < 0.001, "MOUNTAIN expected source x offset=207000", errs)
 		_expect(absf(float(source_transform.get("source_offset_z_m", 0.0)) - 176000.0) < 0.001, "MOUNTAIN expected source z offset=176000", errs)
+		_expect_world_layer_contract_report(snapshot, mode, "single_seam_safe_mountain_page_recipe", false, true, false, false, false, errs)
+	if mode == "WORLD":
+		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)
+	if mode == "LEGACY":
+		_expect_world_layer_contract_report(snapshot, mode, "legacy_dem_kernel_atlas", false, false, false, false, false, errs)
 	if mode == "REFERENCE":
 		_expect_reference_contract(snapshot, mode, errs)
+		_expect_world_layer_contract_report(snapshot, mode, "accepted_static_reference_visual_baseline", true, false, true, true, true, errs)
 	var switched_stats: Dictionary = snapshot.get("stats", {})
 	_expect(int(switched_stats.get("resident", 0)) > 0, "%s expected resident pages after switch" % mode, errs)

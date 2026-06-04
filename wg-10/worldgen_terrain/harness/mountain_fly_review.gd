@@ -288,6 +288,7 @@ func _set_producer_mode(label: String) -> void:
 func debug_runtime_snapshot() -> Dictionary:
 	var stats := {}
 	var source_transform := {}
+	var mountain_world_layer_contract := {}
 	var static_reference := {}
 	var static_reference_center_page := {}
 	var runtime_mode := "missing"
@@ -295,6 +296,7 @@ func debug_runtime_snapshot() -> Dictionary:
 	if _pool != null:
 		stats = _pool.call("stats")
 		source_transform = _pool.call("biome_source_transform")
+		mountain_world_layer_contract = _pool.call("mountain_world_layer_contract_report")
 		static_reference = _pool.call("static_reference_report")
 		static_reference_center_page = _pool.call("static_reference_page_report", 0, 0.0, 0.0, 17)
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
@@ -335,6 +337,7 @@ func debug_runtime_snapshot() -> Dictionary:
 		"biome_path": biome_path,
 		"stats": stats,
 		"source_transform": source_transform,
+		"mountain_world_layer_contract": mountain_world_layer_contract,
 		"static_reference": static_reference,
 		"static_reference_center_page": static_reference_center_page,
 		"mode": mode,

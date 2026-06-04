@@ -44,11 +44,17 @@
 > `static_reference_page_report(...)`, and REFERENCE rendering uses page-level
 > hints for material color/mix instead of collapsing the accepted payload to a
 > corridor-only tint.
+> Follow-up contract audit: `Wg10PagePool.mountain_world_layer_contract_report()`
+> now exposes the active producer's mountain-world-layer facts in one place.
+> `review_runtime` gates that `REFERENCE` is the accepted static visual baseline,
+> live `MOUNTAIN` is only the explicit seam-safe page-recipe candidate, WORLD and
+> LEGACY are not mountain-network producers, and no current mode claims full live
+> mountain-world-layer contract satisfaction.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test -p wg10_terrain --lib`
-> = **225 passed / 0 failed** after adding static-reference conditioning facts.
+> = **225 passed / 0 failed** after adding the producer contract report.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline

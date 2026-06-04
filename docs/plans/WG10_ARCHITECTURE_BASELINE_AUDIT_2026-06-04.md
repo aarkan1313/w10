@@ -103,6 +103,13 @@ runtime, or an explicit decision that the static `REFERENCE` payload remains the
 temporary accepted baseline while the live seam-safe recipe is judged as a
 separate prototype.
 
+The runtime now exposes that distinction directly through
+`Wg10PagePool.mountain_world_layer_contract_report()`. `review_runtime` gates
+that `REFERENCE` reports the accepted static visual baseline facts, live
+`MOUNTAIN` reports `single_seam_safe_mountain_page_recipe` with a pass-network
+blocking gap, and no active mode claims full mountain-world-layer contract
+satisfaction yet.
+
 Current source-size check also changes the refactor framing. No tracked Rust,
 GDScript, GLSL, or Python source file is over 1000 lines after the split. The
 remaining large tracked files are mostly docs/history, generated fixtures, or
