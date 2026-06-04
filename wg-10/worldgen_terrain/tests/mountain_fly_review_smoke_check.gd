@@ -64,6 +64,7 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("detail_on", true)), "runtime default detail should be off", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 	_expect_reference_contract(snapshot, "default", errs)
+	var reference_center_page: Dictionary = snapshot.get("static_reference_center_page", {})
 	_expect_world_layer_contract_report(
 		snapshot,
 		"default",
@@ -76,10 +77,10 @@ func _run() -> int:
 		errs
 	)
 
-	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, errs)
-	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, 425.0, errs)
-	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, errs)
-	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, errs)
+	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, reference_center_page, errs)
+	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, 425.0, {}, errs)
+	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, {}, errs)
+	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, {}, errs)
 
 	scene.queue_free()
 	await process_frame
@@ -101,6 +102,10 @@ func _run() -> int:
 func _expect(condition: bool, message: String, errs: Array[String]) -> void:
 	if not condition:
 		errs.append(message)
+
+func _expect_float_close(actual: float, expected: float, eps: float, message: String, errs: Array[String]) -> void:
+	if absf(actual - expected) > eps:
+		errs.append("%s: expected %.12f got %.12f" % [message, expected, actual])
 
 func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("static_reference", {})
@@ -179,6 +184,41 @@ func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: Stri
 	_expect(float(center_page.get("rock_hint_mean", -1.0)) >= 0.0, "%s bound mountain layer expected rock hint mean" % label, errs)
 	_expect(int(snapshot.get("static_material_bound_tiles", 0)) > 0, "%s live MOUNTAIN expected bound material fact pages" % label, errs)
 
+func _expect_bound_page_matches_reference(expected: Dictionary, actual: Dictionary, errs: Array[String]) -> void:
+	_expect(not expected.is_empty(), "MOUNTAIN missing default REFERENCE center-page baseline", errs)
+	_expect(not actual.is_empty(), "MOUNTAIN missing bound center-page report", errs)
+	if expected.is_empty() or actual.is_empty():
+		return
+	for key in ["has_corridor", "has_material_hints"]:
+		_expect(
+			bool(actual.get(key, false)) == bool(expected.get(key, false)),
+			"MOUNTAIN bound center-page %s mismatch" % key,
+			errs
+		)
+	for key in ["level", "samples_px"]:
+		_expect(
+			int(actual.get(key, -1)) == int(expected.get(key, -1)),
+			"MOUNTAIN bound center-page %s mismatch" % key,
+			errs
+		)
+	for key in [
+		"origin_x",
+		"origin_z",
+		"world_span_m",
+		"corridor_frac",
+		"low_pass_hint_mean",
+		"floor_hint_mean",
+		"rock_hint_mean",
+		"snow_hint_mean",
+	]:
+		_expect_float_close(
+			float(actual.get(key, -999999.0)),
+			float(expected.get(key, -999999.0)),
+			0.000000001,
+			"MOUNTAIN bound center-page %s mismatch" % key,
+			errs
+		)
+
 func _expect_mode_switch(
 	scene: Node,
 	mode: String,
@@ -189,6 +229,7 @@ func _expect_mode_switch(
 	expected_seed: int,
 	expected_view_relief_scale: float,
 	expected_view_relief_ref: float,
+	expected_reference_center_page: Dictionary,
 	errs: Array[String],
 ) -> void:
 	if not scene.has_method("_set_producer_mode"):
@@ -220,6 +261,7 @@ func _expect_mode_switch(
 		_expect(absf(float(source_transform.get("source_offset_z_m", 0.0)) - 176000.0) < 0.001, "MOUNTAIN expected source z offset=176000", errs)
 		_expect_world_layer_contract_report(snapshot, mode, "single_mountain_world_layer_reference_bridge", false, true, true, true, true, errs)
 		_expect_mountain_layer_reference_contract(snapshot, mode, errs)
+		_expect_bound_page_matches_reference(expected_reference_center_page, snapshot.get("mountain_world_layer_reference_center_page", {}), errs)
 	if mode == "WORLD":
 		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)
 	if mode == "LEGACY":

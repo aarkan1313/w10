@@ -207,13 +207,19 @@ single rendered page:
   `height_source=bound_world_layer_reference_payload`,
   `procedural_world_layer_height=false`, and
   `satisfies_mountain_world_layer_contract=false`.
+- `review_runtime` now compares the default `REFERENCE` center-page fact report
+  against the live `MOUNTAIN/network_ref` bound center-page report. The guard
+  checks level, origin, world span, sample count, corridor coverage, and
+  low/floor/rock/snow material hint means, so the bridge cannot drift to a
+  different page-fact sample while still passing only screenshot-level checks.
 - Latest bridge proof after rebuild: `cargo test -p wg10_terrain --lib` =
   227/0, `fast` = 8/8, `review_runtime` = 2/2,
   `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. The latest
-  mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; MOUNTAIN
-  motion p99/max is 35.781/42.245 ms and render p99 is 0.367 ms. The latest
-  visual capture shows MOUNTAIN/network matching the REFERENCE view at the
-  reviewed frame.
+  mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
+  motion CPU p99/max is REFERENCE 31.430/41.763 ms, MOUNTAIN 32.570/43.937 ms,
+  and WORLD 9.032/21.871 ms. Latest render p99 is REFERENCE 0.352 ms,
+  MOUNTAIN 0.375 ms, and WORLD 0.212 ms. The latest visual capture shows
+  MOUNTAIN/network matching the REFERENCE view at the reviewed frame.
 - Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
   stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
   `0.002500` / `0.020000`.

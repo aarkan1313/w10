@@ -612,3 +612,36 @@ Riskier abstraction:
   checks are windowed.
 - Do not claim the drainage-fact-cache spec is implemented because coarse levels
   can run `flow_on=false`. That is only a mitigation, not the cache subsystem.
+
+## Latest Runtime Read - 2026-06-04
+
+Keys `1`, `2`, and `3` in `mountain_fly_review.tscn` are different
+architectures, not three equivalent quality views:
+
+- `1` / `REFERENCE` is the accepted static mountain-network payload streamed
+  through the live clipmap renderer.
+- `2` / `MOUNTAIN` with `network_ref` is the reference-backed bridge. It now
+  matches `REFERENCE` in the visual capture gate and in a numeric center-page
+  fact guard for corridor/material hints.
+- `3` / `WORLD` is still a bounded diagnostic composition path. It is capped to
+  one active biome per page because top-2/full WORLD height composition caused
+  roughly 1900-1950 ms synchronous page-build hitches in the owner fly stream.
+  Page-scale regions and samey/unfinished materials are expected there until
+  WORLD composition is async/cached or replaced by a cheaper preview contract.
+
+Latest gates with the editor closed:
+
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Scripted motion
+  CPU p99/max: REFERENCE 31.430/41.763 ms, MOUNTAIN 32.570/43.937 ms, WORLD
+  9.032/21.871 ms, with zero hide/show in all three. Render p99: REFERENCE
+  0.352 ms, MOUNTAIN 0.375 ms, WORLD 0.212 ms.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1. REFERENCE and
+  MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
+  at 57,600 sampled pixels.
+
+Immediate fix direction: do not tune WORLD as if it were the accepted mountain
+look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
+add manual-path instrumentation if owner fly still shows pop outside the gated
+camera path, and move WORLD visual quality work behind a separated
+world-selection/producer path instead of the current synchronous page stream.
