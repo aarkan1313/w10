@@ -26,6 +26,7 @@ pub(super) struct ApronBuffers {
     core: Rid,              // binding 23 (storage; schedule_mountain's trailing PASS_CROP writes it, inert)
     pool: Vec<Rid>,         // bindings 24..24+POOL_SLOTS-1
     vents: Rid,             // binding 40
+    pub(super) vent_count: i32,
     pub(super) kparams: KernelParams,
 }
 
@@ -153,7 +154,7 @@ pub(super) fn alloc_apron_buffers(
     let pool: Vec<Rid> = (0..POOL_SLOTS).map(|_| mk_field(rd)).collect();
 
     // VENT buffer (40): zeroed for non-volcanic biomes (mountain never reads it).
-    let (vent_packed, _vent_count): (Vec<f32>, usize) = if biome == "volcanic" {
+    let (vent_packed, vent_count): (Vec<f32>, usize) = if biome == "volcanic" {
         crate::recipes_volcanic::volcanic::packed_vents(
             &crate::recipes_volcanic::volcanic::STRATOVOLCANO_CLUSTER,
             seed as i64,
@@ -179,6 +180,7 @@ pub(super) fn alloc_apron_buffers(
         core,
         pool,
         vents,
+        vent_count: vent_count as i32,
         kparams,
     })
 }

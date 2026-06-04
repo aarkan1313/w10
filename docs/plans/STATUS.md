@@ -12,7 +12,8 @@
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
-> `cargo test -p wg10_terrain --lib` = **217 passed / 0 failed**.
+> `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
+> = **218 passed / 0 failed**.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
@@ -27,10 +28,28 @@
 > relief_m=1000`, so the earlier 11-vs-12 `configure_biome` call error was a
 > stale loaded extension, not the current source.
 >
+> Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has three
+> explicit producer modes: `WORLD` (default), `MOUNTAIN`, and `LEGACY`; `B`
+> cycles them and the HUD/log prints the active mode. `WORLD` calls
+> `configure_biome_world(...)`, loads the pack grammar without resolving the
+> legacy kernel atlas, builds cached GPU contexts for the 11 currently ported
+> biome fragments, samples grammar at the page center, and routes each page to
+> the dominant supported biome. This removes the all-mountain default for the
+> live fly, but it is still a first routed producer layer: not yet per-pixel
+> multi-biome compose, not yet badlands-native (badlands falls back to desert),
+> and not yet the Slice 4c atlas-removal/runtime-flip acceptance.
+> `cargo build --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain`
+> passes. The new `biome_world` windowed gate is **1/1 pass** when run outside
+> the sandbox (`python tools\gate.py --suite biome_world`): runtime=`world`,
+> `biome_path=true`, nonzero=65536, min=-1196.652466, max=842.125366. Important
+> run rule: Godot gates must run outside the filesystem sandbox because the
+> sandbox cannot write `user://` AppData logs and Godot crashes before scripts run.
+>
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
-> is pending, and the live BIOME path is still a single mountain producer proving scene, not
-> the accepted grammar/compose world architecture. Slice 4c is also still open: runtime default
-> flip, atlas-removal audit, hardened perf gate, and owner acceptance are pending.
+> is pending, and the live `WORLD` path is page-center biome routing, not the
+> accepted per-pixel grammar/compose world architecture. Slice 4c is also still
+> open: runtime default flip, atlas-removal audit, hardened perf gate, and owner
+> acceptance are pending.
 > Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is
 > designed or explicitly exempted.
 >
@@ -39,8 +58,8 @@
 > `biome_page_compute/local_compose.rs` 439, `recipes_desert.rs` 434, `recipes_karst.rs` 428).
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
-> the live all-mountain fly as a failed version of the accepted network-chunk baseline until
-> it is configured to reproduce the same world/scale assumptions.
+> the live WORLD fly as accepted just because it is no longer all-mountain; it is
+> still page-center routing, not the accepted per-pixel compose world.
 
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating

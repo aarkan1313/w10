@@ -92,12 +92,12 @@ impl Pack {
 /// (grammar-only path; a referenced kernel is recorded but not read). Used by
 /// the grammar layer and its golden pack.
 pub fn load_pack_str(json: &str) -> Result<Pack, String> {
-    load_pack_impl(json, None)
+    load_pack_impl(json, None, false)
 }
 
 /// Load + validate a pack and resolve kernel `.npy` files relative to `base`.
 pub fn load_pack_with_base(json: &str, base: &Path) -> Result<Pack, String> {
-    load_pack_impl(json, Some(base))
+    load_pack_impl(json, Some(base), false)
 }
 
 /// Load + validate a pack from `<dir>/<file>`, resolving kernels relative to `dir`.
@@ -105,10 +105,21 @@ pub fn load_pack_dir(dir: &Path, file: &str) -> Result<Pack, String> {
     let path = dir.join(file);
     let json = std::fs::read_to_string(&path)
         .map_err(|e| format!("cannot read pack {path:?}: {e}"))?;
-    load_pack_impl(&json, Some(dir))
+    load_pack_impl(&json, Some(dir), false)
 }
 
-fn load_pack_impl(json: &str, base: Option<&Path>) -> Result<Pack, String> {
+/// Load + validate grammar/palette/family IDs without resolving kernel files. Used by runtime
+/// biome-world routing, where the pack is a grammar source and GPU recipe fragments supply the
+/// producer math.
+pub fn load_pack_grammar_only(json: &str) -> Result<Pack, String> {
+    load_pack_impl(json, None, true)
+}
+
+fn load_pack_impl(
+    json: &str,
+    base: Option<&Path>,
+    grammar_only: bool,
+) -> Result<Pack, String> {
     let raw: RawPack = serde_json::from_str(json).map_err(|e| format!("pack parse error: {e}"))?;
 
     if raw.schema != PACK_SCHEMA {
@@ -163,6 +174,9 @@ fn load_pack_impl(json: &str, base: Option<&Path>) -> Result<Pack, String> {
         let declares = rf.kernel.is_some() || rf.relief_m.is_some() || rf.footprint_m.is_some();
         if !declares {
             continue; // {} family — grammar-only, no kernel.
+        }
+        if grammar_only {
+            continue;
         }
         let kernel_path = rf.kernel.as_ref()
             .ok_or_else(|| format!("family {id:?} has relief/footprint but no kernel path"))?;

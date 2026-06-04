@@ -3,10 +3,11 @@
 use godot::classes::{RenderingDevice, RenderingServer, Texture2Drd};
 use godot::prelude::*;
 
+use crate::grammar;
 use crate::page_compute::compute_page_cached;
 use crate::page_policy::{Decision, PageKey};
 
-use super::Wg10PagePool;
+use super::{BiomeWorldRuntime, Wg10PagePool};
 
 #[godot_api(secondary)]
 impl Wg10PagePool {
@@ -120,7 +121,11 @@ impl Wg10PagePool {
         flow_on: bool,
     ) -> Result<(), String> {
         if self.use_biome_path {
-            let bctx = self.biome_ctx.as_ref().unwrap();
+            let bctx = if let Some(world) = self.biome_world.as_ref() {
+                self.select_world_biome_context(world, origin_x, origin_z, world_span)?
+            } else {
+                self.biome_ctx.as_ref().unwrap()
+            };
             crate::biome_page_compute::compute_biome_page_cached(
                 rd,
                 bctx,
@@ -151,6 +156,43 @@ impl Wg10PagePool {
         }
     }
 
+    fn select_world_biome_context<'a>(
+        &self,
+        world: &'a BiomeWorldRuntime,
+        origin_x: f64,
+        origin_z: f64,
+        world_span: f64,
+    ) -> Result<&'a crate::biome_page_compute::BiomePageComputeContext, String> {
+        let cx = origin_x + world_span * 0.5;
+        let cz = origin_z + world_span * 0.5;
+        let weights = grammar::family_weights(cx, cz, self.seed, &world.pack);
+        let mut by_biome: std::collections::BTreeMap<&str, f64> = std::collections::BTreeMap::new();
+        for &(family_idx, weight) in weights.entries() {
+            let Some(family_id) = world.pack.family_ids.get(family_idx as usize) else {
+                continue;
+            };
+            let biome = runtime_biome_from_family_id(family_id);
+            if world.contexts.contains_key(biome) {
+                *by_biome.entry(biome).or_insert(0.0) += weight;
+            }
+        }
+
+        let selected = by_biome
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(biome, _)| *biome)
+            .unwrap_or("mountain");
+        world
+            .contexts
+            .get(selected)
+            .or_else(|| world.contexts.get("mountain"))
+            .ok_or_else(|| {
+                format!(
+                    "select_world_biome_context: no context for selected biome '{selected}' and no mountain fallback"
+                )
+            })
+    }
+
     /// Roll back a failed compute into a newly-created texture.
     pub(super) fn rollback_failed_allocate(
         &mut self,
@@ -174,5 +216,15 @@ impl Wg10PagePool {
         }
         self.slot_wrap[slot] = None;
         self.policy.as_mut().unwrap().rollback(key);
+    }
+}
+
+fn runtime_biome_from_family_id(family_id: &str) -> &str {
+    let stem = family_id.split_once("__").map(|(stem, _)| stem).unwrap_or(family_id);
+    match stem {
+        // Badlands has accepted setup artifacts, but no GPU fragment/schedule in the 11-biome
+        // runtime set yet. Desert is the closest available routed fallback until badlands is ported.
+        "badlands" => "desert",
+        other => other,
     }
 }

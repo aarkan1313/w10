@@ -289,6 +289,7 @@ pub(crate) fn biome_sigmas(biome: &str) -> Option<Vec<f64>> {
 /// pre-validated (see `kp`) BEFORE the compute list opens, so the in-list lookups are
 /// provably-unreachable failures. Stored as a small fixed Vec rather than a borrowed closure to
 /// keep the borrow-checker happy across the open-list `&mut rd` reborrows.
+#[derive(Clone)]
 pub(crate) struct KernelParams {
     /// (sigma, koffset, kradius) in the FIXED `mountain_sigmas()` order.
     pub(crate) slots: Vec<(f64, i32, i32)>,

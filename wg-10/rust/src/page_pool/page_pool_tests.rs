@@ -78,6 +78,7 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     // a default flag/None here (the biome reset to None is trivial + asserted below).
     let mut use_biome_path: bool = false;
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
+    let mut biome_world: Option<BiomeWorldRuntime> = None;
 
     Wg10PagePool::reset_configured_state(
         &mut policy,
@@ -89,6 +90,7 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
         &mut compute_ctx,
         &mut use_biome_path,
         &mut biome_ctx,
+        &mut biome_world,
     );
 
     // Every configure-set field is None — the acquire guard now correctly sees
@@ -100,6 +102,7 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     assert!(compute_ctx.is_none(),  "compute_ctx must be cleared");
     assert!(!use_biome_path,        "use_biome_path must be cleared");
     assert!(biome_ctx.is_none(),    "biome_ctx must be cleared");
+    assert!(biome_world.is_none(),  "biome_world must be cleared");
     // Slot vectors emptied — no stale slot_wrap indexable by a stale policy.
     assert!(slot_tex.is_empty(),    "slot_tex must be empty");
     assert!(slot_wrap.is_empty(),   "slot_wrap must be empty");
@@ -135,17 +138,18 @@ fn reset_is_idempotent_on_unconfigured_state() {
     let mut compute_ctx:  Option<PageComputeContext>   = None;
     let mut use_biome_path: bool                       = false;
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
+    let mut biome_world: Option<BiomeWorldRuntime> = None;
 
     // Must not panic / must stay fully unconfigured.
     Wg10PagePool::reset_configured_state(
         &mut policy, &mut slot_tex, &mut slot_wrap,
         &mut pack, &mut pack_buffers, &mut glsl_source, &mut compute_ctx,
-        &mut use_biome_path, &mut biome_ctx,
+        &mut use_biome_path, &mut biome_ctx, &mut biome_world,
     );
 
     assert!(policy.is_none() && pack.is_none() && pack_buffers.is_none()
         && glsl_source.is_none() && compute_ctx.is_none());
-    assert!(!use_biome_path && biome_ctx.is_none());
+    assert!(!use_biome_path && biome_ctx.is_none() && biome_world.is_none());
     assert!(slot_tex.is_empty() && slot_wrap.is_empty());
 }
 
@@ -181,25 +185,28 @@ fn fresh_pool_not_configured_either_path() {
     fn is_configured(
         policy: bool, pack: bool, pack_buffers: bool, glsl: bool, compute_ctx: bool,
         biome_ctx: bool,
+        biome_world: bool,
     ) -> bool {
-        policy && ((pack && pack_buffers && glsl && compute_ctx) || biome_ctx)
+        policy && ((pack && pack_buffers && glsl && compute_ctx) || biome_ctx || biome_world)
     }
 
     // Fresh pool (what `init()` sets): everything absent -> NOT configured on either path.
     assert!(
-        !is_configured(false, false, false, false, false, false),
+        !is_configured(false, false, false, false, false, false, false),
         "fresh pool must be unconfigured on both paths"
     );
     // Policy alone (no producer ctx on EITHER path) is still unconfigured.
-    assert!(!is_configured(true, false, false, false, false, false), "policy alone => unconfigured");
+    assert!(!is_configured(true, false, false, false, false, false, false), "policy alone => unconfigured");
     // Legacy path fully built => configured.
-    assert!(is_configured(true, true, true, true, true, false), "full legacy => configured");
+    assert!(is_configured(true, true, true, true, true, false, false), "full legacy => configured");
     // Legacy path missing its compute_ctx => unconfigured (the F7 hazard, now guarded).
-    assert!(!is_configured(true, true, true, true, false, false), "legacy w/o compute_ctx => unconfigured");
+    assert!(!is_configured(true, true, true, true, false, false, false), "legacy w/o compute_ctx => unconfigured");
     // Biome path => configured with ONLY policy + biome_ctx (no pack/glsl).
-    assert!(is_configured(true, false, false, false, false, true), "biome path => configured");
+    assert!(is_configured(true, false, false, false, false, true, false), "biome path => configured");
     // Biome ctx present but NO policy => unconfigured (policy is mandatory on both paths).
-    assert!(!is_configured(false, false, false, false, false, true), "biome ctx w/o policy => unconfigured");
+    assert!(!is_configured(false, false, false, false, false, true, false), "biome ctx w/o policy => unconfigured");
+    assert!(is_configured(true, false, false, false, false, false, true), "biome world => configured");
+    assert!(!is_configured(false, false, false, false, false, false, true), "biome world w/o policy => unconfigured");
 }
 
 // NOTE (windowed-only, NOT run headless): the END-TO-END proofs —

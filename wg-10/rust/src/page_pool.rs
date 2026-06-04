@@ -24,12 +24,32 @@ use crate::gpu_compute::{build_pack_buffers, PackBuffers};
 use crate::page_policy::PagePolicy;
 use crate::page_compute::{PageComputeContext, build_page_compute_context};
 use crate::biome_page_compute;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 mod acquire;
 mod configure;
 mod lifecycle;
 mod state_api;
+
+struct BiomeWorldRuntime {
+    pack: pack::Pack,
+    contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
+}
+
+const RUNTIME_BIOMES: [&str; 11] = [
+    "coast",
+    "desert",
+    "glacial",
+    "grassland",
+    "karst",
+    "mountain",
+    "rainforest",
+    "temperate",
+    "tundra",
+    "volcanic",
+    "wetland",
+];
 
 // ---------------------------------------------------------------------------
 // Wg10PagePool
@@ -53,12 +73,13 @@ pub struct Wg10PagePool {
     glsl_source:  Option<String>,
     compute_ctx:  Option<PageComputeContext>,
 
-    // Biome GPU producer path (Slice-4, live mountain fly). Flag-gated; legacy kernel path is the
-    // DEFAULT (use_biome_path=false) for A/B + rollback. When true, acquire_page routes both
-    // producer sites through `compute_biome_page_cached` against `biome_ctx` instead of
-    // `compute_page_cached`. The biome path has NO pack/pack_buffers/glsl_source/compute_ctx.
+    // Biome GPU producer path (Slice-4). Flag-gated; legacy kernel path is the DEFAULT
+    // (use_biome_path=false) for A/B + rollback. The original `biome_ctx` is the proven single
+    // recipe path used by parity/perf gates. `biome_world` is the grammar-routed runtime path:
+    // it owns grammar-only pack data and a cached context per compiled recipe.
     use_biome_path:      bool,
     biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
+    biome_world:         Option<BiomeWorldRuntime>,
     biome_feature_span_m: f64,
     /// SCALE-INVARIANCE: the FIRST clipmap level (0 = finest) that bakes WITHOUT the drainage carve.
     /// A page at `level` runs `flow_on = level < biome_flow_max_level`. Default 2 => flow on levels
@@ -92,6 +113,7 @@ impl IRefCounted for Wg10PagePool {
             compute_ctx:  None,
             use_biome_path:       false,
             biome_ctx:            None,
+            biome_world:          None,
             biome_feature_span_m: 90000.0,
             biome_flow_max_level: 2,
             page_px:      256,
@@ -254,6 +276,137 @@ impl Wg10PagePool {
 
         self.install_biome_configuration(
             ctx,
+            capacity,
+            page_px,
+            world_span,
+            feature_span_m,
+            flow_max_level,
+            seed,
+        );
+
+        GString::new()
+    }
+
+    // -----------------------------------------------------------------------
+    // configure_biome_world  (grammar-routed biome producer path)
+    // -----------------------------------------------------------------------
+
+    /// Configure the pool for grammar-routed live biome pages. This is the first runtime world
+    /// layer: page acquisition samples the grammar at the page center, selects the dominant
+    /// supported biome recipe, and dispatches that cached GPU context. Full per-pixel compose
+    /// remains a later producer layer, but this removes the all-mountain runtime assumption.
+    #[func]
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_biome_world(
+        &mut self,
+        pack_dir: GString,
+        pack_file: GString,
+        capacity: i64,
+        page_px: i64,
+        apron_px: i64,
+        world_span: f64,
+        feature_span_m: f64,
+        flow_iters: i64,
+        relief_m: f64,
+        flow_max_level: i64,
+        seed: i64,
+    ) -> GString {
+        self.free_before_reconfigure();
+
+        let pack_dir_s = pack_dir.to_string();
+        let pack_file_s = pack_file.to_string();
+        let pack_dir_path = Path::new(&pack_dir_s);
+        let pack_path = pack_dir_path.join(&pack_file_s);
+        let pack_json = match std::fs::read_to_string(&pack_path) {
+            Ok(s) => s,
+            Err(e) => {
+                return GString::from(&format!(
+                    "configure_biome_world: cannot read pack {pack_path:?}: {e}"
+                ))
+            }
+        };
+        let pack = match pack::load_pack_grammar_only(&pack_json) {
+            Ok(p) => p,
+            Err(e) => return GString::from(&format!("configure_biome_world: pack: {e}")),
+        };
+
+        let worldgen_dir = match pack_dir_path.parent().and_then(|p| p.parent()) {
+            Some(p) => p.to_path_buf(),
+            None => {
+                return GString::from(&format!(
+                    "configure_biome_world: cannot derive shader dir from pack dir {pack_dir_path:?}"
+                ))
+            }
+        };
+        let shader_dir = worldgen_dir.join("shaders");
+        let prim_path = shader_dir.join("recipe_primitives.glsl");
+        let machine_path = shader_dir.join("biome_page.glsl");
+        let prim = match std::fs::read_to_string(&prim_path) {
+            Ok(s) => s,
+            Err(e) => return GString::from(&format!(
+                "configure_biome_world: primitives {prim_path:?}: {e}"
+            )),
+        };
+        let machine = match std::fs::read_to_string(&machine_path) {
+            Ok(s) => s,
+            Err(e) => return GString::from(&format!(
+                "configure_biome_world: machine {machine_path:?}: {e}"
+            )),
+        };
+
+        let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
+            Some(r) => r,
+            None => {
+                return GString::from(
+                    "configure_biome_world: global RenderingDevice unavailable (windowed-only)",
+                )
+            }
+        };
+
+        let mut contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext> =
+            BTreeMap::new();
+        for biome in RUNTIME_BIOMES {
+            let frag_path = shader_dir.join(format!("biome_{biome}.glsl"));
+            let fragment = match std::fs::read_to_string(&frag_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    for (_, ctx) in contexts {
+                        biome_page_compute::free_biome_page_context(&mut rd0, &ctx);
+                    }
+                    return GString::from(&format!(
+                        "configure_biome_world: fragment {frag_path:?}: {e}"
+                    ));
+                }
+            };
+            let ctx = match biome_page_compute::build_biome_page_context_for_biome(
+                &mut rd0,
+                &prim,
+                &machine,
+                &fragment,
+                biome,
+                page_px as usize,
+                apron_px as usize,
+                flow_iters as usize,
+                relief_m as f32,
+                seed,
+                feature_span_m,
+            ) {
+                Ok(c) => c,
+                Err(e) => {
+                    for (_, ctx) in contexts {
+                        biome_page_compute::free_biome_page_context(&mut rd0, &ctx);
+                    }
+                    return GString::from(&format!(
+                        "configure_biome_world: context {biome}: {e}"
+                    ));
+                }
+            };
+            contexts.insert(biome.to_string(), ctx);
+        }
+
+        self.install_biome_world_configuration(
+            pack,
+            contexts,
             capacity,
             page_px,
             world_span,

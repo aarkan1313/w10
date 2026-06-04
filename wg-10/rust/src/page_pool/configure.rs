@@ -5,8 +5,9 @@ use crate::gpu_compute::PackBuffers;
 use crate::pack;
 use crate::page_compute::PageComputeContext;
 use crate::page_policy::PagePolicy;
+use std::collections::BTreeMap;
 
-use super::Wg10PagePool;
+use super::{BiomeWorldRuntime, Wg10PagePool};
 
 impl Wg10PagePool {
     /// Release any existing configured GPU state before applying a new configuration.
@@ -49,6 +50,7 @@ impl Wg10PagePool {
         self.compute_ctx = Some(compute_ctx);
         self.use_biome_path = false;
         self.biome_ctx = None;
+        self.biome_world = None;
         self.page_px = page_px;
         self.world_span = world_span;
         self.seed = seed;
@@ -73,6 +75,35 @@ impl Wg10PagePool {
         self.compute_ctx = None;
         self.use_biome_path = true;
         self.biome_ctx = Some(biome_ctx);
+        self.biome_world = None;
+        self.biome_feature_span_m = feature_span_m;
+        self.biome_flow_max_level = flow_max_level;
+        self.page_px = page_px;
+        self.world_span = world_span;
+        self.seed = seed;
+        self.reset_stats();
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn install_biome_world_configuration(
+        &mut self,
+        pack: pack::Pack,
+        contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+        feature_span_m: f64,
+        flow_max_level: i64,
+        seed: i64,
+    ) {
+        self.init_policy_slots(capacity);
+        self.pack = None;
+        self.pack_buffers = None;
+        self.glsl_source = None;
+        self.compute_ctx = None;
+        self.use_biome_path = true;
+        self.biome_ctx = None;
+        self.biome_world = Some(BiomeWorldRuntime { pack, contexts });
         self.biome_feature_span_m = feature_span_m;
         self.biome_flow_max_level = flow_max_level;
         self.page_px = page_px;

@@ -15,6 +15,18 @@ impl Wg10PagePool {
         self.use_biome_path
     }
 
+    /// Human-readable active producer mode for diagnostics/HUDs.
+    #[func]
+    pub fn biome_runtime_mode(&self) -> GString {
+        if self.biome_world.is_some() {
+            GString::from("world")
+        } else if self.biome_ctx.is_some() {
+            GString::from("single")
+        } else {
+            GString::from("legacy")
+        }
+    }
+
     /// Unprotect a page, marking it LRU-eligible for eviction.
     #[func]
     pub fn release_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {

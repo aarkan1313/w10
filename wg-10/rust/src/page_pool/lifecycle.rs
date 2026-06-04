@@ -12,7 +12,7 @@ use crate::pack;
 use crate::page_compute::{free_page_compute_context, PageComputeContext};
 use crate::page_policy::PagePolicy;
 
-use super::Wg10PagePool;
+use super::{BiomeWorldRuntime, Wg10PagePool};
 
 impl Wg10PagePool {
     /// The actual teardown logic, shared by `free_all` and `Drop`.
@@ -34,6 +34,7 @@ impl Wg10PagePool {
                 &mut self.compute_ctx,
                 &mut self.use_biome_path,
                 &mut self.biome_ctx,
+                &mut self.biome_world,
             );
             return;
         }
@@ -44,6 +45,11 @@ impl Wg10PagePool {
         }
         if let Some(bctx) = self.biome_ctx.take() {
             biome_page_compute::free_biome_page_context(&mut rd, &bctx);
+        }
+        if let Some(world) = self.biome_world.take() {
+            for (_, bctx) in world.contexts {
+                biome_page_compute::free_biome_page_context(&mut rd, &bctx);
+            }
         }
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
@@ -61,6 +67,7 @@ impl Wg10PagePool {
             &mut self.compute_ctx,
             &mut self.use_biome_path,
             &mut self.biome_ctx,
+            &mut self.biome_world,
         );
     }
 
@@ -79,6 +86,7 @@ impl Wg10PagePool {
         compute_ctx: &mut Option<PageComputeContext>,
         use_biome_path: &mut bool,
         biome_ctx: &mut Option<biome_page_compute::BiomePageComputeContext>,
+        biome_world: &mut Option<BiomeWorldRuntime>,
     ) {
         *policy = None;
         slot_tex.clear();
@@ -90,6 +98,7 @@ impl Wg10PagePool {
         *compute_ctx = None;
         *use_biome_path = false;
         *biome_ctx = None;
+        *biome_world = None;
     }
 
     /// Exact predicate mirrored by the `acquire_page` guard.
@@ -100,7 +109,8 @@ impl Wg10PagePool {
                 && self.pack_buffers.is_some()
                 && self.glsl_source.is_some()
                 && self.compute_ctx.is_some())
-                || self.biome_ctx.is_some())
+                || self.biome_ctx.is_some()
+                || self.biome_world.is_some())
     }
 
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px x page_px`.

@@ -90,6 +90,15 @@ fn grammar_only_pack_still_loads_without_kernels() {
 }
 
 #[test]
+fn grammar_only_loader_accepts_kernel_metadata_without_resolving_files() {
+    let json = r#"{"schema":"worldgen10.terrain_pack.v1","version":1,"grammar_constants":{"region_size_m":32768.0,"province_size_regions":4,"palette_primary_pct":72,"palette_compatible_pct":22,"moderation_min":0.4,"moderation_strength":0.5},"palettes":[{"id":"p","families":["x","y","z"]}],"compatibility":{"p":[]},"families":{"x":{"kernel":"kernels/missing.npy","relief_m":1.0,"footprint_m":1.0},"y":{"kernel":"kernels/missing.npy","relief_m":1.0,"footprint_m":1.0},"z":{"kernel":"kernels/missing.npy","relief_m":1.0,"footprint_m":1.0}}}"#;
+    let p = pack::load_pack_grammar_only(json).expect("grammar-only routing must not resolve npy files");
+    assert_eq!(p.palettes.len(), 1);
+    assert_eq!(p.family_ids.len(), 3);
+    assert!(p.family_kernel("x").is_none());
+}
+
+#[test]
 fn load_pack_dir_rejects_missing_kernel_file() {
     // a pack referencing a kernel path that does not exist must error on load.
     let dir = fixtures_dir();
