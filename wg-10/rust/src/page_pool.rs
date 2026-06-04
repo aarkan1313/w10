@@ -31,6 +31,7 @@ mod acquire;
 mod configure;
 mod lifecycle;
 mod state_api;
+mod world_route;
 
 struct BiomeWorldRuntime {
     pack: pack::Pack,

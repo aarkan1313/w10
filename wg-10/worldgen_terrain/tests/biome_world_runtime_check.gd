@@ -14,6 +14,7 @@ const BASE_SPAN := 8192.0
 const CAPACITY := 16
 const SEED := 1337
 const ROUTE_LOD_LEVELS := 4
+const MATERIAL_RUNNER_UP := 0.15
 
 func _init() -> void:
 	quit(await _run())
@@ -60,6 +61,57 @@ func _run() -> int:
 		push_error("[wg10-biome-world] world routing collapsed to one biome: %s" % str(route_counts))
 		return 1
 	print("[wg10-biome-world] routes=%s" % str(route_counts))
+
+	var weight_samples := 0
+	var multi_active_pages := 0
+	var ambiguous_pages := 0
+	var max_active := 0
+	var max_runner_up := 0.0
+	var mean_runner_up := 0.0
+	var mean_top := 0.0
+	var weakest_top := 1.0
+	for ix in range(-route_radius, route_radius + 1, route_step):
+		for iz in range(-route_radius, route_radius + 1, route_step):
+			var report = pool.call(
+				"debug_world_biome_report_for_page",
+				0,
+				float(ix) * BASE_SPAN,
+				float(iz) * BASE_SPAN)
+			if typeof(report) != TYPE_DICTIONARY or report.is_empty():
+				push_error("[wg10-biome-world] debug_world_biome_report_for_page returned empty")
+				return 1
+			var active := int(report.get("active_count", 0))
+			var top := float(report.get("selected_weight", 0.0))
+			var runner := float(report.get("runner_up_weight", 0.0))
+			weight_samples += 1
+			max_active = max(max_active, active)
+			mean_top += top
+			mean_runner_up += runner
+			weakest_top = minf(weakest_top, top)
+			max_runner_up = maxf(max_runner_up, runner)
+			if active > 1:
+				multi_active_pages += 1
+			if runner >= MATERIAL_RUNNER_UP:
+				ambiguous_pages += 1
+	if weight_samples == 0:
+		push_error("[wg10-biome-world] no route weight samples")
+		return 1
+	mean_top /= float(weight_samples)
+	mean_runner_up /= float(weight_samples)
+	print("[wg10-biome-world] route_weights samples=%d multi_active=%d ambiguous=%d max_active=%d mean_top=%f weakest_top=%f mean_runner_up=%f max_runner_up=%f material_runner_up=%f" % [
+		weight_samples,
+		multi_active_pages,
+		ambiguous_pages,
+		max_active,
+		mean_top,
+		weakest_top,
+		mean_runner_up,
+		max_runner_up,
+		MATERIAL_RUNNER_UP,
+	])
+	if multi_active_pages == 0:
+		push_error("[wg10-biome-world] route weights collapsed; no active compose weights visible")
+		return 1
 
 	var lod_route_samples := 0
 	var lod_route_mismatches := 0

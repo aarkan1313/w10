@@ -63,6 +63,15 @@
 > now prints the routed biome per clipmap level in the yellow debug HUD so the owner
 > fly can correlate visible pops with route changes. This is evidence for the
 > per-pixel compose requirement, not acceptance of the page-center route.
+> The WORLD routing helper is now split into `page_pool/world_route.rs` and
+> `biome_world` also reports page-center route-weight loss: current windowed result
+> `route_weights samples=289 multi_active=201 ambiguous=0 max_active=4 mean_top=0.966506
+> weakest_top=0.915909 mean_runner_up=0.031516 max_runner_up=0.084091`. So most sampled
+> pages have more than one active runtime-biome weight, but the current grammar grid
+> still has a very strong dominant biome at each page center. Treat this as the first
+> measurable bridge toward Slice 4 Part B: the current selector is discarding active
+> weights, and the larger visible pop risk remains the 21% child/parent route mismatch
+> until WORLD routing becomes per-pixel compose instead of whole-page selection.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

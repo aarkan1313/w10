@@ -32,17 +32,50 @@ impl Wg10PagePool {
     /// This mirrors the exact page-center selector used by `acquire_page`. It is deliberately
     /// read-only and does not allocate or dispatch page compute.
     #[func]
-    pub fn debug_world_biome_for_page(
-        &self,
-        level: i64,
-        origin_x: f64,
-        origin_z: f64,
-    ) -> GString {
+    pub fn debug_world_biome_for_page(&self, level: i64, origin_x: f64, origin_z: f64) -> GString {
         let Some(world) = self.biome_world.as_ref() else {
             return GString::new();
         };
         let world_span = self.world_span * 2f64.powi(level as i32);
         GString::from(&self.select_world_biome_name(world, origin_x, origin_z, world_span))
+    }
+
+    /// Diagnostic: report page-center runtime-biome weight stats used by WORLD routing.
+    ///
+    /// This intentionally mirrors the current hard page selector. If `runner_up_weight` is
+    /// material, the current runtime is discarding real grammar weight that the compose producer
+    /// should eventually consume instead of choosing one biome for the whole page.
+    #[func]
+    pub fn debug_world_biome_report_for_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+    ) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        let Some(world) = self.biome_world.as_ref() else {
+            return out;
+        };
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        let center_x = origin_x + world_span * 0.5;
+        let center_z = origin_z + world_span * 0.5;
+        let weights = self.world_biome_weights(world, origin_x, origin_z, world_span);
+
+        let mut ranked: Vec<(&String, &f64)> = weights.iter().collect();
+        ranked.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let selected_weight = ranked.first().map(|(_, weight)| **weight).unwrap_or(0.0);
+        let runner_up_weight = ranked.get(1).map(|(_, weight)| **weight).unwrap_or(0.0);
+        let weight_sum: f64 = weights.values().sum();
+        let active_count = weights.values().filter(|w| **w > 1.0e-9).count() as i64;
+
+        out.set("selected_weight", selected_weight);
+        out.set("runner_up_weight", runner_up_weight);
+        out.set("active_count", active_count);
+        out.set("weight_sum", weight_sum);
+        out.set("center_x", center_x);
+        out.set("center_z", center_z);
+        out
     }
 
     /// Unprotect a page, marking it LRU-eligible for eviction.
