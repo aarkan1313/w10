@@ -168,10 +168,33 @@ Current proof after the split:
   REFERENCE 34.839 ms, MOUNTAIN 9.369 ms, WORLD 7.792 ms, with zero hide/show in all three.
   Latest render p99: REFERENCE 0.326 ms, MOUNTAIN 0.251 ms, WORLD 0.470 ms.
 
-Next refactor target: split WORLD route diagnostics out of `state_api.rs` if another
-behavior-neutral page-pool cleanup is needed. Next visual target is still higher priority:
-start porting the accepted mountain-world-layer facts into the live `MOUNTAIN` producer rather
-than tuning mode 3.
+### WORLD Report Split Checkpoint - 2026-06-04
+
+The WORLD-only Godot API/report seam has now moved out of generic page-pool
+state. The new `page_pool/world_reports.rs` module owns:
+
+- `set_biome_world_active_limit(...)`.
+- `debug_world_biome_for_page(...)`.
+- `debug_world_biome_report_for_page(...)`.
+- `debug_world_biome_weight_field_report_for_page(...)`.
+
+`state_api.rs` is now 169 lines and carries generic pool state, source transform,
+resident-page lookup, and display pin APIs. `world_reports.rs` is 160 lines and
+keeps the current bounded WORLD preview diagnostics in one place. Public
+Godot-facing method names are unchanged.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the
+  Godot extension.
+- `python tools\gate.py --suite biome_world` = 1/1.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+
+Next visual target is still higher priority than further page-pool cleanup:
+turn the reference-backed bridge into a generated world-layer producer or
+measured candidate equivalent, then prove its numeric/visual gap against
+REFERENCE moves down without reintroducing page/LOD drift.
 
 ### Live-MOUNTAIN Fact Bridge Checkpoint - 2026-06-04
 

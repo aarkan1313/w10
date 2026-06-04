@@ -34,6 +34,7 @@ mod producer;
 mod state_api;
 mod static_reference;
 mod static_reports;
+mod world_reports;
 mod world_route;
 
 use static_reference::StaticHeightRuntime;

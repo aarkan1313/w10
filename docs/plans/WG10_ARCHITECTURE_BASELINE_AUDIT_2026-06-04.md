@@ -155,6 +155,13 @@ That file is now split by ownership:
 The refactor risk is now producer ownership and mode taxonomy, not a single
 giant terrain source file.
 
+Follow-up page-pool split: WORLD-only active-limit and route/weight diagnostic
+reports now live in `wg-10/rust/src/page_pool/world_reports.rs`. Generic
+`state_api.rs` no longer owns WORLD preview reporting; it carries source
+transform, resident page lookup, display pins, and generic pool stats. The
+public Godot method names did not change, and the split is proven by Rust lib
+tests plus `biome_world` and `review_runtime`.
+
 ## Current Checkpoint
 
 Branch: `slice4-gpu-page-integration`

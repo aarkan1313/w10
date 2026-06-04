@@ -49,6 +49,13 @@
 > `biome_transition_world_review.gd` at 582 lines. The remaining architecture
 > risk is producer ownership, WORLD preview/compose taxonomy, and fact/collision
 > alignment, not a single still-overgrown runtime file.
+> Latest behavior-preserving page-pool split: WORLD active-limit and route/weight
+> diagnostic reports moved from generic `state_api.rs` into
+> `wg-10/rust/src/page_pool/world_reports.rs`. `state_api.rs` is now generic
+> pool/source/page-state API at 169 lines; `world_reports.rs` owns the
+> Godot-visible WORLD preview reports at 160 lines. Proof: `cargo test -p
+> wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds, `biome_world` =
+> 1/1, and `review_runtime` = 2/2.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:
@@ -116,6 +123,16 @@
 > motion numbers: REFERENCE `cpu_p99=34.839 ms`, MOUNTAIN `cpu_p99=9.369 ms`,
 > WORLD `cpu_p99=7.792 ms`, zero hide/show in all three; render p99 is
 > REFERENCE `0.326 ms`, MOUNTAIN `0.251 ms`, WORLD `0.470 ms`.
+> Follow-up WORLD report separation on 2026-06-04: WORLD active-limit and
+> route/weight diagnostic reports moved into
+> `wg-10/rust/src/page_pool/world_reports.rs`. Public Godot method names are
+> unchanged (`set_biome_world_active_limit`, `debug_world_biome_for_page`,
+> `debug_world_biome_report_for_page`,
+> `debug_world_biome_weight_field_report_for_page`), but generic pool
+> `state_api.rs` no longer owns WORLD-only preview diagnostics. Current proof:
+> `cargo test -p wg10_terrain --lib` = 227/0,
+> `tools\build_rust.ps1` builds, `biome_world` = 1/1, and
+> `review_runtime` = 2/2.
 > Follow-up live-MOUNTAIN fact bridge on 2026-06-04: `MOUNTAIN/network_ref`
 > now binds the accepted mountain world-layer payload as a separate
 > fact/material reference beside the live single-biome producer. The bridge
