@@ -227,8 +227,9 @@
 > rock/slope, and snow/high hint fields over the coherent conditioned field
 > before slicing. Focused proof:
 > `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s -p no:cacheprovider`
-> = **4 passed** and still records the live seam-safe gap
-> `mean_abs=1.211743`, `p95_abs=2.276974`, `corr=-0.048456`.
+> = **5 passed** and still records the live seam-safe gap
+> `mean_abs=1.211743`, `p95_abs=2.276974`, `peak_abs=3.200543`,
+> `corr=-0.048456`.
 >
 > Runtime motion fix: the scheduler now maintains a camera-centred display ring
 > plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the
