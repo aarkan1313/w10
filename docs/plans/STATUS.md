@@ -55,6 +55,15 @@
 > looked nothing like the accepted mountain-network review even when the height
 > producer was correct.
 >
+> Pop-in audit evidence: `biome_world` now reports child/parent route disagreement
+> for page-center WORLD routing. Current windowed result: `lod_route_mismatch=183/867`
+> (`ratio=0.211073`). That means about 21% of sampled fine pages route to a different
+> biome than at least one coarser fallback/morph parent, so forward motion can still
+> reveal a different biome surface as pages stream in. `mountain_fly_review.tscn`
+> now prints the routed biome per clipmap level in the yellow debug HUD so the owner
+> fly can correlate visible pops with route changes. This is evidence for the
+> per-pixel compose requirement, not acceptance of the page-center route.
+>
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime
 > capture after the material change, and the live `WORLD` path is page-center

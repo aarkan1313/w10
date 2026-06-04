@@ -13,6 +13,7 @@ const PAGE_PX := 256
 const BASE_SPAN := 8192.0
 const CAPACITY := 16
 const SEED := 1337
+const ROUTE_LOD_LEVELS := 4
 
 func _init() -> void:
 	quit(await _run())
@@ -59,6 +60,30 @@ func _run() -> int:
 		push_error("[wg10-biome-world] world routing collapsed to one biome: %s" % str(route_counts))
 		return 1
 	print("[wg10-biome-world] routes=%s" % str(route_counts))
+
+	var lod_route_samples := 0
+	var lod_route_mismatches := 0
+	for ix in range(-route_radius, route_radius + 1, route_step):
+		for iz in range(-route_radius, route_radius + 1, route_step):
+			var child_ox: float = float(ix) * BASE_SPAN
+			var child_oz: float = float(iz) * BASE_SPAN
+			var child_name := str(pool.call("debug_world_biome_for_page", 0, child_ox, child_oz))
+			var child_cx: float = child_ox + BASE_SPAN * 0.5
+			var child_cz: float = child_oz + BASE_SPAN * 0.5
+			for parent_level in range(1, ROUTE_LOD_LEVELS):
+				var parent_span: float = BASE_SPAN * pow(2.0, parent_level)
+				var parent_ox: float = floor(child_cx / parent_span) * parent_span
+				var parent_oz: float = floor(child_cz / parent_span) * parent_span
+				var parent_name := str(pool.call("debug_world_biome_for_page", parent_level, parent_ox, parent_oz))
+				lod_route_samples += 1
+				if parent_name != child_name:
+					lod_route_mismatches += 1
+	var lod_route_ratio := float(lod_route_mismatches) / maxf(float(lod_route_samples), 1.0)
+	print("[wg10-biome-world] lod_route_mismatch=%d/%d ratio=%f" % [
+		lod_route_mismatches,
+		lod_route_samples,
+		lod_route_ratio,
+	])
 
 	print("[wg10-biome-world] step=acquire")
 	var tex = pool.call("acquire_page", 0, 0.0, 0.0)

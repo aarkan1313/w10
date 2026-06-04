@@ -278,6 +278,19 @@ func _print_biome_state() -> void:
 		_relief_m,
 	])
 
+func _world_route_summary(p: Vector3, v: Vector3) -> String:
+	if _producer_mode != MODE_WORLD or _pool == null or _streamer == null:
+		return ""
+	var led: Vector2 = _streamer.call("coverage_center", p.x, p.z, v.x, v.z)
+	var parts: Array[String] = []
+	for level in range(NUM_LEVELS):
+		var span: float = BASE_SPAN * pow(2.0, level)
+		var ox: float = floor(float(led.x) / span) * span
+		var oz: float = floor(float(led.y) / span) * span
+		var name := str(_pool.call("debug_world_biome_for_page", level, ox, oz))
+		parts.append("L%d:%s" % [level, name])
+	return "routes %s" % " ".join(parts)
+
 func _current_morph_region() -> float:
 	return MORPH_REGION_ON if _morph_enabled else MORPH_REGION_OFF
 
@@ -346,10 +359,13 @@ func _process(_delta: float) -> void:
 		_prev_states = states
 		while _flip_log.size() > 8:
 			_flip_log.pop_front()
-		_dbg_label.text = "mode %s (B cycles) | preset %s %.0fkm (P toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s" % [
+		var route_summary := _world_route_summary(p, v)
+		var route_line := "%s\n" % route_summary if route_summary != "" else ""
+		_dbg_label.text = "mode %s (B cycles) | preset %s %.0fkm (P toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
 			_producer_label(),
 			_mountain_preset_label(),
 			_feature_span_m() / 1000.0,
 			"DISABLED" if _cull_disabled else "on",
 			"on" if _morph_enabled else "off",
+			route_line,
 			"\n".join(_flip_log)]
