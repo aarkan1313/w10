@@ -87,6 +87,7 @@ func build(
 		"has_streamer": streamer != null,
 		"has_rings": rings != null,
 		"has_camera": camera != null,
+		"camera_has_sync_mouse_from_rotation": camera != null and camera.has_method("sync_mouse_from_rotation"),
 		"runtime_mode": runtime_mode,
 		"biome_path": biome_path,
 		"stats": stats,

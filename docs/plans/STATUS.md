@@ -3,6 +3,15 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
+> **Latest owner-report audit:** see
+> `docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`.
+> The immediate fix in this pass is the shared fly-camera
+> `sync_mouse_from_rotation()` method, gated by `mountain_fly_review_smoke_check.gd`,
+> so review-camera reframing no longer leaves mouse-look yaw/pitch stale. Latest
+> post-fix proof: `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
+> `review_runtime_stress` = 1/1. The audit also records the next hardening work:
+> add an owner-spike gate and a visual REPAGE-delta gate before promoting more
+> procedural content.
 > **Read this first:** latest scoped runtime-artifact checkpoint now has the
 > owner fly binding the JSON-ready accepted mountain world-layer tile payload in
 > `REFERENCE`, `MOUNTAIN/network_ref`, and `WORLD` preview. This replaces the

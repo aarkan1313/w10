@@ -35,6 +35,7 @@ func _run() -> int:
 	_expect(bool(snapshot.get("has_streamer", false)), "streamer missing", errs)
 	_expect(bool(snapshot.get("has_rings", false)), "rings missing", errs)
 	_expect(bool(snapshot.get("has_camera", false)), "camera missing", errs)
+	_expect(bool(snapshot.get("camera_has_sync_mouse_from_rotation", false)), "camera missing sync_mouse_from_rotation", errs)
 	_expect(str(snapshot.get("last_config_error", "")) == "", "configure error: %s" % str(snapshot.get("last_config_error", "")), errs)
 
 	var runtime_mode := ""

@@ -57,3 +57,8 @@ func _process(delta: float) -> void:
 ## Current velocity (m/s, world space) — the review scene passes this to view.update.
 func get_velocity() -> Vector3:
 	return _velocity
+
+## Re-sync mouse-look state after another script changes this camera's rotation.
+func sync_mouse_from_rotation() -> void:
+	_yaw = rotation.y
+	_pitch = rotation.x

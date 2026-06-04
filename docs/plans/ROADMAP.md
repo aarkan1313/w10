@@ -6,8 +6,10 @@ applicable). Update this file in place; do not create new plan docs.
 
 **Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
 `docs/plans/STATUS.md` top plus
-`docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md`. Current work is Slice 4
-stabilization and recovery:
+`docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md` plus the current
+implementation audit
+`docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`.
+Current work is Slice 4 stabilization and recovery:
 
 - The scale-invariant biome producer work is implemented and gated (`flow_max_level`,
   windowed 576 parity, cross-level macro agreement, runtime mode gates).
@@ -34,11 +36,16 @@ stabilization and recovery:
 - Current source-size audit found no Rust/GDScript/GLSL/Python source file over
   1000 lines in the active terrain/runtime/tooling paths; the next refactor risk
   is ownership and mode taxonomy, not one giant still-unsplit source file.
+- The latest owner-report fix adds the missing shared fly-camera
+  `sync_mouse_from_rotation()` hook so review-camera reframing cannot leave
+  stale mouse-look state. The next hardening target is a progression review
+  scene plus stricter owner-spike and visual REPAGE-delta gates.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same
-pass-network, conditioning, material/fact, and facts/collision contract. Broad refactors should stay
-attached to that target.
+pass-network, conditioning, material/fact, and facts/collision contract. The immediate implementation
+shape is the progression scene in the audit doc, adding one roadmap feature at a time and proving
+each layer before promotion. Broad refactors should stay attached to that target.
 
 Last updated: 2026-05-31 (**Phase 5 ACTIVE — see the "▶ YOU ARE HERE" box under the Phase 5 header for the
 plain-language current state.** Short version: M0–M4 DONE (engine machinery; gates cargo 121 · fast 6/6 · gpu

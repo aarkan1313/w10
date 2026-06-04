@@ -1,5 +1,10 @@
 # Mountain World-Layer Runtime Contract - 2026-06-04
 
+Latest owner-report audit: see
+`docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`
+for the current implementation/spec audit, the shared fly-camera sync fix, and
+the next progression-scene validation plan.
+
 Purpose: turn the accepted `mountain_network_chunks_review.tscn` visual into a
 live-runtime producer target without confusing it with the current seam-safe
 single-page mountain recipe.
