@@ -91,10 +91,12 @@ Validation:
   `feature_span_m=90000`, `1280x720`). These captures preserve the owner-liked
   offline artifact for direct comparison against the live runtime. This is now
   wired as `python tools\gate.py --suite review_static_visual`.
-- `python tools\gate.py --suite m3`: 9/9 passed after the lit-material and
-  route-debug renderer changes. `m3_accept` p99 = 5.17 ms against the 6.0 ms
-  budget; `m5_detail_check` remained non-vacuous (`diff=0.0124`), bounded,
-  and edge-safe.
+- `python tools\gate.py --suite m3`: 10/10 passed after the lit-material,
+  route-debug, and WORLD route-tint renderer changes. `m3_accept` p99 =
+  5.18 ms against the 6.0 ms budget; `ring_material_tint_check.gd` proves
+  `biome_debug_color` and WORLD `biome_material_mix=0.34` are bound through the
+  actual `Wg10ClipmapRings` material API; `m5_detail_check` remained
+  non-vacuous (`diff=0.0124`), bounded, and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
   macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.106 ms.
@@ -143,8 +145,9 @@ Validation:
   network capture gives a separate visual proof for the scene's default producer;
   the close-debug capture shows why that 3.5 km scale should remain diagnostic
   only; the route capture proves the renderer receives page route labels; the
-  normal WORLD material capture still reads broad/flat in the sampled area, so
-  per-biome materials/content remain open.
+  normal WORLD material capture now receives a restrained route-color tint, so
+  per-biome regions no longer collapse to the same mountain palette. Final
+  per-pixel biome materials/content remain open.
 - `python tools\gate.py --suite review_runtime_visual`: 1/1 passed. This
   regenerates the four live runtime PNG artifacts above and now routes producer
   mode/preset configuration through `mountain_fly_producers.gd` and renderer
@@ -261,8 +264,9 @@ runtime path."
    - current live runtime: `mountain_fly_review.tscn`;
    - current runtime content limitation: composed WORLD pages still need owner
      visual acceptance, per-biome materials, and facts/collision alignment;
-   - current renderer evidence: `m3` 9/9 passed after page fade; owner re-fly
-     is still required because gates do not prove the visual read.
+   - current renderer evidence: `m3` 10/10 passed after page fade and WORLD
+     route-tint material binding; owner re-fly is still required because gates
+     do not prove the visual read.
 2. Add or update a smoke check for `mountain_network_chunks_review.tscn`.
    Existing `mountain_world_chunks_review_check.gd` checks the non-network
    scene; the network scene deserves its own check because it is now the owner
@@ -270,7 +274,7 @@ runtime path."
 3. Editor-closed gate results are now recorded above:
    - `python tools/gate.py --suite review_static` -> 1/1 pass;
    - `python tools/gate.py --suite review_static_visual` -> 1/1 pass;
-   - `python tools/gate.py --suite m3` -> 9/9 pass;
+   - `python tools/gate.py --suite m3` -> 10/10 pass;
    - `python tools/gate.py --suite biome_fly` -> 4/4 pass.
 
 Exit: we know which view is the baseline, which path is live, and which gates

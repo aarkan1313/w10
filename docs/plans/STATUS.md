@@ -22,8 +22,8 @@
 > `mountain_fly_review.tscn` path and verifies `MOUNTAIN/network_ref` defaults),
 > `review_runtime_visual` = **1/1 pass** (captures MOUNTAIN/network, MOUNTAIN/close,
 > WORLD/material, and WORLD/route PNGs through the shared producer helper),
-> `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
-> (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
+> `m3` = **10/10 pass** after the new lit-material/route-debug/WORLD-tint renderer pass
+> (`m3_accept` p99 5.18 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
 > cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.106 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
@@ -59,10 +59,10 @@
 > blue/yellow height-debug ramp as the normal material. `ring_displace.gdshader`
 > now derives a lit terrain palette from displayed height, slope, and world-space
 > detail, while `M` cycles material -> morph heatmap -> WORLD route-color
-> diagnostic. The route-color mode proves the renderer receives page route labels,
-> not final per-biome material blending. This does not solve per-biome materials,
-> but it separates "mountain review" from "WORLD composition debug" and removes
-> one reason the live fly read unlike the accepted mountain-network review.
+> diagnostic. WORLD pages now also get a restrained route-color material tint in
+> normal mode (`biome_material_mix=0.34`, gated by `ring_material_tint_check.gd`),
+> so composed WORLD no longer reads as one undifferentiated mountain palette. This
+> is a visual-readability bridge, not final per-pixel biome material blending.
 >
 > Pop-in audit evidence: `biome_world` still reports child/parent route disagreement
 > for the old page-center route diagnostic. Current windowed result: `lod_route_mismatch=183/867`
@@ -124,9 +124,10 @@
 > MOUNTAIN/network_ref streams 45 pages and reads as broad snow/rock massifs from
 > an overview; MOUNTAIN/close_debug streams 45 pages but is visibly faceted/lumpy
 > at close range, so it remains a diagnostic scale, not an acceptance target.
-> WORLD streams 45 composed pages and route colors are visible, but the normal
-> WORLD material still reads broad/flat in this sampled area. Treat that as an
-> open content/material issue, not as proof of accepted biome visuals.
+> WORLD streams 45 composed pages and route colors are visible; the normal WORLD
+> material now carries a route-color tint, but final per-pixel materials/content
+> remain open. Treat the capture as evidence of a less samey live read, not as
+> proof of accepted biome visuals.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

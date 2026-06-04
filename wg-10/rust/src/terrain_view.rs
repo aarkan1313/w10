@@ -227,11 +227,13 @@ impl Wg10TerrainView {
                         po_x,
                         po_z,
                     );
+                    let material_mix = biome_material_mix_for_page(self.pool.as_ref().unwrap());
                     rings.bind_mut().set_tile_debug_color(
                         level as i64,
                         dx as i64,
                         dz as i64,
                         debug_color,
+                        material_mix,
                     );
                 }
             }
@@ -259,6 +261,15 @@ fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, orig
         biome_route_color("mountain")
     } else {
         Color::from_rgba(0.34, 0.38, 0.43, 1.0)
+    }
+}
+
+fn biome_material_mix_for_page(pool: &Gd<Wg10PagePool>) -> f64 {
+    let mode = pool.bind().biome_runtime_mode().to_string();
+    if mode == "world" {
+        0.34
+    } else {
+        0.0
     }
 }
 

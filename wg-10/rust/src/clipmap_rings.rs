@@ -257,10 +257,18 @@ impl Wg10ClipmapRings {
         self.bound_keys[idx] = next_key;
     }
 
-    /// Set the per-tile WORLD route diagnostic color used when `wg_dbg_mode == 2`.
-    /// The color is presentation-only; it does not affect page data, producer routing, or facts.
+    /// Set the per-tile biome presentation color. `wg_dbg_mode == 2` shows it directly.
+    /// Normal material mode can also use `material_mix` as a restrained tint. Both are
+    /// presentation-only; they do not affect page data, producer routing, or facts.
     #[func]
-    pub fn set_tile_debug_color(&mut self, level: i64, dx: i64, dz: i64, color: Color) {
+    pub fn set_tile_debug_color(
+        &mut self,
+        level: i64,
+        dx: i64,
+        dz: i64,
+        color: Color,
+        material_mix: f64,
+    ) {
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
             godot_error!("Wg10ClipmapRings::set_tile_debug_color: ({level},{dx},{dz}) out of range");
@@ -275,6 +283,7 @@ impl Wg10ClipmapRings {
             return;
         };
         mat.set_shader_parameter("biome_debug_color", &color.to_variant());
+        mat.set_shader_parameter("biome_material_mix", &material_mix.to_variant());
     }
 
     /// Drop every tile material's reference to the pool's page textures, and hide all tiles.

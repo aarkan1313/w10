@@ -20,6 +20,7 @@ uniform float morph_region = 0.0;         // transition width as a fraction of t
 uniform float relief_ref = 2000.0;        // color gradient normalization
 uniform float page_fade = 1.0;            // temporal fade for newly resident pages: 0 parent -> 1 fine
 uniform vec4 biome_debug_color : source_color = vec4(0.45, 0.45, 0.45, 1.0);
+uniform float biome_material_mix = 0.0;   // WORLD-only material tint from page route color.
 
 varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
@@ -31,7 +32,8 @@ varying float v_detail_norm;        // displayed world-space detail, normalized 
 // 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
 global uniform float wg_dbg_mode;
 // Additional mode: wg_dbg_mode=2 uses biome_debug_color, a per-tile page-center WORLD route
-// diagnostic. It is not final per-biome material blending.
+// diagnostic. Normal material mode can also use a restrained WORLD-only route tint through
+// biome_material_mix; that is a temporary visual-readability bridge, not final per-pixel materials.
 // M5 detail: GLOBAL amplitude knob (one RenderingServer.global_shader_parameter for the
 // whole scene, set by the harness / gate). 0.0 = no detail (byte-identical to pre-M5).
 // Detail is added to VERTEX.y after the displayed base height is formed; the page-data
@@ -198,6 +200,7 @@ void fragment() {
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
 		vec3 material = wg_mountain_palette(v_render_height, v_slope) * (1.0 + v_detail_norm * 0.10);
+		material = mix(material, biome_debug_color.rgb, clamp(biome_material_mix, 0.0, 1.0));
 		ALBEDO = wg_apply_terrain_light(clamp(material, vec3(0.0), vec3(1.0)), v_terrain_normal, v_slope);
 	}
 }
