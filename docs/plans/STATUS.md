@@ -38,11 +38,17 @@
 > four page-stable material hint fields per chunk (`low_pass_hint`,
 > `floor_hint`, `rock_hint`, `snow_hint`) plus a world summary; these are
 > contract/fact fields for the runtime port, not final per-pixel materials.
+> Follow-up bridge on 2026-06-04: the Rust static-reference loader validates
+> those four hint arrays as an all-or-none payload contract, exposes whole-payload
+> and page-sampled hint coverage through `static_reference_report()` /
+> `static_reference_page_report(...)`, and REFERENCE rendering uses page-level
+> hints for material color/mix instead of collapsing the accepted payload to a
+> corridor-only tint.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
-> = **223 passed / 0 failed** after adding static-reference fact parsing.
+> = **224 passed / 0 failed** after adding static-reference material-hint parsing.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline

@@ -16,6 +16,7 @@ use crate::biome_page_compute::f32s_to_bytes;
 pub(super) struct StaticHeightRuntime {
     grid: Vec<f32>,
     corridor_grid: Option<Vec<u8>>,
+    material_hints: Option<StaticMaterialHintGrids>,
     grid_n: usize,
     origin_x_m: f64,
     origin_z_m: f64,
@@ -27,9 +28,27 @@ pub(super) struct StaticHeightRuntime {
     pub(super) feature_span_m: f64,
     pub(super) has_corridor: bool,
     pub(super) corridor_frac: f64,
+    pub(super) has_material_hints: bool,
+    pub(super) material_hint_fracs: StaticMaterialHintFractions,
     pub(super) pass_network_routes: i64,
     pub(super) pass_network_walkable_frac: f64,
     pub(super) pass_network_carved_frac: f64,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(super) struct StaticMaterialHintFractions {
+    pub(super) low_pass: f64,
+    pub(super) floor: f64,
+    pub(super) rock: f64,
+    pub(super) snow: f64,
+}
+
+#[derive(Clone)]
+struct StaticMaterialHintGrids {
+    low_pass: Vec<f32>,
+    floor: Vec<f32>,
+    rock: Vec<f32>,
+    snow: Vec<f32>,
 }
 
 #[derive(Deserialize)]
@@ -68,6 +87,10 @@ struct StaticChunk {
     display_origin_z_m: f64,
     height: Vec<f32>,
     corridor: Option<Vec<i64>>,
+    low_pass_hint: Option<Vec<f32>>,
+    floor_hint: Option<Vec<f32>>,
+    rock_hint: Option<Vec<f32>>,
+    snow_hint: Option<Vec<f32>>,
 }
 
 impl StaticHeightRuntime {
@@ -126,6 +149,24 @@ impl StaticHeightRuntime {
         }
         let mut corridor_grid = all_corridor.then(|| vec![0_u8; grid_len]);
         let mut corridor_filled = all_corridor.then(|| vec![false; grid_len]);
+        let all_hints = seed
+            .chunks
+            .iter()
+            .all(|chunk| chunk.has_all_material_hints());
+        let any_hints = seed
+            .chunks
+            .iter()
+            .any(|chunk| chunk.has_any_material_hint());
+        if any_hints && !all_hints {
+            return Err("static reference: material hints must be present as a complete set on all chunks or none".into());
+        }
+        let mut material_hints = all_hints.then(|| StaticMaterialHintGrids {
+            low_pass: vec![0.0; grid_len],
+            floor: vec![0.0; grid_len],
+            rock: vec![0.0; grid_len],
+            snow: vec![0.0; grid_len],
+        });
+        let mut material_hints_filled = all_hints.then(|| vec![false; grid_len]);
 
         let mut min_x = f64::INFINITY;
         let mut min_z = f64::INFINITY;
@@ -162,6 +203,9 @@ impl StaticHeightRuntime {
                         expected_heights
                     ));
                 }
+            }
+            if all_hints {
+                chunk.validate_material_hint_lengths(expected_heights)?;
             }
             if (chunk.span_m - payload.chunk_span_m).abs() > 1.0e-6 {
                 return Err(format!(
@@ -205,6 +249,31 @@ impl StaticHeightRuntime {
                         cg[dst] = value;
                         cf[dst] = true;
                     }
+                    if let (Some(hints), Some(filled)) =
+                        (material_hints.as_mut(), material_hints_filled.as_mut())
+                    {
+                        let values = chunk.material_hint_values(src).ok_or_else(|| {
+                            format!(
+                                "static reference: missing material hint at chunk ({},{})",
+                                chunk.chunk_x, chunk.chunk_z
+                            )
+                        })?;
+                        if filled[dst]
+                            && (!same_hint(hints.low_pass[dst], values.low_pass)
+                                || !same_hint(hints.floor[dst], values.floor)
+                                || !same_hint(hints.rock[dst], values.rock)
+                                || !same_hint(hints.snow[dst], values.snow))
+                        {
+                            return Err(format!(
+                                "static reference: material hint seam mismatch at flat index {dst}"
+                            ));
+                        }
+                        hints.low_pass[dst] = values.low_pass;
+                        hints.floor[dst] = values.floor;
+                        hints.rock[dst] = values.rock;
+                        hints.snow[dst] = values.snow;
+                        filled[dst] = true;
+                    }
                 }
             }
         }
@@ -218,6 +287,13 @@ impl StaticHeightRuntime {
             if let Some(idx) = cf.iter().position(|v| !*v) {
                 return Err(format!(
                     "static reference: missing corridor sample at flat index {idx}"
+                ));
+            }
+        }
+        if let Some(mf) = material_hints_filled.as_ref() {
+            if let Some(idx) = mf.iter().position(|v| !*v) {
+                return Err(format!(
+                    "static reference: missing material hint sample at flat index {idx}"
                 ));
             }
         }
@@ -239,15 +315,19 @@ impl StaticHeightRuntime {
             .unwrap_or(0.0);
         let pass_network = seed.pass_network.as_ref();
         let pass_network_routes = pass_network.map(|p| p.routes).unwrap_or(0);
-        let pass_network_walkable_frac = pass_network
-            .map(|p| p.band_walkable_frac)
-            .unwrap_or(0.0);
+        let pass_network_walkable_frac = pass_network.map(|p| p.band_walkable_frac).unwrap_or(0.0);
         let pass_network_carved_frac = pass_network.map(|p| p.carved_frac).unwrap_or(0.0);
         let has_corridor = corridor_grid.is_some();
+        let material_hint_fracs = material_hints
+            .as_ref()
+            .map(material_hint_fractions)
+            .unwrap_or_default();
+        let has_material_hints = material_hints.is_some();
 
         Ok(Self {
             grid,
             corridor_grid,
+            material_hints,
             grid_n,
             origin_x_m: min_x,
             origin_z_m: min_z,
@@ -259,6 +339,8 @@ impl StaticHeightRuntime {
             feature_span_m: payload.feature_span_m,
             has_corridor,
             corridor_frac,
+            has_material_hints,
+            material_hint_fracs,
             pass_network_routes,
             pass_network_walkable_frac,
             pass_network_carved_frac,
@@ -335,6 +417,40 @@ impl StaticHeightRuntime {
         count as f64 / (samples_px * samples_px) as f64
     }
 
+    pub(super) fn material_hint_fractions_for_page(
+        &self,
+        page_origin_x: f64,
+        page_origin_z: f64,
+        world_span: f64,
+        samples_px: usize,
+    ) -> Option<StaticMaterialHintFractions> {
+        let hints = self.material_hints.as_ref()?;
+        let samples_px = samples_px.clamp(2, 65);
+        let denom = (samples_px - 1) as f64;
+        let mut sums = StaticMaterialHintFractions::default();
+        for z in 0..samples_px {
+            let wz = page_origin_z + world_span * z as f64 / denom;
+            for x in 0..samples_px {
+                let wx = page_origin_x + world_span * x as f64 / denom;
+                let (x0, z0, x1, z1, tx, tz) = self.sample_indices(wx, wz);
+                let ix = if tx >= 0.5 { x1 } else { x0 };
+                let iz = if tz >= 0.5 { z1 } else { z0 };
+                let idx = iz * self.grid_n + ix;
+                sums.low_pass += hints.low_pass[idx] as f64;
+                sums.floor += hints.floor[idx] as f64;
+                sums.rock += hints.rock[idx] as f64;
+                sums.snow += hints.snow[idx] as f64;
+            }
+        }
+        let total = (samples_px * samples_px) as f64;
+        Some(StaticMaterialHintFractions {
+            low_pass: sums.low_pass / total,
+            floor: sums.floor / total,
+            rock: sums.rock / total,
+            snow: sums.snow / total,
+        })
+    }
+
     fn sample_indices(&self, x_m: f64, z_m: f64) -> (usize, usize, usize, usize, f32, f32) {
         let u = ((x_m - self.origin_x_m) / self.span_x_m).clamp(0.0, 1.0);
         let v = ((z_m - self.origin_z_m) / self.span_z_m).clamp(0.0, 1.0);
@@ -350,13 +466,98 @@ impl StaticHeightRuntime {
     }
 }
 
+impl StaticChunk {
+    fn has_all_material_hints(&self) -> bool {
+        self.low_pass_hint.is_some()
+            && self.floor_hint.is_some()
+            && self.rock_hint.is_some()
+            && self.snow_hint.is_some()
+    }
+
+    fn has_any_material_hint(&self) -> bool {
+        self.low_pass_hint.is_some()
+            || self.floor_hint.is_some()
+            || self.rock_hint.is_some()
+            || self.snow_hint.is_some()
+    }
+
+    fn validate_material_hint_lengths(&self, expected: usize) -> Result<(), String> {
+        for (name, values) in [
+            ("low_pass_hint", self.low_pass_hint.as_ref()),
+            ("floor_hint", self.floor_hint.as_ref()),
+            ("rock_hint", self.rock_hint.as_ref()),
+            ("snow_hint", self.snow_hint.as_ref()),
+        ] {
+            let Some(values) = values else {
+                return Err(format!(
+                    "static reference: chunk ({},{}) missing {name}",
+                    self.chunk_x, self.chunk_z
+                ));
+            };
+            if values.len() != expected {
+                return Err(format!(
+                    "static reference: chunk ({},{}) {name}={} expected {}",
+                    self.chunk_x,
+                    self.chunk_z,
+                    values.len(),
+                    expected
+                ));
+            }
+            if values
+                .iter()
+                .any(|v| !v.is_finite() || *v < 0.0 || *v > 1.0)
+            {
+                return Err(format!(
+                    "static reference: chunk ({},{}) {name} values must be finite in [0,1]",
+                    self.chunk_x, self.chunk_z
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn material_hint_values(&self, idx: usize) -> Option<StaticMaterialHintValues> {
+        Some(StaticMaterialHintValues {
+            low_pass: *self.low_pass_hint.as_ref()?.get(idx)?,
+            floor: *self.floor_hint.as_ref()?.get(idx)?,
+            rock: *self.rock_hint.as_ref()?.get(idx)?,
+            snow: *self.snow_hint.as_ref()?.get(idx)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StaticMaterialHintValues {
+    low_pass: f32,
+    floor: f32,
+    rock: f32,
+    snow: f32,
+}
+
+fn same_hint(a: f32, b: f32) -> bool {
+    (a - b).abs() <= 1.0e-6
+}
+
+fn material_hint_fractions(hints: &StaticMaterialHintGrids) -> StaticMaterialHintFractions {
+    fn coverage(values: &[f32]) -> f64 {
+        values.iter().filter(|v| **v >= 0.5).count() as f64 / values.len() as f64
+    }
+    StaticMaterialHintFractions {
+        low_pass: coverage(&hints.low_pass),
+        floor: coverage(&hints.floor),
+        rock: coverage(&hints.rock),
+        snow: coverage(&hints.snow),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn one_chunk_payload(corridor: Option<Vec<i64>>) -> StaticPayload {
         StaticPayload {
-            generator_version: "mountain_synthesis_v0_9x9_original_scene_scale_review_pass_network".into(),
+            generator_version: "mountain_synthesis_v0_9x9_original_scene_scale_review_pass_network"
+                .into(),
             source_scope: "coherent_full_field_carved_with_pass_network_sliced_for_review".into(),
             chunk_count: 1,
             chunk_n: 2,
@@ -379,9 +580,23 @@ mod tests {
                     display_origin_z_m: -5.0,
                     height: vec![0.0, 1.0, 2.0, 3.0],
                     corridor,
+                    low_pass_hint: None,
+                    floor_hint: None,
+                    rock_hint: None,
+                    snow_hint: None,
                 }],
             }],
         }
+    }
+
+    fn one_chunk_payload_with_hints() -> StaticPayload {
+        let mut payload = one_chunk_payload(Some(vec![1, 0, 1, 0]));
+        let chunk = &mut payload.seeds[0].chunks[0];
+        chunk.low_pass_hint = Some(vec![1.0, 0.0, 1.0, 0.0]);
+        chunk.floor_hint = Some(vec![1.0, 0.25, 0.75, 0.0]);
+        chunk.rock_hint = Some(vec![0.0, 0.5, 0.75, 1.0]);
+        chunk.snow_hint = Some(vec![0.0, 0.0, 1.0, 1.0]);
+        payload
     }
 
     #[test]
@@ -413,5 +628,25 @@ mod tests {
             Err(err) => err,
         };
         assert!(err.contains("source_scope"));
+    }
+
+    #[test]
+    fn payload_material_hints_are_preserved_and_page_sampled() {
+        let rt = StaticHeightRuntime::from_payload(one_chunk_payload_with_hints())
+            .expect("payload should parse");
+
+        assert!(rt.has_material_hints);
+        assert!((rt.material_hint_fracs.low_pass - 0.5).abs() < 1.0e-12);
+        assert!((rt.material_hint_fracs.floor - 0.5).abs() < 1.0e-12);
+        assert!((rt.material_hint_fracs.rock - 0.75).abs() < 1.0e-12);
+        assert!((rt.material_hint_fracs.snow - 0.5).abs() < 1.0e-12);
+
+        let page = rt
+            .material_hint_fractions_for_page(-5.0, -5.0, 10.0, 2)
+            .expect("page hints should sample");
+        assert!((page.low_pass - 0.5).abs() < 1.0e-12);
+        assert!((page.floor - 0.5).abs() < 1.0e-12);
+        assert!((page.rock - 0.5625).abs() < 1.0e-12);
+        assert!((page.snow - 0.5).abs() < 1.0e-12);
     }
 }

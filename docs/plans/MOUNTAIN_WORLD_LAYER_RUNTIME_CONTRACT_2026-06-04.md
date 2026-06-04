@@ -93,7 +93,11 @@ single rendered page:
    builder now also emits page-stable material hint arrays per chunk:
    `low_pass_hint`, `floor_hint`, `rock_hint`, and `snow_hint`, derived over the
    coherent conditioned field before slicing. These are contract fields for the
-   runtime port; final per-pixel materials remain follow-up work.
+   runtime port; final per-pixel materials remain follow-up work. The Rust
+   static-reference loader now validates those four arrays as a complete
+   all-or-none payload contract, exposes whole-payload and page-sampled hint
+   coverage, and lets REFERENCE rendering pick material color/mix from those
+   page-level hints.
 
 5. **Gate in layers.**
    Required gates before owner acceptance:
@@ -130,6 +134,10 @@ single rendered page:
 - `review_runtime` now also proves a page-level REFERENCE corridor report exists
   for the runtime renderer (`samples_px=17`, `has_corridor=true`), and the
   renderer consumes that page report for static-reference corridor tinting.
+- `review_runtime` now proves the REFERENCE bridge loaded material hint facts
+  too (`has_material_hints=true`, nonzero floor/rock coverage, and page-level
+  floor/rock means), and the renderer consumes those page-level hints before
+  falling back to corridor-only tinting.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:

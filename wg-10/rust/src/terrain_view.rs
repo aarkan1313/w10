@@ -4,10 +4,10 @@
 //! get_resident_page (NEVER computes on the render path), coarser fallback on a miss ->
 //! rings.bind_tile. Owns no RIDs, no meshes, no scheduling math.
 
-use godot::prelude::*;
+use crate::clipmap_rings::Wg10ClipmapRings;
 use crate::page_pool::Wg10PagePool;
 use crate::streamer::Wg10Streamer;
-use crate::clipmap_rings::Wg10ClipmapRings;
+use godot::prelude::*;
 
 #[derive(GodotClass)]
 #[class(base=Node3D)]
@@ -53,8 +53,8 @@ impl Wg10TerrainView {
         relief_scale: f64,
         morph_region: f64,
         relief_ref: f64,
-        _lead_seconds: f64,  // kept for call-signature stability; the view now reads the clamped
-                             // led centre from the streamer (coverage_center) instead of leading itself.
+        _lead_seconds: f64, // kept for call-signature stability; the view now reads the clamped
+                            // led centre from the streamer (coverage_center) instead of leading itself.
     ) {
         self.pool = Some(pool);
         self.streamer = Some(streamer);
@@ -121,12 +121,11 @@ impl Wg10TerrainView {
                     let mut rings = self.rings.as_ref().unwrap().clone();
 
                     // own-level page (READ-ONLY; never computes on the render path).
-                    let tex = self
-                        .pool
-                        .as_ref()
-                        .unwrap()
-                        .bind()
-                        .get_resident_page(level as i64, po_x, po_z);
+                    let tex = self.pool.as_ref().unwrap().bind().get_resident_page(
+                        level as i64,
+                        po_x,
+                        po_z,
+                    );
                     let Some(ht) = tex else {
                         // Target page not resident yet. Finer levels HIDE (the coarser full 3x3
                         // underneath covers the gap). The COARSEST level has nothing underneath, so
@@ -139,7 +138,12 @@ impl Wg10TerrainView {
                         // screen. Pillars: structural never-black, zero added compute, no magic
                         // numbers — vs. budget-spiking or lead-tuning fixes that only reduce it.)
                         if !is_coarsest {
-                            rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                            rings.bind_mut().set_tile_visible(
+                                level as i64,
+                                dx as i64,
+                                dz as i64,
+                                false,
+                            );
                         } else {
                             // B2: HOLD LAST-GOOD on the coarsest level. The tile keeps showing the
                             // page it last bound (tracked by the rings). RE-VALIDATE that page is
@@ -147,7 +151,10 @@ impl Wg10TerrainView {
                             // underneath it (page-A geometry + page-B pixels). If the held page is no
                             // longer resident-as-itself, there is nothing safe to show — fall through
                             // to hide rather than display a recycled RID.
-                            let bk = rings.bind().bound_page_key(level as i64, dx as i64, dz as i64);
+                            let bk =
+                                rings
+                                    .bind()
+                                    .bound_page_key(level as i64, dx as i64, dz as i64);
                             let held_ox = bk.x as f64;
                             let held_oz = bk.y as f64;
                             let still_there = self
@@ -160,12 +167,18 @@ impl Wg10TerrainView {
                             if still_there {
                                 // pin the held page so the streamer can't evict/recycle it while shown.
                                 let mut pool = self.pool.as_ref().unwrap().clone();
-                                pool.bind_mut().pin_displayed_page(level as i64, held_ox, held_oz);
+                                pool.bind_mut()
+                                    .pin_displayed_page(level as i64, held_ox, held_oz);
                             } else {
                                 // held page gone (recycled under capacity pressure) — don't show wrong
                                 // pixels; hide. (Default-capacity flying never hits this; it's the
                                 // structural guard the capacity-pressure gate exercises.)
-                                rings.bind_mut().set_tile_visible(level as i64, dx as i64, dz as i64, false);
+                                rings.bind_mut().set_tile_visible(
+                                    level as i64,
+                                    dx as i64,
+                                    dz as i64,
+                                    false,
+                                );
                             }
                         }
                         continue;
@@ -190,12 +203,11 @@ impl Wg10TerrainView {
                         let tc_z = po_z + span_l * 0.5;
                         let p_ox = (tc_x / parent_span).floor() * parent_span;
                         let p_oz = (tc_z / parent_span).floor() * parent_span;
-                        let ptex = self
-                            .pool
-                            .as_ref()
-                            .unwrap()
-                            .bind()
-                            .get_resident_page((level + 1) as i64, p_ox, p_oz);
+                        let ptex = self.pool.as_ref().unwrap().bind().get_resident_page(
+                            (level + 1) as i64,
+                            p_ox,
+                            p_oz,
+                        );
                         match ptex {
                             Some(pt) => (pt, parent_span, p_ox, p_oz, self.morph_region),
                             None => (ht.clone(), span_l, po_x, po_z, 0.0),
@@ -208,22 +220,18 @@ impl Wg10TerrainView {
                         dz as i64,
                         ht.upcast::<godot::classes::Texture2D>(),
                         coarse_tex.upcast::<godot::classes::Texture2D>(),
-                        Vector2::new(po_x as f32, po_z as f32),                       // tile_origin (placement)
-                        Vector2::new(span_l as f32, coarse_span as f32),             // spans (sample, coarse)
-                        Vector2::new(span_l as f32, level_half_extent as f32),       // placement (tile_span, half_extent)
+                        Vector2::new(po_x as f32, po_z as f32), // tile_origin (placement)
+                        Vector2::new(span_l as f32, coarse_span as f32), // spans (sample, coarse)
+                        Vector2::new(span_l as f32, level_half_extent as f32), // placement (tile_span, half_extent)
                         self.relief_scale,
                         morph,
                         self.relief_ref,
-                        Vector2::new(po_x as f32, po_z as f32),                       // sample_origin = own page corner
-                        Vector2::new(cco_x as f32, cco_z as f32),                    // coarse (parent) origin
-                        Vector2::new(level_center_x as f32, level_center_z as f32),  // this level's neighborhood centre
+                        Vector2::new(po_x as f32, po_z as f32), // sample_origin = own page corner
+                        Vector2::new(cco_x as f32, cco_z as f32), // coarse (parent) origin
+                        Vector2::new(level_center_x as f32, level_center_z as f32), // this level's neighborhood centre
                     );
-                    let debug_color = debug_color_for_page(
-                        self.pool.as_ref().unwrap(),
-                        level as i64,
-                        po_x,
-                        po_z,
-                    );
+                    let debug_color =
+                        debug_color_for_page(self.pool.as_ref().unwrap(), level as i64, po_x, po_z);
                     let material_mix = biome_material_mix_for_page(
                         self.pool.as_ref().unwrap(),
                         level as i64,
@@ -251,7 +259,12 @@ impl Wg10TerrainView {
     }
 }
 
-fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, origin_z: f64) -> Color {
+fn debug_color_for_page(
+    pool: &Gd<Wg10PagePool>,
+    level: i64,
+    origin_x: f64,
+    origin_z: f64,
+) -> Color {
     let pool_ref = pool.bind();
     let mode = pool_ref.biome_runtime_mode().to_string();
     if mode == "world" {
@@ -260,6 +273,11 @@ fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, orig
             .to_string();
         biome_route_color(&biome)
     } else if mode == "static_reference" {
+        if let Some((low_pass, floor, rock, snow)) =
+            pool_ref.static_reference_material_hint_means_for_page(level, origin_x, origin_z, 17)
+        {
+            return static_reference_material_color(low_pass, floor, rock, snow);
+        }
         let corridor_frac = pool_ref
             .static_reference_corridor_fraction_for_page(level, origin_x, origin_z, 17)
             .unwrap_or(0.0);
@@ -286,6 +304,14 @@ fn biome_material_mix_for_page(
     if mode == "world" {
         0.34
     } else if mode == "static_reference" {
+        if let Some((low_pass, floor, rock, snow)) =
+            pool_ref.static_reference_material_hint_means_for_page(level, origin_x, origin_z, 17)
+        {
+            let hint_signal = low_pass.max(floor).max(rock).max(snow);
+            if hint_signal > 0.02 {
+                return (0.08 + hint_signal * 0.30).clamp(0.0, 0.36);
+            }
+        }
         let corridor_frac = pool_ref
             .static_reference_corridor_fraction_for_page(level, origin_x, origin_z, 17)
             .unwrap_or(0.0);
@@ -296,6 +322,19 @@ fn biome_material_mix_for_page(
         }
     } else {
         0.0
+    }
+}
+
+fn static_reference_material_color(low_pass: f64, floor: f64, rock: f64, snow: f64) -> Color {
+    let floorish = floor.max(low_pass);
+    if snow >= rock && snow >= floorish && snow > 0.02 {
+        Color::from_rgba(0.74, 0.78, 0.72, 1.0)
+    } else if rock >= floorish && rock > 0.02 {
+        Color::from_rgba(0.44, 0.45, 0.40, 1.0)
+    } else if floorish > 0.02 {
+        Color::from_rgba(0.24, 0.48, 0.35, 1.0)
+    } else {
+        biome_route_color("mountain")
     }
 }
 

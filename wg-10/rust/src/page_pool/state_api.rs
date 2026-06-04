@@ -87,12 +87,20 @@ impl Wg10PagePool {
         out.set("feature_span_m", reference.feature_span_m);
         out.set("has_corridor", reference.has_corridor);
         out.set("corridor_frac", reference.corridor_frac);
+        out.set("has_material_hints", reference.has_material_hints);
+        out.set("low_pass_hint_frac", reference.material_hint_fracs.low_pass);
+        out.set("floor_hint_frac", reference.material_hint_fracs.floor);
+        out.set("rock_hint_frac", reference.material_hint_fracs.rock);
+        out.set("snow_hint_frac", reference.material_hint_fracs.snow);
         out.set("pass_network_routes", reference.pass_network_routes);
         out.set(
             "pass_network_walkable_frac",
             reference.pass_network_walkable_frac,
         );
-        out.set("pass_network_carved_frac", reference.pass_network_carved_frac);
+        out.set(
+            "pass_network_carved_frac",
+            reference.pass_network_carved_frac,
+        );
         out
     }
 
@@ -109,6 +117,23 @@ impl Wg10PagePool {
         }
         let world_span = self.world_span * 2f64.powi(level as i32);
         Some(reference.corridor_fraction_for_page(origin_x, origin_z, world_span, samples_px))
+    }
+
+    pub(crate) fn static_reference_material_hint_means_for_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+        samples_px: usize,
+    ) -> Option<(f64, f64, f64, f64)> {
+        let reference = self.static_ref.as_ref()?;
+        if !reference.has_material_hints {
+            return None;
+        }
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        let hints = reference
+            .material_hint_fractions_for_page(origin_x, origin_z, world_span, samples_px)?;
+        Some((hints.low_pass, hints.floor, hints.rock, hints.snow))
     }
 
     /// Diagnostic report for accepted static-reference facts sampled over one runtime page.
@@ -138,6 +163,15 @@ impl Wg10PagePool {
             "corridor_frac",
             reference.corridor_fraction_for_page(origin_x, origin_z, world_span, samples),
         );
+        out.set("has_material_hints", reference.has_material_hints);
+        if let Some(hints) =
+            reference.material_hint_fractions_for_page(origin_x, origin_z, world_span, samples)
+        {
+            out.set("low_pass_hint_mean", hints.low_pass);
+            out.set("floor_hint_mean", hints.floor);
+            out.set("rock_hint_mean", hints.rock);
+            out.set("snow_hint_mean", hints.snow);
+        }
         out
     }
 
