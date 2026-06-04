@@ -78,6 +78,18 @@
 > `cargo fmt -p wg10_terrain -- --check`, focused `page_pool` tests = 18/18,
 > full Rust lib tests = 233/233, `tools/build_rust.ps1` builds, and
 > `review_runtime` = 2/2.
+> Follow-up report ownership split on 2026-06-04: page-pool reference binding,
+> mountain-world contract taxonomy, and sampled static/reference reports are no
+> longer bundled in one `static_reports.rs`. `world_layer_bindings.rs` now owns
+> `bind_mountain_world_layer_reference(...)`, `bind_world_preview_reference(...)`,
+> and the WORLD-preview reference predicate; `world_layer_contract.rs` owns
+> `mountain_world_layer_contract_report()`; `static_reports.rs` now only owns
+> sampled static/reference reports and helper sampling accessors. Current line
+> counts: `static_reports.rs` 241, `world_layer_contract.rs` 152,
+> `world_layer_bindings.rs` 58. Proof after the split:
+> `cargo fmt -p wg10_terrain -- --check`, focused `page_pool` tests = 18/18,
+> full Rust lib tests = 233/233, `tools/build_rust.ps1` builds, and
+> `review_runtime` = 2/2.
 > Current proof after the runtime-tile binding fix: `cargo test -p
 > wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
 > 8/0, `cargo test -p wg10_terrain --lib` = 233/0,

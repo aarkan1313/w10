@@ -33,6 +33,8 @@ mod producer;
 mod state_api;
 mod static_reference;
 mod static_reports;
+mod world_layer_bindings;
+mod world_layer_contract;
 mod world_layer_reference;
 mod world_producer;
 mod world_reports;
