@@ -115,6 +115,57 @@ impl Wg10PagePool {
         out
     }
 
+    /// Diagnostic: sample the per-texel runtime-biome weight field that the future WORLD compose
+    /// producer should consume. This is CPU-side today, but it uses the same texel-corner page
+    /// mapping as the runtime page producer and folds grammar families into supported runtime
+    /// biome names exactly like the current route selector.
+    #[func]
+    pub fn debug_world_biome_weight_field_report_for_page(
+        &self,
+        level: i64,
+        origin_x: f64,
+        origin_z: f64,
+        samples_px: i64,
+    ) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        let Some(world) = self.biome_world.as_ref() else {
+            return out;
+        };
+        let samples = samples_px.clamp(2, 65) as usize;
+        let world_span = self.world_span * 2f64.powi(level as i32);
+        let field = self.world_biome_weight_field(world, origin_x, origin_z, world_span, samples);
+        let n = field.rows * field.cols;
+        let mut max_sum_delta = 0.0f32;
+        let mut min_sum = f32::INFINITY;
+        let mut max_sum = f32::NEG_INFINITY;
+        let mut max_texel_active_count = 0i64;
+        for idx in 0..n {
+            let mut sum = 0.0f32;
+            let mut active = 0i64;
+            for weights in &field.weights {
+                let w = weights[idx];
+                sum += w;
+                if w > 1.0e-9 {
+                    active += 1;
+                }
+            }
+            min_sum = min_sum.min(sum);
+            max_sum = max_sum.max(sum);
+            max_sum_delta = max_sum_delta.max((sum - 1.0).abs());
+            max_texel_active_count = max_texel_active_count.max(active);
+        }
+
+        out.set("rows", field.rows as i64);
+        out.set("cols", field.cols as i64);
+        out.set("sample_count", n as i64);
+        out.set("active_biomes", field.names.len() as i64);
+        out.set("max_texel_active_count", max_texel_active_count);
+        out.set("min_sum", min_sum as f64);
+        out.set("max_sum", max_sum as f64);
+        out.set("max_sum_delta", max_sum_delta as f64);
+        out
+    }
+
     /// Unprotect a page, marking it LRU-eligible for eviction.
     #[func]
     pub fn release_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {

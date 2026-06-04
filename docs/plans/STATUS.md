@@ -90,6 +90,13 @@
 > single selected parent biome cannot represent those children without throwing
 > away real world variation; the aligned fix is runtime per-pixel grammar weights
 > feeding compose, not forcing children to inherit a coarser page route.
+> First compose-bridge seam now exists in Rust: `page_pool/world_route.rs` can
+> generate a texel-corner runtime-biome weight field from `Pack + supported
+> biome predicate`, without depending on `BiomeWorldRuntime` or renderer state.
+> Current `biome_world` proof line: `route_weight_field samples=289
+> active_biomes=2 max_texel_active=2 min_sum=1.000000 max_sum=1.000000
+> max_sum_delta=0.000000`. This does **not** compose the live page yet; it proves
+> the page-local weight-field input needed by the runtime compose producer.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

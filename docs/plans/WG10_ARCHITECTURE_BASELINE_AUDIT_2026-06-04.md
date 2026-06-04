@@ -102,6 +102,13 @@ Validation:
   max_child_routes=6`. This means page-center routing is stable at level 1 in
   the sample but breaks structurally at coarser levels; a single parent biome is
   not a faithful low-detail representation of its children.
+- The first runtime compose bridge seam is now testable separately from page
+  selection: `page_pool/world_route.rs` can generate a texel-corner per-page
+  runtime-biome weight field from grammar. `biome_world` reports
+  `route_weight_field samples=289 active_biomes=2 max_sum_delta=0.000000` for
+  the sampled live page. This is only the input seam; live page generation still
+  needs GPU recipe core buffers copied into a runtime compose context before
+  cropping the composed height to the page texture.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 

@@ -136,6 +136,32 @@ func _run() -> int:
 		max_probe_runner_up,
 	])
 
+	var field_report = pool.call(
+		"debug_world_biome_weight_field_report_for_page",
+		0,
+		0.0,
+		0.0,
+		17)
+	if typeof(field_report) != TYPE_DICTIONARY or field_report.is_empty():
+		push_error("[wg10-biome-world] debug_world_biome_weight_field_report_for_page returned empty")
+		return 1
+	var field_delta := float(field_report.get("max_sum_delta", 1.0))
+	var field_active := int(field_report.get("active_biomes", 0))
+	if field_delta > 1.0e-5 or field_active == 0:
+		push_error("[wg10-biome-world] invalid weight field active=%d max_sum_delta=%f" % [
+			field_active,
+			field_delta,
+		])
+		return 1
+	print("[wg10-biome-world] route_weight_field samples=%d active_biomes=%d max_texel_active=%d min_sum=%f max_sum=%f max_sum_delta=%f" % [
+		int(field_report.get("sample_count", 0)),
+		field_active,
+		int(field_report.get("max_texel_active_count", 0)),
+		float(field_report.get("min_sum", 0.0)),
+		float(field_report.get("max_sum", 0.0)),
+		field_delta,
+	])
+
 	var lod_route_samples := 0
 	var lod_route_mismatches := 0
 	var stable_child_mismatches := 0

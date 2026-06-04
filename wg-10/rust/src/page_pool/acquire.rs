@@ -181,7 +181,15 @@ impl Wg10PagePool {
         origin_z: f64,
         world_span: f64,
     ) -> String {
-        world_route::select_biome_name_for_page(self.seed, world, origin_x, origin_z, world_span)
+        let supported = |biome: &str| world.contexts.contains_key(biome);
+        world_route::select_biome_name_for_page(
+            self.seed,
+            &world.pack,
+            origin_x,
+            origin_z,
+            world_span,
+            &supported,
+        )
     }
 
     pub(super) fn world_biome_weights(
@@ -191,7 +199,15 @@ impl Wg10PagePool {
         origin_z: f64,
         world_span: f64,
     ) -> std::collections::BTreeMap<String, f64> {
-        world_route::biome_weights_for_page(self.seed, world, origin_x, origin_z, world_span)
+        let supported = |biome: &str| world.contexts.contains_key(biome);
+        world_route::biome_weights_for_page(
+            self.seed,
+            &world.pack,
+            origin_x,
+            origin_z,
+            world_span,
+            &supported,
+        )
     }
 
     pub(super) fn world_biome_weights_at(
@@ -200,7 +216,28 @@ impl Wg10PagePool {
         x: f64,
         z: f64,
     ) -> std::collections::BTreeMap<String, f64> {
-        world_route::biome_weights_at_point(self.seed, world, x, z)
+        let supported = |biome: &str| world.contexts.contains_key(biome);
+        world_route::biome_weights_at_point(self.seed, &world.pack, x, z, &supported)
+    }
+
+    pub(super) fn world_biome_weight_field(
+        &self,
+        world: &BiomeWorldRuntime,
+        origin_x: f64,
+        origin_z: f64,
+        world_span: f64,
+        page_px: usize,
+    ) -> world_route::BiomeWeightField {
+        let supported = |biome: &str| world.contexts.contains_key(biome);
+        world_route::biome_weight_field_for_page(
+            self.seed,
+            &world.pack,
+            origin_x,
+            origin_z,
+            world_span,
+            page_px,
+            &supported,
+        )
     }
 
     /// Roll back a failed compute into a newly-created texture.
