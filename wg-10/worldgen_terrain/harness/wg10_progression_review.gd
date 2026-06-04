@@ -68,6 +68,7 @@ var _label: Label
 var _step_index := 0
 var _last_config_error := ""
 var _frame := 0
+var _probe_mode := false
 
 func _ready() -> void:
 	if RenderingServer.get_rendering_device() == null:
@@ -212,7 +213,31 @@ func debug_progression_snapshot() -> Dictionary:
 		"future_steps": FUTURE_STEPS,
 	}
 
+func set_probe_mode(enabled: bool) -> void:
+	_probe_mode = enabled
+	set_process(not enabled)
+
+func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) -> void:
+	if _camera != null:
+		_camera.global_position.x = pos_x
+		_camera.global_position.z = pos_z
+	if _view != null:
+		_view.call("update", pos_x, pos_z, vel_x, vel_z)
+	_refresh_label()
+
+func debug_tile_states() -> PackedInt64Array:
+	if _rings == null:
+		return PackedInt64Array()
+	return _rings.call("debug_tile_states")
+
+func debug_streamer_stats() -> Dictionary:
+	if _streamer == null:
+		return {}
+	return _streamer.call("stats")
+
 func _process(_delta: float) -> void:
+	if _probe_mode:
+		return
 	if _view == null or _camera == null:
 		return
 	_frame += 1

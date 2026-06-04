@@ -117,6 +117,8 @@ impl Wg10TerrainView {
                 for dx in -1..=1 {
                     let po_x = center_x + dx as f64 * span_l;
                     let po_z = center_z + dz as f64 * span_l;
+                    let slot_dx = torus_slot_delta(po_x, span_l);
+                    let slot_dz = torus_slot_delta(po_z, span_l);
 
                     let mut rings = self.rings.as_ref().unwrap().clone();
 
@@ -140,8 +142,8 @@ impl Wg10TerrainView {
                         if !is_coarsest {
                             rings.bind_mut().set_tile_visible(
                                 level as i64,
-                                dx as i64,
-                                dz as i64,
+                                slot_dx,
+                                slot_dz,
                                 false,
                             );
                         } else {
@@ -151,10 +153,7 @@ impl Wg10TerrainView {
                             // underneath it (page-A geometry + page-B pixels). If the held page is no
                             // longer resident-as-itself, there is nothing safe to show — fall through
                             // to hide rather than display a recycled RID.
-                            let bk =
-                                rings
-                                    .bind()
-                                    .bound_page_key(level as i64, dx as i64, dz as i64);
+                            let bk = rings.bind().bound_page_key(level as i64, slot_dx, slot_dz);
                             let held_ox = bk.x as f64;
                             let held_oz = bk.y as f64;
                             let still_there = self
@@ -175,8 +174,8 @@ impl Wg10TerrainView {
                                 // structural guard the capacity-pressure gate exercises.)
                                 rings.bind_mut().set_tile_visible(
                                     level as i64,
-                                    dx as i64,
-                                    dz as i64,
+                                    slot_dx,
+                                    slot_dz,
                                     false,
                                 );
                             }
@@ -216,8 +215,8 @@ impl Wg10TerrainView {
 
                     rings.bind_mut().bind_tile(
                         level as i64,
-                        dx as i64,
-                        dz as i64,
+                        slot_dx,
+                        slot_dz,
                         ht.upcast::<godot::classes::Texture2D>(),
                         coarse_tex.upcast::<godot::classes::Texture2D>(),
                         Vector2::new(po_x as f32, po_z as f32), // tile_origin (placement)
@@ -239,8 +238,8 @@ impl Wg10TerrainView {
                     if let Some(material_tex) = static_material_tex {
                         rings.bind_mut().set_tile_static_material(
                             level as i64,
-                            dx as i64,
-                            dz as i64,
+                            slot_dx,
+                            slot_dz,
                             material_tex.upcast::<godot::classes::Texture2D>(),
                             0.58,
                         );
@@ -255,8 +254,8 @@ impl Wg10TerrainView {
                     );
                     rings.bind_mut().set_tile_debug_color(
                         level as i64,
-                        dx as i64,
-                        dz as i64,
+                        slot_dx,
+                        slot_dz,
                         debug_color,
                         material_mix,
                     );
@@ -390,4 +389,12 @@ fn biome_route_color(name: &str) -> Color {
         "wetland" => Color::from_rgba(0.18, 0.38, 0.34, 1.0),
         _ => Color::from_rgba(0.45, 0.45, 0.45, 1.0),
     }
+}
+
+fn torus_slot_delta(page_origin: f64, span: f64) -> i64 {
+    if !page_origin.is_finite() || !span.is_finite() || span.abs() <= f64::EPSILON {
+        return 0;
+    }
+    let page_index = (page_origin / span).round() as i64;
+    page_index.rem_euclid(3) - 1
 }

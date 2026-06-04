@@ -5,20 +5,28 @@
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > **Latest owner-report audit:** see
 > `docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`.
-> The immediate fix in this pass is the shared fly-camera
-> `sync_mouse_from_rotation()` method, gated by `mountain_fly_review_smoke_check.gd`,
-> so review-camera reframing no longer leaves mouse-look yaw/pitch stale. Latest
-> post-fix proof: `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
-> `review_runtime_stress` = 1/1. The audit also records the next hardening work:
-> add an owner-spike gate and a visual REPAGE-delta gate before promoting more
-> procedural content.
+> Latest fix in this pass: the live clipmap now uses toroidal page slots in
+> `terrain_view.rs`, so already-visible pages keep their mesh/material slot when
+> the camera crosses page boundaries. This directly addresses the owner report
+> that modes 1/2/3 felt slow and popped while moving. New progression proof first
+> failed with `repage_frame_max=18` in all four steps; after the fix it passes
+> with `repage_frame_max=8`, total visible repages down from `72` to `26`, zero
+> hide/show, zero full events, and CPU p99 <= `13.665 ms` across REFERENCE,
+> MOUNTAIN/network, MOUNTAIN/close-debug, and WORLD preview. The earlier shared
+> fly-camera `sync_mouse_from_rotation()` method remains part of this recovery
+> pass and prevents review-camera reframing from leaving mouse-look yaw/pitch
+> stale.
 > **Progression harness follow-up:** `wg10_progression_review.tscn` now exists
 > with an explicit four-step current ladder: accepted REFERENCE baseline,
 > reference-backed MOUNTAIN bridge, raw MOUNTAIN close-debug candidate, and
-> bounded WORLD reference preview. `review_progression` = 1/1 proves those
-> steps report their expected runtime modes and contract kinds, and records the
-> planned future steps for material facts, pass-network facts, procedural
-> mountain world-layer production, and facts/collision parity.
+> bounded WORLD reference preview. `review_progression` = 2/2 now proves those
+> steps report their expected runtime modes/contract kinds and survive scripted
+> motion through page boundaries with bounded repage bursts.
+> Latest post-fix proof: `review_progression` = 2/2, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. The visual
+> gate confirms REFERENCE, MOUNTAIN/network, and WORLD preview match where they
+> are supposed to match; raw `MOUNTAIN/close_debug` and route/debug coloring
+> remain prototype/diagnostic and are not accepted terrain.
 > **Read this first:** latest scoped runtime-artifact checkpoint now has the
 > owner fly binding the JSON-ready accepted mountain world-layer tile payload in
 > `REFERENCE`, `MOUNTAIN/network_ref`, and `WORLD` preview. This replaces the

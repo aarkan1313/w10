@@ -144,6 +144,7 @@ CHECKS = {
     # candidate, and bounded WORLD diagnostic without promoting unfinished content.
     "review_progression": [
         "worldgen_terrain/tests/wg10_progression_review_check.gd",
+        "worldgen_terrain/tests/wg10_progression_motion_check.gd",
     ],
 }
 

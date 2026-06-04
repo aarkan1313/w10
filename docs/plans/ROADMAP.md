@@ -38,12 +38,14 @@ Current work is Slice 4 stabilization and recovery:
   is ownership and mode taxonomy, not one giant still-unsplit source file.
 - The latest owner-report fix adds the missing shared fly-camera
   `sync_mouse_from_rotation()` hook so review-camera reframing cannot leave
-  stale mouse-look state. The next hardening target is a progression review
-  scene plus stricter owner-spike and visual REPAGE-delta gates.
+  stale mouse-look state. The follow-up owner-motion fix changes live clipmap
+  binding to toroidal page slots, reducing progression-scene visible repages
+  from `72` to `26` and same-frame repage bursts from `18` to `8` with zero
+  hide/show/full events.
 - `wg10_progression_review.tscn` is now the progression harness for the next
   chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
   WORLD/reference-preview as explicit steps with `review_progression` guarding
-  runtime modes and contract kinds.
+  runtime modes, contract kinds, and scripted page-boundary motion.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same

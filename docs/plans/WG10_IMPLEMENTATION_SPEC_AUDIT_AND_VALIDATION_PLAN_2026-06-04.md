@@ -30,7 +30,8 @@ Implemented follow-up checkpoint:
 - `wg-10/worldgen_terrain/harness/wg10_progression_review.tscn`
 - `wg-10/worldgen_terrain/harness/wg10_progression_review.gd`
 - `wg-10/worldgen_terrain/tests/wg10_progression_review_check.gd`
-- `python tools/gate.py --suite review_progression` = 1/1.
+- `wg-10/worldgen_terrain/tests/wg10_progression_motion_check.gd`
+- `python tools/gate.py --suite review_progression` = 2/2.
 
 This new scene is the next-chat validation harness. It exposes four current
 steps with explicit status and expected contract:
@@ -45,18 +46,34 @@ It also records planned future steps for source/display overlay, material fact
 layers, pass-network facts, procedural mountain world-layer production, and
 facts/collision parity.
 
-Latest proofs after the camera fix:
+Latest motion fix checkpoint:
+
+- Root cause for the owner-visible "pops while moving in 1/2/3" class was the
+  shared live clipmap rebinding too many visible tiles on page-boundary crosses.
+- Before the fix, the new progression motion gate failed all four steps with
+  `repage_frame_max=18`, `repage=72`, while still reporting `hide=0`,
+  `show=0`, and `full_events=0`. That explains why the older gates were green
+  while the owner still saw popping: the gates allowed visible REPAGE churn.
+- `terrain_view.rs` now maps displayed pages to toroidal 3x3 slots by absolute
+  page origin. Existing pages keep their mesh/material slot; only newly-entering
+  rows/columns rebind.
+- After the fix, `review_progression` passes with `repage_frame_max=8`,
+  `repage=26`, `hide=0`, `show=0`, and `full_events=0` for all four steps.
+
+Latest proofs after the camera and clipmap fixes:
 
 - `python tools/gate.py --suite review_runtime` = 2/2.
 - `python tools/gate.py --suite review_runtime_modes` = 2/2.
-- `python tools/gate.py --suite review_runtime_stress` = 1/1.
+- `python tools/gate.py --suite review_runtime_visual` = 2/2.
+- `python tools/gate.py --suite review_progression` = 2/2.
 
-Mode-gate numbers after restoring the stable one-page/frame budget:
+Mode-gate numbers after the toroidal slot fix:
 
-- REFERENCE: CPU p99/max `9.824/9.968 ms`, GPU p99 `0.746 ms`.
-- MOUNTAIN/network_ref: CPU p99/max `9.597/9.907 ms`, GPU p99 `0.747 ms`.
-- WORLD/network_ref preview: CPU p99/max `9.758/13.061 ms`, GPU p99 `0.748 ms`.
-- All three: `hide=0`, `show=0`, `full_events=0`, `acquired_max=1`.
+- REFERENCE: CPU p99/max `12.293/13.652 ms`, GPU p99 `0.811 ms`.
+- MOUNTAIN/network_ref: CPU p99/max `12.918/13.812 ms`, GPU p99 `0.792 ms`.
+- WORLD/network_ref preview: CPU p99/max `12.143/20.185 ms`, GPU p99 `0.784 ms`.
+- All three: `hide=0`, `show=0`, `full_events=0`, `acquired_max=1`,
+  `repage=26`.
 
 Manual stress after the camera fix:
 
@@ -120,7 +137,7 @@ Mode `4` / `LEGACY`:
 | Conditioning | Accepted payload includes whole-field conditioning stats. | Partial | Live producer lacks equivalent page-stable conditioning. |
 | Material/fact hints | Runtime material pages preserve low-pass/corridor, floor, rock, snow channels. | Partial | Works for accepted reference payload; final procedural material facts remain open. |
 | Facts/collision | Base facts API exists. | Open | Mountain world-layer facts are not yet the collision authority for final procedural content. |
-| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3. | Partial | REPAGE visual delta and single-frame owner spikes are not strict enough yet. |
+| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3; progression motion now bounds same-frame repage bursts to 8 after the toroidal slot fix. | Partial | Pixel-level REPAGE delta and strict single-frame owner-spike budgets remain open. |
 | Owner visual acceptance | Static network scene and runtime REFERENCE bridge match by silhouette/color gates. | Partial | Procedural MOUNTAIN and full WORLD are not accepted. |
 
 ## Architecture Audit
@@ -158,6 +175,8 @@ impossible to confuse.
 
 - Keys 1/2/3 are stable on scripted motion.
 - No visible tiles hide/show, no pool-full events, and render p99 stays low.
+- After the toroidal slot fix, visible repage totals in the scripted path are
+  down to 26 for each mode.
 - It does not prove manual mouse free-fly, editor-window stalls, or visual
   quality beyond nondegenerate terrain.
 
@@ -174,6 +193,14 @@ impossible to confuse.
 - Runtime REFERENCE stays tied to the old accepted static network scene.
 - It does not prove raw procedural mountain content is acceptable.
 
+`review_progression` proves:
+
+- The recovery progression scene exposes the current four-step ladder with
+  explicit status and contract kinds.
+- The same scene survives scripted page-boundary motion with zero hide/show/full
+  events and bounded repage bursts.
+- It does not prove future planned features until each step is added and gated.
+
 ## Fix Plan For "Slow, Laggy, Weird In 1/2/3"
 
 1. Keep the camera-sync fix.
@@ -187,24 +214,29 @@ impossible to confuse.
    - If we need more throughput, make it mode-specific or async/cache-backed,
      not a global synchronous spike.
 
-3. Add a stricter owner-spike gate.
+3. Keep the progression motion gate.
+   - Implemented as `wg10_progression_motion_check.gd`.
+   - It caught the all-mode repage burst that older hide/show gates missed.
+   - The toroidal slot fix reduced `repage_frame_max` from 18 to 8.
+
+4. Add a stricter owner-spike gate.
    - Current stress allows a one-frame `22.349 ms` MOUNTAIN morph-on spike.
    - Decide an owner review max budget and fail it explicitly.
    - Record frame, mode, morph state, acquired pages, and repage count.
 
-4. Add a visual REPAGE-delta gate.
+5. Add a visual REPAGE-delta gate.
    - Current gates count REPAGE as acceptable if tiles never hide.
    - The owner complaint is perceptual: content popping while moving forward.
    - Capture pre/post repage frames, compare image delta in terrain mask, and
      fail if the terrain change is too abrupt.
 
-5. Keep modes 1/2/3 honest.
+6. Keep modes 1/2/3 honest.
    - Mode 1 is the accepted baseline.
    - Modes 2/3 matching mode 1 is intentional until procedural content is built.
    - Do not make mode 2 or mode 3 "look different" by tuning random color/relief
      knobs. That would hide the contract gap.
 
-6. Build the progression review scene before adding more content.
+7. Build from the progression review scene before adding more content.
    - A new scene should add one roadmap feature at a time and gate each step.
    - This prevents another round of "multiple architectures in one scene" drift.
 

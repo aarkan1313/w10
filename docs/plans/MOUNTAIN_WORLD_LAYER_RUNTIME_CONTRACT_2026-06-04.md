@@ -88,6 +88,17 @@ read as terrain lagging/popping during flight. This keeps modes 1/2/3 on the
 accepted reference presentation path before any optional close-surface dressing
 is judged.
 
+Latest owner-motion status: the live clipmap display loop now uses toroidal
+3x3 page slots keyed by absolute page origin. Already-visible pages keep their
+mesh/material slot when the camera crosses a page boundary, so the renderer no
+longer rebinds an entire visible 3x3 level at once. The new progression motion
+gate first exposed the all-mode failure (`repage_frame_max=18`, `repage=72`,
+zero hide/show/full), then passed after the fix (`repage_frame_max=8`,
+`repage=26`, zero hide/show/full across REFERENCE, MOUNTAIN/network,
+MOUNTAIN/close-debug, and WORLD preview). This addresses the renderer-side
+pop class; it does not promote raw `MOUNTAIN/close_debug` or full WORLD compose
+to accepted terrain.
+
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,
 and the ring shader lighting is tuned toward that old static scene rather than
