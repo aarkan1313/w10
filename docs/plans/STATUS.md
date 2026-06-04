@@ -20,7 +20,7 @@
 > loads), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
 > (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.109 ms).
+> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.104 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
 > `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
 > `close_debug` scale (`feature_span_m=3500`). A direct scene smoke launch after
@@ -103,6 +103,13 @@
 > active_biomes=2 max_texel_active=2 min_sum=1.000000 max_sum=1.000000
 > max_sum_delta=0.000000`, followed by `status=pass runtime=world biome_path=true
 > nonzero=65536`.
+> The accepted static network baseline now has a direct visual capture harness:
+> `worldgen_terrain/tests/mountain_network_visual_capture.gd`. It runs the static
+> `mountain_network_chunks_review.tscn` in a windowed `SubViewport` and writes
+> `D:/tmp/wg10_biome_compose/mountain_network_static_focus_capture.png` plus
+> `D:/tmp/wg10_biome_compose/mountain_network_static_overview_capture.png`
+> (`chunks=9`, `feature_span_m=90000`, `1280x720`). These are comparison evidence
+> for the owner-liked offline artifact, not proof that the live runtime matches it.
 > The standalone visual capture now writes four runtime artifacts:
 > `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,

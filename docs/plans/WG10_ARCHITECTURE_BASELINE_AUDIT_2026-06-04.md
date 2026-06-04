@@ -83,13 +83,20 @@ Validation:
   failed because that generic check is stale against its current
   `biome_compose_world_v2_scale_contract` payload; do not use it as the accepted
   network-baseline proof.
+- Direct static baseline capture passed with the Godot console binary:
+  `worldgen_terrain/tests/mountain_network_visual_capture.gd` wrote
+  `D:/tmp/wg10_biome_compose/mountain_network_static_focus_capture.png` and
+  `D:/tmp/wg10_biome_compose/mountain_network_static_overview_capture.png`
+  from `mountain_network_chunks_review.tscn` (`chunks=9`,
+  `feature_span_m=90000`, `1280x720`). These captures preserve the owner-liked
+  offline artifact for direct comparison against the live runtime.
 - `python tools\gate.py --suite m3`: 9/9 passed after the lit-material and
   route-debug renderer changes. `m3_accept` p99 = 5.17 ms against the 6.0 ms
   budget; `m5_detail_check` remained non-vacuous (`diff=0.0124`), bounded,
   and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.109 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.104 ms.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
   loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
   `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
@@ -351,9 +358,11 @@ $env:CARGO_TARGET_DIR='D:\workflows\worldgen10\wg-10\rust\target'
 cargo build -p wg10_terrain
 
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'
+& $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 --script res://worldgen_terrain/tests/mountain_network_visual_capture.gd
 python tools\gate.py --suite m3
 python tools\gate.py --suite biome_fly
 python tools\gate.py --suite review_static
+& $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/mountain_fly_review.tscn --quit-after 2
 ```
 
 Then re-fly:
