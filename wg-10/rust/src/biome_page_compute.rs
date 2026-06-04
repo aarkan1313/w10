@@ -51,8 +51,9 @@ use abi::*;
 pub(crate) use helpers::*;
 pub(crate) use kernels::*;
 pub(crate) use runtime_context::{
-    build_biome_page_context, build_biome_page_context_for_biome, compute_biome_page_cached,
-    free_biome_page_context, BiomePageComputeContext,
+    build_biome_compose_context, build_biome_page_context, build_biome_page_context_for_biome,
+    compute_biome_page_cached, compute_biome_world_page_composed, free_biome_page_context,
+    BiomePageComputeContext,
 };
 pub(crate) use sigma_registry::*;
 

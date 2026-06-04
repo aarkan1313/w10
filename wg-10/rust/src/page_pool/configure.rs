@@ -89,6 +89,7 @@ impl Wg10PagePool {
         &mut self,
         pack: pack::Pack,
         contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
+        compose_ctx: biome_page_compute::BiomePageComputeContext,
         capacity: i64,
         page_px: i64,
         world_span: f64,
@@ -103,7 +104,11 @@ impl Wg10PagePool {
         self.compute_ctx = None;
         self.use_biome_path = true;
         self.biome_ctx = None;
-        self.biome_world = Some(BiomeWorldRuntime { pack, contexts });
+        self.biome_world = Some(BiomeWorldRuntime {
+            pack,
+            contexts,
+            compose_ctx,
+        });
         self.biome_feature_span_m = feature_span_m;
         self.biome_flow_max_level = flow_max_level;
         self.page_px = page_px;

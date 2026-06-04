@@ -13,14 +13,14 @@
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
-> = **218 passed / 0 failed**.
+> = **220 passed / 0 failed**.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
 > loads), `m3` = **9/9 pass** after the new page-fade renderer change (`m3_accept` p99
 > 5.81 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass** (macro 576 maxd
 > 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002, cross-level macro ratio
-> 0.066665 <= 0.08, fly GPU p99 0.106 ms after the live material update).
+> 0.066665 <= 0.08, fly GPU p99 0.105 ms after the live material update).
 > `mountain_fly_review.tscn` now starts on the accepted `network_ref` scale
 > (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug`
 > scale (`feature_span_m=3500`). A direct scene smoke launch after the DLL
@@ -33,17 +33,19 @@
 > cycles them and the HUD/log prints the active mode. `WORLD` calls
 > `configure_biome_world(...)`, loads the pack grammar without resolving the
 > legacy kernel atlas, builds cached GPU contexts for the 11 currently ported
-> biome fragments, samples grammar at the page center, and routes each page to
-> the dominant supported biome. This removes the all-mountain default for the
-> live fly, but it is still a first routed producer layer: not yet per-pixel
-> multi-biome compose, not yet badlands-native (badlands falls back to desert),
-> and not yet the Slice 4c atlas-removal/runtime-flip acceptance.
+> biome fragments plus a cached compose context, generates a texel-corner
+> runtime-biome weight field per page, dispatches each active GPU biome recipe,
+> and folds the resulting core fields through the GPU compose passes before
+> writing the page texture. This removes the all-mountain default and the
+> whole-page dominant-biome selector from the live WORLD fly, but it is still
+> not badlands-native (badlands falls back to desert), not per-biome material
+> complete, and not the Slice 4c atlas-removal/runtime-flip acceptance.
 > `cargo build --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain`
 > passes. The new `biome_world` windowed gate is **1/1 pass** when run outside
 > the sandbox (`python tools\gate.py --suite biome_world`): runtime=`world`,
 > `biome_path=true`, route diversity across the sampled page window includes
 > rainforest/wetland/tundra/volcanic/temperate/desert/grassland/coast/mountain/glacial/karst,
-> nonzero=65536, min=-1196.652466, max=842.125366. Important run rule: Godot
+> nonzero=65536, min=-1633.198242, max=842.125427. Important run rule: Godot
 > gates must run outside the filesystem sandbox because the sandbox cannot write
 > `user://` AppData logs and Godot crashes before scripts run.
 >
@@ -51,35 +53,34 @@
 > blue/yellow height-debug ramp as the normal material. `ring_displace.gdshader`
 > now derives a mountain-style palette from displayed height plus a slope estimate,
 > while `M` still switches to the morph heatmap. This does not solve per-biome
-> materials or per-pixel compose, but it removes one major reason the live fly
-> looked nothing like the accepted mountain-network review even when the height
-> producer was correct.
+> materials, but it removes one major reason the live fly looked nothing like
+> the accepted mountain-network review even when the height producer was correct.
 >
-> Pop-in audit evidence: `biome_world` now reports child/parent route disagreement
-> for page-center WORLD routing. Current windowed result: `lod_route_mismatch=183/867`
+> Pop-in audit evidence: `biome_world` still reports child/parent route disagreement
+> for the old page-center route diagnostic. Current windowed result: `lod_route_mismatch=183/867`
 > (`ratio=0.211073`). That means about 21% of sampled fine pages route to a different
-> biome than at least one coarser fallback/morph parent, so forward motion can still
-> reveal a different biome surface as pages stream in. `mountain_fly_review.tscn`
+> biome than at least one coarser fallback/morph parent under a single-biome selector.
+> The live WORLD producer now composes per-page weight fields instead of using that
+> selector, but `mountain_fly_review.tscn`
 > now prints the routed biome per clipmap level in the yellow debug HUD so the owner
-> fly can correlate visible pops with route changes. This is evidence for the
-> per-pixel compose requirement, not acceptance of the page-center route.
+> fly can correlate any remaining visible pops with route changes and streaming state.
+> This is evidence for why the selector was wrong, not proof that the composed live
+> path is visually accepted.
 > The WORLD routing helper is now split into `page_pool/world_route.rs` and
 > `biome_world` also reports page-center route-weight loss: current windowed result
 > `route_weights samples=289 multi_active=201 ambiguous=0 max_active=4 mean_top=0.966506
 > weakest_top=0.915909 mean_runner_up=0.031516 max_runner_up=0.084091`. So most sampled
 > pages have more than one active runtime-biome weight, but the current grammar grid
-> still has a very strong dominant biome at each page center. Treat this as the first
-> measurable bridge toward Slice 4 Part B: the current selector is discarding active
-> weights, and the larger visible pop risk remains the 21% child/parent route mismatch
-> until WORLD routing becomes per-pixel compose instead of whole-page selection.
+> still has a very strong dominant biome at each page center. This is retained as
+> evidence for why the previous selector discarded valid active weights; the live
+> WORLD producer now consumes the weight field through compose.
 > Follow-up in-page route probe: current windowed `biome_world` reports
 > `route_inpage corner_mixed=0 max_corner_mismatches=0 max_probe_active=4
 > weakest_probe_top=0.711914 max_probe_runner_up=0.288086`. In this sampled window,
 > page footprints are not crossing dominant-route boundaries at their corners, but
 > corners can have material runner-up weights. This further narrows the current
 > forward-motion artifact: the hard evidence points first at cross-LOD route changes,
-> while full compose remains required to consume non-dominant active weights and avoid
-> treating biome transitions as single-recipe pages.
+> and the composed runtime needs a fresh owner fly to determine what remains visible.
 > New parent/child route breakdown from `biome_world`: `lod_route_by_parent
 > L1=0/289(0.000000) L2=63/289(0.217993) L3=120/289(0.415225)
 > stable_child_mismatch=183`. Complete child scans inside sampled parents report
@@ -90,20 +91,20 @@
 > single selected parent biome cannot represent those children without throwing
 > away real world variation; the aligned fix is runtime per-pixel grammar weights
 > feeding compose, not forcing children to inherit a coarser page route.
-> First compose-bridge seam now exists in Rust: `page_pool/world_route.rs` can
-> generate a texel-corner runtime-biome weight field from `Pack + supported
-> biome predicate`, without depending on `BiomeWorldRuntime` or renderer state.
-> Current `biome_world` proof line: `route_weight_field samples=289
+> Runtime compose bridge now exists in Rust: `page_pool/world_route.rs` generates
+> a texel-corner runtime-biome weight field from `Pack + supported biome predicate`,
+> and `compute_biome_world_page_composed(...)` copies recipe core buffers into a
+> cached compose context before cropping the composed height to the live page
+> texture. Current `biome_world` proof line: `route_weight_field samples=289
 > active_biomes=2 max_texel_active=2 min_sum=1.000000 max_sum=1.000000
-> max_sum_delta=0.000000`. This does **not** compose the live page yet; it proves
-> the page-local weight-field input needed by the runtime compose producer.
+> max_sum_delta=0.000000`, followed by `status=pass runtime=world biome_path=true
+> nonzero=65536`.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime
-> capture after the material change, and the live `WORLD` path is page-center
-> biome routing, not the accepted per-pixel grammar/compose world architecture.
-> Slice 4c is also still open: runtime default flip, atlas-removal audit,
-> hardened perf gate, and owner acceptance are pending.
+> capture after the material and compose changes, and per-biome materials/content
+> still need review. Slice 4c is also still open: runtime default flip,
+> atlas-removal audit, hardened perf gate, and owner acceptance are pending.
 > Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is
 > designed or explicitly exempted.
 >
@@ -112,8 +113,8 @@
 > `biome_page_compute/local_compose.rs` 439, `recipes_desert.rs` 434, `recipes_karst.rs` 428).
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
-> the live WORLD fly as accepted just because it is no longer all-mountain; it is
-> still page-center routing, not the accepted per-pixel compose world.
+> the live WORLD fly as accepted just because it now composes biome recipe heights;
+> owner visual acceptance and the Slice 4c runtime/facts story remain open.
 
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating

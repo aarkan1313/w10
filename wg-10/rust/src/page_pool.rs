@@ -1,4 +1,4 @@
-﻿//! Single owner of all page-texture RIDs (DESIGN §5.2).
+//! Single owner of all page-texture RIDs (DESIGN §5.2).
 //!
 //! `Wg10PagePool` is the ONLY place that calls `texture_create` and `free_rid`
 //! on page textures.  It asks `PagePolicy` what to do (reuse / allocate /
@@ -36,6 +36,7 @@ mod world_route;
 struct BiomeWorldRuntime {
     pack: pack::Pack,
     contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
+    compose_ctx: biome_page_compute::BiomePageComputeContext,
 }
 
 const RUNTIME_BIOMES: [&str; 11] = [
@@ -293,9 +294,9 @@ impl Wg10PagePool {
     // -----------------------------------------------------------------------
 
     /// Configure the pool for grammar-routed live biome pages. This is the first runtime world
-    /// layer: page acquisition samples the grammar at the page center, selects the dominant
-    /// supported biome recipe, and dispatches that cached GPU context. Full per-pixel compose
-    /// remains a later producer layer, but this removes the all-mountain runtime assumption.
+    /// layer: page acquisition samples the grammar into a per-texel weight field, dispatches each
+    /// active cached GPU biome context, then folds the resulting core fields through the GPU
+    /// compose machine before writing the page texture.
     #[func]
     #[allow(clippy::too_many_arguments)]
     pub fn configure_biome_world(
@@ -366,6 +367,7 @@ impl Wg10PagePool {
 
         let mut contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext> =
             BTreeMap::new();
+        let mut compose_fragment: Option<String> = None;
         for biome in RUNTIME_BIOMES {
             let frag_path = shader_dir.join(format!("biome_{biome}.glsl"));
             let fragment = match std::fs::read_to_string(&frag_path) {
@@ -379,6 +381,9 @@ impl Wg10PagePool {
                     ));
                 }
             };
+            if biome == "mountain" {
+                compose_fragment = Some(fragment.clone());
+            }
             let ctx = match biome_page_compute::build_biome_page_context_for_biome(
                 &mut rd0,
                 &prim,
@@ -404,10 +409,36 @@ impl Wg10PagePool {
             };
             contexts.insert(biome.to_string(), ctx);
         }
+        let compose_fragment = match compose_fragment {
+            Some(fragment) => fragment,
+            None => {
+                for (_, ctx) in contexts {
+                    biome_page_compute::free_biome_page_context(&mut rd0, &ctx);
+                }
+                return GString::from("configure_biome_world: missing mountain compose fragment");
+            }
+        };
+        let compose_ctx = match biome_page_compute::build_biome_compose_context(
+            &mut rd0,
+            &prim,
+            &machine,
+            &compose_fragment,
+            page_px as usize,
+            relief_m as f32,
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                for (_, ctx) in contexts {
+                    biome_page_compute::free_biome_page_context(&mut rd0, &ctx);
+                }
+                return GString::from(&format!("configure_biome_world: compose context: {e}"));
+            }
+        };
 
         self.install_biome_world_configuration(
             pack,
             contexts,
+            compose_ctx,
             capacity,
             page_px,
             world_span,

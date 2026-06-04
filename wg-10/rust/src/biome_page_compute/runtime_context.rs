@@ -4,11 +4,12 @@ use godot::classes::{
     rendering_device::ShaderStage, RdShaderSource, RdUniform, RenderingDevice,
 };
 use godot::prelude::*;
+use std::collections::BTreeMap;
 
-use super::abi::PASS_CROP_IMG;
+use super::abi::{COMPOSE_RELIEF_SIGMA, PASS_CROP_IMG};
 use super::helpers::{f32s_to_bytes, make_image_uniform, make_storage_uniform};
 use super::kernels::biome_apron_dim;
-use super::runtime_buffers::{alloc_apron_buffers, ApronBuffers};
+use super::runtime_buffers::{alloc_apron_buffers, alloc_compose_buffers, ApronBuffers};
 use super::schedule_coast::schedule_coast;
 use super::schedule_desert::schedule_desert;
 use super::schedule_glacial::schedule_glacial;
@@ -184,6 +185,73 @@ pub(crate) fn build_biome_page_context_for_biome(
     })
 }
 
+/// Build a cached runtime context for WORLD compose. The shader is the same generic machine plus
+/// any biome fragment, because compose passes are handled inline before `biome_pass()` is called.
+/// Buffers are sized to the core page (apron=0): recipe contexts produce cropped core buffers,
+/// then the compose context folds those core fields and writes the final page image.
+pub(crate) fn build_biome_compose_context(
+    rd: &mut Gd<RenderingDevice>,
+    primitives_src: &str,
+    machine_src: &str,
+    any_biome_fragment_src: &str,
+    core_px: usize,
+    relief_m: f32,
+) -> Result<BiomePageComputeContext, String> {
+    if core_px < 2 {
+        return Err(format!(
+            "build_biome_compose_context: core_px {core_px} must be >= 2"
+        ));
+    }
+
+    let machine_plus_fragment = format!("{machine_src}\n{any_biome_fragment_src}");
+    let glsl_stripped =
+        crate::primitive_probe::concat_glsl_hoist_version(primitives_src, &machine_plus_fragment);
+    let mut src = RdShaderSource::new_gd();
+    src.set_stage_source(ShaderStage::COMPUTE, &glsl_stripped);
+    let spirv = rd.shader_compile_spirv_from_source(&src).ok_or_else(|| {
+        "build_biome_compose_context: shader_compile_spirv_from_source returned null".to_string()
+    })?;
+    {
+        let err = spirv.get_stage_compile_error(ShaderStage::COMPUTE);
+        if !err.is_empty() {
+            return Err(format!("build_biome_compose_context: GLSL compile error: {err}"));
+        }
+    }
+    let shader = rd.shader_create_from_spirv(&spirv);
+    if shader.is_invalid() {
+        return Err("build_biome_compose_context: shader_create_from_spirv returned invalid RID".into());
+    }
+    let pipeline = rd.compute_pipeline_create(shader);
+    if pipeline.is_invalid() {
+        rd.free_rid(shader);
+        return Err(
+            "build_biome_compose_context: compute_pipeline_create returned invalid RID".into(),
+        );
+    }
+
+    let core_n = core_px * core_px;
+    let bufs = match alloc_compose_buffers(rd, core_px, core_px, core_n) {
+        Ok(b) => b,
+        Err(e) => {
+            rd.free_rid(pipeline);
+            rd.free_rid(shader);
+            return Err(format!("build_biome_compose_context: {e}"));
+        }
+    };
+
+    Ok(BiomePageComputeContext {
+        biome: "compose".to_string(),
+        shader,
+        pipeline,
+        bufs,
+        apron_dim: core_px,
+        core_px,
+        apron_px: 0,
+        flow_iters: 1,
+        relief_m,
+    })
+}
+
 /// Free EVERY RID the runtime context owns (all apron buffers, pipeline, shader). Per-page uniform
 /// sets are freed per page inside `compute_biome_page_cached`. The B1 RID-leak lesson: miss none.
 pub(crate) fn free_biome_page_context(rd: &mut Gd<RenderingDevice>, ctx: &BiomePageComputeContext) {
@@ -224,6 +292,63 @@ pub(crate) fn compute_biome_page_cached(
     seed: i64,
     flow_on: bool,
 ) -> Result<(), String> {
+    dispatch_biome_page_cached(
+        rd,
+        ctx,
+        target_rid,
+        origin_x,
+        origin_z,
+        world_span,
+        page_px,
+        feature_span_m,
+        seed,
+        flow_on,
+        true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compute_biome_page_core_cached(
+    rd: &mut Gd<RenderingDevice>,
+    ctx: &BiomePageComputeContext,
+    image_binding_rid: Rid,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: i64,
+    feature_span_m: f64,
+    seed: i64,
+    flow_on: bool,
+) -> Result<(), String> {
+    dispatch_biome_page_cached(
+        rd,
+        ctx,
+        image_binding_rid,
+        origin_x,
+        origin_z,
+        world_span,
+        page_px,
+        feature_span_m,
+        seed,
+        flow_on,
+        false,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn dispatch_biome_page_cached(
+    rd: &mut Gd<RenderingDevice>,
+    ctx: &BiomePageComputeContext,
+    image_binding_rid: Rid,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: i64,
+    feature_span_m: f64,
+    seed: i64,
+    flow_on: bool,
+    write_image: bool,
+) -> Result<(), String> {
     if page_px as usize != ctx.core_px {
         return Err(format!(
             "compute_biome_page_cached: page_px {page_px} != context core_px {} (rebuild the context)",
@@ -252,7 +377,7 @@ pub(crate) fn compute_biome_page_cached(
     for (bind, rid) in bindings.iter() {
         uniforms.push(&make_storage_uniform(*bind, *rid));
     }
-    uniforms.push(&make_image_uniform(41, target_rid));
+    uniforms.push(&make_image_uniform(41, image_binding_rid));
     let uset = rd.uniform_set_create(&uniforms, ctx.shader, 0);
     if uset.is_invalid() {
         return Err("compute_biome_page_cached: uniform_set_create returned invalid RID".into());
@@ -305,10 +430,13 @@ pub(crate) fn compute_biome_page_cached(
         flow_iters: ctx.flow_iters,
         flow_on, // SCALE-INVARIANCE: coarse levels pass false -> macro surface (no carve).
     };
-    // Run the selected proven single-biome schedule (ends with PASS_CROP into the core storage
-    // buffer -- inert here, we don't read it), then crop to the IMAGE.
+    // Run the selected proven single-biome schedule. Every schedule ends with PASS_CROP into the
+    // context's core storage buffer. The single-biome runtime additionally crops to the IMAGE;
+    // the WORLD compose runtime leaves the core buffer for a later buffer_copy into compose.
     dispatch_biome_schedule(&ctx.biome, &mut sched)?;
-    sched.dispatch(PASS_CROP_IMG, 0, 0, 0, 0, 0.0, 0, wg_core_x, wg_core_y);
+    if write_image {
+        sched.dispatch(PASS_CROP_IMG, 0, 0, 0, 0, 0.0, 0, wg_core_x, wg_core_y);
+    }
 
     rd.compute_list_end();
     // RUNTIME (global RD): fire-and-forget - do NOT submit()/sync() here. This producer runs on the
@@ -321,6 +449,259 @@ pub(crate) fn compute_biome_page_cached(
     // LOCAL rd via create_local_rendering_device, where submit/sync IS legal - those keep theirs.)
     rd.free_rid(uset); // free ONLY the per-page uniform set; cached resources persist
     Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn compute_biome_world_page_composed(
+    rd: &mut Gd<RenderingDevice>,
+    contexts: &BTreeMap<String, BiomePageComputeContext>,
+    compose_ctx: &BiomePageComputeContext,
+    target_rid: Rid,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: i64,
+    feature_span_m: f64,
+    seed: i64,
+    flow_on: bool,
+    biome_names: &[String],
+    weight_fields: &[Vec<f32>],
+) -> Result<(), String> {
+    if biome_names.is_empty() {
+        return Err("compute_biome_world_page_composed: no active biomes".into());
+    }
+    if biome_names.len() != weight_fields.len() {
+        return Err(format!(
+            "compute_biome_world_page_composed: names/weights mismatch {} vs {}",
+            biome_names.len(),
+            weight_fields.len()
+        ));
+    }
+    let page_n = (page_px as usize)
+        .checked_mul(page_px as usize)
+        .ok_or("compute_biome_world_page_composed: page_px overflow")?;
+    for (i, weights) in weight_fields.iter().enumerate() {
+        if weights.len() != page_n {
+            return Err(format!(
+                "compute_biome_world_page_composed: weight field {i} len {} != {page_n}",
+                weights.len()
+            ));
+        }
+    }
+    if compose_ctx.core_px != page_px as usize || compose_ctx.apron_px != 0 {
+        return Err(format!(
+            "compute_biome_world_page_composed: compose context shape core={} apron={} != page_px={} apron=0",
+            compose_ctx.core_px, compose_ctx.apron_px, page_px
+        ));
+    }
+
+    if biome_names.len() == 1 {
+        let ctx = contexts.get(&biome_names[0]).ok_or_else(|| {
+            format!(
+                "compute_biome_world_page_composed: no context for '{}'",
+                biome_names[0]
+            )
+        })?;
+        return compute_biome_page_cached(
+            rd,
+            ctx,
+            target_rid,
+            origin_x,
+            origin_z,
+            world_span,
+            page_px,
+            feature_span_m,
+            seed,
+            flow_on,
+        );
+    }
+
+    let core_bytes = u32::try_from(page_n * 4)
+        .map_err(|_| "compute_biome_world_page_composed: core byte size overflows u32")?;
+    let use_favored = biome_names.len() == 2;
+
+    let first_ctx = contexts.get(&biome_names[0]).ok_or_else(|| {
+        format!(
+            "compute_biome_world_page_composed: no context for '{}'",
+            biome_names[0]
+        )
+    })?;
+    compute_biome_page_core_cached(
+        rd,
+        first_ctx,
+        target_rid,
+        origin_x,
+        origin_z,
+        world_span,
+        page_px,
+        feature_span_m,
+        seed,
+        flow_on,
+    )?;
+    copy_buffer(
+        rd,
+        first_ctx.bufs.core_rid(),
+        compose_ctx.bufs.field_rid(14),
+        core_bytes,
+        "first recipe core -> compose height",
+    )?;
+    update_buffer_f32(
+        rd,
+        compose_ctx.bufs.field_rid(9),
+        &weight_fields[0],
+        "first weight -> compose acc_w",
+    )?;
+
+    for (biome, weights) in biome_names.iter().skip(1).zip(weight_fields.iter().skip(1)) {
+        let ctx = contexts.get(biome).ok_or_else(|| {
+            format!("compute_biome_world_page_composed: no context for '{biome}'")
+        })?;
+        compute_biome_page_core_cached(
+            rd,
+            ctx,
+            target_rid,
+            origin_x,
+            origin_z,
+            world_span,
+            page_px,
+            feature_span_m,
+            seed,
+            flow_on,
+        )?;
+        copy_buffer(
+            rd,
+            ctx.bufs.core_rid(),
+            compose_ctx.bufs.pool_rid(0),
+            core_bytes,
+            "recipe core -> compose pool0",
+        )?;
+        update_buffer_f32(
+            rd,
+            compose_ctx.bufs.pool_rid(1),
+            weights,
+            "recipe weight -> compose pool1",
+        )?;
+        dispatch_compose_step(rd, compose_ctx, target_rid, use_favored)?;
+    }
+
+    dispatch_compose_crop_to_image(rd, compose_ctx, target_rid)
+}
+
+fn copy_buffer(
+    rd: &mut Gd<RenderingDevice>,
+    src: Rid,
+    dst: Rid,
+    bytes: u32,
+    label: &str,
+) -> Result<(), String> {
+    let err = rd.buffer_copy(src, dst, 0, 0, bytes);
+    if err != godot::global::Error::OK {
+        return Err(format!("compute_biome_world_page_composed: buffer_copy {label} failed: {err:?}"));
+    }
+    Ok(())
+}
+
+fn update_buffer_f32(
+    rd: &mut Gd<RenderingDevice>,
+    dst: Rid,
+    values: &[f32],
+    label: &str,
+) -> Result<(), String> {
+    let bytes = f32s_to_bytes(values);
+    let pba = PackedByteArray::from(bytes.as_slice());
+    let err = rd.buffer_update(dst, 0, bytes.len() as u32, &pba);
+    if err != godot::global::Error::OK {
+        return Err(format!("compute_biome_world_page_composed: buffer_update {label} failed: {err:?}"));
+    }
+    Ok(())
+}
+
+fn dispatch_compose_step(
+    rd: &mut Gd<RenderingDevice>,
+    compose_ctx: &BiomePageComputeContext,
+    target_rid: Rid,
+    use_favored: bool,
+) -> Result<(), String> {
+    let mut sched = begin_compose_scheduler(rd, compose_ctx, target_rid)?;
+    sched.compose_wacc();
+    if use_favored {
+        sched.blend_favored_step();
+    } else {
+        sched.blend_field_step();
+    }
+    sched.compose_accw_add();
+    end_compose_scheduler(sched);
+    Ok(())
+}
+
+fn dispatch_compose_crop_to_image(
+    rd: &mut Gd<RenderingDevice>,
+    compose_ctx: &BiomePageComputeContext,
+    target_rid: Rid,
+) -> Result<(), String> {
+    let wg = (compose_ctx.core_px as u32).div_ceil(16);
+    let mut sched = begin_compose_scheduler(rd, compose_ctx, target_rid)?;
+    sched.dispatch(PASS_CROP_IMG, 0, 0, 0, 0, 0.0, 0, wg, wg);
+    end_compose_scheduler(sched);
+    Ok(())
+}
+
+fn begin_compose_scheduler<'a>(
+    rd: &'a mut Gd<RenderingDevice>,
+    compose_ctx: &BiomePageComputeContext,
+    target_rid: Rid,
+) -> Result<Scheduler<'a>, String> {
+    let bindings = compose_ctx.bufs.buffer_bindings();
+    let mut uniforms: Array<Gd<RdUniform>> = Array::new();
+    for (bind, rid) in bindings.iter() {
+        uniforms.push(&make_storage_uniform(*bind, *rid));
+    }
+    uniforms.push(&make_image_uniform(41, target_rid));
+    let uset = rd.uniform_set_create(&uniforms, compose_ctx.shader, 0);
+    if uset.is_invalid() {
+        return Err("compute_biome_world_page_composed: compose uniform_set_create returned invalid RID".into());
+    }
+
+    let rows = compose_ctx.apron_dim;
+    let cols = compose_ctx.apron_dim;
+    let wg_full_x = (cols as u32).div_ceil(16);
+    let wg_full_y = (rows as u32).div_ceil(16);
+    let kparams = compose_ctx.bufs.kparams.clone();
+    let _ = kparams.kp(COMPOSE_RELIEF_SIGMA);
+
+    let cl = rd.compute_list_begin();
+    rd.compute_list_bind_compute_pipeline(cl, compose_ctx.pipeline);
+    Ok(Scheduler {
+        rd,
+        cl,
+        uset,
+        rows: rows as i32,
+        cols: cols as i32,
+        apron: 0,
+        seed: 0,
+        spacing: 0.0,
+        ox: 0.0,
+        oz: 0.0,
+        feature_span_m: 0.0,
+        vent_count: 0,
+        favor_strength: 2.0,
+        relief_confidence_floor: 1.0e-3,
+        relief_m: compose_ctx.relief_m,
+        wg_full_x,
+        wg_full_y,
+        wg_core_x: wg_full_x,
+        wg_core_y: wg_full_y,
+        kparams,
+        flow_iters: 1,
+        flow_on: true,
+    })
+}
+
+fn end_compose_scheduler(sched: Scheduler<'_>) {
+    let rd = sched.rd;
+    let uset = sched.uset;
+    rd.compute_list_end();
+    rd.free_rid(uset);
 }
 
 fn runtime_kernel_params(

@@ -120,23 +120,43 @@ impl Wg10PagePool {
         flow_on: bool,
     ) -> Result<(), String> {
         if self.use_biome_path {
-            let bctx = if let Some(world) = self.biome_world.as_ref() {
-                self.select_world_biome_context(world, origin_x, origin_z, world_span)?
+            if let Some(world) = self.biome_world.as_ref() {
+                let field = self.world_biome_weight_field(
+                    world,
+                    origin_x,
+                    origin_z,
+                    world_span,
+                    page_px as usize,
+                );
+                crate::biome_page_compute::compute_biome_world_page_composed(
+                    rd,
+                    &world.contexts,
+                    &world.compose_ctx,
+                    tex_rid,
+                    origin_x,
+                    origin_z,
+                    world_span,
+                    page_px,
+                    self.biome_feature_span_m,
+                    seed,
+                    flow_on,
+                    &field.names,
+                    &field.weights,
+                )
             } else {
-                self.biome_ctx.as_ref().unwrap()
-            };
-            crate::biome_page_compute::compute_biome_page_cached(
-                rd,
-                bctx,
-                tex_rid,
-                origin_x,
-                origin_z,
-                world_span,
-                page_px,
-                self.biome_feature_span_m,
-                seed,
-                flow_on,
-            )
+                crate::biome_page_compute::compute_biome_page_cached(
+                    rd,
+                    self.biome_ctx.as_ref().unwrap(),
+                    tex_rid,
+                    origin_x,
+                    origin_z,
+                    world_span,
+                    page_px,
+                    self.biome_feature_span_m,
+                    seed,
+                    flow_on,
+                )
+            }
         } else {
             let ctx = self.compute_ctx.as_ref().unwrap();
             let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
@@ -153,25 +173,6 @@ impl Wg10PagePool {
                 seed,
             )
         }
-    }
-
-    fn select_world_biome_context<'a>(
-        &self,
-        world: &'a BiomeWorldRuntime,
-        origin_x: f64,
-        origin_z: f64,
-        world_span: f64,
-    ) -> Result<&'a crate::biome_page_compute::BiomePageComputeContext, String> {
-        let selected = self.select_world_biome_name(world, origin_x, origin_z, world_span);
-        world
-            .contexts
-            .get(&selected)
-            .or_else(|| world.contexts.get("mountain"))
-            .ok_or_else(|| {
-                format!(
-                    "select_world_biome_context: no context for selected biome '{selected}' and no mountain fallback"
-                )
-            })
     }
 
     pub(super) fn select_world_biome_name(

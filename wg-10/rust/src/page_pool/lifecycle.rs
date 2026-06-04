@@ -50,6 +50,7 @@ impl Wg10PagePool {
             for (_, bctx) in world.contexts {
                 biome_page_compute::free_biome_page_context(&mut rd, &bctx);
             }
+            biome_page_compute::free_biome_page_context(&mut rd, &world.compose_ctx);
         }
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {

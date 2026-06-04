@@ -28,25 +28,24 @@ The project currently has multiple terrain architectures alive at once:
      `biome_<name>.glsl` fragments.
    - Renderer: same clipmap renderer as legacy.
    - Current scene: `wg-10/worldgen_terrain/harness/mountain_fly_review.tscn`
-   - Current behavior: WORLD mode samples grammar at the page center and routes
-     each page to the dominant supported biome context. This is not yet the
-     final per-pixel grammar/compose layer.
+   - Current behavior: WORLD mode generates a texel-corner runtime-biome weight
+     field per page, dispatches each active biome context, and folds those core
+     height fields through the GPU compose passes before writing the page texture.
 
 This explains the owner report:
 
 - The old network-chunk scene looked better because it used the accepted mountain
   world artifact: broad 90 km feature structure plus explicit connected pass
   carving and review dressing.
-- The current live BIOME fly is proving page producer routing and renderer
-  behavior, not the full accepted world/grammar architecture. It can now leave
-  the all-mountain path, but the WORLD mode is page-center routing, not smooth
-  per-pixel composition.
+- The current live BIOME fly is proving page producer composition and renderer
+  behavior, not full owner visual acceptance. It can now leave the all-mountain
+  path and compose active runtime-biome weights, but materials/content/facts and
+  the owner fly review are still open.
 - The pop-in and morph issues have two pieces: renderer scheduling still controls
-  hide/show and geomorph timing, but the current hard evidence points at producer
-  LOD incompatibility in WORLD mode. Whole pages are routed by page-center biome,
-  and coarser pages often cannot represent the multiple fine-page routes inside
-  them. The "ground looks bad / all the same" issue is content architecture: the
-  live path is not yet consuming the accepted biome composition/grammar layer.
+  hide/show and geomorph timing, while the route diagnostics explain why the old
+  whole-page selector was structurally wrong at coarse LODs. The live path now
+  consumes grammar weights through compose; any remaining "ground looks bad" report
+  needs a fresh owner fly against this composed runtime.
 
 ## Current Checkpoint
 
@@ -74,7 +73,7 @@ geomorph blending.
 Validation:
 
 - `cargo build -p wg10_terrain` into the Godot-loaded target: passed.
-- `cargo test -p wg10_terrain --lib`: 217 passed / 0 failed.
+- `cargo test -p wg10_terrain --lib`: 220 passed / 0 failed.
 - `python tools\gate.py --suite review_static`: 1/1 passed. This suite is now
   scoped to `mountain_network_chunks_review.tscn`, the accepted baseline. An
   earlier attempt that also included `mountain_world_chunks_review_check.gd`
@@ -85,16 +84,16 @@ Validation:
   change. `m3_accept` p99 = 5.81 ms against the 6.0 ms budget.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.103 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.105 ms.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
   loaded DLL. The scene now starts on the accepted `network_ref` scale
   (`feature_span_m=90000`) and exposes `P` for the old close-up debug scale
   (`feature_span_m=3500`), so the manual review scale is visible in the HUD.
 - `python tools\gate.py --suite biome_world`: 1/1 passed when run outside the
   filesystem sandbox. The gate configures WORLD mode, builds the 11 cached
-  runtime contexts, acquires one page, reads back a non-degenerate texture, and
-  prints runtime=`world`, `biome_path=true`, nonzero=65536, min=-1196.652466,
-  max=842.125366.
+  runtime contexts plus the compose context, acquires one composed page, reads
+  back a non-degenerate texture, and prints runtime=`world`, `biome_path=true`,
+  nonzero=65536, min=-1633.198242, max=842.125427.
 - Follow-up `biome_world` route diagnostics now separate the pop-in mechanism:
   `route_inpage corner_mixed=0` in the sampled level-0 window, but
   `lod_route_by_parent L1=0/289 L2=63/289 L3=120/289`, and complete parent
@@ -102,13 +101,13 @@ Validation:
   max_child_routes=6`. This means page-center routing is stable at level 1 in
   the sample but breaks structurally at coarser levels; a single parent biome is
   not a faithful low-detail representation of its children.
-- The first runtime compose bridge seam is now testable separately from page
-  selection: `page_pool/world_route.rs` can generate a texel-corner per-page
-  runtime-biome weight field from grammar. `biome_world` reports
+- The runtime compose bridge is now wired into page production:
+  `page_pool/world_route.rs` generates the texel-corner per-page runtime-biome
+  weight field from grammar, and `compute_biome_world_page_composed(...)` copies
+  GPU recipe core buffers into a cached compose context before cropping the
+  composed height to the page texture. `biome_world` reports
   `route_weight_field samples=289 active_biomes=2 max_sum_delta=0.000000` for
-  the sampled live page. This is only the input seam; live page generation still
-  needs GPU recipe core buffers copied into a runtime compose context before
-  cropping the composed height to the page texture.
+  the sampled live page.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -119,9 +118,11 @@ is a coherent full-field mountain synthesis with connected pass-network carving.
 The mesh review is not a streaming page runtime. It is a baked inspection artifact
 that carries exactly the authored structure the owner liked.
 
-`mountain_fly_review.tscn` calls `configure_biome(...)` with a single mountain
-fragment. It does not yet ask the grammar for active biome weights or compose
-multiple accepted biome recipes into one world.
+`mountain_fly_review.tscn` now defaults to WORLD mode and calls
+`configure_biome_world(...)`, which asks the grammar for active runtime-biome
+weights and composes the active GPU biome recipes into the streamed page texture.
+The separate MOUNTAIN mode still calls `configure_biome(...)` with a single
+mountain fragment for A/B review.
 
 ### 2. The scale context changed
 
@@ -140,22 +141,21 @@ proof that runtime mountain scale matches the accepted static baseline.
 
 The harness now defaults to the accepted `network_ref` scale (`feature_span_m=90000`)
 and exposes the old 3.5 km behavior as the `close_debug` preset behind `P`. This
-does not solve the missing grammar/compose layer; it removes a review-harness
-ambiguity so owner fly feedback names the actual preset being reviewed.
+does not solve remaining visual/material/facts acceptance; it removes a
+review-harness ambiguity so owner fly feedback names the actual preset being reviewed.
 
-### 3. The current BIOME runtime is no longer all mountain, but composition is still open
+### 3. The current BIOME runtime is no longer all mountain, but acceptance is still open
 
-The BIOME path now answers "can the live runtime select among the ported GPU
-biome producers?" It does not yet answer "does the world blend active biomes
-per pixel like the accepted composition plan?" WORLD mode samples grammar at a
-page center and dispatches the dominant supported recipe. This should reduce
-the previous all-mountain sameness, but page-scale biome boundaries and missing
-badlands-native runtime support remain expected limitations.
+The BIOME path now answers "can the live runtime compose active grammar-driven
+biome weights from the ported GPU producers?" It does not yet answer "does the
+owner accept the visual result in motion with the current materials, streaming,
+and facts story?" WORLD mode is now composed instead of page-center selected.
+Missing badlands-native runtime support and per-biome material/content review
+remain expected limitations.
 
-The next content architecture step is not more mountain shader tuning. It is
-the full Slice 4 Part B integration already called out in `STATUS.md`: active
-biome IDs/weights must feed the proven compose layer, not only route a whole
-page to one recipe.
+The next content architecture step is not more mountain shader tuning. It is a
+fresh owner fly and then targeted work on whatever remains visible: materials,
+streaming/pops, badlands support, facts/collision, or Slice 4c runtime flip.
 
 ### 4. There are two independent visual failure classes
 
@@ -165,15 +165,15 @@ Renderer/streaming failures:
 - geomorph can still expose cross-level mismatch when parent/child surfaces are
   not true low-pass relatives;
 - page hiding/showing, culling, and repage churn are renderer concerns.
-- in WORLD mode, those renderer transitions are currently fed by incompatible
-  whole-page biome selections at coarse levels, so the producer must stop using a
-  single page-center biome as the cross-LOD representation.
+- route diagnostics still show why the old whole-page selector was incompatible
+  at coarse levels; the producer now composes weight fields, so remaining visual
+  pops need a new runtime capture.
 
 Content/world failures:
 
-- WORLD mode is page-center dominant routing, not per-pixel multi-biome compose;
-- coarser WORLD pages often contain multiple fine-page routes, so parent/child
-  route disagreement is expected until grammar weights are composed per pixel;
+- WORLD mode now composes per-page runtime-biome weight fields;
+- coarser WORLD pages still need owner review because route diagnostics show
+  the old selector would disagree with many children;
 - accepted pass-network carving is not part of the live page world layer yet;
 - static review scale and live page scale are not reconciled.
 
@@ -188,14 +188,15 @@ Proven or strongly supported:
 - Scale-invariant producer work is implemented through `flow_max_level` and cross-level gate wiring.
 - The renderer has a dedicated M3 gate family, and page-fade verification passed
   in the current editor-closed run.
-- The first WORLD runtime routing gate (`biome_world`) passes and proves
-  `configure_biome_world` can build contexts, acquire a routed page, and write a
-  non-degenerate texture.
+- The first WORLD runtime compose gate (`biome_world`) passes and proves
+  `configure_biome_world` can build recipe contexts plus the compose context,
+  acquire a composed page, and write a non-degenerate texture.
 
 Not proven yet:
 
 - The current live BIOME fly matches the accepted mountain-network artifact.
-- The current live BIOME fly uses per-pixel grammar-driven multi-biome composition.
+- The current live BIOME fly is visually accepted as a per-pixel grammar-driven
+  multi-biome composition.
 - Slice 4c runtime flip and atlas removal are safe.
 - Visible biome terrain and facts/collision are aligned.
 
@@ -214,7 +215,8 @@ runtime path."
 1. Add a small baseline table to `STATUS.md`:
    - accepted visual baseline: `mountain_network_chunks_review.tscn`;
    - current live runtime: `mountain_fly_review.tscn`;
-   - current runtime content limitation: page-center WORLD routing, no per-pixel grammar compose;
+   - current runtime content limitation: composed WORLD pages still need owner
+     visual acceptance, per-biome materials, and facts/collision alignment;
    - current renderer evidence: `m3` 9/9 passed after page fade; owner re-fly
      is still required because gates do not prove the visual read.
 2. Add or update a smoke check for `mountain_network_chunks_review.tscn`.
