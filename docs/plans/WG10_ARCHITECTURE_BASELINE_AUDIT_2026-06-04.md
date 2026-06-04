@@ -102,10 +102,20 @@ separate prototype.
 
 Current source-size check also changes the refactor framing. No tracked Rust,
 GDScript, GLSL, or Python source file is over 1000 lines after the split. The
-remaining large tracked files are mostly docs/history; the largest code hotspot
-is `wg-10/rust/src/biome_page_compute/runtime_context.rs` at 727 lines. The
-refactor risk is now producer ownership and mode taxonomy, not a single giant
-terrain source file.
+remaining large tracked files are mostly docs/history, generated fixtures, or
+old review harnesses. The runtime GPU producer hotspot was
+`wg-10/rust/src/biome_page_compute/runtime_context.rs`, which mixed cached
+context construction, single-biome dispatch, and WORLD composition dispatch.
+That file is now split by ownership:
+
+- `runtime_context.rs` builds/frees cached GPU resources.
+- `runtime_dispatch.rs` dispatches one biome page into a caller-owned texture or
+  core buffer.
+- `runtime_compose.rs` folds multiple biome page cores through the WORLD compose
+  path.
+
+The refactor risk is now producer ownership and mode taxonomy, not a single
+giant terrain source file.
 
 ## Current Checkpoint
 

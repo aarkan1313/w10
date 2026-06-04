@@ -1,4 +1,4 @@
-﻿//! WorldGen10 Slice-4a: GPU apron PAGE pipeline for the MOUNTAIN seam-safe recipe.
+//! WorldGen10 Slice-4a: GPU apron PAGE pipeline for the MOUNTAIN seam-safe recipe.
 //!
 //! `Wg10BiomePageCompute` mirrors `recipes.rs::mountain::generate_seamsafe` (the f64 parity
 //! ORACLE) as a MULTI-DISPATCH GPU pipeline. Slice-4b concat-selection: it concatenates three
@@ -28,7 +28,13 @@ mod abi;
 mod compose_api;
 mod helpers;
 mod kernels;
+mod local_compose;
+mod local_readback;
 mod page_api;
+mod runtime_buffers;
+mod runtime_compose;
+mod runtime_context;
+mod runtime_dispatch;
 mod schedule_coast;
 mod schedule_desert;
 mod schedule_glacial;
@@ -40,21 +46,18 @@ mod schedule_temperate;
 mod schedule_tundra;
 mod schedule_volcanic;
 mod schedule_wetland;
-mod runtime_buffers;
-mod runtime_context;
-mod local_compose;
-mod local_readback;
 mod scheduler;
 mod sigma_registry;
 
 use abi::*;
 pub(crate) use helpers::*;
 pub(crate) use kernels::*;
+pub(crate) use runtime_compose::compute_biome_world_page_composed;
 pub(crate) use runtime_context::{
     build_biome_compose_context, build_biome_page_context, build_biome_page_context_for_biome,
-    compute_biome_page_cached, compute_biome_world_page_composed, free_biome_page_context,
-    BiomePageComputeContext,
+    free_biome_page_context, BiomePageComputeContext,
 };
+pub(crate) use runtime_dispatch::compute_biome_page_cached;
 pub(crate) use sigma_registry::*;
 
 #[derive(GodotClass)]
@@ -74,7 +77,12 @@ pub struct Wg10BiomePageCompute {
 #[godot_api]
 impl IRefCounted for Wg10BiomePageCompute {
     fn init(base: Base<RefCounted>) -> Self {
-        Self { primitives_src: None, machine_src: None, compose_fragment: None, base }
+        Self {
+            primitives_src: None,
+            machine_src: None,
+            compose_fragment: None,
+            base,
+        }
     }
 }
 
@@ -99,7 +107,6 @@ impl Wg10BiomePageCompute {
         self.machine_src = Some(machine);
         GString::new()
     }
-
 }
 
 // ---------------------------------------------------------------------------
