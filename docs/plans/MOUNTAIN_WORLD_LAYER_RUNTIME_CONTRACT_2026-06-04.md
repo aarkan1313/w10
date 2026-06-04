@@ -142,9 +142,9 @@ single rendered page:
    Current Rust bridge seam: `StaticHeightRuntime` can now load the exported
    runtime tile payload shape directly, preserving height scale, corridor,
    pass-network, conditioning, and low-pass/floor/rock/snow material facts.
-   This is a loader/contract split only; the owner fly still needs the live
-   harness/cache to bind that runtime tile artifact before it can be judged as
-   the final mountain world-layer path.
+   Current owner-fly bridge: REFERENCE, MOUNTAIN/network, and WORLD preview now
+   bind that runtime tile artifact. This is still a reference-backed bridge, not
+   final procedural world-layer synthesis.
    Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
@@ -305,6 +305,12 @@ single rendered page:
   schema and preserves height, corridor, pass-network, conditioning, and
   material facts; focused result: 8 passed / 0 failed.
 - `cargo test -p wg10_terrain --lib` now passes 233 / 0 after the loader split.
+- `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
+  `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1 after
+  rebinding the owner fly to `mountain_world_layer_tiles.json`. The latest
+  visual gate proves REFERENCE vs MOUNTAIN/network and REFERENCE vs WORLD
+  preview remain mean/p95 RGB delta `0.000000/0.000000`, and the old static
+  chunks scene vs runtime REFERENCE comparison passes at mask IoU `0.986`.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer. The contract report now makes that explicit by requiring its

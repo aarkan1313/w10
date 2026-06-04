@@ -10,7 +10,7 @@ const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
 const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
 const PACK_FILE := "terrain_pack.gate.json"
 const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
-const STATIC_REF_PAYLOAD := "res://worldgen_terrain/generated/review/mountain_network_chunks.json"
+const ACCEPTED_WORLD_LAYER_PAYLOAD := "res://worldgen_terrain/generated/review/mountain_world_layer_tiles.json"
 
 const PAGE_PX := 256
 const APRON_PX := 160
@@ -210,7 +210,7 @@ func _configure_world(pool: Object) -> String:
 	if err != "":
 		return err
 	return str(pool.call("bind_world_preview_reference",
-		ProjectSettings.globalize_path(STATIC_REF_PAYLOAD)))
+		ProjectSettings.globalize_path(ACCEPTED_WORLD_LAYER_PAYLOAD)))
 
 func _configure_mountain(pool: Object) -> String:
 	var err := str(pool.call("configure_biome",
@@ -225,12 +225,12 @@ func _configure_mountain(pool: Object) -> String:
 		return err
 	if _preset == PRESET_NETWORK:
 		return str(pool.call("bind_mountain_world_layer_reference",
-			ProjectSettings.globalize_path(STATIC_REF_PAYLOAD)))
+			ProjectSettings.globalize_path(ACCEPTED_WORLD_LAYER_PAYLOAD)))
 	return ""
 
 func _configure_reference(pool: Object) -> String:
 	return str(pool.call("configure_static_reference",
-		ProjectSettings.globalize_path(STATIC_REF_PAYLOAD),
+		ProjectSettings.globalize_path(ACCEPTED_WORLD_LAYER_PAYLOAD),
 		CAPACITY, PAGE_PX, BASE_SPAN, runtime_seed()))
 
 func _configure_legacy(pool: Object) -> String:

@@ -115,6 +115,35 @@ payload and compare it against `mountain_network_chunks_review.tscn`; until that
 happens, modes `1`, `2`, and `3` can still look wrong for the reasons recorded
 below.
 
+### Runtime Tile Owner-Fly Binding Checkpoint - 2026-06-04
+
+The live owner fly now binds
+`wg-10/worldgen_terrain/generated/review/mountain_world_layer_tiles.json` in
+all three accepted/reference-backed review paths:
+
+- `REFERENCE` through `configure_static_reference(...)`;
+- `MOUNTAIN/network_ref` through `bind_mountain_world_layer_reference(...)`;
+- `WORLD` preview through `bind_world_preview_reference(...)`.
+
+Current proof:
+
+- `tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2, with zero
+  hide/show/full events in REFERENCE, MOUNTAIN, and WORLD and
+  `acquired_max=1` in all three.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2. REFERENCE vs
+  MOUNTAIN/network and REFERENCE vs WORLD preview are mean/p95 RGB
+  `0.000000/0.000000`; old static chunks scene vs runtime REFERENCE passes at
+  mask IoU `0.986`.
+- `python tools\gate.py --suite review_runtime_stress` = 1/1 across six
+  REFERENCE/MOUNTAIN/WORLD morph on/off movement cases.
+
+This fixes the immediate architecture split between the accepted runtime
+artifact and the owner fly. It does not finish final procedural synthesis:
+`MOUNTAIN/network_ref` and `WORLD` still use the accepted reference-backed
+height/material bridge for owner presentation.
+
 ### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
 
 The manual owner-fly complaint now has a dedicated windowed gate:

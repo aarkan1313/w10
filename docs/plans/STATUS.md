@@ -3,8 +3,12 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
-> **Read this first:** latest scoped runtime-artifact checkpoint adds a
-> JSON-ready accepted mountain world-layer tile payload/exporter. It builds on
+> **Read this first:** latest scoped runtime-artifact checkpoint now has the
+> owner fly binding the JSON-ready accepted mountain world-layer tile payload in
+> `REFERENCE`, `MOUNTAIN/network_ref`, and `WORLD` preview. This replaces the
+> runtime bridge's direct dependency on the review chunk JSON shape while
+> keeping `mountain_network_chunks_review.tscn` as the visual comparison
+> baseline. It builds on
 > `2af7df4 fix(slice4): remove owner fly page settle`, tagged
 > `backup-slice4-no-page-settle-20260604-2af7df4`, and
 > `067b14b refactor(slice4): expose mountain world-layer runtime tile`, tagged
@@ -24,16 +28,17 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
-> Current proof after the latest owner-review baseline fix: `cargo fmt -p
-> wg10_terrain -- --check` passes, `cargo test -p wg10_terrain --lib` =
-> 231/0, `tools\build_rust.ps1` builds, `fast` = 8/8, `m3` = 10/10,
-> `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
-> `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1. Latest
-> mode gate reports zero hide/show/full events in REFERENCE, MOUNTAIN, and
-> WORLD; scripted motion CPU p95/p99/max is REFERENCE 9.436/10.046/10.116 ms,
-> MOUNTAIN 9.316/9.921/10.546 ms, WORLD 9.233/9.952/13.508 ms, with
-> `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.748 ms, MOUNTAIN 0.748 ms, WORLD 0.749 ms. The manual stress gate
+> Current proof after the runtime-tile binding fix: `cargo test -p
+> wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
+> 8/0, `cargo test -p wg10_terrain --lib` = 233/0,
+> `tools\build_rust.ps1` builds, `fast` = 8/8, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
+> `review_runtime_stress` = 1/1. Latest mode gate reports zero
+> hide/show/full events in REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU
+> p95/p99/max is REFERENCE 9.026/9.615/10.012 ms, MOUNTAIN
+> 9.310/9.833/9.956 ms, WORLD 9.166/9.748/24.355 ms, with `acquired_max=1`
+> and `full_events=0` in all three. Latest render p99 is REFERENCE 0.748 ms,
+> MOUNTAIN 0.748 ms, WORLD 0.746 ms. The manual stress gate
 > also passes six REFERENCE/MOUNTAIN/WORLD morph on/off movement cases with zero
 > hide/show/full events and GPU p99 below 0.65 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta

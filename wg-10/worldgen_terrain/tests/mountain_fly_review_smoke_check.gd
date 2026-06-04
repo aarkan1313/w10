@@ -1,6 +1,7 @@
 extends SceneTree
 
 const SCENE := "res://worldgen_terrain/harness/mountain_fly_review.tscn"
+const ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE := "generated_mountain_world_layer_tile_for_runtime_cache"
 
 func _init() -> void:
 	quit(await _run())
@@ -176,7 +177,7 @@ func _expect_mode_switch_resets_diagnostics(scene: Node, errs: Array[String]) ->
 
 func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("static_reference", {})
-	_expect(str(reference.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE missing mountain-network source scope" % label, errs)
+	_expect(str(reference.get("source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s REFERENCE missing runtime tile source scope" % label, errs)
 	_expect(str(reference.get("generator_version", "")).contains("pass_network"), "%s REFERENCE missing pass-network generator version" % label, errs)
 	_expect(absf(float(reference.get("height_scale_m", 0.0)) - 1700.0) < 0.001, "%s REFERENCE expected height_scale_m=1700" % label, errs)
 	_expect(absf(float(reference.get("feature_span_m", 0.0)) - 90000.0) < 0.001, "%s REFERENCE expected feature_span_m=90000" % label, errs)
@@ -231,14 +232,14 @@ func _expect_world_layer_contract_report(
 		if expected_pass_network:
 			_expect(bool(report.get("has_bound_world_layer_reference", false)), "%s live MOUNTAIN expected bound world-layer reference facts" % label, errs)
 			_expect(bool(report.get("height_consumes_world_layer_facts", false)), "%s live MOUNTAIN bridge should consume bound height facts" % label, errs)
-			_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s live MOUNTAIN reference source scope mismatch" % label, errs)
+			_expect(str(report.get("reference_source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s live MOUNTAIN reference source scope mismatch" % label, errs)
 	if expected_kind == "world_route_reference_height_preview":
 		_expect(str(report.get("height_source", "")) == "accepted_reference_payload_for_preview", "%s WORLD preview expected accepted reference height source" % label, errs)
 		_expect(not bool(report.get("procedural_world_layer_height", true)), "%s WORLD preview should not claim procedural height" % label, errs)
 		_expect(bool(report.get("has_world_preview_reference", false)), "%s WORLD preview expected bound reference height" % label, errs)
-		_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s WORLD preview reference source scope mismatch" % label, errs)
+		_expect(str(report.get("reference_source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s WORLD preview reference source scope mismatch" % label, errs)
 	if expected_kind == "accepted_static_reference_visual_baseline":
-		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
+		_expect(str(report.get("source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s REFERENCE contract report source scope mismatch" % label, errs)
 
 func _expect_view_config(snapshot: Dictionary, label: String, expected_relief_scale: float, expected_relief_ref: float, errs: Array[String]) -> void:
 	var view_config: Dictionary = snapshot.get("view_config", {})
@@ -252,7 +253,7 @@ func _expect_view_config(snapshot: Dictionary, label: String, expected_relief_sc
 
 func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("mountain_world_layer_reference", {})
-	_expect(str(reference.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s bound mountain layer missing source scope" % label, errs)
+	_expect(str(reference.get("source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s bound mountain layer missing source scope" % label, errs)
 	_expect(str(reference.get("generator_version", "")).contains("pass_network"), "%s bound mountain layer missing pass-network generator version" % label, errs)
 	_expect(bool(reference.get("has_corridor", false)), "%s bound mountain layer expected corridor facts" % label, errs)
 	_expect(bool(reference.get("has_material_hints", false)), "%s bound mountain layer expected material hints" % label, errs)

@@ -43,8 +43,10 @@ The project currently has multiple terrain architectures alive at once:
 
 4. **Runtime static-reference bridge**
    - Producer: `Wg10PagePool.configure_static_reference(...)`.
-   - Data source: `mountain_network_chunks.json`, stitched into the accepted
-     1153x1153 height field and sampled into runtime R32F page textures.
+   - Data source: `mountain_world_layer_tiles.json`, the runtime-facing tile
+     artifact generated from the accepted mountain network world layer. The old
+     `mountain_network_chunks.json` review payload remains the static-scene
+     comparison baseline.
    - Renderer: same clipmap renderer as the live runtime.
    - Status: the first mode in `mountain_fly_review.tscn` and an explicit
      capture target in `biome_fly_capture.gd`. This proves the renderer can
@@ -54,8 +56,8 @@ The project currently has multiple terrain architectures alive at once:
 5. **Reference-backed MOUNTAIN visual bridge**
    - Producer state: `configure_biome(...)` plus
      `bind_mountain_world_layer_reference(...)`.
-   - Data source: the same accepted `mountain_network_chunks.json` payload used
-     by REFERENCE.
+   - Data source: the same accepted `mountain_world_layer_tiles.json` runtime
+     tile payload used by REFERENCE.
    - Status: `MOUNTAIN/network_ref` reports runtime=`single` and
      biome_path=`true`, but its contract kind is
      `single_mountain_world_layer_reference_bridge` with
@@ -98,11 +100,18 @@ page ownership, scheduling, and facts are unchanged.
 Latest accepted-reference bridge proof: `review_runtime_visual` now captures the
 old static review scene and the runtime REFERENCE bridge under matching focus
 framing, then compares terrain masks instead of colors. Latest result:
-static terrain_frac `0.789`, runtime terrain_frac `0.778`, mask IoU `0.987`.
+static terrain_frac `0.789`, runtime terrain_frac `0.778`, mask IoU `0.986`.
 This proves the live REFERENCE bridge preserves the owner-liked mountain
 footprint/framing. Remaining owner-visible quality concerns should target
 runtime material/mesh presentation and final procedural world-layer content,
 not another source-window or camera-scale reset.
+
+Latest runtime-tile binding follow-up: `mountain_fly_producers.gd` now binds
+`mountain_world_layer_tiles.json` for REFERENCE, MOUNTAIN/network, and WORLD
+preview. `mountain_network_chunks.json` remains the accepted static-scene
+payload and comparison baseline, but the owner fly now consumes the separated
+runtime artifact that the Python exporter and Rust loader both prove. This
+removes one architecture split without claiming final procedural synthesis.
 
 Latest harness separation follow-up: the owner-fly runtime snapshot/report
 builder has moved out of `mountain_fly_review.gd` into
@@ -153,7 +162,8 @@ synthetic close-surface noise layer contaminating modes 1/2/3. The clipmap
 page transition fade is now disabled for owner review, because the settle window
 read as terrain lag during manual motion even when page residency was clean.
 Current proof:
-Rust lib tests = 231/0, `fast` = 8/8, `m3` = 10/10, `review_runtime` = 2/2,
+Rust static-reference payload tests = 8/0, Rust lib tests = 233/0,
+`tools\build_rust.ps1` builds, `review_runtime` = 2/2,
 `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
 `review_runtime_stress` = 1/1.
 
