@@ -43,6 +43,17 @@ reference-backed visual recovery bridge, not final procedural synthesis: the rep
 `height_source=bound_world_layer_reference_payload`, and
 `procedural_world_layer_height=false`.
 
+Latest owner-view status: the fly harness now reconfigures the actual
+`Wg10TerrainView` whenever the active producer is rebuilt after a preset or
+relief change. The runtime snapshot records `view.config_report()`, and the
+smoke gate proves the view itself, not only the producer intent, switches
+between `network_ref` (`relief_scale=1.0`, `relief_ref=1700`) and raw
+`close_debug` (`relief_scale=0.25`, `relief_ref=425`) before restoring the
+accepted network bridge. This makes the visual reports trustworthy, but it does
+not change the contract outcome: raw `close_debug` is still
+`single_seam_safe_mountain_page_recipe` and still lacks pass-network,
+conditioning, and material facts.
+
 ## Contract
 
 A runtime mountain world layer must provide these facts independently of any
@@ -252,3 +263,7 @@ single rendered page:
   pass-network and page-stable conditioning facts do not exist in the live
   producer. The contract report now makes that explicit by requiring its
   `blocking_gap` to name the missing pass-network work.
+- `review_runtime` now also gates the real view configuration after owner
+  preset changes. It proves the raw `MOUNTAIN/close_debug` candidate is using
+  the intended close/debug relief view and source transform, then proves the
+  accepted `MOUNTAIN/network_ref` bridge is restored to the reference view.

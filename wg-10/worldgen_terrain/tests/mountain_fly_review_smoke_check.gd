@@ -55,6 +55,7 @@ func _run() -> int:
 	_expect(absf(float(snapshot.get("relief_m", 0.0)) - 1700.0) < 0.001, "expected relief_m=1700", errs)
 	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - 1.0) < 0.001, "expected reference relief scale=1.0", errs)
 	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - 1700.0) < 0.001, "expected reference relief ref=1700", errs)
+	_expect_view_config(snapshot, "default", 1.0, 1700.0, errs)
 	var source_transform: Dictionary = snapshot.get("source_transform", {})
 	_expect(absf(float(source_transform.get("source_scale", 0.0)) - 1.0) < 0.000001, "expected reference source scale=1", errs)
 	_expect(absf(float(source_transform.get("source_offset_x_m", 0.0))) < 0.001, "expected reference source x offset=0", errs)
@@ -79,6 +80,7 @@ func _run() -> int:
 	)
 
 	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, reference_center_page, errs)
+	await _expect_close_debug_candidate(scene, errs)
 	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 1.0, 1700.0, {}, errs)
 	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, {}, errs)
 	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, {}, errs)
@@ -210,6 +212,16 @@ func _expect_world_layer_contract_report(
 	if expected_kind == "accepted_static_reference_visual_baseline":
 		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
 
+func _expect_view_config(snapshot: Dictionary, label: String, expected_relief_scale: float, expected_relief_ref: float, errs: Array[String]) -> void:
+	var view_config: Dictionary = snapshot.get("view_config", {})
+	_expect(bool(view_config.get("configured", false)), "%s view should report configured", errs)
+	_expect(absf(float(view_config.get("relief_scale", 0.0)) - expected_relief_scale) < 0.001, "%s view actual relief scale mismatch" % label, errs)
+	_expect(absf(float(view_config.get("relief_ref", 0.0)) - expected_relief_ref) < 0.001, "%s view actual relief ref mismatch" % label, errs)
+	var expected_morph := 0.15 if bool(snapshot.get("morph_enabled", false)) else 0.0
+	_expect(absf(float(view_config.get("morph_region", -1.0)) - expected_morph) < 0.001, "%s view actual morph region mismatch" % label, errs)
+	_expect(int(view_config.get("num_levels", 0)) == 5, "%s view expected 5 levels" % label, errs)
+	_expect(absf(float(view_config.get("base_span_m", 0.0)) - 8192.0) < 0.001, "%s view expected base span 8192" % label, errs)
+
 func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("mountain_world_layer_reference", {})
 	_expect(str(reference.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s bound mountain layer missing source scope" % label, errs)
@@ -305,6 +317,7 @@ func _expect_mode_switch(
 		_expect_world_layer_contract_report(snapshot, mode, "single_mountain_world_layer_reference_bridge", false, true, true, true, true, errs)
 		_expect_mountain_layer_reference_contract(snapshot, mode, errs)
 		_expect_bound_page_matches_reference(expected_reference_center_page, snapshot.get("mountain_world_layer_reference_center_page", {}), errs)
+	_expect_view_config(snapshot, mode, expected_view_relief_scale, expected_view_relief_ref, errs)
 	if mode == "WORLD":
 		_expect_world_layer_contract_report(snapshot, mode, "world_route_reference_height_preview", false, false, true, true, true, errs)
 		_expect_world_preview_reports(snapshot, mode, errs)
@@ -316,6 +329,49 @@ func _expect_mode_switch(
 		_expect_world_layer_contract_report(snapshot, mode, "accepted_static_reference_visual_baseline", true, false, true, true, true, errs)
 	var switched_stats: Dictionary = snapshot.get("stats", {})
 	_expect(int(switched_stats.get("resident", 0)) > 0, "%s expected resident pages after switch" % mode, errs)
+
+func _expect_close_debug_candidate(scene: Node, errs: Array[String]) -> void:
+	if not scene.has_method("_toggle_mountain_preset"):
+		errs.append("scene missing _toggle_mountain_preset")
+		return
+	scene.call("_toggle_mountain_preset")
+	for _i in range(30):
+		await process_frame
+	var snapshot := {}
+	if scene.has_method("debug_runtime_snapshot"):
+		snapshot = scene.call("debug_runtime_snapshot")
+	else:
+		errs.append("scene missing debug_runtime_snapshot after close-debug toggle")
+		return
+
+	_expect(str(snapshot.get("last_config_error", "")) == "", "close-debug configure error: %s" % str(snapshot.get("last_config_error", "")), errs)
+	_expect(str(snapshot.get("mode", "")) == "MOUNTAIN", "close-debug expected MOUNTAIN mode", errs)
+	_expect(str(snapshot.get("preset", "")) == "close_debug", "close-debug expected close_debug preset", errs)
+	_expect_mode_taxonomy(snapshot, "MOUNTAIN/close_debug", errs)
+	_expect(str(snapshot.get("runtime_mode", "")) == "single", "close-debug expected runtime=single", errs)
+	_expect(bool(snapshot.get("biome_path", false)), "close-debug expected biome path", errs)
+	_expect(absf(float(snapshot.get("feature_span_m", 0.0)) - 3500.0) < 0.001, "close-debug expected feature_span_m=3500", errs)
+	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - 0.25) < 0.001, "close-debug expected relief scale=0.25", errs)
+	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - 425.0) < 0.001, "close-debug expected relief ref=425", errs)
+	_expect_view_config(snapshot, "MOUNTAIN/close_debug", 0.25, 425.0, errs)
+	var source_transform: Dictionary = snapshot.get("source_transform", {})
+	_expect(absf(float(source_transform.get("source_scale", 0.0)) - 1.0) < 0.000001, "close-debug expected source scale=1", errs)
+	_expect(absf(float(source_transform.get("source_offset_x_m", 0.0))) < 0.001, "close-debug expected source x offset=0", errs)
+	_expect(absf(float(source_transform.get("source_offset_z_m", 0.0))) < 0.001, "close-debug expected source z offset=0", errs)
+	_expect_world_layer_contract_report(snapshot, "MOUNTAIN/close_debug", "single_seam_safe_mountain_page_recipe", false, true, false, false, false, errs)
+	var report: Dictionary = snapshot.get("mountain_world_layer_contract", {})
+	_expect(not bool(report.get("has_bound_world_layer_reference", true)), "close-debug should not have a bound accepted reference", errs)
+	_expect(str(report.get("height_source", "")) == "", "close-debug should not report reference-backed height", errs)
+	_expect(snapshot.get("mountain_world_layer_reference", {}).is_empty(), "close-debug should not expose mountain reference facts", errs)
+
+	# Restore the owner-accepted network lane so later mode checks keep their expected preset.
+	scene.call("_toggle_mountain_preset")
+	for _i in range(30):
+		await process_frame
+	if scene.has_method("debug_runtime_snapshot"):
+		var restored: Dictionary = scene.call("debug_runtime_snapshot")
+		_expect(str(restored.get("preset", "")) == "network_ref", "MOUNTAIN preset should restore to network_ref", errs)
+		_expect_view_config(restored, "MOUNTAIN/restored_network", 1.0, 1700.0, errs)
 
 func _expect_world_preview_reports(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var route_report: Dictionary = snapshot.get("world_biome_report_center_page", {})

@@ -199,6 +199,7 @@ func _rebuild_runtime_pages(reason: String) -> void:
 	if err != "":
 		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
 		return
+	_reconfigure_view()
 	_prev_states = PackedInt64Array()
 
 func _producer_label() -> String:

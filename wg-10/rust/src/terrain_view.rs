@@ -272,6 +272,21 @@ impl Wg10TerrainView {
             None => Dictionary::<GString, Variant>::new(),
         }
     }
+
+    #[func]
+    pub fn config_report(&self) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        out.set(
+            "configured",
+            self.pool.is_some() && self.streamer.is_some() && self.rings.is_some(),
+        );
+        out.set("num_levels", self.num_levels);
+        out.set("base_span_m", self.base_span);
+        out.set("relief_scale", self.relief_scale);
+        out.set("morph_region", self.morph_region);
+        out.set("relief_ref", self.relief_ref);
+        out
+    }
 }
 
 fn debug_color_for_page(

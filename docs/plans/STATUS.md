@@ -116,6 +116,19 @@
 > the edge smear and measured stream pop are fixed, but the raw procedural
 > mountain layer still needs the accepted pass-network/conditioning/material
 > contract rather than more ad hoc renderer tuning.
+> Follow-up owner-view reconfigure fix: rebuilding the owner fly producer after
+> preset or relief changes now also reconfigures the live `Wg10TerrainView`.
+> Before this, the page pool could be rebuilt for `network_ref` or
+> `close_debug` while the actual clipmap view kept stale relief/morph settings.
+> The owner snapshot now records `view.config_report()`, and
+> `review_runtime` proves the actual view config for default REFERENCE,
+> `MOUNTAIN/network_ref`, raw `MOUNTAIN/close_debug` (`relief_scale=0.25`,
+> `relief_ref=425`), WORLD, LEGACY, and the restored network preset. Current
+> post-fix proof: `tools\build_rust.ps1` builds, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, and `review_runtime_stress` = 1/1. Latest mode
+> and stress gates still report zero hide/show, zero full events, and
+> `acquired_max=1` across modes 1/2/3. This fixes a harness/runtime state bug;
+> it does not make the raw procedural mountain candidate accepted content.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

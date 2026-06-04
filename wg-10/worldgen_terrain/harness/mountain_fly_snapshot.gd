@@ -24,6 +24,7 @@ func build(
 	var static_reference_center_page := {}
 	var world_biome_report_center_page := {}
 	var world_biome_weight_field_center_page := {}
+	var view_config := {}
 	var runtime_mode := "missing"
 	var biome_path := false
 	if pool != null:
@@ -39,6 +40,8 @@ func build(
 		if runtime_mode == "world":
 			world_biome_report_center_page = pool.call("debug_world_biome_report_for_page", 0, 0.0, 0.0)
 			world_biome_weight_field_center_page = pool.call("debug_world_biome_weight_field_report_for_page", 0, 0.0, 0.0, 17)
+	if view != null and view.has_method("config_report"):
+		view_config = view.call("config_report")
 
 	var mode := "missing"
 	var preset := "missing"
@@ -93,6 +96,7 @@ func build(
 		"static_reference_center_page": static_reference_center_page,
 		"world_biome_report_center_page": world_biome_report_center_page,
 		"world_biome_weight_field_center_page": world_biome_weight_field_center_page,
+		"view_config": view_config,
 		"mode": mode,
 		"preset": preset,
 		"mode_role": mode_role,

@@ -145,6 +145,17 @@ bounded display detail layer enabled. Current proof includes Rust lib tests,
 not a streaming architecture failure; it is the unresolved live mountain
 world-layer content contract versus the accepted static artifact.
 
+Latest owner-view reconfigure follow-up: `mountain_fly_review.gd` now
+reconfigures the actual `Wg10TerrainView` after preset/relief-driven producer
+rebuilds, and `mountain_fly_snapshot.gd` records the view's own
+`config_report()`. The smoke gate now proves `MOUNTAIN/close_debug` is really
+using the close/debug view settings (`relief_scale=0.25`, `relief_ref=425`) and
+then proves `MOUNTAIN/network_ref` restores the accepted reference view. This
+removes a stale-view harness bug from the investigation. It does not change the
+architectural conclusion: the ugly raw procedural candidate is missing the
+accepted world-layer facts, while modes 1/2/3 normal preview are stable bridges
+for review.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same
