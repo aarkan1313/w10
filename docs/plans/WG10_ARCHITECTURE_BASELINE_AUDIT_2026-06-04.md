@@ -110,6 +110,15 @@ that `REFERENCE` reports the accepted static visual baseline facts, live
 blocking gap, and no active mode claims full mountain-world-layer contract
 satisfaction yet.
 
+The accepted Python world-layer now also owns the runtime-page sampling seam:
+`source_origin_for_display`, `sample_world_page`, and `sample_payload_page`.
+The contract test proves the same source mapping used by the live preset
+(`display 0,0 -> source 207000,176000`) and samples accepted height/material
+fields from the stitched world layer. This resolves the first Phase 3 shape
+choice: start with a generated/coherent world tile plus facts sampled into
+runtime pages, then port that seam into Rust/GPU instead of inventing another
+page-local mountain recipe.
+
 Current source-size check also changes the refactor framing. No tracked Rust,
 GDScript, GLSL, or Python source file is over 1000 lines after the split. The
 remaining large tracked files are mostly docs/history, generated fixtures, or

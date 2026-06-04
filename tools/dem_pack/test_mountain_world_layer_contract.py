@@ -22,57 +22,23 @@ def _load_network_payload() -> dict:
     return json.loads(NETWORK_PAYLOAD.read_text(encoding="utf-8"))
 
 
-def _bilinear_sample(field: np.ndarray, xs: np.ndarray, zs: np.ndarray, *, origin_x: float, origin_z: float, span_m: float) -> np.ndarray:
-    n = int(field.shape[0])
-    u = np.clip((xs - float(origin_x)) / float(span_m) * float(n - 1), 0.0, float(n - 1) - 1.0e-9)
-    v = np.clip((zs - float(origin_z)) / float(span_m) * float(n - 1), 0.0, float(n - 1) - 1.0e-9)
-
-    x0 = np.floor(u).astype(np.int64)
-    z0 = np.floor(v).astype(np.int64)
-    x1 = np.minimum(x0 + 1, n - 1)
-    z1 = np.minimum(z0 + 1, n - 1)
-    fx = u - x0
-    fz = v - z0
-
-    h00 = field[z0, x0]
-    h10 = field[z0, x1]
-    h01 = field[z1, x0]
-    h11 = field[z1, x1]
-    a = h00 * (1.0 - fx) + h10 * fx
-    b = h01 * (1.0 - fx) + h11 * fx
-    return a * (1.0 - fz) + b * fz
-
-
 def _accepted_reference_page(payload: dict, *, display_origin_x: float, display_origin_z: float) -> np.ndarray:
-    world = payload["seeds"][0]
-    field = layer.stitch_grid(world["chunks"], int(payload["chunk_count"]), int(payload["chunk_n"]), "height")
-    world_span = float(payload["world_span_m"])
-    display_min_x = -0.5 * world_span
-    display_min_z = -0.5 * world_span
-
-    axis = np.linspace(0.0, DISPLAY_PAGE_SPAN_M, SAMPLE_N)
-    xs, zs = np.meshgrid(axis + display_origin_x, axis + display_origin_z)
-    return _bilinear_sample(field, xs, zs, origin_x=display_min_x, origin_z=display_min_z, span_m=world_span)
-
-
-def _source_origin_for_display(payload: dict, *, display_origin_x: float, display_origin_z: float) -> tuple[float, float]:
-    world_span = float(payload["world_span_m"])
-    ratio = float(payload["source_scene_ratio"])
-    display_min_x = -0.5 * world_span
-    display_min_z = -0.5 * world_span
-    return (
-        float(payload["world_origin_x_m"]) + (float(display_origin_x) - display_min_x) * ratio,
-        float(payload["world_origin_z_m"]) + (float(display_origin_z) - display_min_z) * ratio,
+    return layer.sample_payload_page(
+        payload,
+        page_span_m=DISPLAY_PAGE_SPAN_M,
+        sample_n=SAMPLE_N,
+        display_origin_x_m=display_origin_x,
+        display_origin_z_m=display_origin_z,
     )
 
 
 def _live_seamsafe_page(payload: dict, *, display_origin_x: float, display_origin_z: float) -> np.ndarray:
     ratio = float(payload["source_scene_ratio"])
     source_span_m = DISPLAY_PAGE_SPAN_M * ratio
-    source_origin_x, source_origin_z = _source_origin_for_display(
+    source_origin_x, source_origin_z = layer.source_origin_for_display(
         payload,
-        display_origin_x=display_origin_x,
-        display_origin_z=display_origin_z,
+        display_origin_x_m=display_origin_x,
+        display_origin_z_m=display_origin_z,
     )
     spacing_m = source_span_m / float(SAMPLE_N - 1)
     apron_px = int(mountain.MOUNTAIN_APRON_PX)
@@ -148,6 +114,62 @@ def test_generated_mountain_network_payload_declares_accepted_world_layer_contra
     assert payload["feature_span_m"] == layer.FEATURE_SPAN_M
     assert payload["height_scale_m"] == layer.HEIGHT_SCALE_M
     assert np.isclose(payload["source_scene_ratio"], layer.SOURCE_CHUNK_SPAN_M / layer.DISPLAY_CHUNK_SPAN_M)
+
+
+def test_runtime_page_sampler_owns_source_mapping_and_material_fields():
+    payload = _load_network_payload()
+
+    source_x, source_z = layer.source_origin_for_display(
+        payload,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+    assert np.isclose(source_x, 207000.0)
+    assert np.isclose(source_z, 176000.0)
+
+    page = layer.sample_payload_page(
+        payload,
+        page_span_m=DISPLAY_PAGE_SPAN_M,
+        sample_n=SAMPLE_N,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+    via_world = layer.sample_world_page(
+        payload["seeds"][0],
+        chunk_count=int(payload["chunk_count"]),
+        chunk_n=int(payload["chunk_n"]),
+        display_chunk_span_m=float(payload["chunk_span_m"]),
+        page_span_m=DISPLAY_PAGE_SPAN_M,
+        sample_n=SAMPLE_N,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+    floor = layer.sample_payload_page(
+        payload,
+        field="floor_hint",
+        page_span_m=DISPLAY_PAGE_SPAN_M,
+        sample_n=SAMPLE_N,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+    rock = layer.sample_payload_page(
+        payload,
+        field="rock_hint",
+        page_span_m=DISPLAY_PAGE_SPAN_M,
+        sample_n=SAMPLE_N,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+
+    assert page.shape == (SAMPLE_N, SAMPLE_N)
+    assert np.max(np.abs(page - via_world)) <= 1.0e-12
+    for field in (floor, rock):
+        assert field.shape == (SAMPLE_N, SAMPLE_N)
+        assert np.all(np.isfinite(field))
+        assert np.min(field) >= 0.0
+        assert np.max(field) <= 1.0
+    assert np.mean(floor) > 0.0
+    assert np.mean(rock) > 0.0
 
 
 def test_live_seamsafe_mountain_page_is_not_yet_the_accepted_network_layer():

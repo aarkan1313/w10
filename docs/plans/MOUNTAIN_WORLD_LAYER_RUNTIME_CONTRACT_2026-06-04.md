@@ -73,9 +73,15 @@ single rendered page:
    `corr=-0.048456`, `ref_ptp=1.584039`, `live_ptp=4.914207`.
 
 3. **Choose the live world-layer shape.**
-   Viable options:
+   Chosen first implementation seam:
    - CPU-authored/generated route and conditioning facts cached per large world
-     tile, sampled by the GPU page producer.
+     tile, sampled into runtime page coordinates.
+   `tools/dem_pack/mountain_world_layer.py` now owns the accepted
+   source/display mapping and runtime-page sampler
+   (`source_origin_for_display`, `sample_world_page`, `sample_payload_page`).
+   This is the contract the later Rust/GPU page producer should consume or
+   mirror.
+   Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
    - Static payload only as a temporary accepted baseline, not as procedural final.
@@ -164,6 +170,10 @@ single rendered page:
   payload present, it also records the current seam-safe live-producer gap:
   mean absolute normalized delta `1.211743`, p95 `2.276974`, and correlation
   `-0.048456` over the same mapped page.
+- The same pytest now proves the accepted runtime-page sampler owns the
+  source/display mapping used by the live preset (`display 0,0 -> source
+  207000,176000`) and samples height/floor/rock fields from the accepted
+  world-layer payload without test-local duplicate sampling code.
 - The same pytest contract now proves the accepted builder emits non-vacuous,
   bounded material hint fields (`low_pass_hint`, `floor_hint`, `rock_hint`,
   `snow_hint`) on chunks and aprons, with the stitched low-pass/floor hints

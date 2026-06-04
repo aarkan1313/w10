@@ -154,6 +154,135 @@ def stitch_grid(chunks: list[dict[str, object]], chunk_count: int, chunk_n: int,
     return out
 
 
+def source_origin_for_display(
+    payload: dict[str, object],
+    *,
+    display_origin_x_m: float,
+    display_origin_z_m: float,
+) -> tuple[float, float]:
+    """Map a display page origin into the accepted source-world coordinate frame."""
+    world_span_m = float(payload["world_span_m"])
+    ratio = float(payload["source_scene_ratio"])
+    display_min_x = -0.5 * world_span_m
+    display_min_z = -0.5 * world_span_m
+    return (
+        float(payload["world_origin_x_m"]) + (float(display_origin_x_m) - display_min_x) * ratio,
+        float(payload["world_origin_z_m"]) + (float(display_origin_z_m) - display_min_z) * ratio,
+    )
+
+
+def _bilinear_sample(
+    field: np.ndarray,
+    xs: np.ndarray,
+    zs: np.ndarray,
+    *,
+    origin_x_m: float,
+    origin_z_m: float,
+    span_m: float,
+) -> np.ndarray:
+    arr = np.asarray(field, dtype=np.float64)
+    if arr.ndim != 2:
+        raise ValueError("sample_runtime_page: field must be 2D")
+    if min(arr.shape) < 2:
+        raise ValueError("sample_runtime_page: field dimensions must be >= 2")
+    n_z, n_x = arr.shape
+    u = np.clip((xs - float(origin_x_m)) / float(span_m) * float(n_x - 1), 0.0, float(n_x - 1) - 1.0e-9)
+    v = np.clip((zs - float(origin_z_m)) / float(span_m) * float(n_z - 1), 0.0, float(n_z - 1) - 1.0e-9)
+
+    x0 = np.floor(u).astype(np.int64)
+    z0 = np.floor(v).astype(np.int64)
+    x1 = np.minimum(x0 + 1, n_x - 1)
+    z1 = np.minimum(z0 + 1, n_z - 1)
+    fx = u - x0
+    fz = v - z0
+
+    h00 = arr[z0, x0]
+    h10 = arr[z0, x1]
+    h01 = arr[z1, x0]
+    h11 = arr[z1, x1]
+    a = h00 * (1.0 - fx) + h10 * fx
+    b = h01 * (1.0 - fx) + h11 * fx
+    return a * (1.0 - fz) + b * fz
+
+
+def sample_runtime_page(
+    field: np.ndarray,
+    *,
+    field_origin_x_m: float,
+    field_origin_z_m: float,
+    field_span_m: float,
+    display_origin_x_m: float,
+    display_origin_z_m: float,
+    page_span_m: float,
+    sample_n: int,
+) -> np.ndarray:
+    """Sample a world-layer field into one runtime page using texel-corner coordinates."""
+    if int(sample_n) < 2:
+        raise ValueError("sample_runtime_page: sample_n must be >= 2")
+    axis = np.linspace(0.0, float(page_span_m), int(sample_n))
+    xs, zs = np.meshgrid(axis + float(display_origin_x_m), axis + float(display_origin_z_m))
+    return _bilinear_sample(
+        field,
+        xs,
+        zs,
+        origin_x_m=float(field_origin_x_m),
+        origin_z_m=float(field_origin_z_m),
+        span_m=float(field_span_m),
+    )
+
+
+def sample_world_page(
+    world: dict[str, object],
+    *,
+    chunk_count: int,
+    chunk_n: int,
+    page_span_m: float,
+    sample_n: int,
+    field: str = "height",
+    display_chunk_span_m: float = DISPLAY_CHUNK_SPAN_M,
+    display_origin_x_m: float = 0.0,
+    display_origin_z_m: float = 0.0,
+) -> np.ndarray:
+    """Sample a stitched accepted world-layer field into one runtime page."""
+    stitched = stitch_grid(world["chunks"], int(chunk_count), int(chunk_n), field)
+    world_span_m = float(display_chunk_span_m) * float(chunk_count)
+    return sample_runtime_page(
+        stitched,
+        field_origin_x_m=-0.5 * world_span_m,
+        field_origin_z_m=-0.5 * world_span_m,
+        field_span_m=world_span_m,
+        display_origin_x_m=float(display_origin_x_m),
+        display_origin_z_m=float(display_origin_z_m),
+        page_span_m=float(page_span_m),
+        sample_n=int(sample_n),
+    )
+
+
+def sample_payload_page(
+    payload: dict[str, object],
+    *,
+    page_span_m: float,
+    sample_n: int,
+    seed_index: int = 0,
+    field: str = "height",
+    display_origin_x_m: float = 0.0,
+    display_origin_z_m: float = 0.0,
+) -> np.ndarray:
+    """Sample a generated mountain-network payload into one runtime page."""
+    world = payload["seeds"][int(seed_index)]
+    return sample_world_page(
+        world,
+        chunk_count=int(payload["chunk_count"]),
+        chunk_n=int(payload["chunk_n"]),
+        field=field,
+        display_chunk_span_m=float(payload["chunk_span_m"]),
+        display_origin_x_m=float(display_origin_x_m),
+        display_origin_z_m=float(display_origin_z_m),
+        page_span_m=float(page_span_m),
+        sample_n=int(sample_n),
+    )
+
+
 def build_network_world(
     style: mountain.MountainStyle,
     *,

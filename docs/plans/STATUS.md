@@ -50,6 +50,13 @@
 > live `MOUNTAIN` is only the explicit seam-safe page-recipe candidate, WORLD and
 > LEGACY are not mountain-network producers, and no current mode claims full live
 > mountain-world-layer contract satisfaction.
+> Follow-up world-layer seam: `tools/dem_pack/mountain_world_layer.py` now owns
+> the accepted source/display mapping and runtime-page sampler
+> (`source_origin_for_display`, `sample_world_page`, `sample_payload_page`).
+> The focused contract test proves display `0,0` maps to source
+> `207000,176000`, accepted height/material fields sample through the shared
+> seam, and the live seam-safe page still has the same measured gap. This is the
+> first concrete CPU/generated world-tile seam for the later Rust/GPU port.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
