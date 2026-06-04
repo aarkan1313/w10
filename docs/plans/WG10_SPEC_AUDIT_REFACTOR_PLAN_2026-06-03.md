@@ -91,6 +91,30 @@ bridge still uses the accepted static payload for owner-visible height/material
 recovery until a generated world-layer producer consumes or mirrors this tile
 contract.
 
+### Runtime Tile Loader Checkpoint - 2026-06-04
+
+`StaticHeightRuntime` now accepts both accepted review payloads and the exported
+runtime world-layer tile payload schema. The new loader path validates the tile
+contract, converts normalized height through the payload `height_scale_m`, keeps
+corridor coverage, preserves pass-network and conditioning facts, and carries
+the four material hint channels (`low_pass_hint`, `floor_hint`, `rock_hint`,
+`snow_hint`) into page sampling.
+
+Current proof:
+
+- `cargo test -p wg10_terrain --lib page_pool::static_reference::payload -- --nocapture`
+  = 8 passed / 0 failed, including direct runtime-tile construction and JSON
+  deserialization through `StaticPayload`.
+- `cargo test -p wg10_terrain --lib` = 233 passed / 0 failed.
+
+This is still a separation/refactor proof, not an owner-visible fix. It removes
+one architecture split by letting the Rust runtime consume the same generated
+world-layer tile contract that the Python builder/exporter already proves. The
+next implementation step is to wire the live review harness/cache to this
+payload and compare it against `mountain_network_chunks_review.tscn`; until that
+happens, modes `1`, `2`, and `3` can still look wrong for the reasons recorded
+below.
+
 ### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
 
 The manual owner-fly complaint now has a dedicated windowed gate:
@@ -969,3 +993,6 @@ the gated sprint path, and move WORLD visual quality work behind a separated
 world-selection/producer path instead of the current synchronous page stream.
 Implemented pop mitigation: renderer page fade is disabled for owner review, so
 REPAGE smoothing does not become visible terrain lag/settle during owner motion.
+The current runtime-tile loader proof above is the next concrete step toward
+that separation: the accepted world-layer artifact can now be loaded as a
+runtime contract instead of being approximated by another page recipe.

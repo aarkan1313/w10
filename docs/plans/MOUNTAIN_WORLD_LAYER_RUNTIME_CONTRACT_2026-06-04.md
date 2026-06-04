@@ -139,6 +139,12 @@ single rendered page:
    `wg-10/worldgen_terrain/generated/review/mountain_world_layer_tiles.json`.
    This is the contract the later Rust/GPU page producer should consume or
    mirror.
+   Current Rust bridge seam: `StaticHeightRuntime` can now load the exported
+   runtime tile payload shape directly, preserving height scale, corridor,
+   pass-network, conditioning, and low-pass/floor/rock/snow material facts.
+   This is a loader/contract split only; the owner fly still needs the live
+   harness/cache to bind that runtime tile artifact before it can be judged as
+   the final mountain world-layer path.
    Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
@@ -294,6 +300,11 @@ single rendered page:
   bounded material hint fields (`low_pass_hint`, `floor_hint`, `rock_hint`,
   `snow_hint`) on chunks and aprons, with the stitched low-pass/floor hints
   covering the accepted corridor mask.
+- `cargo test -p wg10_terrain --lib page_pool::static_reference::payload -- --nocapture`
+  now proves the Rust static-reference loader accepts the exported runtime tile
+  schema and preserves height, corridor, pass-network, conditioning, and
+  material facts; focused result: 8 passed / 0 failed.
+- `cargo test -p wg10_terrain --lib` now passes 233 / 0 after the loader split.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer. The contract report now makes that explicit by requiring its
