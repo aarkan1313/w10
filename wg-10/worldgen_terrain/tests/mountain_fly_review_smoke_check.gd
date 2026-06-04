@@ -23,6 +23,7 @@ func _run() -> int:
 	var errs: Array[String] = []
 	var pool: Object = scene.get("_pool")
 	var producer: Object = scene.get("_producer")
+	var runtime: Object = scene.get("_runtime")
 	var view: Object = scene.get("_view")
 	var streamer: Object = scene.get("_streamer")
 	var rings: Object = scene.get("_rings")
@@ -30,6 +31,7 @@ func _run() -> int:
 
 	_expect(pool != null, "pool missing", errs)
 	_expect(producer != null, "producer helper missing", errs)
+	_expect(runtime != null, "runtime config missing", errs)
 	_expect(view != null, "view missing", errs)
 	_expect(streamer != null, "streamer missing", errs)
 	_expect(rings != null, "rings missing", errs)
@@ -54,6 +56,10 @@ func _run() -> int:
 		_expect(absf(float(producer.relief_m()) - 1000.0) < 0.001, "expected relief_m=1000", errs)
 		_expect(not bool(producer.is_world()), "default producer should not be WORLD", errs)
 		_expect(not bool(producer.is_legacy()), "default producer should not be LEGACY", errs)
+	if runtime != null:
+		_expect(not bool(runtime.default_morph_enabled()), "runtime default morph should be off", errs)
+		_expect(not bool(runtime.default_detail_enabled()), "runtime default detail should be off", errs)
+		_expect(absf(float(runtime.loaded_edge_m()) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 
 	scene.queue_free()
 	await process_frame

@@ -98,10 +98,12 @@ Validation:
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
   macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.106 ms.
-- `python tools\gate.py --suite fast`: 7/7 passed after extracting
-  `mountain_fly_producers.gd`; the new `mountain_fly_producers_check.gd` locks
-  the live review helper's default MOUNTAIN/network preset, close-debug preset,
-  relief clamps, and B-cycle order.
+- `python tools\gate.py --suite fast`: 8/8 passed after extracting
+  `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
+  check locks the live review helper's default MOUNTAIN/network preset,
+  close-debug preset, relief clamps, and B-cycle order. The runtime config check
+  locks the shared renderer defaults: 5 levels, 8192 m base span, 196608 m loaded
+  edge, morph/detail default off, and the review sky color.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
   loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
   `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
@@ -145,9 +147,10 @@ Validation:
   per-biome materials/content remain open.
 - `python tools\gate.py --suite review_runtime_visual`: 1/1 passed. This
   regenerates the four live runtime PNG artifacts above and now routes producer
-  mode/preset configuration through `mountain_fly_producers.gd`, so the owner
-  scene and runtime visual capture share the same producer constants and
-  `configure_biome*` call shape.
+  mode/preset configuration through `mountain_fly_producers.gd` and renderer
+  setup through `mountain_fly_runtime_config.gd`, so the owner scene and runtime
+  visual capture share producer constants, `configure_biome*` call shape,
+  clipmap/view constants, morph/detail defaults, fog, and loaded edge.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -330,6 +333,13 @@ state its own fast gate. The follow-up `review_runtime` gate now instantiates th
 actual owner scene so this separation is proven on the path the user flies.
 `biome_fly_capture.gd` also consumes `mountain_fly_producers.gd`, so live visual
 evidence no longer duplicates producer config behind the scene.
+
+Second implemented step: runtime renderer constants now live in
+`mountain_fly_runtime_config.gd`. `mountain_fly_review.gd` and
+`biome_fly_capture.gd` both consume it for clipmap levels/span, streamer lead,
+view relief scale/ref, morph/detail defaults, shader globals, fog/loaded edge,
+and ring shader path. `review_runtime` and `review_runtime_visual` prove the
+owner scene and visual evidence still start after this split.
 
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 

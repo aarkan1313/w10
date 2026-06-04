@@ -146,6 +146,10 @@
 > scene startup too, catching GDScript/Rust call-signature drift and default-preset drift.
 > `biome_fly_capture.gd` also uses `mountain_fly_producers.gd`, so runtime visual
 > evidence can no longer drift from the owner scene's producer constants/configure calls.
+> Runtime renderer constants are now split into `mountain_fly_runtime_config.gd` and
+> locked by `mountain_fly_runtime_config_check.gd`; the owner scene and runtime visual
+> capture share levels, span, lead, morph/detail defaults, fog/loaded edge, shader path,
+> and view configuration. Current `fast` = **8/8 pass**.
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
 > the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual

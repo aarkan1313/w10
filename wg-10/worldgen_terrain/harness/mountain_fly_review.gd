@@ -15,33 +15,18 @@ extends Node3D
 
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
+const RUNTIME_CONFIG := "res://worldgen_terrain/harness/mountain_fly_runtime_config.gd"
 
-const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const PROFILER := "res://worldgen_terrain/harness/profiler.gd"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 const OVERLAY := "res://worldgen_terrain/harness/diagnostics_overlay.gd"
-# 5 levels: the clipmap reaches 1.5 * BASE_SPAN * 2^(NUM_LEVELS-1) from the camera. At 3 levels
-# that was only ~49 km while the camera saw ~524 km -> ground loaded as you approached then
-# unloaded behind ("loads then unloads"). 5 levels reaches ~197 km; the far plane is matched to it
-# below so you never SEE the loaded edge. (Coarse distant rings are cheap: big pages, 9 each.)
-const NUM_LEVELS := 5
-const BASE_SPAN := 8192.0
-const GRID_RES := 64
-const RADIUS_PAGES := 1
-const LEAD_SECONDS := 0.5
-const MAX_PER_FRAME := 4
-const MORPH_REGION_ON := 0.15
-const MORPH_REGION_OFF := 0.0
-const RELIEF_SCALE := 0.25
-const RELIEF_REF := 2000.0
-const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~88 m effective — chosen
-							 # to be clearly VISIBLE at fly scale (60 m → ~21 m was invisible; see STATUS
-							 # M5 fly finding). STARTING value for live owner tuning, not a final look.
+# Runtime renderer constants live in mountain_fly_runtime_config.gd.
 
 var _view: Object
 var _pool: Object                # kept so _exit_tree can free its page-texture RIDs (B1)
 var _streamer: Object
 var _producer: Object
+var _runtime: Object
 var _camera: Camera3D
 var _rings: Object               # debug: poll tile states for the flip log
 var _dbg_label: Label
@@ -49,15 +34,17 @@ var _prev_states: PackedInt64Array = PackedInt64Array()
 var _flip_log: Array[String] = []
 var _cull_disabled := false
 var _debug_mode := 0
-var _morph_enabled := false # Runtime biome modes start with morph OFF: fine/coarse surfaces still differ visibly.
-var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matches the m5 gate's 0.0
-						  # baseline + the operator's "N enables detail" expectation; the scene used to
-						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
+var _morph_enabled := false
+var _detail_on := false
 var _frame := 0
 
 func _ready() -> void:
 	if RenderingServer.get_rendering_device() == null:
 		push_error("mountain_fly_review: no RenderingDevice (run windowed)"); return
+
+	_runtime = load(RUNTIME_CONFIG).new()
+	_morph_enabled = bool(_runtime.default_morph_enabled())
+	_detail_on = bool(_runtime.default_detail_enabled())
 
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	_pool = pool   # keep a reference for deterministic teardown in _exit_tree (B1)
@@ -67,30 +54,19 @@ func _ready() -> void:
 		push_error("mountain_fly_review: pool configure failed: %s" % err); return
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
 	_streamer = streamer
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
+	_runtime.configure_streamer(streamer, pool)
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
-	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
+	_runtime.configure_rings(rings)
 	add_child(rings)
 	_rings = rings
 	_view = ClassDB.instantiate("Wg10TerrainView")
 	_reconfigure_view()
 
-	# Loaded extent = the coarsest 3x3's half-width from the camera. Match the far plane + fog to it
-	# so the horizon fades to sky BEFORE the loaded edge — you never see ground load/unload at a
-	# visible boundary. (RADIUS_PAGES + 0.5) * coarsest_span.
-	var coarsest_span := BASE_SPAN * pow(2.0, NUM_LEVELS - 1)
-	var loaded_edge := (RADIUS_PAGES + 0.5) * coarsest_span    # metres from camera to the outer edge
+	# Match far plane and fog to the shared loaded extent.
+	var loaded_edge := float(_runtime.loaded_edge_m())
 
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.45, 0.62, 0.85)
-	# Distance fog fading to the sky color, ending just inside the loaded edge so the horizon is
-	# sky, not a hard terrain cliff. depth_end ~ 85% of the loaded edge.
-	env.fog_enabled = true
-	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = loaded_edge * 0.45
-	env.fog_depth_end = loaded_edge * 0.85
-	env.fog_light_color = Color(0.45, 0.62, 0.85)
+	_runtime.configure_review_environment(env)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
 	add_child(light)
@@ -110,12 +86,7 @@ func _ready() -> void:
 	add_child(overlay)
 	overlay.call("bind_sources", profiler, _view)
 
-	# DEBUG: register the global shader debug-mode param (used by ring_displace's wg_dbg_mode).
-	# Press M to cycle NORMAL -> MORPH-BAND HEATMAP -> WORLD ROUTE COLOR.
-	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	# M5: global detail amplitude (read by ring_displace's wg_detail_amp). Register at 0.0 (detail OFF
-	# at load, matching _detail_on=false + the m5 gate convention); N toggles to DETAIL_AMP and back.
-	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	_runtime.register_shader_globals(_detail_on)
 
 	# DEBUG flip-log HUD (bottom-left). Press K to toggle cull-disable (A/B test the AABB-cull
 	# theory): if a vanishing chunk STOPS with culling off, it's frustum culling; if it persists,
@@ -152,14 +123,14 @@ func _input(event: InputEvent) -> void:
 			_rings.call("debug_disable_culling", _cull_disabled)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_M:
 		_debug_mode = (_debug_mode + 1) % 3
-		RenderingServer.global_shader_parameter_set("wg_dbg_mode", float(_debug_mode))
+		_runtime.set_debug_mode(_debug_mode)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_morph_enabled = not _morph_enabled
 		_reconfigure_view()
 		print("[fly] morph_region=%s" % str(_current_morph_region()))
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_N:
 		_detail_on = not _detail_on
-		RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP if _detail_on else 0.0)
+		_runtime.set_detail_enabled(_detail_on)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_P:
 		_toggle_mountain_preset()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_B:
@@ -236,8 +207,8 @@ func _world_route_summary(p: Vector3, v: Vector3) -> String:
 		return ""
 	var led: Vector2 = _streamer.call("coverage_center", p.x, p.z, v.x, v.z)
 	var parts: Array[String] = []
-	for level in range(NUM_LEVELS):
-		var span: float = BASE_SPAN * pow(2.0, level)
+	for level in range(int(_runtime.num_levels())):
+		var span: float = float(_runtime.base_span_m()) * pow(2.0, level)
 		var ox: float = floor(float(led.x) / span) * span
 		var oz: float = floor(float(led.y) / span) * span
 		var name := str(_pool.call("debug_world_biome_for_page", level, ox, oz))
@@ -245,7 +216,9 @@ func _world_route_summary(p: Vector3, v: Vector3) -> String:
 	return "routes %s" % " ".join(parts)
 
 func _current_morph_region() -> float:
-	return MORPH_REGION_ON if _morph_enabled else MORPH_REGION_OFF
+	if _runtime == null:
+		return 0.0
+	return float(_runtime.morph_region(_morph_enabled))
 
 func _debug_mode_label() -> String:
 	if _debug_mode == 1:
@@ -255,9 +228,9 @@ func _debug_mode_label() -> String:
 	return "material"
 
 func _reconfigure_view() -> void:
-	if _view == null or _pool == null or _streamer == null or _rings == null:
+	if _view == null or _pool == null or _streamer == null or _rings == null or _runtime == null:
 		return
-	_view.call("configure", _pool, _streamer, _rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, _current_morph_region(), RELIEF_REF, LEAD_SECONDS)
+	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled)
 
 # Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
 # LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep

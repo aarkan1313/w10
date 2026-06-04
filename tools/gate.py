@@ -21,6 +21,7 @@ CHECKS = {
         "worldgen_terrain/tests/dem_pack_check.gd",
         "worldgen_terrain/tests/facts_check.gd",
         "worldgen_terrain/tests/mountain_fly_producers_check.gd",
+        "worldgen_terrain/tests/mountain_fly_runtime_config_check.gd",
     ],
     "gpu": [
         "worldgen_terrain/tests/gpu_parity_check.gd",

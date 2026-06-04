@@ -8,19 +8,8 @@ extends SceneTree
 # WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_*_fly_capture*.png
 
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
-const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
-const NUM_LEVELS := 5
-const BASE_SPAN := 8192.0
-const GRID_RES := 64
-const RADIUS_PAGES := 1
-const LEAD_SECONDS := 0.5
-const MAX_PER_FRAME := 4
-const MORPH_REGION := 0.15
-const RELIEF_SCALE := 0.25
-const RELIEF_REF := 2000.0
-const DETAIL_AMP := 350.0
+const RUNTIME_CONFIG := "res://worldgen_terrain/harness/mountain_fly_runtime_config.gd"
 const VIEW_SIZE := Vector2i(1280, 720)
-const SKY := Color(0.45, 0.62, 0.85)
 const OUT_MOUNTAIN_NETWORK := "D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png"
 const OUT_MOUNTAIN_CLOSE := "D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png"
 const OUT_WORLD := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
@@ -38,26 +27,20 @@ func _run() -> int:
 	if RenderingServer.get_rendering_device() == null:
 		print("[wg10-biome-capture] status=skip reason=no-render-device"); return 2
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	# Register BOTH global uniforms the render shader declares (ring_displace.gdshader: wg_dbg_mode +
-	# wg_detail_amp). Missing wg_dbg_mode -> the render pipeline's global-uniform descriptor set is
-	# incomplete -> "Uniforms were never supplied for set (3)" every draw (a HARNESS bug, not the producer).
-	# Match the live review scene: add directly instead of calling global_shader_parameter_get_list(),
-	# which Godot warns should not be used outside the editor.
-	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, DETAIL_AMP)
-	RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP)
+	var runtime: Object = load(RUNTIME_CONFIG).new()
+	runtime.register_shader_globals(bool(runtime.default_detail_enabled()))
 
-	var rc := await _capture_mode("mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
+	var rc := await _capture_mode(runtime, "mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
 	if rc != 0:
 		return rc
-	rc = await _capture_mode("mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
+	rc = await _capture_mode(runtime, "mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
 	if rc != 0:
 		return rc
-	rc = await _capture_mode("world_network", MODE_WORLD, PRESET_NETWORK, OUT_WORLD, OUT_ROUTE)
+	rc = await _capture_mode(runtime, "world_network", MODE_WORLD, PRESET_NETWORK, OUT_WORLD, OUT_ROUTE)
 	return rc
 
-func _capture_mode(label: String, mode: String, preset: String, out_material: String, out_route: String) -> int:
-	RenderingServer.global_shader_parameter_set("wg_dbg_mode", 0.0)
+func _capture_mode(runtime: Object, label: String, mode: String, preset: String, out_material: String, out_route: String) -> int:
+	runtime.set_debug_mode(0)
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	var producer: Object = load(PRODUCERS).new()
 	var producer_err := _configure_producer(producer, mode, preset)
@@ -72,28 +55,22 @@ func _capture_mode(label: String, mode: String, preset: String, out_material: St
 	if runtime_mode != expected_runtime:
 		push_error("[wg10-biome-capture] %s expected runtime=%s, got %s" % [label, expected_runtime, runtime_mode]); return 1
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
-	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
+	runtime.configure_streamer(streamer, pool)
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
-	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
+	runtime.configure_rings(rings)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()))
 
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	vp.own_world_3d = true
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = SKY
-	env.fog_enabled = true
-	env.fog_mode = Environment.FOG_MODE_DEPTH
-	env.fog_depth_begin = BASE_SPAN * 8.0
-	env.fog_depth_end = BASE_SPAN * 20.0
-	env.fog_light_color = SKY
+	runtime.configure_review_environment(env)
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
 	var cam := Camera3D.new()
-	cam.far = BASE_SPAN * 32.0
+	cam.far = float(runtime.loaded_edge_m())
 	cam.environment = env
 	vp.add_child(rings)
 	vp.add_child(light)
@@ -127,7 +104,7 @@ func _capture_mode(label: String, mode: String, preset: String, out_material: St
 
 	var route_rc := OK
 	if out_route != "":
-		RenderingServer.global_shader_parameter_set("wg_dbg_mode", 2.0)
+		runtime.set_debug_mode(2)
 		RenderingServer.force_draw()
 		await process_frame
 		var route_img: Image = vp.get_texture().get_image()
