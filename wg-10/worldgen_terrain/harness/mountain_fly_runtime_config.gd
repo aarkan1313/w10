@@ -6,10 +6,11 @@ extends RefCounted
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const NUM_LEVELS := 5
 const BASE_SPAN_M := 8192.0
-# The accepted mountain-network payload is sampled at about 66.7 m. A 64x64 fly mesh samples
-# the 8192 m base page at 128 m, which visibly facets the reference scene and makes LOD repages
-# read as visual pop. 128 keeps the live review mesh close to the accepted source density.
-const GRID_RES := 128
+# The accepted mountain-network payload is sampled at about 66.7 m. A 128x128 fly mesh samples
+# the 8192 m base page at 64 m, which preserves data but still reads as triangular facets in the
+# owner fly. 256 oversamples the accepted height texture for smoother presentation without changing
+# the page/facts data contract.
+const GRID_RES := 256
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 1
@@ -21,7 +22,7 @@ const RELIEF_SCALE := 0.25
 const RELIEF_REF := 1700.0
 const DETAIL_AMP_M := 350.0
 const DEFAULT_MORPH_ENABLED := false
-const DEFAULT_DETAIL_ENABLED := false
+const DEFAULT_DETAIL_ENABLED := true
 const SKY := Color(0.45, 0.62, 0.85)
 # Accepted mountain-network display footprint. The streamer keeps a larger loaded edge for
 # fallback coverage, but the owner review camera/fog should not expose static-reference samples

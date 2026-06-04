@@ -113,6 +113,8 @@ func _run() -> int:
 
 	rings.call("unbind_all")
 	pool.call("free_all")
+	rings.queue_free()
+	await process_frame
 
 	if stream_events <= 0:
 		errs.append("no stream events during motion; path did not exercise page boundaries")

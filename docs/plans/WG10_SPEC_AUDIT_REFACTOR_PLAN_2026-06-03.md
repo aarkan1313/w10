@@ -6,6 +6,57 @@ current state, because much of the active WG10 work is presently untracked.
 
 ## Addendum - 2026-06-04 Stabilization
 
+### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
+
+The manual owner-fly complaint now has a dedicated windowed gate:
+`review_runtime_stress`. It drives REFERENCE, MOUNTAIN, and WORLD with morph
+off/on through speed pulses, stop/start motion, diagonal turns, viewport
+rendering, CPU/GPU timing, visible tile churn checks, pool-full checks,
+terrain-fraction checks, and evidence PNG output under
+`D:/tmp/wg10_biome_compose`.
+
+The first run proved the streamer was not hiding tiles, but the captures exposed
+a real visual bug shared by modes 1/2/3: the accepted static-reference payload
+was finite, while the coarse clipmap pages sampled outside that payload and
+clamped to its last row/column. That made the reference horizon smear and made
+valid repages look like bad biome/LOD artifacts.
+
+Fixes in this checkpoint:
+
+- `StaticHeightRuntime` now fades height samples outside the accepted payload
+  domain to a low neutral floor instead of repeating the edge forever.
+- Static corridor/material hints now return empty outside the payload domain, so
+  presentation and page-average reports do not invent corridor/rock/snow beyond
+  the accepted reference.
+- The owner review mesh is now 256 subdivisions per page, and bounded display
+  detail is enabled by default for the fly harness.
+- `review_runtime_stress` is part of the gate index and the smoke/runtime config
+  tests now cover the changed review defaults.
+
+Current proof:
+
+- `cargo test -p wg10_terrain --lib` = 229 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the
+  Godot extension.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest mode render
+  gate uses `grid=256`, `vertices=2972205`, GPU p99 about `0.744 ms`, and zero
+  hide/show.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2, with REFERENCE vs
+  MOUNTAIN/network and REFERENCE vs WORLD/network preview still matching within
+  budgets.
+- `python tools\gate.py --suite review_runtime_stress` = 1/1. Latest stress run
+  has zero hide/show, zero full events, `visible0=45/45`, CPU p99 about
+  `12.1-12.4 ms`, CPU max <= `13.3 ms`, and GPU p99 about `0.62 ms` across all
+  six cases.
+
+This retires the finite-reference edge smear and gives manual fly regressions a
+better gate. It does not finish the biome/content problem. The remaining visual
+debt is close-range terrain quality and the procedural mountain world-layer
+contract: connected pass routes, page-stable conditioning, accepted material
+facts, and final dressing need to move into a real live producer instead of
+being masked by renderer tweaks.
+
 ### WORLD Reference Preview Checkpoint - 2026-06-04
 
 The latest owner-visible fix separates WORLD route diagnostics from owner-facing terrain

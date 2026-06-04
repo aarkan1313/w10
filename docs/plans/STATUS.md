@@ -95,6 +95,27 @@
 > WORLD/network preview at 0.000000/0.000000. Remaining owner reports of manual
 > flight popping/lag need a capture that follows the exact manual path; the
 > current scripted path does not reproduce hide/show or full-page stalls.
+> Follow-up manual-flight checkpoint: `review_runtime_stress` now runs a heavier
+> owner-flight path across REFERENCE, MOUNTAIN, and WORLD with morph off/on,
+> speed pulses, stops, diagonal turns, viewport rendering, CPU/GPU timing,
+> visible-tile churn checks, pool-full checks, terrain-fraction checks, and
+> evidence PNGs under `D:/tmp/wg10_biome_compose`. The first stress captures
+> exposed a real visual bug: the finite accepted static-reference payload was
+> clamped outside its 76.8 km domain, so coarse clipmap pages smeared the last
+> row/column into the horizon. `StaticHeightRuntime` now fades out-of-domain
+> height samples to a low neutral floor and treats out-of-domain corridor/material
+> hints as empty, so the finite reference no longer pretends to be infinite
+> terrain. The owner fly review mesh is now 256 subdivisions per page and starts
+> with bounded display detail enabled. Proof after this checkpoint: `cargo test
+> -p wg10_terrain --lib` = 229/0, `tools\build_rust.ps1` builds,
+> `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
+> `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1. Latest
+> stress run still has zero hide/show, zero full events, `visible0=45/45`, CPU
+> p99 about 12.1-12.4 ms, CPU max <= 13.3 ms, and GPU p99 about 0.62 ms across
+> all six cases. Remaining visual debt is close-range terrain/content quality:
+> the edge smear and measured stream pop are fixed, but the raw procedural
+> mountain layer still needs the accepted pass-network/conditioning/material
+> contract rather than more ad hoc renderer tuning.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

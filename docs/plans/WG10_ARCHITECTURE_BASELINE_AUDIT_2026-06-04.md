@@ -129,6 +129,22 @@ the biome route colors. The raw procedural WORLD path remains gated by
 `biome_world` and remains a future async/cache problem, not an accepted terrain
 mode.
 
+Latest manual-stress follow-up: the owner fly now has a dedicated
+`review_runtime_stress` suite that renders REFERENCE, MOUNTAIN, and WORLD with
+morph off/on through a hand-flight style path. The gate did not reproduce
+hide/show or pool-full stalls, but it exposed a shared visual fault: the finite
+accepted reference payload was clamped outside its domain, so large coarse
+clipmap pages stretched the payload edge into the horizon. The static-reference
+runtime now fades out-of-domain heights to a low neutral floor and treats
+out-of-domain corridor/material hints as empty. This makes the bridge honest
+about the accepted 76.8 km payload instead of presenting it as infinite
+terrain. The owner review mesh is also denser (`grid=256`) and starts with the
+bounded display detail layer enabled. Current proof includes Rust lib tests,
+`review_runtime`, `review_runtime_modes`, `review_runtime_visual`, and
+`review_runtime_stress`. The remaining close-range "ground looks bad" issue is
+not a streaming architecture failure; it is the unresolved live mountain
+world-layer content contract versus the accepted static artifact.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

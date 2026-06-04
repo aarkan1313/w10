@@ -62,7 +62,7 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("is_world", false)), "default producer should not be WORLD", errs)
 	_expect(not bool(snapshot.get("is_legacy", false)), "default producer should not be LEGACY", errs)
 	_expect(not bool(snapshot.get("morph_enabled", true)), "runtime default morph should be off", errs)
-	_expect(not bool(snapshot.get("detail_on", true)), "runtime default detail should be off", errs)
+	_expect(bool(snapshot.get("detail_on", false)), "runtime default detail should be on", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 	_expect_reference_contract(snapshot, "default", errs)
 	var reference_center_page: Dictionary = snapshot.get("static_reference_center_page", {})
@@ -84,6 +84,8 @@ func _run() -> int:
 	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, {}, errs)
 
 	scene.queue_free()
+	scene = null
+	await process_frame
 	await process_frame
 
 	if not errs.is_empty():

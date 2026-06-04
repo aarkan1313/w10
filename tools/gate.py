@@ -122,6 +122,13 @@ CHECKS = {
         "worldgen_terrain/tests/mountain_fly_modes_perf_check.gd",
         "worldgen_terrain/tests/mountain_fly_modes_render_perf_check.gd",
     ],
+    # Owner manual-flight stress probe. This is heavier than the standard mode gate and follows a
+    # hand-review style path with speed pulses, stops, turns, viewport rendering, and morph off/on.
+    # It fails on hard owner-visible regressions (hide/show, full pool events, degenerate frames, or
+    # large hitches) and writes evidence PNGs under D:/tmp/wg10_biome_compose.
+    "review_runtime_stress": [
+        "worldgen_terrain/tests/mountain_fly_manual_stress_check.gd",
+    ],
     # Windowed live-runtime visual capture. This writes the REFERENCE, MOUNTAIN/network,
     # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence, and fails if the
     # reference-backed MOUNTAIN/network bridge drifts away from REFERENCE at the reviewed frame.
@@ -146,6 +153,7 @@ WINDOWED_SUITES = {
     "review_static_visual",
     "review_runtime",
     "review_runtime_modes",
+    "review_runtime_stress",
     "review_runtime_visual",
 }
 

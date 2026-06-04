@@ -51,6 +51,9 @@ impl StaticHeightRuntime {
     }
 
     fn sample_material_code(&self, x_m: f64, z_m: f64) -> f32 {
+        if !self.contains_reference_point(x_m, z_m) {
+            return 0.0;
+        }
         let (x0, z0, x1, z1, tx, tz) = self.sample_indices(x_m, z_m);
         if let Some(corridor) = self.corridor_grid.as_ref() {
             let ix = if tx >= 0.5 { x1 } else { x0 };

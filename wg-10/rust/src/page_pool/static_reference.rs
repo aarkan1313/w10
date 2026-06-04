@@ -28,6 +28,8 @@ pub(super) struct StaticHeightRuntime {
     origin_z_m: f64,
     span_x_m: f64,
     span_z_m: f64,
+    outside_height_m: f32,
+    edge_fade_m: f64,
     pub(super) generator_version: String,
     pub(super) source_scope: String,
     pub(super) height_scale_m: f64,
@@ -111,5 +113,4 @@ impl StaticHeightRuntime {
         }
         Ok(())
     }
-
 }

@@ -277,6 +277,8 @@ impl StaticHeightRuntime {
             .map(material_hint_fractions)
             .unwrap_or_default();
         let has_material_hints = material_hints.is_some();
+        let outside_height_m = height_percentile(&grid, 0.05);
+        let edge_fade_m = span_x.min(span_z) * 0.08;
 
         Ok(Self {
             grid,
@@ -287,6 +289,8 @@ impl StaticHeightRuntime {
             origin_z_m: min_z,
             span_x_m: span_x,
             span_z_m: span_z,
+            outside_height_m,
+            edge_fade_m,
             generator_version: payload.generator_version,
             source_scope: payload.source_scope,
             height_scale_m: payload.height_scale_m,
@@ -386,6 +390,18 @@ fn material_hint_fractions(hints: &StaticMaterialHintGrids) -> StaticMaterialHin
         rock: coverage(&hints.rock),
         snow: coverage(&hints.snow),
     }
+}
+
+fn height_percentile(grid: &[f32], fraction: f64) -> f32 {
+    let mut values: Vec<f32> = grid.iter().copied().filter(|v| v.is_finite()).collect();
+    if values.is_empty() {
+        return 0.0;
+    }
+    values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let idx = ((values.len() as f64 * fraction).ceil() as usize)
+        .saturating_sub(1)
+        .min(values.len() - 1);
+    values[idx]
 }
 
 fn validate_conditioning_stats(stats: StaticConditioningStats) -> Result<(), String> {
@@ -511,6 +527,20 @@ mod tests {
     }
 
     #[test]
+    fn payload_outside_domain_fades_to_low_floor_instead_of_smearing_edge() {
+        let rt = StaticHeightRuntime::from_payload(one_chunk_payload(Some(vec![1, 0, 1, 0])))
+            .expect("payload should parse");
+
+        assert_eq!(rt.sample(5.0, 5.0), 300.0);
+        assert_eq!(rt.sample(50.0, 50.0), 0.0);
+        assert!(!rt.sample_corridor(50.0, 50.0));
+        assert_eq!(
+            rt.corridor_fraction_for_page(45.0, 45.0, 10.0, 2),
+            0.0
+        );
+    }
+
+    #[test]
     fn payload_without_source_scope_is_rejected() {
         let mut payload = one_chunk_payload(None);
         payload.source_scope.clear();
@@ -552,5 +582,19 @@ mod tests {
         assert!((page.floor - 0.5).abs() < 1.0e-12);
         assert!((page.rock - 0.5625).abs() < 1.0e-12);
         assert!((page.snow - 0.5).abs() < 1.0e-12);
+    }
+
+    #[test]
+    fn payload_material_hints_outside_domain_do_not_smear_edge() {
+        let rt = StaticHeightRuntime::from_payload(one_chunk_payload_with_hints())
+            .expect("payload should parse");
+
+        let page = rt
+            .material_hint_fractions_for_page(45.0, 45.0, 10.0, 2)
+            .expect("page hints should sample");
+        assert_eq!(page.low_pass, 0.0);
+        assert_eq!(page.floor, 0.0);
+        assert_eq!(page.rock, 0.0);
+        assert_eq!(page.snow, 0.0);
     }
 }
