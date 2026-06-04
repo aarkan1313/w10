@@ -9,9 +9,10 @@ extends Node3D
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
 # KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
-#       P toggles runtime scale preset, and B cycles MOUNTAIN -> REFERENCE -> LEGACY -> WORLD. The streamer/view
-#       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in MOUNTAIN mode so
-#       the mountain review scene reviews mountain content first; WORLD remains the biome-composition A/B.
+#       P toggles runtime scale preset, B cycles modes, and 1/2/3/4 jump directly to
+#       REFERENCE/MOUNTAIN/WORLD/LEGACY. The streamer/view keep the same pool ref; on toggle we
+#       free_all + reconfigure live. Starts in MOUNTAIN mode so the mountain review scene reviews
+#       mountain content first; REFERENCE remains the accepted static-payload baseline.
 
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
@@ -137,6 +138,14 @@ func _input(event: InputEvent) -> void:
 		_toggle_mountain_preset()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		_cycle_producer_mode()
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_1:
+		_set_producer_mode("REFERENCE")
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_2:
+		_set_producer_mode("MOUNTAIN")
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_3:
+		_set_producer_mode("WORLD")
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_4:
+		_set_producer_mode("LEGACY")
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
 		_set_relief(_relief_m() * 1.25)   # taller mountains
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_F:
@@ -237,13 +246,9 @@ func _reconfigure_view() -> void:
 		relief_scale = float(_producer.view_relief_scale(relief_scale))
 	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled, relief_scale)
 
-# Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
-# accepted REFERENCE payload, LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
-# working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
-func _cycle_producer_mode() -> void:
+func _apply_mode_reconfigure(reason: String) -> void:
 	if _pool == null or _producer == null:
 		return
-	_producer.cycle_mode()
 	# Detach ring materials from the page textures before free_all (else the next draws flood
 	# "Texture binding 1 not valid" against the freed RIDs until pages re-stream after reconfigure).
 	if _rings != null:
@@ -256,12 +261,29 @@ func _cycle_producer_mode() -> void:
 	else:
 		_morph_enabled = false
 	if err != "":
-		push_error("mountain_fly_review: reconfigure failed: %s" % err)
+		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
 		return
 	_reconfigure_view()
 	# Reset the flip-log baseline so the post-reconfigure repage churn doesn't spam the HUD.
 	_prev_states = PackedInt64Array()
 	_print_biome_state()
+
+# Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
+# accepted REFERENCE payload, LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
+# working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
+func _cycle_producer_mode() -> void:
+	if _pool == null or _producer == null:
+		return
+	_producer.cycle_mode()
+	_apply_mode_reconfigure("mode-cycle")
+
+func _set_producer_mode(label: String) -> void:
+	if _pool == null or _producer == null:
+		return
+	if not bool(_producer.set_mode_label(label)):
+		push_error("mountain_fly_review: invalid producer mode %s" % label)
+		return
+	_apply_mode_reconfigure("mode-%s" % label.to_lower())
 
 func debug_runtime_snapshot() -> Dictionary:
 	var stats := {}
@@ -354,7 +376,7 @@ func _process(_delta: float) -> void:
 			_flip_log.pop_front()
 		var route_summary := _world_route_summary(p, v)
 		var route_line := "%s\n" % route_summary if route_summary != "" else ""
-		_dbg_label.text = "mode %s (B cycles) | preset %s %.0fkm (P toggles) | debug %s (M cycles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
+		_dbg_label.text = "mode %s (1 ref 2 mountain 3 world 4 legacy | B cycles) | preset %s %.0fkm (P toggles) | debug %s (M cycles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
 			_producer_label(),
 			_mountain_preset_label(),
 			_feature_span_m() / 1000.0,

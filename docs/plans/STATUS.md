@@ -89,8 +89,12 @@
 > runtime renderer can show the accepted mountain-network geometry when fed the
 > accepted payload. The default live MOUNTAIN capture now uses the same seed,
 > relief family, and source-window scale as that payload, so the remaining mountain
-> mismatch is isolated to the missing full-field conditioning/pass-network world
-> fact and material/dressing, not the clipmap renderer or command invocation.
+> mismatch is isolated to the producer contract: the accepted payload was generated
+> by the old full-field diagnostic branch (`apron_px=0`, field-level zscore/norm,
+> connected pass-network carving, and whole-field percentile/tanh conditioning)
+> before slicing, while the live runtime uses the seam-safe page branch with fixed
+> affine constants, scale-anchored kernels, flow-level gating, and no pass-network
+> fact. This is not a command invocation or relief scalar issue.
 >
 > Runtime motion fix: the scheduler now maintains a camera-centred display ring
 > plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the
@@ -198,7 +202,10 @@
 > Runtime renderer constants are now split into `mountain_fly_runtime_config.gd` and
 > locked by `mountain_fly_runtime_config_check.gd`; the owner scene and runtime visual
 > capture share levels, span, lead, morph/detail defaults, fog/loaded edge, shader path,
-> and view configuration. Follow-up hardening: the producer helper exposes
+> and view configuration. The owner scene now also has direct architecture-mode
+> keys: `1` REFERENCE accepted payload, `2` live MOUNTAIN recipe, `3` WORLD compose,
+> and `4` LEGACY atlas; `B` still cycles the same modes. Follow-up hardening: the
+> producer helper exposes
 > `runtime_seed()` instead of `seed()` to avoid the GDScript built-in RNG seeder, and
 > `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so `review_runtime`
 > validates the actual owner scene through a stable debug surface instead of private

@@ -65,6 +65,48 @@ This explains the owner report:
   through compose; any remaining "ground looks bad" report needs a fresh owner
   fly against this composed runtime.
 
+## 2026-06-04 Deep-Dive Addendum
+
+The latest source-window fix makes live `MOUNTAIN/network_ref` sample the same
+270 km source window that the accepted static payload came from, but that did
+not make the live recipe match the accepted mountain-network scene. The current
+evidence says this is expected.
+
+The accepted payload generator is:
+
+1. `tools/dem_pack/export_godot_mountain_network_chunks.py`
+2. `mountain.generate(...)` over one 270 km field with `apron_px=0`, which uses
+   the old full-field diagnostic branch: window-level `zscore` / `norm01`,
+   non-scale-anchored Gaussian widths, and rotation around the field midpoint.
+3. `mountain_pass_network.carve_pass_network(...)`, which runs a coarse
+   least-cost route network and carves ramps into the one raw field.
+4. `_condition(...)`, which applies whole-field percentile normalization,
+   a small Gaussian, and `tanh`.
+5. Only then does the exporter slice 9x9 chunks for review.
+
+The live `configure_biome(...)` path is intentionally different:
+
+1. It uses the seam-safe page branch of `mountain.generate(...)` mirrored in
+   Rust/GLSL.
+2. It uses fixed affine constants instead of per-window `zscore` / `norm01`.
+3. It anchors blur widths for cross-level invariance and gates flow by level.
+4. It has no coarse route-network fact and no whole-field conditioning pass.
+
+So the current visual mismatch is not a remaining command/configuration error.
+It is a content producer contract gap. The aligned fix is not more relief-scale
+tuning; it is a named mountain world-layer producer/fact design that can provide
+connected pass routes and a page-stable conditioning contract to the live
+runtime, or an explicit decision that the static `REFERENCE` payload remains the
+temporary accepted baseline while the live seam-safe recipe is judged as a
+separate prototype.
+
+Current source-size check also changes the refactor framing. No tracked Rust,
+GDScript, GLSL, or Python source file is over 1000 lines after the split. The
+remaining large tracked files are mostly docs/history; the largest code hotspot
+is `wg-10/rust/src/biome_page_compute/runtime_context.rs` at 727 lines. The
+refactor risk is now producer ownership and mode taxonomy, not a single giant
+terrain source file.
+
 ## Current Checkpoint
 
 Branch: `slice4-gpu-page-integration`
