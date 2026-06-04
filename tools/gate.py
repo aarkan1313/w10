@@ -139,6 +139,12 @@ CHECKS = {
         "worldgen_terrain/tests/biome_fly_capture.gd",
         "worldgen_terrain/tests/mountain_runtime_reference_static_compare.gd",
     ],
+    # Progression scene smoke. This is the next-chat validation harness: explicit ordered steps
+    # replay the accepted REFERENCE baseline, reference-backed MOUNTAIN bridge, raw close-debug
+    # candidate, and bounded WORLD diagnostic without promoting unfinished content.
+    "review_progression": [
+        "worldgen_terrain/tests/wg10_progression_review_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -156,6 +162,7 @@ WINDOWED_SUITES = {
     "review_runtime_modes",
     "review_runtime_stress",
     "review_runtime_visual",
+    "review_progression",
 }
 
 

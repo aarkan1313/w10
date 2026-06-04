@@ -13,7 +13,7 @@ Latest committed backup before this audit pass:
 - `a9e76f7 refactor(slice4): split world layer reports`
 - tag `backup-slice4-world-layer-reports-20260604-a9e76f7`
 
-Latest uncommitted fix in this pass:
+Latest camera fix checkpoint:
 
 - `wg-10/worldgen_terrain/harness/fly_camera.gd` now implements
   `sync_mouse_from_rotation()`.
@@ -24,6 +24,26 @@ Latest uncommitted fix in this pass:
 - `mountain_fly_snapshot.gd` exposes
   `camera_has_sync_mouse_from_rotation`.
 - `mountain_fly_review_smoke_check.gd` gates that the camera sync method exists.
+
+Implemented follow-up checkpoint:
+
+- `wg-10/worldgen_terrain/harness/wg10_progression_review.tscn`
+- `wg-10/worldgen_terrain/harness/wg10_progression_review.gd`
+- `wg-10/worldgen_terrain/tests/wg10_progression_review_check.gd`
+- `python tools/gate.py --suite review_progression` = 1/1.
+
+This new scene is the next-chat validation harness. It exposes four current
+steps with explicit status and expected contract:
+
+1. `reference_baseline`: accepted REFERENCE runtime baseline.
+2. `mountain_network_bridge`: reference-backed MOUNTAIN bridge.
+3. `mountain_close_debug_candidate`: raw live mountain prototype.
+4. `world_reference_preview`: bounded WORLD diagnostic over accepted reference
+   height/materials.
+
+It also records planned future steps for source/display overlay, material fact
+layers, pass-network facts, procedural mountain world-layer production, and
+facts/collision parity.
 
 Latest proofs after the camera fix:
 
@@ -190,7 +210,7 @@ impossible to confuse.
 
 ## Progression Scene Plan
 
-Recommended files:
+Implemented files:
 
 - `wg-10/worldgen_terrain/harness/wg10_progression_review.tscn`
 - `wg-10/worldgen_terrain/harness/wg10_progression_review.gd`

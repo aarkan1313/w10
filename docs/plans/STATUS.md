@@ -12,6 +12,13 @@
 > `review_runtime_stress` = 1/1. The audit also records the next hardening work:
 > add an owner-spike gate and a visual REPAGE-delta gate before promoting more
 > procedural content.
+> **Progression harness follow-up:** `wg10_progression_review.tscn` now exists
+> with an explicit four-step current ladder: accepted REFERENCE baseline,
+> reference-backed MOUNTAIN bridge, raw MOUNTAIN close-debug candidate, and
+> bounded WORLD reference preview. `review_progression` = 1/1 proves those
+> steps report their expected runtime modes and contract kinds, and records the
+> planned future steps for material facts, pass-network facts, procedural
+> mountain world-layer production, and facts/collision parity.
 > **Read this first:** latest scoped runtime-artifact checkpoint now has the
 > owner fly binding the JSON-ready accepted mountain world-layer tile payload in
 > `REFERENCE`, `MOUNTAIN/network_ref`, and `WORLD` preview. This replaces the

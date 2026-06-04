@@ -40,12 +40,16 @@ Current work is Slice 4 stabilization and recovery:
   `sync_mouse_from_rotation()` hook so review-camera reframing cannot leave
   stale mouse-look state. The next hardening target is a progression review
   scene plus stricter owner-spike and visual REPAGE-delta gates.
+- `wg10_progression_review.tscn` is now the progression harness for the next
+  chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
+  WORLD/reference-preview as explicit steps with `review_progression` guarding
+  runtime modes and contract kinds.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same
 pass-network, conditioning, material/fact, and facts/collision contract. The immediate implementation
-shape is the progression scene in the audit doc, adding one roadmap feature at a time and proving
-each layer before promotion. Broad refactors should stay attached to that target.
+shape is extending the progression scene in the audit doc, adding one roadmap feature at a time and
+proving each layer before promotion. Broad refactors should stay attached to that target.
 
 Last updated: 2026-05-31 (**Phase 5 ACTIVE — see the "▶ YOU ARE HERE" box under the Phase 5 header for the
 plain-language current state.** Short version: M0–M4 DONE (engine machinery; gates cargo 121 · fast 6/6 · gpu
