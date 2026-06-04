@@ -66,7 +66,8 @@ func _capture_mode(runtime: Object, label: String, mode: String, preset: String,
 	runtime.configure_rings(rings)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
 	var relief_scale := float(producer.view_relief_scale(float(runtime.default_relief_scale())))
-	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()), relief_scale)
+	var relief_ref := float(producer.view_relief_ref(float(runtime.default_relief_ref()), float(runtime.default_relief_scale())))
+	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()), relief_scale, relief_ref)
 
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE
@@ -77,7 +78,7 @@ func _capture_mode(runtime: Object, label: String, mode: String, preset: String,
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
 	var cam := Camera3D.new()
-	cam.far = float(runtime.loaded_edge_m())
+	cam.far = float(runtime.review_visual_edge_m())
 	cam.environment = env
 	vp.add_child(rings)
 	vp.add_child(light)

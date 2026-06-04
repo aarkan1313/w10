@@ -3,6 +3,18 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
+> Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
+> an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
+> that view during review. Runtime color normalization is now producer-owned:
+> REFERENCE normalizes material color against displayed 1700 m relief,
+> MOUNTAIN/network against 850 m, and WORLD/close-debug against 425 m, so low-relief
+> modes no longer collapse into one washed-out palette. The review camera/fog now uses
+> the accepted mountain-network 76.8 km visual footprint while the streamer still keeps
+> the larger 196.608 km loaded edge for fallback coverage; this avoids showing
+> static-reference samples beyond the accepted payload as horizon artifacts. REFERENCE
+> static material pages are blended into terrain shading (`0.58`) instead of replacing
+> the palette outright, and `mountain_fly_review_smoke_check.gd` now proves the owner
+> scene has bound those material page textures.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly
@@ -61,7 +73,7 @@
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test -p wg10_terrain --lib`
-> = **225 passed / 0 failed** after adding the producer contract report.
+> = **227 passed / 0 failed** after the owner-visual review fix.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
@@ -74,9 +86,12 @@
 > MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/route PNGs through
 > the shared producer helper),
 > `m3` = **10/10 pass** after the display/prefetch scheduler split
-> (`m3_accept` p99 5.25 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
+> (`m3_accept` p99 5.25 ms / 6.0 ms budget), `review_runtime_modes` = **2/2 pass**
+> after the owner-visual fix (REFERENCE/MOUNTAIN/WORLD zero hide/show; render p99
+> REFERENCE 0.358 ms, MOUNTAIN 0.248 ms, WORLD 0.492 ms at 1280x720), and
+> `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, latest fly GPU p99 0.108 ms).
+> cross-level macro ratio 0.066665 <= 0.08, latest fly GPU p99 0.177 ms).
 > Correct command sequence for Godot-facing Rust rebuilds is
 > `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` from the repo
 > root, then set `GODOT_BIN` to the Godot 4.6.2 console executable and run

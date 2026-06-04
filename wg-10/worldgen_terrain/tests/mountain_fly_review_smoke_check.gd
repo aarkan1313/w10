@@ -53,6 +53,7 @@ func _run() -> int:
 	_expect(absf(float(snapshot.get("feature_span_m", 0.0)) - 90000.0) < 0.001, "expected feature_span_m=90000", errs)
 	_expect(absf(float(snapshot.get("relief_m", 0.0)) - 1700.0) < 0.001, "expected relief_m=1700", errs)
 	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - 1.0) < 0.001, "expected reference relief scale=1.0", errs)
+	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - 1700.0) < 0.001, "expected reference relief ref=1700", errs)
 	var source_transform: Dictionary = snapshot.get("source_transform", {})
 	_expect(absf(float(source_transform.get("source_scale", 0.0)) - 1.0) < 0.000001, "expected reference source scale=1", errs)
 	_expect(absf(float(source_transform.get("source_offset_x_m", 0.0))) < 0.001, "expected reference source x offset=0", errs)
@@ -75,10 +76,10 @@ func _run() -> int:
 		errs
 	)
 
-	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 0.5, errs)
-	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, errs)
-	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, errs)
-	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, errs)
+	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 0.5, 850.0, errs)
+	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, 425.0, errs)
+	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, errs)
+	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, errs)
 
 	scene.queue_free()
 	await process_frame
@@ -125,6 +126,7 @@ func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array
 	_expect(bool(center_page.get("has_material_hints", false)), "%s REFERENCE center page expected material hint facts" % label, errs)
 	_expect(float(center_page.get("floor_hint_mean", -1.0)) >= 0.0, "%s REFERENCE center page expected floor hint mean" % label, errs)
 	_expect(float(center_page.get("rock_hint_mean", -1.0)) >= 0.0, "%s REFERENCE center page expected rock hint mean" % label, errs)
+	_expect(int(snapshot.get("static_material_bound_tiles", 0)) > 0, "%s REFERENCE expected bound static material page textures" % label, errs)
 
 func _expect_world_layer_contract_report(
 	snapshot: Dictionary,
@@ -162,6 +164,7 @@ func _expect_mode_switch(
 	expected_legacy: bool,
 	expected_seed: int,
 	expected_view_relief_scale: float,
+	expected_view_relief_ref: float,
 	errs: Array[String],
 ) -> void:
 	if not scene.has_method("_set_producer_mode"):
@@ -185,6 +188,7 @@ func _expect_mode_switch(
 	_expect(bool(snapshot.get("is_legacy", false)) == expected_legacy, "%s is_legacy mismatch" % mode, errs)
 	_expect(int(snapshot.get("seed", 0)) == expected_seed, "%s expected seed=%d, got %d" % [mode, expected_seed, int(snapshot.get("seed", 0))], errs)
 	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - expected_view_relief_scale) < 0.001, "%s expected view relief scale %.3f, got %.3f" % [mode, expected_view_relief_scale, float(snapshot.get("view_relief_scale", 0.0))], errs)
+	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - expected_view_relief_ref) < 0.001, "%s expected view relief ref %.3f, got %.3f" % [mode, expected_view_relief_ref, float(snapshot.get("view_relief_ref", 0.0))], errs)
 	if mode == "MOUNTAIN":
 		var source_transform: Dictionary = snapshot.get("source_transform", {})
 		_expect(absf(float(source_transform.get("source_scale", 0.0)) - 3.515625) < 0.000001, "MOUNTAIN expected source scale=3.515625", errs)

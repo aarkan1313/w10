@@ -242,7 +242,7 @@ impl Wg10TerrainView {
                             dx as i64,
                             dz as i64,
                             material_tex.upcast::<godot::classes::Texture2D>(),
-                            1.0,
+                            0.58,
                         );
                     }
                     let debug_color =

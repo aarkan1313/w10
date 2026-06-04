@@ -15,11 +15,13 @@ func _run() -> int:
 	_expect(absf(float(cfg.lead_seconds()) - 0.5) < 0.001, "lead_seconds should be 0.5", errs)
 	_expect(absf(float(cfg.detail_amp_m()) - 350.0) < 0.001, "detail_amp_m should be 350", errs)
 	_expect(absf(float(cfg.default_relief_scale()) - 0.25) < 0.001, "default relief scale should be 0.25", errs)
+	_expect(absf(float(cfg.default_relief_ref()) - 1700.0) < 0.001, "default relief ref should be 1700", errs)
 	_expect(not bool(cfg.default_morph_enabled()), "default morph should be off", errs)
 	_expect(not bool(cfg.default_detail_enabled()), "default detail should be off", errs)
 	_expect(absf(float(cfg.morph_region(false)) - 0.0) < 0.001, "morph off region should be 0", errs)
 	_expect(absf(float(cfg.morph_region(true)) - 0.15) < 0.001, "morph on region should be 0.15", errs)
 	_expect(absf(float(cfg.loaded_edge_m()) - 196608.0) < 0.001, "loaded edge should be 196608m", errs)
+	_expect(absf(float(cfg.review_visual_edge_m()) - 76800.0) < 0.001, "review visual edge should be 76800m", errs)
 	_expect(cfg.sky_color() == Color(0.45, 0.62, 0.85), "sky color should match review scene", errs)
 
 	if not errs.is_empty():

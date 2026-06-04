@@ -6,6 +6,43 @@ current state, because much of the active WG10 work is presently untracked.
 
 ## Addendum - 2026-06-04 Stabilization
 
+### Current Owner-Visual Checkpoint - 2026-06-04
+
+The windowed scale-invariance and owner-runtime gates have now run on hardware. Current proof:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite biome_fly` = 4/4, including cross-level macro ratio
+  0.066665 <= 0.08.
+
+This retires the old F1 "missing cross-level gate" finding as an implementation/gate
+blocker. It does not mean visual acceptance is complete: live `MOUNTAIN` still lacks
+the accepted pass-network, route-carving, page-stable conditioning, and facts/material
+world-layer contract. `REFERENCE` remains the accepted static baseline bridge; `MOUNTAIN`
+and `WORLD` remain explicit candidates/prototypes.
+
+Current source-size check also retires the old 3.6k-line source finding. The largest tracked
+source hotspot is now `wg-10/rust/src/page_pool/static_reference.rs` at about 778 lines, while
+files above 1000 lines are docs/history. The next refactor pressure is not "split a giant
+biome file"; it is separation of producer facts, page-pool routing, renderer presentation, and
+review artifacts.
+
+Owner-visual fixes landed in the review path:
+
+- per-mode color normalization follows displayed relief instead of one fixed 2000 m palette ref;
+- the owner fly starts from an accepted-reference camera frame and `G` reframes to it;
+- review fog/far uses the accepted 76.8 km visual footprint while streaming still loads farther;
+- REFERENCE material pages blend into terrain shading rather than replacing it;
+- the owner-scene smoke test proves static material page textures are bound.
+
+Next refactor target: split the static-reference bridge into payload loading/validation, page
+sampling, material-code presentation, and report/diagnostic surfaces. After that, move producer
+selection out of `Wg10PagePool` into an explicit producer interface so REFERENCE, MOUNTAIN, WORLD,
+and LEGACY are not routed by one pool implementation.
+
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
 readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0

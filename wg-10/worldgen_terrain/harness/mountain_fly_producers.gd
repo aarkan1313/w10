@@ -154,6 +154,11 @@ func view_relief_scale(default_scale: float) -> float:
 		return MOUNTAIN_NETWORK_VIEW_RELIEF_SCALE
 	return default_scale
 
+func view_relief_ref(default_ref: float, default_scale: float) -> float:
+	if _mode == MODE_LEGACY:
+		return default_ref
+	return maxf(50.0, _relief_m * view_relief_scale(default_scale))
+
 func _configure_world(pool: Object) -> String:
 	var err := str(pool.call("configure_biome_world",
 		ProjectSettings.globalize_path(PACK_RES_DIR),

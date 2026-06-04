@@ -9,7 +9,8 @@ extends Node3D
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
 # KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
-#       P toggles runtime scale preset, B cycles modes, and 1/2/3/4 jump directly to
+#       P toggles runtime scale preset, G reframes to the accepted-review camera, B cycles modes,
+#       and 1/2/3/4 jump directly to
 #       REFERENCE/MOUNTAIN/WORLD/LEGACY. The streamer/view keep the same pool ref; on toggle we
 #       free_all + reconfigure live. Starts in REFERENCE mode so the owner review opens on the
 #       accepted mountain-network baseline; MOUNTAIN remains the explicit live candidate.
@@ -65,9 +66,6 @@ func _ready() -> void:
 	_view = ClassDB.instantiate("Wg10TerrainView")
 	_reconfigure_view()
 
-	# Match far plane and fog to the shared loaded extent.
-	var loaded_edge := float(_runtime.loaded_edge_m())
-
 	var env := Environment.new()
 	_runtime.configure_review_environment(env)
 	var light := DirectionalLight3D.new()
@@ -76,12 +74,12 @@ func _ready() -> void:
 
 	_camera = load(FLY_CAMERA).new()
 	_camera.environment = env
-	# Far plane at the loaded edge: nothing renders past where terrain exists, and fog has already
-	# faded the horizon to sky before that, so the edge is never visible.
-	_camera.far = float(loaded_edge)
+	# Far plane at the accepted review edge. The streamer still loads farther for fallback coverage,
+	# but the visual review should not expose static-reference samples beyond the accepted payload.
+	_camera.far = float(_runtime.review_visual_edge_m())
 	add_child(_camera)
 	# Set position AFTER the node is in the tree (global_position pre-tree warns + no-ops).
-	_camera.global_position = Vector3(0.0, 1200.0, 0.0)
+	_apply_review_camera_frame()
 
 	var profiler: Node = load(PROFILER).new()
 	add_child(profiler)
@@ -136,6 +134,8 @@ func _input(event: InputEvent) -> void:
 		_runtime.set_detail_enabled(_detail_on)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_P:
 		_toggle_mountain_preset()
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_G:
+		_apply_review_camera_frame()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		_cycle_producer_mode()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_1:
@@ -242,9 +242,25 @@ func _reconfigure_view() -> void:
 	if _view == null or _pool == null or _streamer == null or _rings == null or _runtime == null:
 		return
 	var relief_scale := float(_runtime.default_relief_scale())
+	var relief_ref := float(_runtime.default_relief_ref())
 	if _producer != null:
 		relief_scale = float(_producer.view_relief_scale(relief_scale))
-	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled, relief_scale)
+		relief_ref = float(_producer.view_relief_ref(relief_ref, float(_runtime.default_relief_scale())))
+	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled, relief_scale, relief_ref)
+
+func _apply_review_camera_frame() -> void:
+	if _camera == null:
+		return
+	var span := 76800.0
+	var height_ref := 1700.0
+	if _producer != null and _runtime != null:
+		var default_scale := float(_runtime.default_relief_scale())
+		height_ref = float(_producer.view_relief_ref(1700.0, default_scale))
+	var eye := Vector3(0.0, maxf(220.0, span * 0.030 + height_ref * 0.80), span * 0.090)
+	_camera.global_position = eye
+	_camera.look_at(Vector3.ZERO, Vector3.UP)
+	if _camera.has_method("sync_mouse_from_rotation"):
+		_camera.call("sync_mouse_from_rotation")
 
 func _apply_mode_reconfigure(reason: String) -> void:
 	if _pool == null or _producer == null:
@@ -308,6 +324,7 @@ func debug_runtime_snapshot() -> Dictionary:
 	var feature_span_m := 0.0
 	var relief_m := 0.0
 	var view_relief_scale := 0.0
+	var view_relief_ref := 0.0
 	var loaded_edge_m := 0.0
 	var is_world := false
 	var is_legacy := false
@@ -320,7 +337,9 @@ func debug_runtime_snapshot() -> Dictionary:
 		feature_span_m = float(_producer.feature_span_m())
 		relief_m = float(_producer.relief_m())
 		var default_relief_scale := float(_runtime.default_relief_scale()) if _runtime != null else 0.25
+		var default_relief_ref := float(_runtime.default_relief_ref()) if _runtime != null else 1700.0
 		view_relief_scale = float(_producer.view_relief_scale(default_relief_scale))
+		view_relief_ref = float(_producer.view_relief_ref(default_relief_ref, default_relief_scale))
 		is_world = bool(_producer.is_world())
 		is_legacy = bool(_producer.is_legacy())
 
@@ -346,12 +365,28 @@ func debug_runtime_snapshot() -> Dictionary:
 		"feature_span_m": feature_span_m,
 		"relief_m": relief_m,
 		"view_relief_scale": view_relief_scale,
+		"view_relief_ref": view_relief_ref,
 		"loaded_edge_m": loaded_edge_m,
 		"is_world": is_world,
 		"is_legacy": is_legacy,
 		"morph_enabled": _morph_enabled,
 		"detail_on": _detail_on,
+		"static_material_bound_tiles": _static_material_bound_tiles(),
 	}
+
+func _static_material_bound_tiles() -> int:
+	if _rings == null:
+		return 0
+	var count := 0
+	for child in _rings.get_children():
+		if child is MeshInstance3D:
+			var mat: Material = child.get_material_override()
+			if mat is ShaderMaterial:
+				var mix_variant: Variant = mat.get_shader_parameter("static_material_mix")
+				var mix_value := float(mix_variant) if typeof(mix_variant) in [TYPE_FLOAT, TYPE_INT] else 0.0
+				if mix_value > 0.5:
+					count += 1
+	return count
 
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:
