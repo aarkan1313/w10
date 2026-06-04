@@ -43,6 +43,20 @@
 > REFERENCE 0.750 ms, MOUNTAIN 0.750 ms, WORLD 0.743 ms. This fixes a concrete
 > presentation/gate hole; it does not make raw procedural MOUNTAIN or full WORLD
 > composition accepted content.
+> Follow-up architecture split on 2026-06-04: the Godot-callable page-pool
+> producer configuration API moved out of core `page_pool.rs` into
+> `page_pool/config_api.rs`. Core `page_pool.rs` now keeps pool state, owner
+> slots, and `free_all`; `config_api.rs` owns `configure`, `configure_biome`,
+> `configure_biome_world`, and `configure_static_reference`. This is a
+> behavior-preserving separation checkpoint for the current owner report that
+> modes 1/2/3 still feel slow or visually wrong, not a final procedural-content
+> fix. Proof after the split: `cargo fmt -p wg10_terrain -- --check`, focused
+> `page_pool` tests = 18/18, full Rust lib tests = 233/233, `tools/build_rust.ps1`
+> builds, `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
+> `review_runtime_visual` = 2/2. Latest scripted mode numbers remain zero
+> hide/show/full events with CPU p99 around 9.8 ms and render GPU p99 around
+> 0.75 ms, so the next visual/perf step must reproduce the manual flight path
+> rather than retuning a green scripted path.
 > Current proof after the runtime-tile binding fix: `cargo test -p
 > wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
 > 8/0, `cargo test -p wg10_terrain --lib` = 233/0,
