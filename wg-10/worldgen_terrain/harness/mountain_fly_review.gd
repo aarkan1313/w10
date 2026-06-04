@@ -8,7 +8,7 @@ extends Node3D
 # LAUNCH: run this scene (windowed). Fly with WASD (+ Shift to sprint to ~1000s m/s), mouse to
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
-# KEYS: K toggle cull-disable, M morph-band heatmap, N detail on/off (as m3_review), and
+# KEYS: K toggle cull-disable, M morph-band heatmap, O morph on/off, N detail on/off, and
 #       B toggles A/B between the BIOME mountain producer and the LEGACY dem_v1 kernel atlas (the
 #       streamer/view keep the same pool ref; on toggle we free_all + reconfigure live). Starts
 #       in BIOME mode. Prints "[fly] biome_path=<true/false>" on each toggle.
@@ -53,7 +53,8 @@ const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
 const CAPACITY := 96       # 5 levels x 9 = 45 + stream-ahead + parent-fetch headroom
-const MORPH_REGION := 0.15
+const MORPH_REGION_ON := 0.15
+const MORPH_REGION_OFF := 0.0
 const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
 const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~88 m effective — chosen
@@ -62,6 +63,7 @@ const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~8
 
 var _view: Object
 var _pool: Object                # kept so _exit_tree can free its page-texture RIDs (B1)
+var _streamer: Object
 var _camera: Camera3D
 var _rings: Object               # debug: poll tile states for the flip log
 var _dbg_label: Label
@@ -69,6 +71,7 @@ var _prev_states: PackedInt64Array = PackedInt64Array()
 var _flip_log: Array[String] = []
 var _cull_disabled := false
 var _morph_view := false
+var _morph_enabled := false # BIOME starts with morph OFF: current fine/coarse surfaces still differ visibly.
 var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matches the m5 gate's 0.0
 						  # baseline + the operator's "N enables detail" expectation; the scene used to
 						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
@@ -85,13 +88,14 @@ func _ready() -> void:
 	if err != "":
 		push_error("mountain_fly_review: pool configure_biome failed: %s" % err); return
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
+	_streamer = streamer
 	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	rings.call("configure", NUM_LEVELS, BASE_SPAN, GRID_RES, SHADER)
 	add_child(rings)
 	_rings = rings
 	_view = ClassDB.instantiate("Wg10TerrainView")
-	_view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, MORPH_REGION, RELIEF_REF, LEAD_SECONDS)
+	_reconfigure_view()
 
 	# Loaded extent = the coarsest 3x3's half-width from the camera. Match the far plane + fog to it
 	# so the horizon fades to sky BEFORE the loaded edge — you never see ground load/unload at a
@@ -181,6 +185,10 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_M:
 		_morph_view = not _morph_view
 		RenderingServer.global_shader_parameter_set("wg_dbg_mode", 1.0 if _morph_view else 0.0)
+	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
+		_morph_enabled = not _morph_enabled
+		_reconfigure_view()
+		print("[fly] morph_region=%s" % str(_current_morph_region()))
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_N:
 		_detail_on = not _detail_on
 		RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP if _detail_on else 0.0)
@@ -207,6 +215,14 @@ func _set_relief(v: float) -> void:
 			push_error("mountain_fly_review: relief reconfigure failed: %s" % err)
 		_prev_states = PackedInt64Array()
 
+func _current_morph_region() -> float:
+	return MORPH_REGION_ON if _morph_enabled else MORPH_REGION_OFF
+
+func _reconfigure_view() -> void:
+	if _view == null or _pool == null or _streamer == null or _rings == null:
+		return
+	_view.call("configure", _pool, _streamer, _rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, _current_morph_region(), RELIEF_REF, LEAD_SECONDS)
+
 # A/B live toggle (B): free_all + reconfigure the SAME pool object between the biome mountain
 # producer and the legacy dem_v1 kernel atlas. The streamer/view hold the same pool ref and keep
 # working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
@@ -222,11 +238,14 @@ func _toggle_biome() -> void:
 	var err: String
 	if _biome_mode:
 		err = _configure_biome(_pool)
+		_morph_enabled = false
 	else:
 		err = _configure_legacy(_pool)
+		_morph_enabled = true
 	if err != "":
 		push_error("mountain_fly_review: reconfigure failed: %s" % err)
 		return
+	_reconfigure_view()
 	# Reset the flip-log baseline so the post-reconfigure repage churn doesn't spam the HUD.
 	_prev_states = PackedInt64Array()
 	print("[fly] biome_path=%s" % str(_pool.call("uses_biome_path")))
@@ -261,6 +280,8 @@ func _process(_delta: float) -> void:
 		_prev_states = states
 		while _flip_log.size() > 8:
 			_flip_log.pop_front()
-		_dbg_label.text = "mode %s (B toggles) | cull %s (K toggles)\n%s" % [
+		_dbg_label.text = "mode %s (B toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s" % [
 			"BIOME" if _biome_mode else "LEGACY",
-			"DISABLED" if _cull_disabled else "on", "\n".join(_flip_log)]
+			"DISABLED" if _cull_disabled else "on",
+			"on" if _morph_enabled else "off",
+			"\n".join(_flip_log)]
