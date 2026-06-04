@@ -101,6 +101,14 @@ footprint/framing. Remaining owner-visible quality concerns should target
 runtime material/mesh presentation and final procedural world-layer content,
 not another source-window or camera-scale reset.
 
+Latest harness separation follow-up: the owner-fly runtime snapshot/report
+builder has moved out of `mountain_fly_review.gd` into
+`mountain_fly_snapshot.gd`. The scene still exposes the same snapshot method for
+tests, but diagnostic report shape is now separate from scene input,
+reconfigure, camera, and rendering assembly. This reduces the mixed-architecture
+pressure in the live review harness before the next mode-specific visual/perf
+fix.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

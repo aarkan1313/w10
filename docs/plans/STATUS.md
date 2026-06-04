@@ -58,6 +58,13 @@
 > switch back to full multi-biome compose while still passing only taxonomy
 > checks. This reinforces that WORLD remains diagnostic until compose is
 > backgrounded/cached or given a cheaper preview contract.
+> Follow-up harness separation: the owner-fly runtime snapshot/report builder
+> now lives in `wg-10/worldgen_terrain/harness/mountain_fly_snapshot.gd`.
+> `mountain_fly_review.gd` still exposes the same `debug_runtime_snapshot()`
+> API for gates, but the scene has moved closer to the DESIGN §6.4 rule that
+> review scenes assemble components instead of containing diagnostic/report
+> logic. This is behavior-preserving cleanup for the current slow/weird visual
+> triage; it does not change any producer, shader, or acceptance result.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

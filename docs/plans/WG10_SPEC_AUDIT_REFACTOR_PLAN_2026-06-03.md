@@ -58,6 +58,18 @@ This does not make WORLD visually accepted. It makes the diagnostic contract har
 violate while the real fix remains moving multi-biome compose out of the synchronous owner fly path
 or replacing it with a cheaper preview contract.
 
+### Owner Fly Snapshot Separation - 2026-06-04
+
+The owner fly scene no longer owns the runtime snapshot/report construction directly. The public
+`debug_runtime_snapshot()` surface stays on `mountain_fly_review.gd`, but it delegates to
+`wg-10/worldgen_terrain/harness/mountain_fly_snapshot.gd`, which owns the report dictionary shape
+used by smoke and visual gates.
+
+This is a behavior-preserving separation step tied to DESIGN §6.4: the review scene should assemble
+runtime pieces and input/reconfigure behavior, while diagnostic report construction is a reusable
+harness component. It does not change mode 1/2/3 visuals; it gives the next visual/perf pass a
+cleaner evidence boundary.
+
 ### Current Owner-Visual Checkpoint - 2026-06-04
 
 The windowed scale-invariance and owner-runtime gates have now run on hardware. Current proof:

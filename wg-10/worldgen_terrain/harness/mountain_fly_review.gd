@@ -19,6 +19,7 @@ extends Node3D
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
 const RUNTIME_CONFIG := "res://worldgen_terrain/harness/mountain_fly_runtime_config.gd"
+const SNAPSHOT := "res://worldgen_terrain/harness/mountain_fly_snapshot.gd"
 
 const PROFILER := "res://worldgen_terrain/harness/profiler.gd"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
@@ -30,6 +31,7 @@ var _pool: Object                # kept so _exit_tree can free its page-texture 
 var _streamer: Object
 var _producer: Object
 var _runtime: Object
+var _snapshot: Object
 var _camera: Camera3D
 var _rings: Object               # debug: poll tile states for the flip log
 var _dbg_label: Label
@@ -47,6 +49,7 @@ func _ready() -> void:
 		push_error("mountain_fly_review: no RenderingDevice (run windowed)"); return
 
 	_runtime = load(RUNTIME_CONFIG).new()
+	_snapshot = load(SNAPSHOT).new()
 	_morph_enabled = bool(_runtime.default_morph_enabled())
 	_detail_on = bool(_runtime.default_detail_enabled())
 
@@ -321,116 +324,20 @@ func _set_producer_mode(label: String) -> void:
 	_apply_mode_reconfigure("mode-%s" % label.to_lower())
 
 func debug_runtime_snapshot() -> Dictionary:
-	var stats := {}
-	var source_transform := {}
-	var mountain_world_layer_contract := {}
-	var mountain_world_layer_reference := {}
-	var mountain_world_layer_reference_center_page := {}
-	var static_reference := {}
-	var static_reference_center_page := {}
-	var world_biome_report_center_page := {}
-	var world_biome_weight_field_center_page := {}
-	var runtime_mode := "missing"
-	var biome_path := false
-	if _pool != null:
-		stats = _pool.call("stats")
-		source_transform = _pool.call("biome_source_transform")
-		mountain_world_layer_contract = _pool.call("mountain_world_layer_contract_report")
-		mountain_world_layer_reference = _pool.call("mountain_world_layer_reference_report")
-		mountain_world_layer_reference_center_page = _pool.call("mountain_world_layer_reference_page_report", 0, 0.0, 0.0, 17)
-		static_reference = _pool.call("static_reference_report")
-		static_reference_center_page = _pool.call("static_reference_page_report", 0, 0.0, 0.0, 17)
-		runtime_mode = str(_pool.call("biome_runtime_mode"))
-		biome_path = bool(_pool.call("uses_biome_path"))
-		if runtime_mode == "world":
-			world_biome_report_center_page = _pool.call("debug_world_biome_report_for_page", 0, 0.0, 0.0)
-			world_biome_weight_field_center_page = _pool.call("debug_world_biome_weight_field_report_for_page", 0, 0.0, 0.0, 17)
-
-	var mode := "missing"
-	var preset := "missing"
-	var mode_role := "missing"
-	var mode_acceptance := "missing"
-	var mode_note := "missing"
-	var seed := -1
-	var feature_span_m := 0.0
-	var relief_m := 0.0
-	var view_relief_scale := 0.0
-	var view_relief_ref := 0.0
-	var loaded_edge_m := 0.0
-	var world_active_biome_limit := -1
-	var is_world := false
-	var is_legacy := false
-	if _runtime != null:
-		loaded_edge_m = float(_runtime.loaded_edge_m())
-	if _producer != null:
-		mode = str(_producer.mode_label())
-		preset = str(_producer.preset_label())
-		mode_role = str(_producer.mode_role())
-		mode_acceptance = str(_producer.mode_acceptance())
-		mode_note = str(_producer.mode_note())
-		seed = int(_producer.runtime_seed())
-		feature_span_m = float(_producer.feature_span_m())
-		relief_m = float(_producer.relief_m())
-		var default_relief_scale := float(_runtime.default_relief_scale()) if _runtime != null else 0.25
-		var default_relief_ref := float(_runtime.default_relief_ref()) if _runtime != null else 1700.0
-		view_relief_scale = float(_producer.view_relief_scale(default_relief_scale))
-		view_relief_ref = float(_producer.view_relief_ref(default_relief_ref, default_relief_scale))
-		world_active_biome_limit = int(_producer.world_active_biome_limit())
-		is_world = bool(_producer.is_world())
-		is_legacy = bool(_producer.is_legacy())
-
-	return {
-		"last_config_error": _last_config_error,
-		"has_pool": _pool != null,
-		"has_producer": _producer != null,
-		"has_runtime": _runtime != null,
-		"has_view": _view != null,
-		"has_streamer": _streamer != null,
-		"has_rings": _rings != null,
-		"has_camera": _camera != null,
-		"runtime_mode": runtime_mode,
-		"biome_path": biome_path,
-		"stats": stats,
-		"source_transform": source_transform,
-		"mountain_world_layer_contract": mountain_world_layer_contract,
-		"mountain_world_layer_reference": mountain_world_layer_reference,
-		"mountain_world_layer_reference_center_page": mountain_world_layer_reference_center_page,
-		"static_reference": static_reference,
-		"static_reference_center_page": static_reference_center_page,
-		"world_biome_report_center_page": world_biome_report_center_page,
-		"world_biome_weight_field_center_page": world_biome_weight_field_center_page,
-		"mode": mode,
-		"preset": preset,
-		"mode_role": mode_role,
-		"mode_acceptance": mode_acceptance,
-		"mode_note": mode_note,
-		"seed": seed,
-		"feature_span_m": feature_span_m,
-		"relief_m": relief_m,
-		"view_relief_scale": view_relief_scale,
-		"view_relief_ref": view_relief_ref,
-		"loaded_edge_m": loaded_edge_m,
-		"world_active_biome_limit": world_active_biome_limit,
-		"is_world": is_world,
-		"is_legacy": is_legacy,
-		"morph_enabled": _morph_enabled,
-		"detail_on": _detail_on,
-		"static_material_bound_tiles": _static_material_bound_tiles(),
-	}
-
-func _static_material_bound_tiles() -> int:
-	if _rings == null:
-		return 0
-	var count := 0
-	for child in _rings.get_children():
-		if child is MeshInstance3D:
-			var mat: Material = child.get_material_override()
-			if mat is ShaderMaterial:
-				var mix_variant: Variant = mat.get_shader_parameter("static_material_mix")
-				var mix_value := float(mix_variant) if typeof(mix_variant) in [TYPE_FLOAT, TYPE_INT] else 0.0
-				if mix_value > 0.5:
-					count += 1
-	return count
+	if _snapshot == null:
+		_snapshot = load(SNAPSHOT).new()
+	return _snapshot.build(
+		_pool,
+		_producer,
+		_runtime,
+		_view,
+		_streamer,
+		_rings,
+		_camera,
+		_morph_enabled,
+		_detail_on,
+		_last_config_error
+	)
 
 func _process(_delta: float) -> void:
 	if _view == null or _camera == null:
