@@ -216,10 +216,13 @@ single rendered page:
   227/0, `fast` = 8/8, `review_runtime` = 2/2,
   `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. The latest
   mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 31.430/41.763 ms, MOUNTAIN 32.570/43.937 ms,
-  and WORLD 9.032/21.871 ms. Latest render p99 is REFERENCE 0.352 ms,
-  MOUNTAIN 0.375 ms, and WORLD 0.212 ms. The latest visual capture shows
+  motion CPU p99/max is REFERENCE 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms,
+  and WORLD 8.617/10.980 ms. Latest render p99 is REFERENCE 0.342 ms,
+  MOUNTAIN 0.382 ms, and WORLD 0.216 ms. The latest visual capture shows
   MOUNTAIN/network matching the REFERENCE view at the reviewed frame.
+- The renderer page transition fade is now wall-clock based (`0.18 s`) instead
+  of frame-count based. This targets owner-visible REPAGE snap at high review
+  FPS without changing page data, reference facts, or WORLD composition.
 - Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
   stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
   `0.002500` / `0.020000`.

@@ -13,15 +13,14 @@ use godot::classes::{
     ArrayMesh, INode3D, MeshInstance3D, Shader, ShaderMaterial,
 };
 use godot::prelude::*;
+use std::time::Instant;
 
 /// Tiles per level: a 3x3 neighborhood (radius 1).
 const TILES_PER_LEVEL: usize = 9;
 
-/// Per-frame height fade step for newly-bound pages. At 60 FPS this is ~200 ms; at the
-/// current review-scene 220-240 FPS it is ~50 ms. The fade starts from the parent page's
-/// height and ramps to the newly resident fine page, hiding one-frame pop-in without adding
-/// more page work.
-const PAGE_FADE_STEP: f32 = 0.08;
+/// Wall-clock height fade for newly-bound pages. The fade starts from the parent page's height
+/// and ramps to the newly resident fine page, hiding repage pop-in without adding page work.
+const PAGE_FADE_SECONDS: f32 = 0.18;
 
 /// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
 /// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
@@ -40,6 +39,7 @@ pub struct Wg10ClipmapRings {
     tiles: Vec<Gd<MeshInstance3D>>,
     bound_keys: Vec<(i64, i64)>,
     fade_values: Vec<f32>,
+    fade_last_update: Vec<Instant>,
     num_levels: i32,
     base_span: f64,
     grid_res: i32,
@@ -54,6 +54,7 @@ impl INode3D for Wg10ClipmapRings {
             tiles: Vec::new(),
             bound_keys: Vec::new(),
             fade_values: Vec::new(),
+            fade_last_update: Vec::new(),
             num_levels: 0,
             base_span: 0.0,
             grid_res: 0,
@@ -99,6 +100,7 @@ impl Wg10ClipmapRings {
         let total = (self.num_levels as usize) * TILES_PER_LEVEL;
         self.bound_keys = vec![(i64::MIN, i64::MIN); total];
         self.fade_values = vec![1.0; total];
+        self.fade_last_update = vec![Instant::now(); total];
 
         for level in 0..self.num_levels {
             let priority = (self.num_levels - 1 - level) as i32; // finest (0) -> highest -> on top
@@ -209,12 +211,17 @@ impl Wg10ClipmapRings {
             godot_error!("Wg10ClipmapRings::bind_tile: ({level},{dx},{dz}) out of range");
             return;
         }
+        let now = Instant::now();
         let was_hidden = !self.tiles[idx].is_visible();
         if self.bound_keys[idx] != next_key || was_hidden {
             self.fade_values[idx] = 0.0;
         } else {
-            self.fade_values[idx] = (self.fade_values[idx] + PAGE_FADE_STEP).min(1.0);
+            let dt = now
+                .duration_since(self.fade_last_update[idx])
+                .as_secs_f32();
+            self.fade_values[idx] = (self.fade_values[idx] + dt / PAGE_FADE_SECONDS).min(1.0);
         }
+        self.fade_last_update[idx] = now;
         // Placement is INVARIANT — tile (level,dx,dz) always sits in its fine grid slot,
         // covering world [tile_origin, tile_origin+tile_span], whatever it samples. Sampling
         // (sample_origin/sample_span = the fine page, OR the coarse page on fallback) is set
@@ -347,6 +354,10 @@ impl Wg10ClipmapRings {
         }
         for f in self.fade_values.iter_mut() {
             *f = 1.0;
+        }
+        let now = Instant::now();
+        for t in self.fade_last_update.iter_mut() {
+            *t = now;
         }
     }
 

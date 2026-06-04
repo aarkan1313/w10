@@ -633,9 +633,9 @@ Latest gates with the editor closed:
 
 - `python tools\gate.py --suite review_runtime` = 2/2.
 - `python tools\gate.py --suite review_runtime_modes` = 2/2. Scripted motion
-  CPU p99/max: REFERENCE 31.430/41.763 ms, MOUNTAIN 32.570/43.937 ms, WORLD
-  9.032/21.871 ms, with zero hide/show in all three. Render p99: REFERENCE
-  0.352 ms, MOUNTAIN 0.375 ms, WORLD 0.212 ms.
+  CPU p99/max: REFERENCE 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms, WORLD
+  8.617/10.980 ms, with zero hide/show in all three. Render p99: REFERENCE
+  0.342 ms, MOUNTAIN 0.382 ms, WORLD 0.216 ms.
 - `python tools\gate.py --suite review_runtime_visual` = 1/1. REFERENCE and
   MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
   at 57,600 sampled pixels.
@@ -645,3 +645,6 @@ look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
 add manual-path instrumentation if owner fly still shows pop outside the gated
 camera path, and move WORLD visual quality work behind a separated
 world-selection/producer path instead of the current synchronous page stream.
+Implemented pop mitigation: renderer page fade is now wall-clock based
+(`0.18 s`) instead of frame-count based, so high-FPS owner review does not
+compress REPAGE transitions into a near-hard snap.
