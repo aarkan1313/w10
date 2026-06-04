@@ -20,11 +20,21 @@ pub(super) struct StaticHeightRuntime {
     origin_z_m: f64,
     span_x_m: f64,
     span_z_m: f64,
+    pub(super) generator_version: String,
+    pub(super) source_scope: String,
+    pub(super) height_scale_m: f64,
     pub(super) feature_span_m: f64,
+    pub(super) has_corridor: bool,
+    pub(super) corridor_frac: f64,
+    pub(super) pass_network_routes: i64,
+    pub(super) pass_network_walkable_frac: f64,
+    pub(super) pass_network_carved_frac: f64,
 }
 
 #[derive(Deserialize)]
 struct StaticPayload {
+    generator_version: String,
+    source_scope: String,
     chunk_count: usize,
     chunk_n: usize,
     chunk_span_m: f64,
@@ -37,6 +47,14 @@ struct StaticPayload {
 #[derive(Deserialize)]
 struct StaticSeed {
     chunks: Vec<StaticChunk>,
+    pass_network: Option<StaticPassNetwork>,
+}
+
+#[derive(Deserialize)]
+struct StaticPassNetwork {
+    routes: i64,
+    band_walkable_frac: f64,
+    carved_frac: f64,
 }
 
 #[derive(Deserialize)]
@@ -48,6 +66,7 @@ struct StaticChunk {
     display_origin_x_m: f64,
     display_origin_z_m: f64,
     height: Vec<f32>,
+    corridor: Option<Vec<i64>>,
 }
 
 impl StaticHeightRuntime {
@@ -65,6 +84,12 @@ impl StaticHeightRuntime {
         }
         if payload.chunk_n < 2 {
             return Err("static reference: chunk_n must be >= 2".into());
+        }
+        if payload.source_scope.trim().is_empty() {
+            return Err("static reference: source_scope must be non-empty".into());
+        }
+        if payload.generator_version.trim().is_empty() {
+            return Err("static reference: generator_version must be non-empty".into());
         }
         let seed = payload
             .seeds
@@ -93,6 +118,13 @@ impl StaticHeightRuntime {
             .ok_or("static reference: grid size overflow")?;
         let mut grid = vec![0.0_f32; grid_len];
         let mut filled = vec![false; grid_len];
+        let any_corridor = seed.chunks.iter().any(|chunk| chunk.corridor.is_some());
+        let all_corridor = seed.chunks.iter().all(|chunk| chunk.corridor.is_some());
+        if any_corridor && !all_corridor {
+            return Err("static reference: corridor must be present on all chunks or none".into());
+        }
+        let mut corridor_grid = all_corridor.then(|| vec![0_u8; grid_len]);
+        let mut corridor_filled = all_corridor.then(|| vec![false; grid_len]);
 
         let mut min_x = f64::INFINITY;
         let mut min_z = f64::INFINITY;
@@ -118,6 +150,17 @@ impl StaticHeightRuntime {
                     chunk.height.len(),
                     expected_heights
                 ));
+            }
+            if let Some(corridor) = chunk.corridor.as_ref() {
+                if corridor.len() != expected_heights {
+                    return Err(format!(
+                        "static reference: chunk ({},{}) corridor={} expected {}",
+                        chunk.chunk_x,
+                        chunk.chunk_z,
+                        corridor.len(),
+                        expected_heights
+                    ));
+                }
             }
             if (chunk.span_m - payload.chunk_span_m).abs() > 1.0e-6 {
                 return Err(format!(
@@ -147,6 +190,20 @@ impl StaticHeightRuntime {
                     let src = z * payload.chunk_n + x;
                     grid[dst] = chunk.height[src] * payload.height_scale_m as f32;
                     filled[dst] = true;
+                    if let (Some(corridor), Some(cg), Some(cf)) = (
+                        chunk.corridor.as_ref(),
+                        corridor_grid.as_mut(),
+                        corridor_filled.as_mut(),
+                    ) {
+                        let value = if corridor[src] != 0 { 1_u8 } else { 0_u8 };
+                        if cf[dst] && cg[dst] != value {
+                            return Err(format!(
+                                "static reference: corridor seam mismatch at flat index {dst}"
+                            ));
+                        }
+                        cg[dst] = value;
+                        cf[dst] = true;
+                    }
                 }
             }
         }
@@ -155,6 +212,13 @@ impl StaticHeightRuntime {
             return Err(format!(
                 "static reference: missing grid sample at flat index {idx}"
             ));
+        }
+        if let Some(cf) = corridor_filled.as_ref() {
+            if let Some(idx) = cf.iter().position(|v| !*v) {
+                return Err(format!(
+                    "static reference: missing corridor sample at flat index {idx}"
+                ));
+            }
         }
         let span_x = max_x - min_x;
         let span_z = max_z - min_z;
@@ -166,6 +230,18 @@ impl StaticHeightRuntime {
                 span_x, span_z, payload.world_span_m
             ));
         }
+        let corridor_frac = corridor_grid
+            .as_ref()
+            .map(|corridor| {
+                corridor.iter().filter(|v| **v != 0).count() as f64 / corridor.len() as f64
+            })
+            .unwrap_or(0.0);
+        let pass_network = seed.pass_network.as_ref();
+        let pass_network_routes = pass_network.map(|p| p.routes).unwrap_or(0);
+        let pass_network_walkable_frac = pass_network
+            .map(|p| p.band_walkable_frac)
+            .unwrap_or(0.0);
+        let pass_network_carved_frac = pass_network.map(|p| p.carved_frac).unwrap_or(0.0);
 
         Ok(Self {
             grid,
@@ -174,7 +250,15 @@ impl StaticHeightRuntime {
             origin_z_m: min_z,
             span_x_m: span_x,
             span_z_m: span_z,
+            generator_version: payload.generator_version,
+            source_scope: payload.source_scope,
+            height_scale_m: payload.height_scale_m,
             feature_span_m: payload.feature_span_m,
+            has_corridor: corridor_grid.is_some(),
+            corridor_frac,
+            pass_network_routes,
+            pass_network_walkable_frac,
+            pass_network_carved_frac,
         })
     }
 
@@ -227,5 +311,70 @@ impl StaticHeightRuntime {
         let hx0 = h00 + (h10 - h00) * tx;
         let hx1 = h01 + (h11 - h01) * tx;
         hx0 + (hx1 - hx0) * tz
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn one_chunk_payload(corridor: Option<Vec<i64>>) -> StaticPayload {
+        StaticPayload {
+            generator_version: "mountain_synthesis_v0_9x9_original_scene_scale_review_pass_network".into(),
+            source_scope: "coherent_full_field_carved_with_pass_network_sliced_for_review".into(),
+            chunk_count: 1,
+            chunk_n: 2,
+            chunk_span_m: 10.0,
+            world_span_m: 10.0,
+            height_scale_m: 100.0,
+            feature_span_m: 90_000.0,
+            seeds: vec![StaticSeed {
+                pass_network: Some(StaticPassNetwork {
+                    routes: 12,
+                    band_walkable_frac: 0.75,
+                    carved_frac: 0.25,
+                }),
+                chunks: vec![StaticChunk {
+                    chunk_x: 0,
+                    chunk_z: 0,
+                    n: 2,
+                    span_m: 10.0,
+                    display_origin_x_m: -5.0,
+                    display_origin_z_m: -5.0,
+                    height: vec![0.0, 1.0, 2.0, 3.0],
+                    corridor,
+                }],
+            }],
+        }
+    }
+
+    #[test]
+    fn payload_contract_metadata_and_corridor_are_preserved() {
+        let rt = StaticHeightRuntime::from_payload(one_chunk_payload(Some(vec![1, 0, 1, 0])))
+            .expect("payload should parse");
+
+        assert_eq!(
+            rt.source_scope,
+            "coherent_full_field_carved_with_pass_network_sliced_for_review"
+        );
+        assert_eq!(rt.pass_network_routes, 12);
+        assert!((rt.pass_network_walkable_frac - 0.75).abs() < 1.0e-12);
+        assert!((rt.pass_network_carved_frac - 0.25).abs() < 1.0e-12);
+        assert!(rt.has_corridor);
+        assert!((rt.corridor_frac - 0.5).abs() < 1.0e-12);
+        assert_eq!(rt.sample(-5.0, -5.0), 0.0);
+        assert_eq!(rt.sample(5.0, 5.0), 300.0);
+    }
+
+    #[test]
+    fn payload_without_source_scope_is_rejected() {
+        let mut payload = one_chunk_payload(None);
+        payload.source_scope.clear();
+
+        let err = match StaticHeightRuntime::from_payload(payload) {
+            Ok(_) => panic!("empty scope should be rejected"),
+            Err(err) => err,
+        };
+        assert!(err.contains("source_scope"));
     }
 }

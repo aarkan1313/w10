@@ -72,6 +72,30 @@ impl Wg10PagePool {
         out
     }
 
+    /// Diagnostic report for the accepted static mountain world-layer payload.
+    ///
+    /// Empty when the active producer is not `configure_static_reference`.
+    #[func]
+    pub fn static_reference_report(&self) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        let Some(reference) = self.static_ref.as_ref() else {
+            return out;
+        };
+        out.set("generator_version", reference.generator_version.clone());
+        out.set("source_scope", reference.source_scope.clone());
+        out.set("height_scale_m", reference.height_scale_m);
+        out.set("feature_span_m", reference.feature_span_m);
+        out.set("has_corridor", reference.has_corridor);
+        out.set("corridor_frac", reference.corridor_frac);
+        out.set("pass_network_routes", reference.pass_network_routes);
+        out.set(
+            "pass_network_walkable_frac",
+            reference.pass_network_walkable_frac,
+        );
+        out.set("pass_network_carved_frac", reference.pass_network_carved_frac);
+        out
+    }
+
     /// Diagnostic: return the strongest page-center runtime biome for a world-routed page.
     ///
     /// This is deliberately read-only and does not allocate or dispatch page compute. Runtime

@@ -25,11 +25,18 @@
 > `export_godot_mountain_network_chunks.py` is now a thin writer around that
 > module, removing the previous hidden dependency on the untracked
 > `export_godot_mountain_world_chunks.py` helper.
+> Runtime bridge follow-up: `Wg10PagePool.static_reference_report()` now parses
+> and exposes the accepted payload's generator version, source scope, height
+> scale, feature span, corridor coverage, and pass-network route/carve summary.
+> `mountain_fly_review_smoke_check.gd` gates those facts when switching to
+> REFERENCE mode, so the accepted bridge is now a named mountain-world-layer
+> contract rather than an anonymous static height texture. Rendering still
+> consumes height only; corridor/material channels remain the next runtime port.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
-> = **221 passed / 0 failed**.
+> = **223 passed / 0 failed** after adding static-reference fact parsing.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline

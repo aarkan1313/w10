@@ -288,11 +288,13 @@ func _set_producer_mode(label: String) -> void:
 func debug_runtime_snapshot() -> Dictionary:
 	var stats := {}
 	var source_transform := {}
+	var static_reference := {}
 	var runtime_mode := "missing"
 	var biome_path := false
 	if _pool != null:
 		stats = _pool.call("stats")
 		source_transform = _pool.call("biome_source_transform")
+		static_reference = _pool.call("static_reference_report")
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
 		biome_path = bool(_pool.call("uses_biome_path"))
 
@@ -331,6 +333,7 @@ func debug_runtime_snapshot() -> Dictionary:
 		"biome_path": biome_path,
 		"stats": stats,
 		"source_transform": source_transform,
+		"static_reference": static_reference,
 		"mode": mode,
 		"preset": preset,
 		"seed": seed,

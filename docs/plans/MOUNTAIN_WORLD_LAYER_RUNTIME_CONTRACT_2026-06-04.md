@@ -84,6 +84,11 @@ single rendered page:
    Height alone is not enough. The accepted scene reads better because corridors,
    floors, slopes, and snow/rock zones are visible. Add stable material hint
    channels or a documented temporary equivalent.
+   First runtime-facing step: `Wg10PagePool.static_reference_report()` now
+   exposes the accepted payload's generator version, source scope, height scale,
+   feature span, corridor presence/fraction, and pass-network route summary.
+   `review_runtime` gates those facts in `REFERENCE` mode. The renderer still
+   consumes only height, so material/corridor rendering remains follow-up work.
 
 5. **Gate in layers.**
    Required gates before owner acceptance:
@@ -113,6 +118,10 @@ single rendered page:
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes.
 - `REFERENCE` proves the renderer can display the accepted mountain-network
   geometry when fed the accepted payload.
+- `review_runtime` now also proves the REFERENCE bridge loaded the accepted
+  mountain-world facts, not just anonymous height data: source scope
+  `coherent_full_field_carved_with_pass_network_sliced_for_review`, pass-network
+  generator, nonzero routes, nonzero carved fraction, and corridor facts.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:
