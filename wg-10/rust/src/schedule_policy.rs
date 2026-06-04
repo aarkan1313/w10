@@ -30,9 +30,8 @@ pub struct ScheduleConfig {
     pub max_per_frame: u32,
 }
 
-/// A bounded per-frame plan: pages to acquire (capped at max_per_frame, coarsest +
-/// nearest-ahead first — the coarse never-black blanket leads) and pages to release
-/// (resident but no longer covered).
+/// A bounded per-frame plan: pages to acquire (capped at max_per_frame, display pages before
+/// prefetch pages, coarsest-first within each group) and pages to release.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FramePlan {
     pub acquire: Vec<PageKey>,
@@ -75,16 +74,37 @@ impl SchedulePolicy {
         (ox, oz)
     }
 
-    /// The set of page keys the rings need this frame: for each level, a
-    /// (2*radius+1)^2 ring of pages around the velocity-biased centre. Union
-    /// across levels. Deduplicated. Pure function of (cfg, pos, vel).
+    /// The set of page keys needed this frame: the camera-centred DISPLAY ring plus a
+    /// velocity-led PREFETCH ring. Display stays camera-centred; prefetch gives incoming pages time
+    /// to become resident before the displayed ring crosses a page boundary.
     pub fn coverage(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> Vec<PageKey> {
         let (cx, cz) = self.coverage_center(pos_x, pos_z, vel_x, vel_z);
-        let r = self.cfg.radius_pages;
-        // `seen` dedups defensively: today levels never overlap in key-space
-        // (PageKey includes `level`), but this guards future multi-ring overlap.
+        let mut out = self.ring_coverage(pos_x, pos_z);
+        let mut seen: HashSet<PageKey> = out.iter().cloned().collect();
+        self.extend_ring_coverage(cx, cz, &mut seen, &mut out);
+        out
+    }
+
+    /// The camera-centred visible ring, without velocity prefetch pages.
+    pub fn display_coverage(&self, pos_x: f64, pos_z: f64) -> Vec<PageKey> {
+        self.ring_coverage(pos_x, pos_z)
+    }
+
+    fn ring_coverage(&self, cx: f64, cz: f64) -> Vec<PageKey> {
         let mut seen: HashSet<PageKey> = HashSet::new();
         let mut out: Vec<PageKey> = Vec::new();
+        self.extend_ring_coverage(cx, cz, &mut seen, &mut out);
+        out
+    }
+
+    fn extend_ring_coverage(
+        &self,
+        cx: f64,
+        cz: f64,
+        seen: &mut HashSet<PageKey>,
+        out: &mut Vec<PageKey>,
+    ) {
+        let r = self.cfg.radius_pages;
         for level in 0..self.cfg.num_levels {
             let span = self.level_span(level) as i64;
             let (centre_ox, centre_oz) = self.page_origin(level, cx, cz);
@@ -101,20 +121,15 @@ impl SchedulePolicy {
                 }
             }
         }
-        out
     }
 
-    /// The velocity-led world point coverage (and the renderer) centre their rings on. Exposed
-    /// so `Wg10TerrainView` displays EXACTLY the ring the scheduler maintains — the slice-8
-    /// flicker bug was the view centring on the raw camera position while the scheduler centred
-    /// on the led point, so the view referenced pages the scheduler had released (churn + miss).
-    /// One centre, one ring: never-black budget math (coarsest column <= max_per_frame) is intact.
+    /// The velocity-led world point used for the prefetch ring. Display stays camera-centred, while
+    /// coverage includes this led ring so incoming pages can stream before they become visible.
     ///
     /// The lead offset `vel * lead_seconds` is CLAMPED per-axis to `±(radius_pages - 0.5) *
     /// base_span`. With radius 1 that is ±0.5 page: the led centre can move at most half a page
-    /// from the camera, so the camera's own page is ALWAYS one of the (2r+1)^2 ring pages — there
-    /// is structurally never bare ground under the camera, at any velocity. Pre-fetch still biases
-    /// the ring toward travel (the far edge leads), it just can't pull the ring off the camera.
+    /// from the camera, so the camera's own page is always also covered by the union. Prefetch still
+    /// biases coverage toward travel, it just cannot pull residency away from visible ground.
     pub fn coverage_center(&self, pos_x: f64, pos_z: f64, vel_x: f64, vel_z: f64) -> (f64, f64) {
         // radius 0 would give a 0 clamp (no lead possible with a single page); guard to >= 0.
         let max_lead = ((self.cfg.radius_pages as f64) - 0.5).max(0.0) * self.cfg.base_span;
@@ -159,6 +174,8 @@ impl SchedulePolicy {
         vel_z: f64,
         resident: &HashSet<PageKey>,
     ) -> FramePlan {
+        let display = self.display_coverage(pos_x, pos_z);
+        let display_set: HashSet<PageKey> = display.iter().cloned().collect();
         let needed = self.coverage(pos_x, pos_z, vel_x, vel_z);
         let needed_set: HashSet<PageKey> = needed.iter().cloned().collect();
 
@@ -172,8 +189,9 @@ impl SchedulePolicy {
             .collect();
         release.sort();
 
-        // missing = needed - resident, prioritized then truncated. Use the SAME clamped led
-        // centre as coverage so acquire-priority distance matches the ring the view displays.
+        // missing = needed - resident, prioritized then truncated. Current display pages affect
+        // this frame and beat prefetch pages. Within each group, coarsest-first preserves the
+        // never-black blanket before filling finer detail.
         let (cx, cz) = self.coverage_center(pos_x, pos_z, vel_x, vel_z);
         let mut missing: Vec<PageKey> = needed
             .into_iter()
@@ -190,12 +208,21 @@ impl SchedulePolicy {
             let span = self.level_span(k.level);
             let kcx = k.origin_x as f64 + span * 0.5;
             let kcz = k.origin_z as f64 + span * 0.5;
-            let d2 = (kcx - cx) * (kcx - cx) + (kcz - cz) * (kcz - cz);
+            let is_prefetch = !display_set.contains(k);
+            let target_x = if is_prefetch { cx } else { pos_x };
+            let target_z = if is_prefetch { cz } else { pos_z };
+            let d2 = (kcx - target_x) * (kcx - target_x) + (kcz - target_z) * (kcz - target_z);
             // (-level, distance^2, origin) — `-(k.level as i64)` so coarser (higher
             // level) sorts first; origin breaks remaining ties for a deterministic
             // total order. `d2 as i64` is a saturating cast (Rust 1.45+); for any
             // realistic world coordinate d2 stays well under i64::MAX.
-            (-(k.level as i64), d2 as i64, k.origin_x, k.origin_z)
+            (
+                if is_prefetch { 1i64 } else { 0i64 },
+                -(k.level as i64),
+                d2 as i64,
+                k.origin_x,
+                k.origin_z,
+            )
         });
         missing.truncate(self.cfg.max_per_frame as usize);
 

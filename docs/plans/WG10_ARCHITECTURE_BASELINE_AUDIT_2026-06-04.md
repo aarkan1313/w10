@@ -44,11 +44,13 @@ This explains the owner report:
   single-mountain content again, while WORLD composition stays as an explicit A/B.
   WORLD can compose active runtime-biome weights, but materials/content/facts and
   the owner fly review are still open.
-- The pop-in and morph issues have two pieces: renderer scheduling still controls
+- The pop-in and morph issues have two pieces: renderer scheduling controls
   hide/show and geomorph timing, while the route diagnostics explain why the old
-  whole-page selector was structurally wrong at coarse LODs. The live path now
-  consumes grammar weights through compose; any remaining "ground looks bad" report
-  needs a fresh owner fly against this composed runtime.
+  whole-page selector was structurally wrong at coarse LODs. The renderer now
+  separates visible display coverage from led prefetch coverage and has an
+  automated zero-hide sprint gate. The live path now consumes grammar weights
+  through compose; any remaining "ground looks bad" report needs a fresh owner
+  fly against this composed runtime.
 
 ## Current Checkpoint
 
@@ -92,8 +94,9 @@ Validation:
   offline artifact for direct comparison against the live runtime. This is now
   wired as `python tools\gate.py --suite review_static_visual`.
 - `python tools\gate.py --suite m3`: 10/10 passed after the lit-material,
-  route-debug, and WORLD route-tint renderer changes. `m3_accept` p99 =
-  5.18 ms against the 6.0 ms budget; `ring_material_tint_check.gd` proves
+  route-debug, WORLD route-tint, and display/prefetch scheduler changes.
+  `m3_accept` p99 = 5.64 ms against the 6.0 ms budget;
+  `ring_material_tint_check.gd` proves
   `biome_debug_color` and WORLD `biome_material_mix=0.34` are bound through the
   actual `Wg10ClipmapRings` material API; `m5_detail_check` remained
   non-vacuous (`diff=0.0124`), bounded, and edge-safe.
@@ -112,12 +115,15 @@ Validation:
   close-up debug scale (`feature_span_m=3500`), so the manual review scale is
   visible in the HUD. Smoke log: `mode=MOUNTAIN runtime=single biome_path=true
   preset=network_ref feature_span_m=90000 relief_m=1000`.
-- `python tools\gate.py --suite review_runtime`: 1/1 passed. This windowed
+- `python tools\gate.py --suite review_runtime`: 2/2 passed. This windowed
   gate instantiates the actual `mountain_fly_review.tscn` owner scene, waits for
   startup, then verifies `MOUNTAIN/network_ref`, runtime=`single`,
-  biome_path=`true`, and real page startup (`created=45`, `resident=45`). This
-  specifically gates the GDScript/Rust call signature and default scene wiring
-  that the proxy producer gates do not instantiate.
+  biome_path=`true`, and real page startup (`created=45`, `resident=45`). It also
+  runs `mountain_fly_visibility_churn_check.gd`, a sprint-speed motion gate over
+  360 frames: `stream_events=24`, `resident=69`, `repage=72`, `hide=0`,
+  `show=0`, `hidden_frames=0`, `max_hidden=0`. This specifically gates the
+  GDScript/Rust call signature, default scene wiring, and forward-motion
+  hide/show pop-in.
 - `python tools\gate.py --suite biome_world`: 1/1 passed when run outside the
   filesystem sandbox. The gate configures WORLD mode, builds the 11 cached
   runtime contexts plus the compose context, acquires one composed page, reads
@@ -213,8 +219,9 @@ Renderer/streaming failures:
   not true low-pass relatives;
 - page hiding/showing, culling, and repage churn are renderer concerns.
 - route diagnostics still show why the old whole-page selector was incompatible
-  at coarse levels; the producer now composes weight fields, so remaining visual
-  pops need a new runtime capture.
+  at coarse levels; the producer now composes weight fields, and hide/show pop is
+  gated at zero hides, so remaining visual artifacts need owner fly review rather
+  than another selector-only diagnosis.
 
 Content/world failures:
 

@@ -45,6 +45,24 @@ fn coverage_keys_are_unique() {
 }
 
 #[test]
+fn coverage_includes_display_and_led_prefetch_rings() {
+    let mut c = cfg();
+    c.lead_seconds = 0.5;
+    let p = SchedulePolicy::new(c);
+
+    // Camera-visible level-0 ring is centred in page origin 0; the led prefetch centre crosses
+    // into page origin 1000. Coverage must contain both the visible trailing column and the
+    // prefetched leading column.
+    let keys = p.coverage(750.0, 0.0, 1000.0, 0.0);
+    assert!(keys.iter().any(|k| k.level == 0 && k.origin_x == -1000 && k.origin_z == 0));
+    assert!(keys.iter().any(|k| k.level == 0 && k.origin_x == 2000 && k.origin_z == 0));
+    assert!(
+        keys.len() > 3 * 9,
+        "lead prefetch should enlarge coverage when display and led rings differ"
+    );
+}
+
+#[test]
 fn velocity_lead_biases_centre_but_clamps_to_keep_camera_covered() {
     let mut c = cfg(); // base_span 1000, radius 1 -> max_lead = (1-0.5)*1000 = 500 m
     c.lead_seconds = 0.5;

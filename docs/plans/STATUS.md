@@ -13,17 +13,18 @@
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
 > `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
-> = **220 passed / 0 failed**.
+> = **221 passed / 0 failed**.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
 > loads), `review_static_visual` = **1/1 pass** (captures the accepted static
-> baseline PNGs), `review_runtime` = **1/1 pass** (instantiates the owner
-> `mountain_fly_review.tscn` path and verifies `MOUNTAIN/network_ref` defaults),
+> baseline PNGs), `review_runtime` = **2/2 pass** (instantiates the owner
+> `mountain_fly_review.tscn` path, verifies `MOUNTAIN/network_ref` defaults, and
+> runs the sprint-speed visibility churn gate),
 > `review_runtime_visual` = **1/1 pass** (captures MOUNTAIN/network, MOUNTAIN/close,
 > WORLD/material, and WORLD/route PNGs through the shared producer helper),
-> `m3` = **10/10 pass** after the new lit-material/route-debug/WORLD-tint renderer pass
-> (`m3_accept` p99 5.18 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
+> `m3` = **10/10 pass** after the display/prefetch scheduler split
+> (`m3_accept` p99 5.64 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
 > cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.106 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
@@ -63,6 +64,18 @@
 > normal mode (`biome_material_mix=0.34`, gated by `ring_material_tint_check.gd`),
 > so composed WORLD no longer reads as one undifferentiated mountain palette. This
 > is a visual-readability bridge, not final per-pixel biome material blending.
+>
+> Runtime motion fix: the scheduler now maintains a camera-centred display ring
+> plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the
+> camera-centred ring. This turns stream-ahead into actual prefetch instead of
+> exposing the led ring as soon as it crosses a page boundary. `Wg10Streamer`
+> now exposes `display_keys(...)` so gates assert never-black on visible pages
+> while allowing prefetch pages to be missing briefly. New gate
+> `mountain_fly_visibility_churn_check.gd` is wired into `review_runtime` and
+> passed on hardware: `frames=360 speed=8000 stream_events=24 resident=69
+> repage=72 hide=0 show=0 hidden_frames=0 max_hidden=0`. This automates the
+> forward-motion hide/show pop proof; owner re-fly is still required for visual
+> acceptance and content quality.
 >
 > Pop-in audit evidence: `biome_world` still reports child/parent route disagreement
 > for the old page-center route diagnostic. Current windowed result: `lod_route_mismatch=183/867`
@@ -130,8 +143,9 @@
 > proof of accepted biome visuals.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
-> is pending, the reported forward-motion pop-in still needs an owner/runtime
-> capture after the material and compose changes, and per-biome materials/content
+> is pending. The forward-motion hide/show pop now has an automated zero-hide
+> runtime gate, but the owner still needs to fly the scene to judge remaining
+> visual quality, terrain content, and any non-hide artifacts. Per-biome materials/content
 > still need review. Slice 4c is also still open: runtime default flip,
 > atlas-removal audit, hardened perf gate, and owner acceptance are pending.
 > Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is

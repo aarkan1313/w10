@@ -85,14 +85,11 @@ impl Wg10TerrainView {
             pool.bind_mut().clear_display_pins();
         }
 
-        // Centre the displayed rings on the SAME clamped velocity-led point the scheduler covers
-        // — ask the streamer for it rather than recomputing, so the view can NEVER desync from
-        // coverage and always inherits the lead clamp (camera stays inside its ring). Recomputing
-        // it here with a raw lead was the bug that flew the ring off into empty ground.
-        let streamer = self.streamer.as_ref().unwrap().clone();
-        let led = streamer.bind().coverage_center(camera_x, camera_z, vel_x, vel_z);
-        let led_x = led.x as f64;       // Vector2 packs world (x, z) as (.x, .y)
-        let led_z = led.y as f64;
+        // Display the ring around the camera. The streamer maintains this display ring plus a
+        // velocity-led prefetch ring, so new pages can stream before the display boundary reaches
+        // them without exposing the prefetch ring itself.
+        let display_x = camera_x;
+        let display_z = camera_z;
 
         // Render model (proven by the prove-one-at-a-time reset, owner-flown): EVERY level draws
         // its full 3x3; coarser levels are drawn UNDERNEATH (lower render_priority, set at
@@ -106,8 +103,8 @@ impl Wg10TerrainView {
         let num = self.num_levels;
         for level in 0..num {
             let span_l = self.base_span * 2f64.powi(level);
-            let center_x = (led_x / span_l).floor() * span_l;
-            let center_z = (led_z / span_l).floor() * span_l;
+            let center_x = (display_x / span_l).floor() * span_l;
+            let center_z = (display_z / span_l).floor() * span_l;
             // this level's 3x3 neighborhood centre (= the middle tile's centre) + half-extent
             // (3 tiles wide -> half is 1.5*span); the geomorph rises to 1 at the outer ring.
             let level_center_x = center_x + span_l * 0.5;

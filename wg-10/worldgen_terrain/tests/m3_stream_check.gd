@@ -82,9 +82,10 @@ func _run() -> int:
 		if int(ps.get("resident", 0)) > CAPACITY:
 			errs.append("frame %d: resident %d > capacity %d" % [f, int(ps.get("resident",0)), CAPACITY])
 
-		# (3) never black: every covered page is resident OR has a coarser fallback
+		# (3) never black: every DISPLAYED page is resident OR has a coarser fallback.
+		# coverage_keys also includes led prefetch pages, which are intentionally not visible yet.
 		var resident := _key_set(pool.call("resident_keys"))
-		var coverage := _key_list(streamer.call("coverage_keys", cam_x, cam_z, VEL_X, VEL_Z))
+		var coverage := _key_list(streamer.call("display_keys", cam_x, cam_z))
 		for k in coverage:
 			if resident.has(k):
 				continue

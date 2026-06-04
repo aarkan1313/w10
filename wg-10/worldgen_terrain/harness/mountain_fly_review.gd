@@ -202,15 +202,14 @@ func _print_biome_state() -> void:
 		_relief_m(),
 	])
 
-func _world_route_summary(p: Vector3, v: Vector3) -> String:
+func _world_route_summary(p: Vector3, _v: Vector3) -> String:
 	if _producer == null or not bool(_producer.is_world()) or _pool == null or _streamer == null:
 		return ""
-	var led: Vector2 = _streamer.call("coverage_center", p.x, p.z, v.x, v.z)
 	var parts: Array[String] = []
 	for level in range(int(_runtime.num_levels())):
 		var span: float = float(_runtime.base_span_m()) * pow(2.0, level)
-		var ox: float = floor(float(led.x) / span) * span
-		var oz: float = floor(float(led.y) / span) * span
+		var ox: float = floor(p.x / span) * span
+		var oz: float = floor(p.z / span) * span
 		var name := str(_pool.call("debug_world_biome_for_page", level, ox, oz))
 		parts.append("L%d:%s" % [level, name])
 	return "routes %s" % " ".join(parts)

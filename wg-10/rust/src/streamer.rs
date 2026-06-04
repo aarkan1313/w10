@@ -170,10 +170,27 @@ impl Wg10Streamer {
         out
     }
 
-    /// The clamped velocity-led world centre the scheduler covers this frame, as a Vector2(x,z).
-    /// Consumers (Wg10TerrainView, the proving ground) MUST centre their displayed ring on this
-    /// exact point so the view and the maintained coverage never desync — and so the view inherits
-    /// the lead CLAMP (camera always inside its ring). Returns (camera_x, camera_z) if unconfigured.
+    /// Display coverage for a frame as a flat (level, origin_x, origin_z) triple array. This is the
+    /// camera-centred visible ring only; `coverage_keys` also includes velocity-led prefetch pages.
+    #[func]
+    pub fn display_keys(
+        &self,
+        camera_x: f64,
+        camera_z: f64,
+    ) -> PackedInt64Array {
+        let mut out = PackedInt64Array::new();
+        if let Some(policy) = self.policy.as_ref() {
+            for k in policy.display_coverage(camera_x, camera_z) {
+                out.push(k.level as i64);
+                out.push(k.origin_x);
+                out.push(k.origin_z);
+            }
+        }
+        out
+    }
+
+    /// The clamped velocity-led prefetch centre, as a Vector2(x,z). Display consumers should use
+    /// `display_keys` / the camera-centred ring; this remains useful for diagnostics.
     #[func]
     pub fn coverage_center(&self, camera_x: f64, camera_z: f64, vel_x: f64, vel_z: f64) -> Vector2 {
         match self.policy.as_ref() {

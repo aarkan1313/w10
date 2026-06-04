@@ -113,6 +113,7 @@ CHECKS = {
     # so GDScript/Rust call-signature and default-preset drift are gated.
     "review_runtime": [
         "worldgen_terrain/tests/mountain_fly_review_smoke_check.gd",
+        "worldgen_terrain/tests/mountain_fly_visibility_churn_check.gd",
     ],
     # Windowed live-runtime visual capture. This writes the MOUNTAIN/network,
     # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence.
