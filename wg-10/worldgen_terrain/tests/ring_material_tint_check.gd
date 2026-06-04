@@ -26,6 +26,11 @@ func _run() -> int:
 		_expect(color.is_equal_approx(Color(0.10, 0.42, 0.24, 1.0)), "biome_debug_color not bound", errs)
 		_expect(absf(mix - 0.34) < 0.0001, "biome_material_mix not bound", errs)
 
+	var shader_source := FileAccess.get_file_as_string(ProjectSettings.globalize_path(SHADER))
+	_expect(shader_source.contains("float material_fade = clamp(page_fade, 0.0, 1.0);"), "shader should derive material_fade from page_fade", errs)
+	_expect(shader_source.contains("static_material_mix * material_fade"), "static material mix should fade with page_fade", errs)
+	_expect(shader_source.contains("biome_material_mix * material_fade"), "WORLD route tint should fade with page_fade", errs)
+
 	rings.queue_free()
 	if not errs.is_empty():
 		for err in errs:
