@@ -67,6 +67,17 @@
 > deltas `0.000000/0.000000` for MOUNTAIN and WORLD with morph off/on. This
 > improves coverage for the manual "modes 1/2/3 feel slow/weird" report; it
 > still does not make raw procedural MOUNTAIN or full WORLD composition accepted.
+> Follow-up WORLD ownership split on 2026-06-04: `BiomeWorldRuntime` moved out
+> of core `page_pool.rs` into `page_pool/world_runtime.rs`, with WORLD context
+> construction and teardown owned beside the WORLD producer path. Current source
+> size audit: `page_pool.rs` is 172 lines, `world_runtime.rs` is 35 lines, and
+> the largest active Rust terrain source file is 566 lines, so the remaining
+> architecture risk is no longer "1000-line files" in this slice; it is whether
+> producer ownership, WORLD preview/full-compose taxonomy, and mountain
+> fact/collision contracts stay explicit. Proof after the split:
+> `cargo fmt -p wg10_terrain -- --check`, focused `page_pool` tests = 18/18,
+> full Rust lib tests = 233/233, `tools/build_rust.ps1` builds, and
+> `review_runtime` = 2/2.
 > Current proof after the runtime-tile binding fix: `cargo test -p
 > wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
 > 8/0, `cargo test -p wg10_terrain --lib` = 233/0,

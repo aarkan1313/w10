@@ -24,7 +24,6 @@ use crate::page_compute::PageComputeContext;
 use crate::page_policy::PagePolicy;
 use godot::classes::Texture2Drd;
 use godot::prelude::*;
-use std::collections::BTreeMap;
 
 mod acquire;
 mod config_api;
@@ -38,16 +37,11 @@ mod world_layer_reference;
 mod world_producer;
 mod world_reports;
 mod world_route;
+mod world_runtime;
 
 use static_reference::StaticHeightRuntime;
 use world_layer_reference::BoundWorldLayerReference;
-
-struct BiomeWorldRuntime {
-    pack: pack::Pack,
-    contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
-    compose_ctx: biome_page_compute::BiomePageComputeContext,
-    active_limit: usize,
-}
+use world_runtime::BiomeWorldRuntime;
 
 // ---------------------------------------------------------------------------
 // Wg10PagePool

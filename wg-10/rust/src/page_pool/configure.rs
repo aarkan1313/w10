@@ -117,12 +117,7 @@ impl Wg10PagePool {
         self.glsl_source = None;
         self.compute_ctx = None;
         self.biome_ctx = None;
-        self.biome_world = Some(BiomeWorldRuntime {
-            pack,
-            contexts,
-            compose_ctx,
-            active_limit: usize::MAX,
-        });
+        self.biome_world = Some(BiomeWorldRuntime::new(pack, contexts, compose_ctx));
         self.static_ref = None;
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;

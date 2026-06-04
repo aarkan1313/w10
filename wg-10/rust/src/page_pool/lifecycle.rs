@@ -51,10 +51,7 @@ impl Wg10PagePool {
             biome_page_compute::free_biome_page_context(&mut rd, &bctx);
         }
         if let Some(world) = self.biome_world.take() {
-            for (_, bctx) in world.contexts {
-                biome_page_compute::free_biome_page_context(&mut rd, &bctx);
-            }
-            biome_page_compute::free_biome_page_context(&mut rd, &world.compose_ctx);
+            world.free(&mut rd);
         }
         self.static_ref = None;
         self.mountain_layer_ref = None;
