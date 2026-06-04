@@ -22,10 +22,11 @@ use godot::classes::{RenderingServer, Texture2Drd};
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
 use crate::page_policy::{PagePolicy, PageKey, Decision};
-use crate::page_compute::{PageComputeContext, build_page_compute_context, compute_page_cached};
+use crate::page_compute::{PageComputeContext, build_page_compute_context};
 use crate::biome_page_compute;
 use std::path::Path;
 
+mod acquire;
 mod lifecycle;
 
 // ---------------------------------------------------------------------------
@@ -393,31 +394,13 @@ impl Wg10PagePool {
                 // Dispatch into the new texture using the CACHED compute context (slice 7) —
                 // no shader recompile, no buffer re-upload; just a uniform set + push + dispatch.
                 // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
-                let result = if self.use_biome_path {
-                    let bctx = self.biome_ctx.as_ref().unwrap();
-                    crate::biome_page_compute::compute_biome_page_cached(
-                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd, flow_on,
-                    )
-                } else {
-                    let ctx = self.compute_ctx.as_ref().unwrap();
-                    let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
-                    compute_page_cached(
-                        &mut rd,
-                        ctx,
-                        &self.pack.as_ref().unwrap().grammar_constants,
-                        num_palettes,
-                        tex_rid,
-                        ox, oz, ws, ppx, sd,
-                    )
-                };
+                let result = self.dispatch_page_compute(
+                    &mut rd, tex_rid, ox, oz, ws, ppx, sd, flow_on,
+                );
 
                 if let Err(e) = result {
                     godot_error!("Wg10PagePool: compute_page_cached failed (slot {slot}): {e}");
-                    // Free the just-created texture — slot was never stored.
-                    rd.free_rid(tex_rid);
-                    // Roll back the policy fully: remove the key + free the slot
-                    // so a re-acquire is a fresh Allocate, not a stale Reuse.
-                    self.policy.as_mut().unwrap().rollback(key);
+                    self.rollback_failed_allocate(&mut rd, key, tex_rid);
                     return None;
                 }
 
@@ -439,40 +422,15 @@ impl Wg10PagePool {
                     .expect("AllocateEvicting: slot must be occupied");
 
                 // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
-                let result = if self.use_biome_path {
-                    let bctx = self.biome_ctx.as_ref().unwrap();
-                    crate::biome_page_compute::compute_biome_page_cached(
-                        &mut rd, bctx, tex_rid, ox, oz, ws, ppx, self.biome_feature_span_m, sd, flow_on,
-                    )
-                } else {
-                    let ctx = self.compute_ctx.as_ref().unwrap();
-                    let num_palettes = self.pack_buffers.as_ref().unwrap().num_palettes;
-                    compute_page_cached(
-                        &mut rd,
-                        ctx,
-                        &self.pack.as_ref().unwrap().grammar_constants,
-                        num_palettes,
-                        tex_rid,
-                        ox, oz, ws, ppx, sd,
-                    )
-                };
+                let result = self.dispatch_page_compute(
+                    &mut rd, tex_rid, ox, oz, ws, ppx, sd, flow_on,
+                );
 
                 if let Err(e) = result {
                     godot_error!(
                         "Wg10PagePool: compute_page_cached failed on eviction (slot {slot}): {e}"
                     );
-                    // The slot's texture now holds neither key cleanly: the old
-                    // key was already evicted from the policy by acquire(), and
-                    // the recompute for the new key failed. Drop it so no stale
-                    // content is ever returned. (This is the ONE case
-                    // AllocateEvicting frees — a documented failure path.)
-                    if let Some(old_rid) = self.slot_tex[slot].take() {
-                        rd.free_rid(old_rid);
-                    }
-                    self.slot_wrap[slot] = None;
-                    // Roll back the new key: frees the slot in the policy so a
-                    // future acquire re-allocates it cleanly.
-                    self.policy.as_mut().unwrap().rollback(key);
+                    self.rollback_failed_eviction(&mut rd, key, slot);
                     return None;
                 }
 
