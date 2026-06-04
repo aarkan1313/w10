@@ -132,8 +132,13 @@ single rendered page:
    source/display mapping, runtime-page sampler
    (`source_origin_for_display`, `sample_world_page`, `sample_payload_page`),
    and a runtime-cacheable world-layer tile boundary
-   (`build_runtime_world_layer_tile`, `sample_world_layer_tile_page`). This is
-   the contract the later Rust/GPU page producer should consume or mirror.
+   (`build_runtime_world_layer_tile`, `serialize_runtime_world_layer_tile`,
+   `build_runtime_world_layer_payload`, `sample_world_layer_tile_page`). The
+   committed exporter `tools/dem_pack/export_godot_mountain_world_layer_tiles.py`
+   writes the ignored runtime artifact
+   `wg-10/worldgen_terrain/generated/review/mountain_world_layer_tiles.json`.
+   This is the contract the later Rust/GPU page producer should consume or
+   mirror.
    Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
@@ -279,11 +284,12 @@ single rendered page:
   source/display mapping used by the live preset (`display 0,0 -> source
   207000,176000`) and samples height/floor/rock fields from the accepted
   world-layer payload without test-local duplicate sampling code.
-- The same pytest now proves the runtime-cacheable world-layer tile boundary
-  preserves the accepted page contract: tile sampling matches stitched
-  world-layer page sampling for height, corridor, and all material hint fields
-  to `1.0e-12`, while exposing pass-network, conditioning, material-hint, and
-  source/display mapping facts.
+- The same pytest now proves the runtime-cacheable world-layer tile payload is
+  JSON-ready and preserves the accepted page contract after a JSON round trip:
+  tile sampling matches stitched world-layer page sampling for height, corridor,
+  and all material hint fields to `1.0e-12`, while exposing pass-network,
+  conditioning, material-hint, and source/display mapping facts. Current focused
+  proof: `8 passed`.
 - The same pytest contract now proves the accepted builder emits non-vacuous,
   bounded material hint fields (`low_pass_hint`, `floor_hint`, `rock_hint`,
   `snow_hint`) on chunks and aprons, with the stitched low-pass/floor hints

@@ -3,17 +3,21 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
-> **Read this first:** latest scoped runtime checkpoint is
+> **Read this first:** latest scoped runtime-artifact checkpoint adds a
+> JSON-ready accepted mountain world-layer tile payload/exporter. It builds on
 > `2af7df4 fix(slice4): remove owner fly page settle`, tagged
-> `backup-slice4-no-page-settle-20260604-2af7df4`. It builds on
+> `backup-slice4-no-page-settle-20260604-2af7df4`, and
 > `067b14b refactor(slice4): expose mountain world-layer runtime tile`, tagged
-> `backup-slice4-runtime-world-layer-tile-20260604-067b14b`. The runtime tile
-> checkpoint separates the accepted mountain world-layer facts/sampling boundary
-> from review JSON export. The no-settle checkpoint disables the parent-to-fine
-> newly-bound-page height fade that read as terrain lag/popping during owner fly
-> movement. `REFERENCE` remains the accepted static mountain-network baseline
-> streamed through the runtime page pool. `MOUNTAIN/network_ref` now matches that
-> baseline through a reference-backed height/material/fact bridge
+> `backup-slice4-runtime-world-layer-tile-20260604-067b14b`. The new tile
+> payload/exporter separates the future Rust/Godot runtime producer/cache
+> contract from the review chunk JSON shape; it writes flat row-major height,
+> corridor, low-pass/floor/rock/snow fields with source/display mapping,
+> pass-network facts, conditioning stats, and material summaries. The no-settle
+> checkpoint disables the parent-to-fine newly-bound-page height fade that read
+> as terrain lag/popping during owner fly movement. `REFERENCE` remains the
+> accepted static mountain-network baseline streamed through the runtime page
+> pool. `MOUNTAIN/network_ref` now matches that baseline through a
+> reference-backed height/material/fact bridge
 > (`single_mountain_world_layer_reference_bridge`,
 > `height_source=bound_world_layer_reference_payload`,
 > `procedural_world_layer_height=false`). This recovers the owner-visible

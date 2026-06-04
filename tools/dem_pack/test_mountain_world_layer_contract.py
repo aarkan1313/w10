@@ -219,6 +219,64 @@ def test_runtime_world_layer_tile_preserves_accepted_page_contract():
             assert np.max(page) <= 1.0
 
 
+def test_runtime_world_layer_tile_payload_is_json_ready_and_page_equivalent():
+    world = layer.build_network_world(mountain.STYLES[0], chunk_count=3, chunk_n=33)
+    tile = layer.build_runtime_world_layer_tile(world, chunk_count=3, chunk_n=33)
+    payload = layer.serialize_runtime_world_layer_tile(tile)
+    roundtrip = json.loads(json.dumps(payload, separators=(",", ":")))
+
+    assert roundtrip["tile_format"] == layer.RUNTIME_TILE_FORMAT_VERSION
+    assert roundtrip["source_scope"] == "generated_mountain_world_layer_tile_for_runtime_cache"
+    assert roundtrip["field_order"] == list(layer.WORLD_LAYER_FIELDS)
+    assert roundtrip["field_n"] == 97
+    assert len(roundtrip["fields"]["height"]) == 97 * 97
+    assert roundtrip["facts"]["has_pass_network"]
+    assert roundtrip["facts"]["has_world_conditioning"]
+    assert roundtrip["facts"]["has_material_hint_fields"]
+
+    for field in layer.WORLD_LAYER_FIELDS:
+        page = layer.sample_world_layer_tile_page(
+            roundtrip,
+            field=field,
+            page_span_m=DISPLAY_PAGE_SPAN_M,
+            sample_n=SAMPLE_N,
+            display_origin_x_m=0.0,
+            display_origin_z_m=0.0,
+        )
+        via_tile = layer.sample_world_layer_tile_page(
+            tile,
+            field=field,
+            page_span_m=DISPLAY_PAGE_SPAN_M,
+            sample_n=SAMPLE_N,
+            display_origin_x_m=0.0,
+            display_origin_z_m=0.0,
+        )
+        assert page.shape == (SAMPLE_N, SAMPLE_N)
+        assert np.max(np.abs(page - via_tile)) <= 1.0e-12
+
+
+def test_runtime_world_layer_payload_declares_cache_contract():
+    payload = layer.build_runtime_world_layer_payload(styles=mountain.STYLES[:1], chunk_count=3, chunk_n=33)
+
+    assert payload["tile_format"] == layer.RUNTIME_TILE_FORMAT_VERSION
+    assert payload["source_scope"] == "generated_mountain_world_layer_tiles_for_runtime_cache"
+    assert payload["generator_version"] == layer.NETWORK_GENERATOR_VERSION
+    assert payload["chunk_count"] == 3
+    assert payload["chunk_n"] == 33
+    assert payload["field_n"] == 97
+    assert payload["field_order"] == list(layer.WORLD_LAYER_FIELDS)
+    assert len(payload["tiles"]) == 1
+    tile = payload["tiles"][0]
+    assert tile["tile_format"] == layer.RUNTIME_TILE_FORMAT_VERSION
+    assert tile["style_key"] == mountain.STYLES[0].key
+    assert tile["pass_network"]["routes"] > 0
+    assert tile["facts"]["has_pass_network"]
+    assert tile["facts"]["has_world_conditioning"]
+    assert tile["facts"]["has_material_hint_fields"]
+    for field in layer.WORLD_LAYER_FIELDS:
+        assert len(tile["fields"][field]) == 97 * 97
+
+
 def test_live_seamsafe_mountain_page_is_not_yet_the_accepted_network_layer():
     payload = _load_network_payload()
     reference = _accepted_reference_page(payload, display_origin_x=0.0, display_origin_z=0.0)

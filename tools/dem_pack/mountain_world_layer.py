@@ -25,6 +25,7 @@ import mountain_synthesis as mountain
 
 GENERATOR_VERSION = "mountain_synthesis_v0_9x9_original_scene_scale_review"
 NETWORK_GENERATOR_VERSION = GENERATOR_VERSION + "_pass_network"
+RUNTIME_TILE_FORMAT_VERSION = NETWORK_GENERATOR_VERSION + "_runtime_tile_v1"
 CHUNK_COUNT = 9
 CHUNK_N = 129
 SOURCE_CHUNK_SPAN_M = 30_000.0
@@ -308,6 +309,22 @@ def _world_layer_fields_from_chunks(world: dict[str, object], chunk_count: int, 
     }
 
 
+def _tile_field_array(tile: dict[str, object], field: str) -> np.ndarray:
+    fields = tile["fields"]
+    if field not in fields:
+        raise KeyError(f"runtime world-layer tile: unknown field {field!r}")
+    arr = np.asarray(fields[field], dtype=np.float64)
+    if arr.ndim == 1:
+        field_n = int(tile["field_n"])
+        expected = field_n * field_n
+        if arr.size != expected:
+            raise ValueError(f"runtime world-layer tile: field {field!r} has {arr.size} samples, expected {expected}")
+        arr = arr.reshape((field_n, field_n))
+    if arr.ndim != 2:
+        raise ValueError(f"runtime world-layer tile: field {field!r} must be 2D or flat row-major")
+    return arr
+
+
 def build_runtime_world_layer_tile(
     world: dict[str, object],
     *,
@@ -387,11 +404,9 @@ def sample_world_layer_tile_page(
     display_origin_z_m: float = 0.0,
 ) -> np.ndarray:
     """Sample a runtime-cacheable accepted world-layer tile into one page."""
-    fields = tile["fields"]
-    if field not in fields:
-        raise KeyError(f"sample_world_layer_tile_page: unknown field {field!r}")
+    field_arr = _tile_field_array(tile, field)
     return sample_runtime_page(
-        fields[field],
+        field_arr,
         field_origin_x_m=float(tile["field_origin_x_m"]),
         field_origin_z_m=float(tile["field_origin_z_m"]),
         field_span_m=float(tile["field_span_m"]),
@@ -400,6 +415,42 @@ def sample_world_layer_tile_page(
         page_span_m=float(page_span_m),
         sample_n=int(sample_n),
     )
+
+
+def serialize_runtime_world_layer_tile(tile: dict[str, object]) -> dict[str, object]:
+    """Convert a runtime tile into a flat JSON-ready cache payload."""
+    fields: dict[str, object] = {}
+    for field in WORLD_LAYER_FIELDS:
+        arr = _tile_field_array(tile, field)
+        if field == "corridor":
+            fields[field] = np.rint(arr).astype(int).ravel().tolist()
+        else:
+            fields[field] = np.round(arr, 4).astype(float).ravel().tolist()
+    return {
+        "tile_format": RUNTIME_TILE_FORMAT_VERSION,
+        "source_scope": tile["source_scope"],
+        "generator_version": tile["generator_version"],
+        "seed": int(tile["seed"]),
+        "style_key": tile["style_key"],
+        "label": tile["label"],
+        "chunk_count": int(tile["chunk_count"]),
+        "chunk_n": int(tile["chunk_n"]),
+        "field_n": int(tile["field_n"]),
+        "field_origin_x_m": float(tile["field_origin_x_m"]),
+        "field_origin_z_m": float(tile["field_origin_z_m"]),
+        "field_span_m": float(tile["field_span_m"]),
+        "source_origin_x_m": float(tile["source_origin_x_m"]),
+        "source_origin_z_m": float(tile["source_origin_z_m"]),
+        "source_span_m": float(tile["source_span_m"]),
+        "source_scene_ratio": float(tile["source_scene_ratio"]),
+        "height_scale_m": float(tile["height_scale_m"]),
+        "field_order": list(WORLD_LAYER_FIELDS),
+        "stats": dict(tile["stats"]),
+        "pass_network": dict(tile["pass_network"]),
+        "material_hints": dict(tile["material_hints"]),
+        "facts": dict(tile["facts"]),
+        "fields": fields,
+    }
 
 
 def build_network_world(
@@ -548,4 +599,65 @@ def build_network_payload(
         "height_scale_m": float(HEIGHT_SCALE_M),
         "review_variants": list(REVIEW_VARIANTS),
         "seeds": worlds,
+    }
+
+
+def build_runtime_world_layer_payload(
+    *,
+    styles: Iterable[mountain.MountainStyle] = mountain.STYLES,
+    seed: int = SEED,
+    chunk_count: int = CHUNK_COUNT,
+    chunk_n: int = CHUNK_N,
+    source_chunk_span_m: float = SOURCE_CHUNK_SPAN_M,
+    display_chunk_span_m: float = DISPLAY_CHUNK_SPAN_M,
+    origin_x_m: float = WORLD_ORIGIN_X_M,
+    origin_z_m: float = WORLD_ORIGIN_Z_M,
+) -> dict[str, object]:
+    worlds = [
+        build_network_world(
+            style,
+            seed=seed,
+            chunk_count=chunk_count,
+            chunk_n=chunk_n,
+            source_chunk_span_m=source_chunk_span_m,
+            display_chunk_span_m=display_chunk_span_m,
+            origin_x_m=origin_x_m,
+            origin_z_m=origin_z_m,
+        )
+        for style in styles
+    ]
+    tiles = [
+        serialize_runtime_world_layer_tile(
+            build_runtime_world_layer_tile(
+                world,
+                chunk_count=chunk_count,
+                chunk_n=chunk_n,
+                source_chunk_span_m=source_chunk_span_m,
+                display_chunk_span_m=display_chunk_span_m,
+                origin_x_m=origin_x_m,
+                origin_z_m=origin_z_m,
+            )
+        )
+        for world in worlds
+    ]
+    field_n = int(chunk_count) * (int(chunk_n) - 1) + 1
+    return {
+        "title": "WorldGen10 mountain runtime world-layer tiles",
+        "tile_format": RUNTIME_TILE_FORMAT_VERSION,
+        "generator_version": NETWORK_GENERATOR_VERSION,
+        "source_scope": "generated_mountain_world_layer_tiles_for_runtime_cache",
+        "chunk_count": int(chunk_count),
+        "chunk_n": int(chunk_n),
+        "field_n": field_n,
+        "chunk_span_m": float(display_chunk_span_m),
+        "source_chunk_span_m": float(source_chunk_span_m),
+        "feature_span_m": float(FEATURE_SPAN_M),
+        "world_span_m": float(chunk_count) * float(display_chunk_span_m),
+        "source_world_span_m": float(chunk_count) * float(source_chunk_span_m),
+        "source_scene_ratio": float(source_chunk_span_m) / float(display_chunk_span_m),
+        "world_origin_x_m": float(origin_x_m),
+        "world_origin_z_m": float(origin_z_m),
+        "height_scale_m": float(HEIGHT_SCALE_M),
+        "field_order": list(WORLD_LAYER_FIELDS),
+        "tiles": tiles,
     }

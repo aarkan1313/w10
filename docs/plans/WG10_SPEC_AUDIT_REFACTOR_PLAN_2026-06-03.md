@@ -65,8 +65,12 @@ contract before close-debug terrain should be judged as owner-accepted.
 
 `tools/dem_pack/mountain_world_layer.py` now exposes a runtime-cacheable
 accepted mountain world-layer tile boundary:
-`build_runtime_world_layer_tile`, `source_origin_for_world_layer_tile`, and
-`sample_world_layer_tile_page`. This separates the future runtime producer/cache
+`build_runtime_world_layer_tile`, `serialize_runtime_world_layer_tile`,
+`build_runtime_world_layer_payload`, `source_origin_for_world_layer_tile`, and
+`sample_world_layer_tile_page`. The committed exporter
+`tools/dem_pack/export_godot_mountain_world_layer_tiles.py` writes
+`wg-10/worldgen_terrain/generated/review/mountain_world_layer_tiles.json` as an
+ignored generated artifact. This separates the future runtime producer/cache
 contract from the review JSON exporter. The tile carries stitched height,
 corridor, low-pass/floor/rock/snow material hint fields, pass-network facts,
 conditioning stats, and source/display mapping.
@@ -74,9 +78,10 @@ conditioning stats, and source/display mapping.
 Current proof:
 
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s -p no:cacheprovider`
-  = 6 passed.
-- The new tile sampler matches the accepted stitched world-layer page sampler
-  for height, corridor, and all material fields to `1.0e-12`.
+  = 8 passed.
+- The new tile payload survives JSON round-trip and matches the accepted
+  stitched world-layer page sampler for height, corridor, and all material
+  fields to `1.0e-12`.
 - The same test keeps the live seam-safe gap visible:
   mean absolute normalized delta `1.211743`, p95 `2.276974`, correlation
   `-0.048456`.
