@@ -172,6 +172,53 @@ def test_runtime_page_sampler_owns_source_mapping_and_material_fields():
     assert np.mean(rock) > 0.0
 
 
+def test_runtime_world_layer_tile_preserves_accepted_page_contract():
+    world = layer.build_network_world(mountain.STYLES[0], chunk_count=3, chunk_n=33)
+    tile = layer.build_runtime_world_layer_tile(world, chunk_count=3, chunk_n=33)
+
+    assert tile["source_scope"] == "generated_mountain_world_layer_tile_for_runtime_cache"
+    assert tile["generator_version"] == layer.NETWORK_GENERATOR_VERSION
+    assert tile["field_n"] == 97
+    assert tile["facts"]["has_pass_network"]
+    assert tile["facts"]["has_world_conditioning"]
+    assert tile["facts"]["has_material_hint_fields"]
+    assert tile["pass_network"]["routes"] > 0
+    assert tile["material_hints"]["floor_hint_coverage"] > 0.0
+
+    source_x, source_z = layer.source_origin_for_world_layer_tile(
+        tile,
+        display_origin_x_m=0.0,
+        display_origin_z_m=0.0,
+    )
+    assert np.isclose(source_x, 117000.0)
+    assert np.isclose(source_z, 86000.0)
+
+    for field in layer.WORLD_LAYER_FIELDS:
+        page = layer.sample_world_layer_tile_page(
+            tile,
+            field=field,
+            page_span_m=DISPLAY_PAGE_SPAN_M,
+            sample_n=SAMPLE_N,
+            display_origin_x_m=0.0,
+            display_origin_z_m=0.0,
+        )
+        via_world = layer.sample_world_page(
+            world,
+            chunk_count=3,
+            chunk_n=33,
+            field=field,
+            page_span_m=DISPLAY_PAGE_SPAN_M,
+            sample_n=SAMPLE_N,
+            display_origin_x_m=0.0,
+            display_origin_z_m=0.0,
+        )
+        assert page.shape == (SAMPLE_N, SAMPLE_N)
+        assert np.max(np.abs(page - via_world)) <= 1.0e-12
+        if field in layer.MATERIAL_HINT_FIELDS:
+            assert np.min(page) >= 0.0
+            assert np.max(page) <= 1.0
+
+
 def test_live_seamsafe_mountain_page_is_not_yet_the_accepted_network_layer():
     payload = _load_network_payload()
     reference = _accepted_reference_page(payload, display_origin_x=0.0, display_origin_z=0.0)

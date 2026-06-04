@@ -35,6 +35,7 @@ WORLD_ORIGIN_Z_M = 41_000.0
 SEED = 177
 HEIGHT_SCALE_M = 1700.0
 MATERIAL_HINT_FIELDS = ("low_pass_hint", "floor_hint", "rock_hint", "snow_hint")
+WORLD_LAYER_FIELDS = ("height", "corridor", *MATERIAL_HINT_FIELDS)
 
 REVIEW_VARIANTS = (
     {"id": "mountain_dressed", "label": "mountain dressed", "relief": 1.0, "dressing": "review_biome"},
@@ -161,13 +162,30 @@ def source_origin_for_display(
     display_origin_z_m: float,
 ) -> tuple[float, float]:
     """Map a display page origin into the accepted source-world coordinate frame."""
-    world_span_m = float(payload["world_span_m"])
-    ratio = float(payload["source_scene_ratio"])
-    display_min_x = -0.5 * world_span_m
-    display_min_z = -0.5 * world_span_m
+    return _source_origin_for_display_values(
+        world_span_m=float(payload["world_span_m"]),
+        source_scene_ratio=float(payload["source_scene_ratio"]),
+        world_origin_x_m=float(payload["world_origin_x_m"]),
+        world_origin_z_m=float(payload["world_origin_z_m"]),
+        display_origin_x_m=float(display_origin_x_m),
+        display_origin_z_m=float(display_origin_z_m),
+    )
+
+
+def _source_origin_for_display_values(
+    *,
+    world_span_m: float,
+    source_scene_ratio: float,
+    world_origin_x_m: float,
+    world_origin_z_m: float,
+    display_origin_x_m: float,
+    display_origin_z_m: float,
+) -> tuple[float, float]:
+    display_min_x = -0.5 * float(world_span_m)
+    display_min_z = -0.5 * float(world_span_m)
     return (
-        float(payload["world_origin_x_m"]) + (float(display_origin_x_m) - display_min_x) * ratio,
-        float(payload["world_origin_z_m"]) + (float(display_origin_z_m) - display_min_z) * ratio,
+        float(world_origin_x_m) + (float(display_origin_x_m) - display_min_x) * float(source_scene_ratio),
+        float(world_origin_z_m) + (float(display_origin_z_m) - display_min_z) * float(source_scene_ratio),
     )
 
 
@@ -276,6 +294,107 @@ def sample_payload_page(
         chunk_n=int(payload["chunk_n"]),
         field=field,
         display_chunk_span_m=float(payload["chunk_span_m"]),
+        display_origin_x_m=float(display_origin_x_m),
+        display_origin_z_m=float(display_origin_z_m),
+        page_span_m=float(page_span_m),
+        sample_n=int(sample_n),
+    )
+
+
+def _world_layer_fields_from_chunks(world: dict[str, object], chunk_count: int, chunk_n: int) -> dict[str, np.ndarray]:
+    return {
+        field: stitch_grid(world["chunks"], int(chunk_count), int(chunk_n), field)
+        for field in WORLD_LAYER_FIELDS
+    }
+
+
+def build_runtime_world_layer_tile(
+    world: dict[str, object],
+    *,
+    chunk_count: int,
+    chunk_n: int,
+    source_chunk_span_m: float = SOURCE_CHUNK_SPAN_M,
+    display_chunk_span_m: float = DISPLAY_CHUNK_SPAN_M,
+    origin_x_m: float = WORLD_ORIGIN_X_M,
+    origin_z_m: float = WORLD_ORIGIN_Z_M,
+) -> dict[str, object]:
+    """Package an accepted mountain world into a runtime-cacheable tile.
+
+    The tile is the boundary the live runtime should consume: coherent fields
+    plus their source/display mapping and world-layer facts. JSON exporters can
+    still slice chunks for review assets, but runtime sampling should not
+    re-derive page-local mountains from the seam-safe recipe.
+    """
+    fields = _world_layer_fields_from_chunks(world, int(chunk_count), int(chunk_n))
+    display_world_span_m = float(chunk_count) * float(display_chunk_span_m)
+    source_world_span_m = float(chunk_count) * float(source_chunk_span_m)
+    pass_network = dict(world.get("pass_network", {}))
+    material_hints = dict(world.get("material_hints", {}))
+    stats = dict(world.get("stats", {}))
+    return {
+        "source_scope": "generated_mountain_world_layer_tile_for_runtime_cache",
+        "generator_version": NETWORK_GENERATOR_VERSION,
+        "seed": int(world["seed"]),
+        "style_key": str(world["style_key"]),
+        "label": str(world["label"]),
+        "chunk_count": int(chunk_count),
+        "chunk_n": int(chunk_n),
+        "field_n": int(next(iter(fields.values())).shape[0]),
+        "field_origin_x_m": -0.5 * display_world_span_m,
+        "field_origin_z_m": -0.5 * display_world_span_m,
+        "field_span_m": display_world_span_m,
+        "source_origin_x_m": float(origin_x_m),
+        "source_origin_z_m": float(origin_z_m),
+        "source_span_m": source_world_span_m,
+        "source_scene_ratio": float(source_chunk_span_m) / float(display_chunk_span_m),
+        "height_scale_m": float(HEIGHT_SCALE_M),
+        "stats": stats,
+        "pass_network": pass_network,
+        "material_hints": material_hints,
+        "facts": {
+            "has_pass_network": int(pass_network.get("routes", 0)) > 0,
+            "has_world_conditioning": float(stats.get("conditioned_ptp", 0.0)) > 0.0,
+            "has_material_hint_fields": all(name in fields for name in MATERIAL_HINT_FIELDS),
+        },
+        "fields": fields,
+    }
+
+
+def source_origin_for_world_layer_tile(
+    tile: dict[str, object],
+    *,
+    display_origin_x_m: float,
+    display_origin_z_m: float,
+) -> tuple[float, float]:
+    """Map a runtime tile display page origin into its source-world coordinates."""
+    return _source_origin_for_display_values(
+        world_span_m=float(tile["field_span_m"]),
+        source_scene_ratio=float(tile["source_scene_ratio"]),
+        world_origin_x_m=float(tile["source_origin_x_m"]),
+        world_origin_z_m=float(tile["source_origin_z_m"]),
+        display_origin_x_m=float(display_origin_x_m),
+        display_origin_z_m=float(display_origin_z_m),
+    )
+
+
+def sample_world_layer_tile_page(
+    tile: dict[str, object],
+    *,
+    page_span_m: float,
+    sample_n: int,
+    field: str = "height",
+    display_origin_x_m: float = 0.0,
+    display_origin_z_m: float = 0.0,
+) -> np.ndarray:
+    """Sample a runtime-cacheable accepted world-layer tile into one page."""
+    fields = tile["fields"]
+    if field not in fields:
+        raise KeyError(f"sample_world_layer_tile_page: unknown field {field!r}")
+    return sample_runtime_page(
+        fields[field],
+        field_origin_x_m=float(tile["field_origin_x_m"]),
+        field_origin_z_m=float(tile["field_origin_z_m"]),
+        field_span_m=float(tile["field_span_m"]),
         display_origin_x_m=float(display_origin_x_m),
         display_origin_z_m=float(display_origin_z_m),
         page_span_m=float(page_span_m),
