@@ -5,6 +5,7 @@ use godot::prelude::*;
 
 use crate::page_policy::PageKey;
 
+use super::producer::ProducerKind;
 use super::{world_route, Wg10PagePool};
 
 #[godot_api(secondary)]
@@ -12,21 +13,13 @@ impl Wg10PagePool {
     /// True when the pool is producing pages via the GPU biome path.
     #[func]
     pub fn uses_biome_path(&self) -> bool {
-        self.use_biome_path
+        self.uses_active_biome_path()
     }
 
     /// Human-readable active producer mode for diagnostics/HUDs.
     #[func]
     pub fn biome_runtime_mode(&self) -> GString {
-        if self.static_ref.is_some() {
-            GString::from("static_reference")
-        } else if self.biome_world.is_some() {
-            GString::from("world")
-        } else if self.biome_ctx.is_some() {
-            GString::from("single")
-        } else {
-            GString::from("legacy")
-        }
+        GString::from(self.active_runtime_mode_label())
     }
 
     /// Configure the source coordinate transform for live biome synthesis.
@@ -51,7 +44,10 @@ impl Wg10PagePool {
         if !source_offset_x_m.is_finite() || !source_offset_z_m.is_finite() {
             return GString::from("set_biome_source_transform: offsets must be finite");
         }
-        if !self.use_biome_path || self.static_ref.is_some() {
+        if !matches!(
+            self.active_producer_kind(),
+            Some(ProducerKind::SingleBiome | ProducerKind::World)
+        ) {
             return GString::from(
                 "set_biome_source_transform: pool is not configured for live biome synthesis",
             );
@@ -101,15 +97,7 @@ impl Wg10PagePool {
     #[func]
     pub fn mountain_world_layer_contract_report(&self) -> Dictionary<GString, Variant> {
         let mut out = Dictionary::<GString, Variant>::new();
-        let runtime_mode = if self.static_ref.is_some() {
-            "static_reference"
-        } else if self.biome_world.is_some() {
-            "world"
-        } else if self.biome_ctx.is_some() {
-            "single"
-        } else {
-            "legacy"
-        };
+        let runtime_mode = self.active_runtime_mode_label();
 
         out.set("runtime_mode", runtime_mode);
         out.set("accepted_visual_baseline", false);
@@ -143,13 +131,13 @@ impl Wg10PagePool {
                 "blocking_gap",
                 "live facts/collision story and procedural world-layer synthesis remain open",
             );
-        } else if self.biome_world.is_some() {
+        } else if matches!(self.active_producer_kind(), Some(ProducerKind::World)) {
             out.set("contract_kind", "grammar_routed_runtime_biome_composition");
             out.set("source_scope", "grammar_routed_page_weight_field");
             out.set("has_source_display_mapping", true);
             out.set("has_mountain_macro_field", true);
             out.set("blocking_gap", "WORLD composes runtime-biome pages but does not own the accepted mountain pass-network or conditioning facts");
-        } else if self.biome_ctx.is_some() {
+        } else if matches!(self.active_producer_kind(), Some(ProducerKind::SingleBiome)) {
             out.set("contract_kind", "single_seam_safe_mountain_page_recipe");
             out.set("source_scope", "display_to_source_transform_page_synthesis");
             out.set("explicit_live_candidate", true);

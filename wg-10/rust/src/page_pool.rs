@@ -30,6 +30,7 @@ use std::path::Path;
 mod acquire;
 mod configure;
 mod lifecycle;
+mod producer;
 mod static_reference;
 mod state_api;
 mod world_route;
@@ -81,11 +82,10 @@ pub struct Wg10PagePool {
     glsl_source:  Option<String>,
     compute_ctx:  Option<PageComputeContext>,
 
-    // Biome GPU producer path (Slice-4). Flag-gated; legacy kernel path is the DEFAULT
-    // (use_biome_path=false) for A/B + rollback. The original `biome_ctx` is the proven single
-    // recipe path used by parity/perf gates. `biome_world` is the grammar-routed runtime path:
-    // it owns grammar-only pack data and a cached context per compiled recipe.
-    use_biome_path:      bool,
+    // Biome GPU producer path (Slice-4). Active producer identity is derived from exactly one of
+    // the producer contexts below. The original `biome_ctx` is the proven single recipe path used
+    // by parity/perf gates. `biome_world` is the grammar-routed runtime path: it owns grammar-only
+    // pack data and a cached context per compiled recipe.
     biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
     biome_world:         Option<BiomeWorldRuntime>,
     static_ref:          Option<StaticHeightRuntime>,
@@ -125,7 +125,6 @@ impl IRefCounted for Wg10PagePool {
             pack_buffers: None,
             glsl_source:  None,
             compute_ctx:  None,
-            use_biome_path:       false,
             biome_ctx:            None,
             biome_world:          None,
             static_ref:           None,
@@ -228,9 +227,9 @@ impl Wg10PagePool {
     // -----------------------------------------------------------------------
 
     /// Configure the pool to produce pages via the GPU biome path (mountain, Slice-4 live-fly)
-    /// instead of the legacy kernel atlas. Sets `use_biome_path=true` and builds the biome compute
-    /// context on the global rd. Legacy `configure` stays the default path (flag off) for A/B +
-    /// rollback. Windowed-only (needs the global RenderingDevice), like `configure`.
+    /// instead of the legacy kernel atlas. Builds the biome compute context on the global rd.
+    /// Legacy `configure` stays available for A/B + rollback. Windowed-only (needs the global
+    /// RenderingDevice), like `configure`.
     ///
     /// Returns `""` on success, or an error string on failure (leaving the pool not-ready).
     #[func]

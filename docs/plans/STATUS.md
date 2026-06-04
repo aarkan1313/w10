@@ -36,6 +36,14 @@
 > `cpu_max=10.050 ms`, zero hide/show, and render p99 `0.505 ms`. Do not treat mode 3
 > as accepted visual terrain until WORLD composition is backgrounded, cached, or replaced
 > by a cheaper preview contract.
+> Follow-up page-pool separation on 2026-06-04: active producer classification and page
+> dispatch moved into `wg-10/rust/src/page_pool/producer.rs`. `acquire.rs` now owns
+> page policy/slot acquisition/rollback only, and the redundant `use_biome_path` field was
+> removed; `uses_biome_path()` is derived from the active producer kind. Current proof:
+> `cargo test -p wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds,
+> `fast` = 8/8, `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
+> `biome_world` = 1/1. Latest mode gate still reports zero hide/show; WORLD stays bounded
+> diagnostic with `cpu_p99=8.723 ms`, `cpu_max=10.612 ms`, render p99 `0.216 ms`.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

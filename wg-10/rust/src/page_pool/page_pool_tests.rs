@@ -79,7 +79,6 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     // Biome path fields: a BiomePageComputeContext has private fields (a real ApronBuffers set)
     // so it can't be faked headlessly; the legacy-path reset of these two is covered by passing
     // a default flag/None here (the biome reset to None is trivial + asserted below).
-    let mut use_biome_path: bool = false;
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
@@ -94,7 +93,6 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
         &mut pack_buffers,
         &mut glsl_source,
         &mut compute_ctx,
-        &mut use_biome_path,
         &mut biome_ctx,
         &mut biome_world,
         &mut static_ref,
@@ -107,7 +105,6 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     assert!(pack_buffers.is_none(), "pack_buffers must be cleared");
     assert!(glsl_source.is_none(),  "glsl_source must be cleared");
     assert!(compute_ctx.is_none(),  "compute_ctx must be cleared");
-    assert!(!use_biome_path,        "use_biome_path must be cleared");
     assert!(biome_ctx.is_none(),    "biome_ctx must be cleared");
     assert!(biome_world.is_none(),  "biome_world must be cleared");
     assert!(static_ref.is_none(),   "static_ref must be cleared");
@@ -148,7 +145,6 @@ fn reset_is_idempotent_on_unconfigured_state() {
     let mut pack_buffers: Option<PackBuffers>          = None;
     let mut glsl_source:  Option<String>               = None;
     let mut compute_ctx:  Option<PageComputeContext>   = None;
-    let mut use_biome_path: bool                       = false;
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
@@ -158,14 +154,13 @@ fn reset_is_idempotent_on_unconfigured_state() {
         &mut policy, &mut slot_tex, &mut slot_wrap,
         &mut slot_material_tex, &mut slot_material_wrap,
         &mut pack, &mut pack_buffers, &mut glsl_source, &mut compute_ctx,
-        &mut use_biome_path, &mut biome_ctx, &mut biome_world, &mut static_ref,
+        &mut biome_ctx, &mut biome_world, &mut static_ref,
     );
 
     assert!(policy.is_none() && pack.is_none() && pack_buffers.is_none()
         && glsl_source.is_none() && compute_ctx.is_none());
     assert!(
-        !use_biome_path
-            && biome_ctx.is_none()
+        biome_ctx.is_none()
             && biome_world.is_none()
             && static_ref.is_none()
     );
@@ -177,24 +172,27 @@ fn reset_is_idempotent_on_unconfigured_state() {
     );
 }
 
-/// `is_configured` mirrors the acquire guard exactly: true ONLY when all four
-/// of policy/pack/pack_buffers/glsl_source are Some. This is the predicate
+/// Legacy `is_configured` mirrors the acquire guard exactly: true ONLY when all
+/// legacy options and the cached compute context are present. This is the predicate
 /// `configure` uses to decide whether to free-before-reconfigure (F8), so it
-/// must match the guard wording in `acquire_page`. Verified field-by-field via
-/// the same boolean the guard computes (the struct itself needs a Base, so we
-/// reproduce the predicate here rather than instantiate the GodotClass).
+/// must match the guard wording in `acquire_page`. Verified field-by-field over
+/// plain booleans (the struct itself needs a Base, so we reproduce the predicate
+/// here rather than instantiate the GodotClass).
 #[test]
 fn configured_predicate_requires_all_four_config_options() {
-    // Helper mirroring the guard / `is_configured` over the four options.
-    fn guard(p: bool, pk: bool, pb: bool, g: bool) -> bool { p && pk && pb && g }
+    // Helper mirroring the legacy branch of active_producer_kind + policy.
+    fn guard(p: bool, pk: bool, pb: bool, g: bool, ctx: bool) -> bool {
+        p && pk && pb && g && ctx
+    }
 
-    assert!(guard(true, true, true, true), "all Some => configured");
+    assert!(guard(true, true, true, true, true), "all Some => configured");
     // Any single missing option => NOT configured (guard returns early).
-    assert!(!guard(false, true, true, true), "missing policy => unconfigured");
-    assert!(!guard(true, false, true, true), "missing pack => unconfigured");
-    assert!(!guard(true, true, false, true), "missing pack_buffers => unconfigured");
-    assert!(!guard(true, true, true, false), "missing glsl_source => unconfigured");
-    assert!(!guard(false, false, false, false), "all None => unconfigured");
+    assert!(!guard(false, true, true, true, true), "missing policy => unconfigured");
+    assert!(!guard(true, false, true, true, true), "missing pack => unconfigured");
+    assert!(!guard(true, true, false, true, true), "missing pack_buffers => unconfigured");
+    assert!(!guard(true, true, true, false, true), "missing glsl_source => unconfigured");
+    assert!(!guard(true, true, true, true, false), "missing compute_ctx => unconfigured");
+    assert!(!guard(false, false, false, false, false), "all None => unconfigured");
 }
 
 /// A FRESH pool is configured on NEITHER path. `Wg10PagePool` is a GodotClass needing a live

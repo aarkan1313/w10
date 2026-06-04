@@ -56,7 +56,6 @@ impl Wg10PagePool {
         self.pack_buffers = Some(pack_buffers);
         self.glsl_source = Some(glsl_source);
         self.compute_ctx = Some(compute_ctx);
-        self.use_biome_path = false;
         self.biome_ctx = None;
         self.biome_world = None;
         self.static_ref = None;
@@ -83,7 +82,6 @@ impl Wg10PagePool {
         self.pack_buffers = None;
         self.glsl_source = None;
         self.compute_ctx = None;
-        self.use_biome_path = true;
         self.biome_ctx = Some(biome_ctx);
         self.biome_world = None;
         self.static_ref = None;
@@ -114,7 +112,6 @@ impl Wg10PagePool {
         self.pack_buffers = None;
         self.glsl_source = None;
         self.compute_ctx = None;
-        self.use_biome_path = true;
         self.biome_ctx = None;
         self.biome_world = Some(BiomeWorldRuntime {
             pack,
@@ -147,7 +144,6 @@ impl Wg10PagePool {
         self.pack_buffers = None;
         self.glsl_source = None;
         self.compute_ctx = None;
-        self.use_biome_path = true;
         self.biome_ctx = None;
         self.biome_world = None;
         self.static_ref = Some(static_ref);

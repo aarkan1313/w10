@@ -84,10 +84,28 @@ moved to a background/cache path or replaced by a cheaper preview contract. The 
 remains live `MOUNTAIN` against the accepted mountain-world-layer contract; WORLD composition should
 not block that path or be presented as accepted terrain.
 
+### Page-Pool Producer Split Checkpoint - 2026-06-04
+
+The next producer separation pass is complete. Active producer classification and page dispatch now
+live in `page_pool/producer.rs`, with an explicit `ProducerKind` for `Legacy`, `SingleBiome`,
+`World`, and `StaticReference`. `acquire.rs` is reduced to page policy/slot acquisition/rollback,
+and the redundant `use_biome_path` field is gone; public `uses_biome_path()` now derives from the
+active producer kind.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest WORLD numbers:
+  `cpu_p99=8.723 ms`, `cpu_max=10.612 ms`, render p99 `0.216 ms`, zero hide/show.
+- `python tools\gate.py --suite biome_world` = 1/1.
+
 Next refactor target: split static-reference sampling/material presentation from report surfaces,
-then move producer selection out of `Wg10PagePool` into explicit producer implementations. Next
-visual target: make live `MOUNTAIN` reproduce the accepted mountain-world-layer contract before
-trying to tune biome palettes or add more biomes.
+then keep moving producer details out of `Wg10PagePool` storage/configuration toward explicit
+producer implementations. Next visual target: make live `MOUNTAIN` reproduce the accepted
+mountain-world-layer contract before trying to tune biome palettes or add more biomes.
 
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the

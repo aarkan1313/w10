@@ -34,7 +34,6 @@ impl Wg10PagePool {
                 &mut self.pack_buffers,
                 &mut self.glsl_source,
                 &mut self.compute_ctx,
-                &mut self.use_biome_path,
                 &mut self.biome_ctx,
                 &mut self.biome_world,
                 &mut self.static_ref,
@@ -77,7 +76,6 @@ impl Wg10PagePool {
             &mut self.pack_buffers,
             &mut self.glsl_source,
             &mut self.compute_ctx,
-            &mut self.use_biome_path,
             &mut self.biome_ctx,
             &mut self.biome_world,
             &mut self.static_ref,
@@ -99,7 +97,6 @@ impl Wg10PagePool {
         pack_buffers: &mut Option<PackBuffers>,
         glsl_source: &mut Option<String>,
         compute_ctx: &mut Option<PageComputeContext>,
-        use_biome_path: &mut bool,
         biome_ctx: &mut Option<biome_page_compute::BiomePageComputeContext>,
         biome_world: &mut Option<BiomeWorldRuntime>,
         static_ref: &mut Option<super::StaticHeightRuntime>,
@@ -115,7 +112,6 @@ impl Wg10PagePool {
         *pack_buffers = None;
         *glsl_source = None;
         *compute_ctx = None;
-        *use_biome_path = false;
         *biome_ctx = None;
         *biome_world = None;
         *static_ref = None;
@@ -124,14 +120,7 @@ impl Wg10PagePool {
     /// Exact predicate mirrored by the `acquire_page` guard.
     #[allow(dead_code)]
     pub(super) fn is_configured(&self) -> bool {
-        self.policy.is_some()
-            && ((self.pack.is_some()
-                && self.pack_buffers.is_some()
-                && self.glsl_source.is_some()
-                && self.compute_ctx.is_some())
-                || self.biome_ctx.is_some()
-                || self.biome_world.is_some()
-                || self.static_ref.is_some())
+        self.policy.is_some() && self.active_producer_kind().is_some()
     }
 
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px x page_px`.
