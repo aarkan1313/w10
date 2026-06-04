@@ -20,6 +20,9 @@ const WORLD_SEED := 1337
 const MOUNTAIN_REVIEW_SEED := 177
 const FLOW_ITERS := 192
 const FLOW_MAX_LEVEL := 2
+# WORLD review stays single-biome-per-page until multi-biome compose moves off the synchronous fly
+# stream. Top-2/full compose removes rectangular route pages but currently causes ~1.9s page-build
+# hitches in `review_runtime_modes`; treat WORLD as diagnostic, not accepted terrain.
 const WORLD_REVIEW_ACTIVE_BIOME_LIMIT := 1
 const FEATURE_SPAN_NETWORK_M := 90000.0
 const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
@@ -146,6 +149,9 @@ func is_legacy() -> bool:
 
 func is_reference() -> bool:
 	return _mode == MODE_REFERENCE
+
+func world_active_biome_limit() -> int:
+	return WORLD_REVIEW_ACTIVE_BIOME_LIMIT
 
 func view_relief_scale(default_scale: float) -> float:
 	if _mode == MODE_REFERENCE:

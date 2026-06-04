@@ -72,6 +72,18 @@ failure. The remaining owner-visible problems are architectural:
 - Mode 3 / `WORLD` is still a composed prototype and currently exposes page-scale composition/LOD
   boundaries in capture.
 
+WORLD follow-up audit: the page-scale artifact is caused by the owner fly's bounded WORLD preview
+using one active biome per page. Switching the review helper to top-2 or unbounded height compose
+is not currently viable on the synchronous fly stream: `review_runtime_modes` measured WORLD
+`cpu_max` around 1900-1950 ms and failed the 50 ms max-update gate, even with WORLD flow disabled.
+Restoring the one-biome diagnostic cap returns the same gate to pass with latest WORLD
+`cpu_p99=7.686 ms`, `cpu_max=10.050 ms`, zero hide/show, and render p99 `0.505 ms`.
+
+Conclusion: mode 3 is a routing/material diagnostic until multi-biome WORLD height composition is
+moved to a background/cache path or replaced by a cheaper preview contract. The next visual target
+remains live `MOUNTAIN` against the accepted mountain-world-layer contract; WORLD composition should
+not block that path or be presented as accepted terrain.
+
 Next refactor target: split static-reference sampling/material presentation from report surfaces,
 then move producer selection out of `Wg10PagePool` into explicit producer implementations. Next
 visual target: make live `MOUNTAIN` reproduce the accepted mountain-world-layer contract before

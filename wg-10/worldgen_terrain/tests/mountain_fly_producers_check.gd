@@ -71,6 +71,7 @@ func _run() -> int:
 	_expect(bool(producers.is_world()), "WORLD mode should report is_world", errs)
 	_expect(int(producers.runtime_seed()) == 1337, "WORLD seed should use world seed", errs)
 	_expect(absf(float(producers.view_relief_ref(1700.0, 0.25)) - 5000.0) < 0.001, "WORLD relief ref should follow clamped relief and default scale", errs)
+	_expect(int(producers.world_active_biome_limit()) == 1, "WORLD review should stay capped until compose is off the fly stream", errs)
 	producers.cycle_mode()
 	_expect(str(producers.mode_label()) == "MOUNTAIN", "WORLD should cycle to MOUNTAIN", errs)
 	_expect(bool(producers.set_mode_label("WORLD")), "set_mode_label WORLD should succeed", errs)

@@ -27,6 +27,15 @@
 > pass-network/material/facts world-layer contract, and mode 3 (`WORLD`) still exposes
 > page-scale composition/LOD boundaries. Those are architecture/content-port issues, not
 > page-pool speed failures.
+> Follow-up WORLD diagnostic audit: the owner fly WORLD mode is intentionally capped at
+> one active biome per page until multi-biome height composition moves off the synchronous
+> streamer path. Testing top-2/full WORLD compose in the owner fly removed the one-biome
+> shortcut but produced ~1.9 s `review_runtime_modes` update hitches (`WORLD cpu_max`
+> about 1900-1950 ms), even with WORLD flow disabled. Restored bounded WORLD diagnostic
+> mode passes again: latest `review_runtime_modes` = 2/2 with WORLD `cpu_p99=7.686 ms`,
+> `cpu_max=10.050 ms`, zero hide/show, and render p99 `0.505 ms`. Do not treat mode 3
+> as accepted visual terrain until WORLD composition is backgrounded, cached, or replaced
+> by a cheaper preview contract.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

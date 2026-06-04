@@ -50,6 +50,10 @@ single rendered page:
 - Do not treat static `REFERENCE` as final live synthesis. It is the accepted
   visual baseline and renderer bridge until the live world-layer producer exists.
 - Do not call WORLD composition accepted just because its route tint is visible.
+- Do not move multi-biome WORLD height composition into the owner fly stream as a
+  synchronous "visual fix". Top-2/full compose currently causes ~1.9 s page-build
+  hitches in `review_runtime_modes`; it needs backgrounding, caching, or a cheaper
+  preview contract before it can be owner-review default.
 
 ## Implementation Path
 
@@ -144,6 +148,11 @@ single rendered page:
   passes the sprint-speed zero-hide churn gate.
 - `review_runtime_visual` writes separate visual evidence for REFERENCE,
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes.
+- `review_runtime_modes` proves the current owner WORLD mode is only a bounded
+  diagnostic preview: one active biome per page keeps streaming within budget
+  (latest WORLD `cpu_p99=7.686 ms`, `cpu_max=10.050 ms`, render p99 `0.505 ms`).
+  A direct top-2/full WORLD height-compose attempt failed with ~1900-1950 ms
+  update hitches, so full WORLD composition remains a background/cache task.
 - `REFERENCE` proves the renderer can display the accepted mountain-network
   geometry when fed the accepted payload.
 - `review_runtime` now also proves the REFERENCE bridge loaded the accepted
