@@ -4,8 +4,11 @@
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > **Read this first:** latest committed checkpoint is
-> `7e0fb98 fix(slice4): recover mountain network visual bridge`, tagged
-> `backup-slice4-mountain-visual-bridge-20260604-7e0fb98`. `REFERENCE` remains
+> `37eedc5 fix(slice4): smooth page repage fade by time`, tagged
+> `backup-slice4-page-fade-time-20260604-37eedc5`. The immediately preceding
+> runtime proof commit is `ff797fc test(slice4): guard mountain reference page
+> facts`, tagged
+> `backup-slice4-mountain-reference-page-guard-20260604-ff797fc`. `REFERENCE` remains
 > the accepted static mountain-network baseline streamed through the runtime
 > page pool. `MOUNTAIN/network_ref` now matches that baseline through a
 > reference-backed height/material/fact bridge
@@ -15,11 +18,30 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
+> Current proof after the latest renderer fix: `cargo test -p wg10_terrain --lib`
+> = 227/0, `tools\build_rust.ps1` builds the Godot-facing extension,
+> `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
+> `review_runtime_visual` = 1/1. Latest mode gate reports zero hide/show in
+> REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
+> 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms, WORLD 8.617/10.980 ms. Latest
+> render p99 is REFERENCE 0.342 ms, MOUNTAIN 0.382 ms, WORLD 0.216 ms. The
+> REFERENCE vs MOUNTAIN/network visual bridge still has sampled mean/p95 RGB
+> delta 0.000000/0.000000. The page transition fade is now wall-clock based
+> (`0.18 s`) instead of frame-count based, so high-FPS review does not compress
+> REPAGE transitions into a near-hard snap.
+> Current source-size audit: no Rust/GDScript/GLSL/Python source file under
+> `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
+> `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The
+> largest current source files found were `tools/dem_pack/export_godot_rough_world_chunks.py`
+> at 745 lines, `mountain_world_chunks_review.gd` at 695 lines, and
+> `biome_transition_world_review.gd` at 582 lines. The remaining architecture
+> risk is producer ownership, WORLD preview/compose taxonomy, and fact/collision
+> alignment, not a single still-overgrown runtime file.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:
 > REFERENCE normalizes material color against displayed 1700 m relief,
-> MOUNTAIN/network against 850 m, and WORLD/close-debug against 425 m, so low-relief
+> MOUNTAIN/network against displayed 1700 m, and WORLD/close-debug against 425 m, so low-relief
 > modes no longer collapse into one washed-out palette. The review camera/fog now uses
 > the accepted mountain-network 76.8 km visual footprint while the streamer still keeps
 > the larger 196.608 km loaded edge for fallback coverage; this avoids showing
@@ -210,7 +232,7 @@
 > (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug` scale
 > (`feature_span_m=3500`). That candidate uses the accepted mountain-network seed
 > family (`runtime_seed=177`), `relief_m=1700`, a MOUNTAIN/network-only view
-> relief scale of `0.5`, and the accepted source-window transform
+> relief scale of `1.0`, and the accepted source-window transform
 > (`source_scale=3.515625`, source center `207000,176000`); `review_runtime`
 > proves runtime=`single`, biome_path=`true` after switching to MOUNTAIN.
 > `WORLD` remains available through `B` as the biome-composition A/B path.

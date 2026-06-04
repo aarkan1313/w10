@@ -16,8 +16,15 @@ stabilization and recovery:
   (`single_mountain_world_layer_reference_bridge`): it uses the accepted payload for
   height/material/facts and matches REFERENCE in the latest capture, but it is **not final
   procedural biome synthesis**.
+- Latest committed checkpoint is `37eedc5 fix(slice4): smooth page repage fade by time`
+  (`backup-slice4-page-fade-time-20260604-37eedc5`). It includes the preceding
+  REFERENCE-vs-MOUNTAIN center-page fact guard and the wall-clock page-fade
+  mitigation for high-FPS REPAGE snap.
 - `WORLD` remains diagnostic until multi-biome composition is moved off the synchronous fly stream
   or given a cheaper preview contract.
+- Current source-size audit found no Rust/GDScript/GLSL/Python source file over
+  1000 lines in the active terrain/runtime/tooling paths; the next refactor risk
+  is ownership and mode taxonomy, not one giant still-unsplit source file.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same

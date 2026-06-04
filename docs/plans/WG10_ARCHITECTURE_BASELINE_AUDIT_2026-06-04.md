@@ -222,7 +222,7 @@ Validation:
   the accepted mountain-network payload through the live page pool and renderer.
   `MOUNTAIN/network_ref` remains the explicit live candidate through `2`/`B`; it
   uses `runtime_seed=177`, `relief_m=1700`, a MOUNTAIN/network-only view relief
-  scale of `0.5`, and the accepted source-window transform
+  scale of `1.0`, and the accepted source-window transform
   (`source_scale=3.515625`, source center `207000,176000`), matching the accepted
   mountain-network seed/relief/source family without changing the global renderer
   relief scale. `P` still exposes the old close-up debug scale
@@ -234,7 +234,7 @@ Validation:
   corridor/material hints, view relief scale=`1.0`, identity source transform,
   and real page startup. It also switches to `MOUNTAIN/network_ref` and verifies
   runtime=`single`, biome_path=`true`, seed=`177`, relief_m=`1700`, view relief
-  scale=`0.5`, source scale=`3.515625`, and source offset=`207000,176000`. It
+  scale=`1.0`, source scale=`3.515625`, and source offset=`207000,176000`. It
   also
   runs `mountain_fly_visibility_churn_check.gd`, a sprint-speed motion gate over
   360 frames: `stream_events=24`, `resident=69`, `repage=72`, `hide=0`,
@@ -525,7 +525,7 @@ Third implemented step: the live review producer now owns explicit world and
 mountain-reference seed constants through `runtime_seed()` (renamed away from the
 GDScript built-in `seed()`), the MOUNTAIN/network candidate relief is `1700m`,
 and only the MOUNTAIN/network review preset overrides the renderer's default view
-relief scale to `0.5`. `mountain_fly_review.gd` exposes
+relief scale to `1.0`. `mountain_fly_review.gd` exposes
 `debug_runtime_snapshot()` so the smoke gate validates the owner scene through a
 stable debug surface instead of reaching into private fields.
 
