@@ -48,11 +48,33 @@ func cycle_mode() -> void:
 	else:
 		_mode = MODE_WORLD
 
+func set_mode_label(label: String) -> bool:
+	var normalized := label.to_upper()
+	if normalized == "WORLD":
+		_mode = MODE_WORLD
+		return true
+	if normalized == "MOUNTAIN":
+		_mode = MODE_MOUNTAIN
+		return true
+	if normalized == "LEGACY":
+		_mode = MODE_LEGACY
+		return true
+	return false
+
 func toggle_preset() -> void:
 	if _preset == PRESET_NETWORK:
 		_preset = PRESET_CLOSE_DEBUG
 	else:
 		_preset = PRESET_NETWORK
+
+func set_preset_label(label: String) -> bool:
+	if label == "network_ref":
+		_preset = PRESET_NETWORK
+		return true
+	if label == "close_debug":
+		_preset = PRESET_CLOSE_DEBUG
+		return true
+	return false
 
 func set_relief_m(value: float) -> void:
 	_relief_m = clampf(value, 50.0, 20000.0)

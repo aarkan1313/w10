@@ -20,6 +20,8 @@
 > loads), `review_static_visual` = **1/1 pass** (captures the accepted static
 > baseline PNGs), `review_runtime` = **1/1 pass** (instantiates the owner
 > `mountain_fly_review.tscn` path and verifies `MOUNTAIN/network_ref` defaults),
+> `review_runtime_visual` = **1/1 pass** (captures MOUNTAIN/network, MOUNTAIN/close,
+> WORLD/material, and WORLD/route PNGs through the shared producer helper),
 > `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
 > (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
@@ -142,6 +144,8 @@
 > `mountain_fly_producers.gd`, with `mountain_fly_producers_check.gd` in the `fast`
 > suite to lock B/P/R state transitions. `review_runtime` now gates the actual owner
 > scene startup too, catching GDScript/Rust call-signature drift and default-preset drift.
+> `biome_fly_capture.gd` also uses `mountain_fly_producers.gd`, so runtime visual
+> evidence can no longer drift from the owner scene's producer constants/configure calls.
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
 > the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual

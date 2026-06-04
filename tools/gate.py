@@ -112,6 +112,11 @@ CHECKS = {
     "review_runtime": [
         "worldgen_terrain/tests/mountain_fly_review_smoke_check.gd",
     ],
+    # Windowed live-runtime visual capture. This writes the MOUNTAIN/network,
+    # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence.
+    "review_runtime_visual": [
+        "worldgen_terrain/tests/biome_fly_capture.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -125,6 +130,7 @@ WINDOWED_SUITES = {
     "biome_world",
     "review_static_visual",
     "review_runtime",
+    "review_runtime_visual",
 }
 
 

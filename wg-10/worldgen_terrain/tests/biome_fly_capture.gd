@@ -7,25 +7,14 @@ extends SceneTree
 # - WORLD/network_ref: composed grammar-routed runtime plus route-color diagnostic
 # WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_*_fly_capture*.png
 
-const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
-const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
-const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
-const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
-const PACK_FILE := "terrain_pack.gate.json"
+const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
-const APRON_PX := 160
-const FEATURE_SPAN_NETWORK_M := 90000.0
-const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
-const FLOW_ITERS := 192
-const PAGE_PX := 256
-const SEED := 1337
 const NUM_LEVELS := 5
 const BASE_SPAN := 8192.0
 const GRID_RES := 64
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
-const CAPACITY := 96
 const MORPH_REGION := 0.15
 const RELIEF_SCALE := 0.25
 const RELIEF_REF := 2000.0
@@ -37,8 +26,10 @@ const OUT_MOUNTAIN_CLOSE := "D:/tmp/wg10_biome_compose/biome_mountain_close_fly_
 const OUT_WORLD := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
 const OUT_ROUTE := "D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png"
 
-const MODE_MOUNTAIN := 0
-const MODE_WORLD := 1
+const MODE_MOUNTAIN := "MOUNTAIN"
+const MODE_WORLD := "WORLD"
+const PRESET_NETWORK := "network_ref"
+const PRESET_CLOSE_DEBUG := "close_debug"
 
 func _init() -> void:
 	quit(await _run())
@@ -56,19 +47,24 @@ func _run() -> int:
 	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, DETAIL_AMP)
 	RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP)
 
-	var rc := await _capture_mode("mountain_network", MODE_MOUNTAIN, FEATURE_SPAN_NETWORK_M, OUT_MOUNTAIN_NETWORK, "")
+	var rc := await _capture_mode("mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
 	if rc != 0:
 		return rc
-	rc = await _capture_mode("mountain_close", MODE_MOUNTAIN, FEATURE_SPAN_CLOSE_DEBUG_M, OUT_MOUNTAIN_CLOSE, "")
+	rc = await _capture_mode("mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
 	if rc != 0:
 		return rc
-	rc = await _capture_mode("world_network", MODE_WORLD, FEATURE_SPAN_NETWORK_M, OUT_WORLD, OUT_ROUTE)
+	rc = await _capture_mode("world_network", MODE_WORLD, PRESET_NETWORK, OUT_WORLD, OUT_ROUTE)
 	return rc
 
-func _capture_mode(label: String, mode: int, feature_span_m: float, out_material: String, out_route: String) -> int:
+func _capture_mode(label: String, mode: String, preset: String, out_material: String, out_route: String) -> int:
 	RenderingServer.global_shader_parameter_set("wg_dbg_mode", 0.0)
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
-	var err := _configure_pool(pool, mode, feature_span_m)
+	var producer: Object = load(PRODUCERS).new()
+	var producer_err := _configure_producer(producer, mode, preset)
+	if producer_err != "":
+		push_error("[wg10-biome-capture] %s producer failed: %s" % [label, producer_err]); return 1
+	var feature_span_m := float(producer.feature_span_m())
+	var err: String = producer.configure(pool)
 	if err != "":
 		push_error("[wg10-biome-capture] %s configure failed: %s" % [label, err]); return 1
 	var runtime_mode := str(pool.call("biome_runtime_mode"))
@@ -151,17 +147,12 @@ func _capture_mode(label: String, mode: int, feature_span_m: float, out_material
 		label, runtime_mode, feature_span_m, out_material, route_suffix, pages, str(biome), VIEW_SIZE.x, VIEW_SIZE.y])
 	return 0
 
-func _configure_pool(pool: Object, mode: int, feature_span_m: float) -> String:
-	if mode == MODE_WORLD:
-		return str(pool.call("configure_biome_world",
-			ProjectSettings.globalize_path(PACK_RES_DIR),
-			PACK_FILE,
-			CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m, FLOW_ITERS, 1000.0, 2, SEED))
-	return str(pool.call("configure_biome",
-		ProjectSettings.globalize_path(PRIM),
-		ProjectSettings.globalize_path(MACHINE),
-		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m, FLOW_ITERS, 1000.0, 2, SEED))
+func _configure_producer(producer: Object, mode: String, preset: String) -> String:
+	if not bool(producer.set_mode_label(mode)):
+		return "invalid mode %s" % mode
+	if not bool(producer.set_preset_label(preset)):
+		return "invalid preset %s" % preset
+	return ""
 
 func _camera_frame(pos: Vector2, feature_span_m: float) -> Dictionary:
 	if feature_span_m > 10000.0:

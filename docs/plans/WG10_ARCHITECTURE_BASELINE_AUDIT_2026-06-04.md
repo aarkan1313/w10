@@ -143,6 +143,11 @@ Validation:
   only; the route capture proves the renderer receives page route labels; the
   normal WORLD material capture still reads broad/flat in the sampled area, so
   per-biome materials/content remain open.
+- `python tools\gate.py --suite review_runtime_visual`: 1/1 passed. This
+  regenerates the four live runtime PNG artifacts above and now routes producer
+  mode/preset configuration through `mountain_fly_producers.gd`, so the owner
+  scene and runtime visual capture share the same producer constants and
+  `configure_biome*` call shape.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -323,6 +328,8 @@ route diagnostics, and page-stream state. This does not complete Phase 2, but it
 removes one mixed concern from the live owner review scene and gives the mode
 state its own fast gate. The follow-up `review_runtime` gate now instantiates the
 actual owner scene so this separation is proven on the path the user flies.
+`biome_fly_capture.gd` also consumes `mountain_fly_producers.gd`, so live visual
+evidence no longer duplicates producer config behind the scene.
 
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 
@@ -381,6 +388,7 @@ $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stab
 python tools\gate.py --suite review_static
 python tools\gate.py --suite review_static_visual
 python tools\gate.py --suite review_runtime
+python tools\gate.py --suite review_runtime_visual
 python tools\gate.py --suite m3
 python tools\gate.py --suite biome_fly
 & $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/mountain_fly_review.tscn --quit-after 2

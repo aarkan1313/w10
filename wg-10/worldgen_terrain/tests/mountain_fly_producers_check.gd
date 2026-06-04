@@ -26,6 +26,12 @@ func _run() -> int:
 	_expect(absf(float(producers.feature_span_m()) - 3500.0) < 0.001, "close_debug span should be 3500m", errs)
 	producers.toggle_preset()
 	_expect(str(producers.preset_label()) == "network_ref", "second toggle should return to network_ref", errs)
+	_expect(bool(producers.set_preset_label("close_debug")), "set_preset_label close_debug should succeed", errs)
+	_expect(str(producers.preset_label()) == "close_debug", "set_preset_label should enter close_debug", errs)
+	_expect(bool(producers.set_preset_label("network_ref")), "set_preset_label network_ref should succeed", errs)
+	_expect(str(producers.preset_label()) == "network_ref", "set_preset_label should enter network_ref", errs)
+	_expect(not bool(producers.set_preset_label("bad")), "invalid preset label should fail", errs)
+	_expect(str(producers.preset_label()) == "network_ref", "invalid preset label should leave preset unchanged", errs)
 
 	producers.set_relief_m(1.0)
 	_expect(absf(float(producers.relief_m()) - 50.0) < 0.001, "relief lower clamp should be 50m", errs)
@@ -40,6 +46,14 @@ func _run() -> int:
 	_expect(bool(producers.is_world()), "WORLD mode should report is_world", errs)
 	producers.cycle_mode()
 	_expect(str(producers.mode_label()) == "MOUNTAIN", "WORLD should cycle to MOUNTAIN", errs)
+	_expect(bool(producers.set_mode_label("WORLD")), "set_mode_label WORLD should succeed", errs)
+	_expect(str(producers.mode_label()) == "WORLD", "set_mode_label should enter WORLD", errs)
+	_expect(bool(producers.set_mode_label("LEGACY")), "set_mode_label LEGACY should succeed", errs)
+	_expect(str(producers.mode_label()) == "LEGACY", "set_mode_label should enter LEGACY", errs)
+	_expect(bool(producers.set_mode_label("MOUNTAIN")), "set_mode_label MOUNTAIN should succeed", errs)
+	_expect(str(producers.mode_label()) == "MOUNTAIN", "set_mode_label should enter MOUNTAIN", errs)
+	_expect(not bool(producers.set_mode_label("BAD")), "invalid mode label should fail", errs)
+	_expect(str(producers.mode_label()) == "MOUNTAIN", "invalid mode label should leave mode unchanged", errs)
 
 	if not errs.is_empty():
 		for err in errs:
