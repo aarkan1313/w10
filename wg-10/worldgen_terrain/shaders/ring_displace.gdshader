@@ -72,13 +72,10 @@ float wg_value_noise(vec2 x) {
 // ceiling directly.
 const int   WG_DETAIL_OCTAVES = 5;
 const float WG_DETAIL_GAIN    = 0.5;
-const float WG_DETAIL_FREQ    = 0.00025;  // ~1/4000 m base wavelength. LOWERED from 0.0009 so the 5
-                                          // octaves (~4000/2000/1000/500/250 m) stay at/above the
-                                          // GRID_RES=64 fly mesh Nyquist (256 m) — at 0.0009 the 3
-                                          // finest octaves (278/139/69 m) were below the 128 m vertex
-                                          // spacing and aliased AWAY, leaving only faint km-scale swell
-                                          // (the "no visible detail" fly finding). All octaves now
-                                          // resolve on the shipped mesh. (Final freq is an S4 config knob.)
+const float WG_DETAIL_FREQ    = 0.00025;  // ~1/4000 m base wavelength. The 5 octaves
+                                          // (~4000/2000/1000/500/250 m) stay above the review mesh
+                                          // Nyquist after the owner fly mesh was raised to GRID_RES=128.
+                                          // (Final freq is an S4 config knob.)
 float wg_fbm_detail(vec2 world_xz) {
 	float sum = 0.0;
 	float amp = 1.0;

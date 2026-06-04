@@ -120,6 +120,7 @@ CHECKS = {
     # page-stream hitches.
     "review_runtime_modes": [
         "worldgen_terrain/tests/mountain_fly_modes_perf_check.gd",
+        "worldgen_terrain/tests/mountain_fly_modes_render_perf_check.gd",
     ],
     # Windowed live-runtime visual capture. This writes the MOUNTAIN/network,
     # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence.

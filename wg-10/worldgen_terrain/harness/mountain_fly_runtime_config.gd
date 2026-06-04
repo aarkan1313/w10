@@ -6,7 +6,10 @@ extends RefCounted
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const NUM_LEVELS := 5
 const BASE_SPAN_M := 8192.0
-const GRID_RES := 64
+# The accepted mountain-network payload is sampled at about 66.7 m. A 64x64 fly mesh samples
+# the 8192 m base page at 128 m, which visibly facets the reference scene and makes LOD repages
+# read as visual pop. 128 keeps the live review mesh close to the accepted source density.
+const GRID_RES := 128
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
