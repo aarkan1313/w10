@@ -101,6 +101,23 @@ CHECKS = {
     "review_static": [
         "worldgen_terrain/tests/mountain_network_chunks_review_check.gd",
     ],
+    # Windowed visual capture for the accepted static mountain-network baseline. Kept separate
+    # from `review_static` because it writes PNG evidence and requires a real render device.
+    "review_static_visual": [
+        "worldgen_terrain/tests/mountain_network_visual_capture.gd",
+    ],
+}
+
+WINDOWED_SUITES = {
+    "gpu",
+    "m3",
+    "gpu_flow",
+    "page_measure",
+    "biome_page",
+    "flow_converge",
+    "biome_fly",
+    "biome_world",
+    "review_static_visual",
 }
 
 
@@ -176,7 +193,7 @@ def main() -> int:
         return run_pytest_suite(fast=False)
     if args.suite == PYTEST_FAST_SUITE:
         return run_pytest_suite(fast=True)
-    headless = args.suite not in ("gpu", "m3", "gpu_flow", "page_measure", "biome_page", "flow_converge", "biome_fly", "biome_world")   # GPU compute (RenderingDevice) needs a windowed device
+    headless = args.suite not in WINDOWED_SUITES
     godot = godot_bin()
     ensure_extension_imported(godot)   # the import pass is always headless; that's fine
     failures = 0

@@ -17,7 +17,8 @@
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
-> loads), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
+> loads), `review_static_visual` = **1/1 pass** (captures the accepted static
+> baseline PNGs), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
 > (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
 > cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.104 ms).
@@ -108,8 +109,9 @@
 > `mountain_network_chunks_review.tscn` in a windowed `SubViewport` and writes
 > `D:/tmp/wg10_biome_compose/mountain_network_static_focus_capture.png` plus
 > `D:/tmp/wg10_biome_compose/mountain_network_static_overview_capture.png`
-> (`chunks=9`, `feature_span_m=90000`, `1280x720`). These are comparison evidence
-> for the owner-liked offline artifact, not proof that the live runtime matches it.
+> (`chunks=9`, `feature_span_m=90000`, `1280x720`). It is now wired as the
+> `review_static_visual` gate suite. These are comparison evidence for the
+> owner-liked offline artifact, not proof that the live runtime matches it.
 > The standalone visual capture now writes four runtime artifacts:
 > `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,

@@ -89,7 +89,8 @@ Validation:
   `D:/tmp/wg10_biome_compose/mountain_network_static_overview_capture.png`
   from `mountain_network_chunks_review.tscn` (`chunks=9`,
   `feature_span_m=90000`, `1280x720`). These captures preserve the owner-liked
-  offline artifact for direct comparison against the live runtime.
+  offline artifact for direct comparison against the live runtime. This is now
+  wired as `python tools\gate.py --suite review_static_visual`.
 - `python tools\gate.py --suite m3`: 9/9 passed after the lit-material and
   route-debug renderer changes. `m3_accept` p99 = 5.17 ms against the 6.0 ms
   budget; `m5_detail_check` remained non-vacuous (`diff=0.0124`), bounded,
@@ -250,6 +251,7 @@ runtime path."
    baseline.
 3. Editor-closed gate results are now recorded above:
    - `python tools/gate.py --suite review_static` -> 1/1 pass;
+   - `python tools/gate.py --suite review_static_visual` -> 1/1 pass;
    - `python tools/gate.py --suite m3` -> 9/9 pass;
    - `python tools/gate.py --suite biome_fly` -> 4/4 pass.
 
@@ -358,10 +360,10 @@ $env:CARGO_TARGET_DIR='D:\workflows\worldgen10\wg-10\rust\target'
 cargo build -p wg10_terrain
 
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'
-& $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 --script res://worldgen_terrain/tests/mountain_network_visual_capture.gd
+python tools\gate.py --suite review_static
+python tools\gate.py --suite review_static_visual
 python tools\gate.py --suite m3
 python tools\gate.py --suite biome_fly
-python tools\gate.py --suite review_static
 & $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/mountain_fly_review.tscn --quit-after 2
 ```
 
