@@ -7,15 +7,21 @@
 //! frame. Persistent: tiles are created once, never rebuilt (only transform + uniforms
 //! change). Owns NO page RIDs — it only samples textures the pool owns.
 
-use godot::prelude::*;
+use crate::ring_geometry::{band_mesh, RingLayout, RingMesh};
 use godot::classes::{
-    ArrayMesh, MeshInstance3D, ShaderMaterial, Shader, INode3D,
     mesh::{ArrayType, PrimitiveType},
+    ArrayMesh, INode3D, MeshInstance3D, Shader, ShaderMaterial,
 };
-use crate::ring_geometry::{RingLayout, band_mesh, RingMesh};
+use godot::prelude::*;
 
 /// Tiles per level: a 3x3 neighborhood (radius 1).
 const TILES_PER_LEVEL: usize = 9;
+
+/// Per-frame height fade step for newly-bound pages. At 60 FPS this is ~200 ms; at the
+/// current review-scene 220-240 FPS it is ~50 ms. The fade starts from the parent page's
+/// height and ramps to the newly resident fine page, hiding one-frame pop-in without adding
+/// more page work.
+const PAGE_FADE_STEP: f32 = 0.08;
 
 /// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
 /// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
@@ -33,6 +39,7 @@ fn tile_index(level: i32, dx: i32, dz: i32) -> usize {
 pub struct Wg10ClipmapRings {
     tiles: Vec<Gd<MeshInstance3D>>,
     bound_keys: Vec<(i64, i64)>,
+    fade_values: Vec<f32>,
     num_levels: i32,
     base_span: f64,
     grid_res: i32,
@@ -46,6 +53,7 @@ impl INode3D for Wg10ClipmapRings {
         Self {
             tiles: Vec::new(),
             bound_keys: Vec::new(),
+            fade_values: Vec::new(),
             num_levels: 0,
             base_span: 0.0,
             grid_res: 0,
@@ -58,13 +66,21 @@ impl INode3D for Wg10ClipmapRings {
 #[godot_api]
 impl Wg10ClipmapRings {
     #[func]
-    pub fn configure(&mut self, num_levels: i64, base_span: f64, grid_res: i64, shader_path: GString) {
+    pub fn configure(
+        &mut self,
+        num_levels: i64,
+        base_span: f64,
+        grid_res: i64,
+        shader_path: GString,
+    ) {
         if !self.tiles.is_empty() {
             godot_error!("Wg10ClipmapRings::configure called more than once — ignoring");
             return;
         }
         if grid_res < 1 || grid_res % 4 != 0 {
-            godot_error!("Wg10ClipmapRings: grid_res must be >= 1 and divisible by 4, got {grid_res}");
+            godot_error!(
+                "Wg10ClipmapRings: grid_res must be >= 1 and divisible by 4, got {grid_res}"
+            );
             return;
         }
         self.num_levels = num_levels as i32;
@@ -74,18 +90,22 @@ impl Wg10ClipmapRings {
 
         let shader: Gd<Shader> = match try_load::<Shader>(&shader_path) {
             Ok(s) => s,
-            Err(_) => { godot_error!("Wg10ClipmapRings: failed to load shader {shader_path}"); return; }
+            Err(_) => {
+                godot_error!("Wg10ClipmapRings: failed to load shader {shader_path}");
+                return;
+            }
         };
 
         let total = (self.num_levels as usize) * TILES_PER_LEVEL;
         self.bound_keys = vec![(i64::MIN, i64::MIN); total];
+        self.fade_values = vec![1.0; total];
 
         for level in 0..self.num_levels {
             let priority = (self.num_levels - 1 - level) as i32; // finest (0) -> highest -> on top
             let span_l = self.base_span * 2f64.powi(level);
             for dz in -1..=1 {
                 for dx in -1..=1 {
-                    let tile_layout = RingLayout::new(1, span_l);     // full grid at span_l
+                    let tile_layout = RingLayout::new(1, span_l); // full grid at span_l
                     let rm: RingMesh = band_mesh(&tile_layout, 0, self.grid_res);
                     self.built_vertex_count += rm.positions.len() as i64;
                     let mesh = build_array_mesh(&rm);
@@ -117,10 +137,14 @@ impl Wg10ClipmapRings {
     }
 
     #[func]
-    pub fn level_count(&self) -> i64 { self.num_levels as i64 }
+    pub fn level_count(&self) -> i64 {
+        self.num_levels as i64
+    }
 
     #[func]
-    pub fn tile_count(&self) -> i64 { self.tiles.len() as i64 }
+    pub fn tile_count(&self) -> i64 {
+        self.tiles.len() as i64
+    }
 
     #[func]
     pub fn total_vertex_count(&self) -> i64 {
@@ -138,7 +162,11 @@ impl Wg10ClipmapRings {
                 }
             }
         }
-        if read_any { total } else { self.built_vertex_count }
+        if read_any {
+            total
+        } else {
+            self.built_vertex_count
+        }
     }
 
     #[func]
@@ -175,10 +203,17 @@ impl Wg10ClipmapRings {
         let coarse_span = spans.y as f64;
         let tile_span = placement.x as f64;
         let level_half_extent = placement.y as f64;
+        let next_key = (sample_origin.x as i64, sample_origin.y as i64);
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
             godot_error!("Wg10ClipmapRings::bind_tile: ({level},{dx},{dz}) out of range");
             return;
+        }
+        let was_hidden = !self.tiles[idx].is_visible();
+        if self.bound_keys[idx] != next_key || was_hidden {
+            self.fade_values[idx] = 0.0;
+        } else {
+            self.fade_values[idx] = (self.fade_values[idx] + PAGE_FADE_STEP).min(1.0);
         }
         // Placement is INVARIANT — tile (level,dx,dz) always sits in its fine grid slot,
         // covering world [tile_origin, tile_origin+tile_span], whatever it samples. Sampling
@@ -197,10 +232,12 @@ impl Wg10ClipmapRings {
         }
         let mi = &mut self.tiles[idx];
         let Some(mat_res) = mi.get_material_override() else {
-            godot_error!("Wg10ClipmapRings::bind_tile: tile has no material"); return;
+            godot_error!("Wg10ClipmapRings::bind_tile: tile has no material");
+            return;
         };
         let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
-            godot_error!("Wg10ClipmapRings::bind_tile: material is not a ShaderMaterial"); return;
+            godot_error!("Wg10ClipmapRings::bind_tile: material is not a ShaderMaterial");
+            return;
         };
         mat.set_shader_parameter("height_tex", &height_tex.to_variant());
         mat.set_shader_parameter("coarse_height_tex", &coarse_tex.to_variant());
@@ -210,13 +247,14 @@ impl Wg10ClipmapRings {
         mat.set_shader_parameter("morph_region", &morph_region.to_variant());
         mat.set_shader_parameter("relief_ref", &relief_ref.to_variant());
         mat.set_shader_parameter("coarse_origin", &coarse_origin.to_variant());
+        mat.set_shader_parameter("page_fade", &self.fade_values[idx].to_variant());
         // fine SAMPLE frame (world-UV: the fine page, or the coarse page on fallback) + the
         // level's 3x3 neighborhood center & half-extent (geomorph engages at the outer ring only).
         mat.set_shader_parameter("page_origin", &sample_origin.to_variant());
         mat.set_shader_parameter("level_center", &level_center.to_variant());
         mat.set_shader_parameter("level_half_extent", &level_half_extent.to_variant());
-        self.tiles[idx].set_visible(true);   // binding a tile implies it is shown
-        self.bound_keys[idx] = (sample_origin.x as i64, sample_origin.y as i64);
+        self.tiles[idx].set_visible(true); // binding a tile implies it is shown
+        self.bound_keys[idx] = next_key;
     }
 
     /// Drop every tile material's reference to the pool's page textures, and hide all tiles.
@@ -247,6 +285,9 @@ impl Wg10ClipmapRings {
         }
         for k in self.bound_keys.iter_mut() {
             *k = (i64::MIN, i64::MIN);
+        }
+        for f in self.fade_values.iter_mut() {
+            *f = 1.0;
         }
     }
 

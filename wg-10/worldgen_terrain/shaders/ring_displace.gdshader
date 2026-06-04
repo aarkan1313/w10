@@ -18,6 +18,7 @@ uniform float relief_scale = 1.0;         // authoritative world-relief multipli
                                           // `height_scale`; folded into one relief knob (spec §5).
 uniform float morph_region = 0.0;         // transition width as a fraction of the half-extent (0 = no morph)
 uniform float relief_ref = 2000.0;        // color gradient normalization
+uniform float page_fade = 1.0;            // temporal fade for newly resident pages: 0 parent -> 1 fine
 
 varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
@@ -27,8 +28,8 @@ varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 
 global uniform float wg_dbg_mode;
 // M5 detail: GLOBAL amplitude knob (one RenderingServer.global_shader_parameter for the
 // whole scene, set by the harness / gate). 0.0 = no detail (byte-identical to pre-M5).
-// Detail is added to VERTEX.y AFTER h_base is formed, so the base/collision height is
-// untouched (facts read h_base). See spec §4 invariant 1.
+// Detail is added to VERTEX.y after the displayed base height is formed; the page-data
+// contract stays in the facts path. See spec §4 invariant 1.
 global uniform float wg_detail_amp;
 
 // ---- M5 detail: value-noise fBm, pure function of world XZ (edge-safe by construction) ----
@@ -110,15 +111,17 @@ void vertex() {
 	vec2 uv_coarse = (world.xz - coarse_origin) / coarse_span;
 	float h_coarse = texture(coarse_height_tex, uv_coarse).r;
 
-	float h = mix(h_fine, h_coarse, t);   // h_base: THE facts/collision height (untouched)
+	float h_lod = mix(h_fine, h_coarse, t);
+	// Transient visual fade for newly resident pages: start from parent height, then settle
+	// to the normal LOD/morph height. The underlying page data/facts path is unchanged.
+	float h = mix(h_coarse, h_lod, clamp(page_fade, 0.0, 1.0));
 	v_morph = t;
 	// M5 detail: bounded world-space fBm added ON TOP of the base height. Pure function of
-	// world.xz -> abutting tiles agree on shared edges (edge-safe). h (above) is unchanged,
-	// so facts/collision parity is preserved. Slice 1 = flat amp (no modulation/fade yet).
+	// world.xz -> abutting tiles agree on shared edges (edge-safe). Slice 1 = flat amp
+	// (no modulation/fade yet).
 	float detail = wg_fbm_detail(world.xz) * wg_detail_amp;
 	// v_render_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
-	// facts/collision height: collision reads h_base via the separate CPU facts path, so the
-	// parity contract is on h (unchanged above), not on this varying.
+	// facts/collision height: collision reads the separate CPU facts path, not this varying.
 	v_render_height = h + detail;
 	VERTEX.y = (h + detail) * relief_scale;
 }
