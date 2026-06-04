@@ -97,7 +97,11 @@ Validation:
   and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.104 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.106 ms.
+- `python tools\gate.py --suite fast`: 7/7 passed after extracting
+  `mountain_fly_producers.gd`; the new `mountain_fly_producers_check.gd` locks
+  the live review helper's default MOUNTAIN/network preset, close-debug preset,
+  relief clamps, and B-cycle order.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
   loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
   `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
@@ -305,6 +309,13 @@ Target ownership:
 
 Exit: fixing pop-in only touches renderer; fixing sameness only touches
 world/biome selection and producer inputs.
+
+First implemented step: `mountain_fly_review.gd` no longer owns producer
+constants, scale presets, relief state, or `configure_biome*` calls. Those live
+in `mountain_fly_producers.gd`; the scene still owns renderer setup, input, HUD,
+route diagnostics, and page-stream state. This does not complete Phase 2, but it
+removes one mixed concern from the live owner review scene and gives the mode
+state its own fast gate.
 
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 

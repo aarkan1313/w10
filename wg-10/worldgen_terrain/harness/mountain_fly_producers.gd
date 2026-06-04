@@ -1,0 +1,102 @@
+extends RefCounted
+
+# Producer/preset configuration for mountain_fly_review.gd.
+# This owns the runtime content path choice only; the fly scene still owns
+# renderer, input, HUD, and page-stream state.
+
+const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
+const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
+const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
+const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
+const PACK_FILE := "terrain_pack.gate.json"
+const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
+
+const PAGE_PX := 256
+const APRON_PX := 160
+const CAPACITY := 96
+const BASE_SPAN := 8192.0
+const SEED := 1337
+const FLOW_ITERS := 192
+const FLOW_MAX_LEVEL := 2
+const FEATURE_SPAN_NETWORK_M := 90000.0
+const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
+const RELIEF_M_DEFAULT := 1000.0
+
+const MODE_WORLD := 0
+const MODE_MOUNTAIN := 1
+const MODE_LEGACY := 2
+
+const PRESET_NETWORK := 0
+const PRESET_CLOSE_DEBUG := 1
+
+var _mode := MODE_MOUNTAIN
+var _preset := PRESET_NETWORK
+var _relief_m := RELIEF_M_DEFAULT
+
+func configure(pool: Object) -> String:
+	if _mode == MODE_WORLD:
+		return _configure_world(pool)
+	if _mode == MODE_MOUNTAIN:
+		return _configure_mountain(pool)
+	return _configure_legacy(pool)
+
+func cycle_mode() -> void:
+	if _mode == MODE_WORLD:
+		_mode = MODE_MOUNTAIN
+	elif _mode == MODE_MOUNTAIN:
+		_mode = MODE_LEGACY
+	else:
+		_mode = MODE_WORLD
+
+func toggle_preset() -> void:
+	if _preset == PRESET_NETWORK:
+		_preset = PRESET_CLOSE_DEBUG
+	else:
+		_preset = PRESET_NETWORK
+
+func set_relief_m(value: float) -> void:
+	_relief_m = clampf(value, 50.0, 20000.0)
+
+func relief_m() -> float:
+	return _relief_m
+
+func feature_span_m() -> float:
+	if _preset == PRESET_CLOSE_DEBUG:
+		return FEATURE_SPAN_CLOSE_DEBUG_M
+	return FEATURE_SPAN_NETWORK_M
+
+func preset_label() -> String:
+	if _preset == PRESET_CLOSE_DEBUG:
+		return "close_debug"
+	return "network_ref"
+
+func mode_label() -> String:
+	if _mode == MODE_WORLD:
+		return "WORLD"
+	if _mode == MODE_MOUNTAIN:
+		return "MOUNTAIN"
+	return "LEGACY"
+
+func is_world() -> bool:
+	return _mode == MODE_WORLD
+
+func is_legacy() -> bool:
+	return _mode == MODE_LEGACY
+
+func _configure_world(pool: Object) -> String:
+	return str(pool.call("configure_biome_world",
+		ProjectSettings.globalize_path(PACK_RES_DIR),
+		PACK_FILE,
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+
+func _configure_mountain(pool: Object) -> String:
+	return str(pool.call("configure_biome",
+		ProjectSettings.globalize_path(PRIM),
+		ProjectSettings.globalize_path(MACHINE),
+		ProjectSettings.globalize_path(MOUNTAIN),
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+
+func _configure_legacy(pool: Object) -> String:
+	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
+	var glsl_os := ProjectSettings.globalize_path(GLSL)
+	return str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))

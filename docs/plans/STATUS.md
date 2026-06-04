@@ -21,7 +21,7 @@
 > baseline PNGs), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
 > (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.104 ms).
+> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.106 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
 > `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
 > `close_debug` scale (`feature_span_m=3500`). A direct scene smoke launch after
@@ -135,10 +135,14 @@
 > **Refactor state:** the former 3.6k-line `biome_page_compute.rs` has been split into
 > focused modules; current Rust hotspots are now mostly recipe-local (`recipes_glacial.rs` 452,
 > `biome_page_compute/local_compose.rs` 439, `recipes_desert.rs` 434, `recipes_karst.rs` 428).
-> Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
-> routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
-> the live WORLD fly as accepted just because it now composes biome recipe heights;
-> owner visual acceptance and the Slice 4c runtime/facts story remain open.
+> The live fly harness has started that separation: `mountain_fly_review.gd` now delegates
+> producer modes, scale presets, relief, and pool configure calls to
+> `mountain_fly_producers.gd`, with `mountain_fly_producers_check.gd` in the `fast`
+> suite to lock B/P/R state transitions. Continue refactor only at clear ownership
+> boundaries: renderer streaming/pop-in, producer routing/page compute, biome grammar/composition,
+> and review harness taxonomy. Do not treat the live WORLD fly as accepted just because it
+> now composes biome recipe heights; owner visual acceptance and the Slice 4c runtime/facts
+> story remain open.
 
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating

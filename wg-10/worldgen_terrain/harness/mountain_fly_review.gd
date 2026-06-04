@@ -13,36 +13,13 @@ extends Node3D
 #       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in MOUNTAIN mode so
 #       the mountain review scene reviews mountain content first; WORLD remains the biome-composition A/B.
 
-# --- BIOME (mountain GPU producer) constants — replaces the legacy PACK/GLSL trio ---
-const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
-const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
-const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
-const APRON_PX := 160
-const MOUNTAIN_PRESET_NETWORK := 0
-const MOUNTAIN_PRESET_CLOSE_DEBUG := 1
-const FEATURE_SPAN_NETWORK_M := 90000.0     # accepted static network-chunk baseline scale
-const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0  # close-up page/debug scale; not the accepted baseline
-const FLOW_ITERS := 192        # measured production convergence count (memory: 576^2 mountain ~192)
-# SCALE-INVARIANCE: first clipmap level (0=finest) baked WITHOUT the drainage carve. A page at
-# `level` runs flow_on = level < FLOW_MAX_LEVEL. 2 -> carve on levels 0,1 (near camera), off 2.. .
-const FLOW_MAX_LEVEL := 2
-# VERTICAL SCALE KNOB (metres): the biome page multiplies its NORMALIZED recipe height (~[-3.2,2.2])
-# by this before the texture write, so the render (VERTEX.y = h*relief_scale 0.25) sees metres. Default
-# 1000 -> ~1350m effective range. Live-tunable: R raises, F lowers (x1.25 / x0.8), reconfigures the pool.
-const RELIEF_M_DEFAULT := 1000.0
-var _relief_m := RELIEF_M_DEFAULT
-
-# --- LEGACY (dem_v1 kernel atlas) — for the B A/B toggle back to the old kernel path ---
-const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
-const PACK_FILE := "terrain_pack.gate.json"
-const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
+# Producer modes, scale presets, relief, and pool configure calls live in a helper.
+const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
 
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const PROFILER := "res://worldgen_terrain/harness/profiler.gd"
 const FLY_CAMERA := "res://worldgen_terrain/harness/fly_camera.gd"
 const OVERLAY := "res://worldgen_terrain/harness/diagnostics_overlay.gd"
-const PAGE_PX := 256
-const SEED := 1337
 # 5 levels: the clipmap reaches 1.5 * BASE_SPAN * 2^(NUM_LEVELS-1) from the camera. At 3 levels
 # that was only ~49 km while the camera saw ~524 km -> ground loaded as you approached then
 # unloaded behind ("loads then unloads"). 5 levels reaches ~197 km; the far plane is matched to it
@@ -53,7 +30,6 @@ const GRID_RES := 64
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
 const MAX_PER_FRAME := 4
-const CAPACITY := 96       # 5 levels x 9 = 45 + stream-ahead + parent-fetch headroom
 const MORPH_REGION_ON := 0.15
 const MORPH_REGION_OFF := 0.0
 const RELIEF_SCALE := 0.25
@@ -62,13 +38,10 @@ const DETAIL_AMP := 350.0    # M5 detail peak (metres). ×RELIEF_SCALE 0.25 = ~8
 							 # to be clearly VISIBLE at fly scale (60 m → ~21 m was invisible; see STATUS
 							 # M5 fly finding). STARTING value for live owner tuning, not a final look.
 
-const MODE_WORLD := 0
-const MODE_MOUNTAIN := 1
-const MODE_LEGACY := 2
-
 var _view: Object
 var _pool: Object                # kept so _exit_tree can free its page-texture RIDs (B1)
 var _streamer: Object
+var _producer: Object
 var _camera: Camera3D
 var _rings: Object               # debug: poll tile states for the flip log
 var _dbg_label: Label
@@ -80,8 +53,6 @@ var _morph_enabled := false # Runtime biome modes start with morph OFF: fine/coa
 var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matches the m5 gate's 0.0
 						  # baseline + the operator's "N enables detail" expectation; the scene used to
 						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
-var _producer_mode := MODE_MOUNTAIN   # B cycles MOUNTAIN -> LEGACY -> WORLD.
-var _mountain_preset := MOUNTAIN_PRESET_NETWORK
 var _frame := 0
 
 func _ready() -> void:
@@ -90,6 +61,7 @@ func _ready() -> void:
 
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	_pool = pool   # keep a reference for deterministic teardown in _exit_tree (B1)
+	_producer = load(PRODUCERS).new()
 	var err: String = _configure_active_producer(pool)
 	if err != "":
 		push_error("mountain_fly_review: pool configure failed: %s" % err); return
@@ -156,33 +128,10 @@ func _ready() -> void:
 	dbg_layer.add_child(_dbg_label)
 	_print_biome_state()
 
-# Configure the pool for the grammar-routed WORLD producer path.
-func _configure_world(pool: Object) -> String:
-	return str(pool.call("configure_biome_world",
-		ProjectSettings.globalize_path(PACK_RES_DIR),
-		PACK_FILE,
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, _feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
-
-# Configure the pool for the single MOUNTAIN GPU producer path.
-func _configure_biome(pool: Object) -> String:
-	return str(pool.call("configure_biome",
-		ProjectSettings.globalize_path(PRIM),
-		ProjectSettings.globalize_path(MACHINE),
-		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, _feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
-
-# Configure the pool for the LEGACY (dem_v1 kernel atlas) path — the A/B comparison.
-func _configure_legacy(pool: Object) -> String:
-	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)
-	var glsl_os := ProjectSettings.globalize_path(GLSL)
-	return str(pool.call("configure", pack_os, PACK_FILE, glsl_os, CAPACITY, PAGE_PX, BASE_SPAN, SEED))
-
 func _configure_active_producer(pool: Object) -> String:
-	if _producer_mode == MODE_WORLD:
-		return _configure_world(pool)
-	if _producer_mode == MODE_MOUNTAIN:
-		return _configure_biome(pool)
-	return _configure_legacy(pool)
+	if _producer == null:
+		return "producer helper not loaded"
+	return _producer.configure(pool)
 
 func _exit_tree() -> void:
 	# Free the pool's page-texture RIDs on scene teardown (B1). Wg10PagePool also self-frees via a
@@ -216,37 +165,43 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_B:
 		_cycle_producer_mode()
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_R:
-		_set_relief(_relief_m * 1.25)   # taller mountains
+		_set_relief(_relief_m() * 1.25)   # taller mountains
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_F:
-		_set_relief(_relief_m * 0.8)    # flatter
+		_set_relief(_relief_m() * 0.8)    # flatter
 
 # Live VERTICAL-SCALE knob (R/F): change the biome relief (metres) and reconfigure the pool so new
 # pages bake at the new scale. Only meaningful in WORLD/MOUNTAIN mode (legacy ignores it).
 func _set_relief(v: float) -> void:
-	_relief_m = clampf(v, 50.0, 20000.0)
-	print("[fly] relief_m=%.0f m" % _relief_m)
+	if _producer == null:
+		return
+	_producer.set_relief_m(v)
+	print("[fly] relief_m=%.0f m" % _relief_m())
 	_rebuild_runtime_pages("relief")
 
+func _relief_m() -> float:
+	if _producer == null:
+		return 0.0
+	return float(_producer.relief_m())
+
 func _feature_span_m() -> float:
-	if _mountain_preset == MOUNTAIN_PRESET_CLOSE_DEBUG:
-		return FEATURE_SPAN_CLOSE_DEBUG_M
-	return FEATURE_SPAN_NETWORK_M
+	if _producer == null:
+		return 0.0
+	return float(_producer.feature_span_m())
 
 func _mountain_preset_label() -> String:
-	if _mountain_preset == MOUNTAIN_PRESET_CLOSE_DEBUG:
-		return "close_debug"
-	return "network_ref"
+	if _producer == null:
+		return "unknown"
+	return str(_producer.preset_label())
 
 func _toggle_mountain_preset() -> void:
-	if _mountain_preset == MOUNTAIN_PRESET_NETWORK:
-		_mountain_preset = MOUNTAIN_PRESET_CLOSE_DEBUG
-	else:
-		_mountain_preset = MOUNTAIN_PRESET_NETWORK
+	if _producer == null:
+		return
+	_producer.toggle_preset()
 	_rebuild_runtime_pages("preset")
 	_print_biome_state()
 
 func _rebuild_runtime_pages(reason: String) -> void:
-	if _pool == null or _producer_mode == MODE_LEGACY:
+	if _pool == null or _producer == null or bool(_producer.is_legacy()):
 		return
 	# Detach ring materials from the page textures before free_all (else the next draws flood
 	# "Texture binding 1 not valid" against the freed RIDs until pages re-stream).
@@ -260,11 +215,9 @@ func _rebuild_runtime_pages(reason: String) -> void:
 	_prev_states = PackedInt64Array()
 
 func _producer_label() -> String:
-	if _producer_mode == MODE_WORLD:
-		return "WORLD"
-	if _producer_mode == MODE_MOUNTAIN:
-		return "MOUNTAIN"
-	return "LEGACY"
+	if _producer == null:
+		return "UNKNOWN"
+	return str(_producer.mode_label())
 
 func _print_biome_state() -> void:
 	if _pool == null:
@@ -275,11 +228,11 @@ func _print_biome_state() -> void:
 		str(_pool.call("uses_biome_path")),
 		_mountain_preset_label(),
 		_feature_span_m(),
-		_relief_m,
+		_relief_m(),
 	])
 
 func _world_route_summary(p: Vector3, v: Vector3) -> String:
-	if _producer_mode != MODE_WORLD or _pool == null or _streamer == null:
+	if _producer == null or not bool(_producer.is_world()) or _pool == null or _streamer == null:
 		return ""
 	var led: Vector2 = _streamer.call("coverage_center", p.x, p.z, v.x, v.z)
 	var parts: Array[String] = []
@@ -310,21 +263,16 @@ func _reconfigure_view() -> void:
 # LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
 # working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
 func _cycle_producer_mode() -> void:
-	if _pool == null:
+	if _pool == null or _producer == null:
 		return
-	if _producer_mode == MODE_WORLD:
-		_producer_mode = MODE_MOUNTAIN
-	elif _producer_mode == MODE_MOUNTAIN:
-		_producer_mode = MODE_LEGACY
-	else:
-		_producer_mode = MODE_WORLD
+	_producer.cycle_mode()
 	# Detach ring materials from the page textures before free_all (else the next draws flood
 	# "Texture binding 1 not valid" against the freed RIDs until pages re-stream after reconfigure).
 	if _rings != null:
 		_rings.call("unbind_all")
 	_pool.call("free_all")
 	var err := _configure_active_producer(_pool)
-	if _producer_mode == MODE_LEGACY:
+	if bool(_producer.is_legacy()):
 		_morph_enabled = true
 	else:
 		_morph_enabled = false
