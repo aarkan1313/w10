@@ -70,6 +70,25 @@ runtime pieces and input/reconfigure behavior, while diagnostic report construct
 harness component. It does not change mode 1/2/3 visuals; it gives the next visual/perf pass a
 cleaner evidence boundary.
 
+### Owner Material Softening Checkpoint - 2026-06-04
+
+The next visual fix is renderer presentation only. `ring_displace.gdshader` now treats
+static-reference material pages as softer accepted-scene hints: corridor uses the accepted
+corridor blend target, rock/snow blend with the base mountain palette instead of replacing it, and
+the final static material contribution is scaled down after the page-fade factor. The manual
+unshaded lighting was also softened so clipmap triangles do not read as strongly faceted.
+
+Current proof:
+
+- `python tools\gate.py --suite m3` = 10/10.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion still reports
+  zero hide/show in REFERENCE, MOUNTAIN, and WORLD; latest render p99 is REFERENCE `0.339 ms`,
+  MOUNTAIN `0.418 ms`, WORLD `0.215 ms`.
+
+This improves modes 1/2 presentation against the accepted `mountain_network_chunks_review.tscn`
+baseline. It does not make mode 3 owner-accepted; WORLD still remains a bounded diagnostic route.
+
 ### Current Owner-Visual Checkpoint - 2026-06-04
 
 The windowed scale-invariance and owner-runtime gates have now run on hardware. Current proof:

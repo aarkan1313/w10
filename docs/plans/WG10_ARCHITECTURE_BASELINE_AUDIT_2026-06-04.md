@@ -109,6 +109,13 @@ reconfigure, camera, and rendering assembly. This reduces the mixed-architecture
 pressure in the live review harness before the next mode-specific visual/perf
 fix.
 
+Latest renderer-presentation follow-up: the live bridge keeps the same accepted
+height/material fact payload, but the shader now presents static material pages
+as softer hints rather than hard class colors and uses gentler manual lighting.
+This narrows the visible gap between modes 1/2 and the old chunk scene without
+changing producer data or promoting WORLD. The remaining WORLD artifacts are
+still composition/diagnostic-path issues, not mountain-reference bridge issues.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

@@ -28,14 +28,15 @@ func _run() -> int:
 
 	var shader_source := FileAccess.get_file_as_string(ProjectSettings.globalize_path(SHADER))
 	_expect(shader_source.contains("float material_fade = clamp(page_fade, 0.0, 1.0);"), "shader should derive material_fade from page_fade", errs)
-	_expect(shader_source.contains("static_material_mix * material_fade"), "static material mix should fade with page_fade", errs)
+	_expect(shader_source.contains("float accepted_material_mix = static_material_mix * material_fade * 0.62;"), "static material mix should fade and stay presentation-softened", errs)
 	_expect(shader_source.contains("biome_material_mix * material_fade"), "WORLD route tint should fade with page_fade", errs)
-	_expect(shader_source.contains("vec3(0.24, 0.48, 0.35)"), "static corridor material should use restrained terrain green", errs)
-	_expect(shader_source.contains("vec3(0.44, 0.45, 0.40)"), "static rock material should use muted rock tint", errs)
-	_expect(shader_source.contains("vec3(0.74, 0.78, 0.72)"), "static snow material should avoid chalk-white override", errs)
+	_expect(shader_source.contains("vec3(0.18, 0.39, 0.33)"), "static corridor material should match accepted corridor blend target", errs)
+	_expect(shader_source.contains("mix(base, vec3(0.46, 0.45, 0.41), 0.70)"), "static rock material should blend instead of replacing terrain color", errs)
+	_expect(shader_source.contains("mix(base, vec3(0.82, 0.84, 0.78), 0.64)"), "static snow material should blend instead of replacing terrain color", errs)
+	_expect(not shader_source.contains("vec3(0.74, 0.78, 0.72)"), "static snow material should not use a flat replacement tint", errs)
 	_expect(not shader_source.contains("vec3(0.90, 0.88, 0.76)"), "static snow material should not use chalk-white override", errs)
-	_expect(shader_source.contains("float lit = 0.50 + 0.50 * ndl;"), "terrain lighting should keep stronger directional contrast", errs)
-	_expect(shader_source.contains("0.26);"), "terrain lighting should keep stronger slope shadow", errs)
+	_expect(shader_source.contains("float lit = 0.64 + 0.36 * ndl;"), "terrain lighting should keep softened directional contrast", errs)
+	_expect(shader_source.contains("0.12);"), "terrain lighting should keep softened slope shadow", errs)
 
 	rings.queue_free()
 	if not errs.is_empty():

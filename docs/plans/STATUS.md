@@ -65,6 +65,15 @@
 > review scenes assemble components instead of containing diagnostic/report
 > logic. This is behavior-preserving cleanup for the current slow/weird visual
 > triage; it does not change any producer, shader, or acceptance result.
+> Follow-up renderer-presentation fix: `ring_displace.gdshader` now applies
+> accepted static-reference material pages as a softer presentation blend
+> instead of a hard floor/rock/snow class replacement, and its manual
+> directional/slope lighting is less contrasty. This targets the owner report
+> that modes 1/2 had the right mountain footprint but still looked masky and
+> faceted compared with the old `mountain_network_chunks_review.tscn`. Proof:
+> `m3` = 10/10, `review_runtime_visual` = 2/2, and
+> `review_runtime_modes` = 2/2. Latest scripted mode run still has zero
+> hide/show in REFERENCE, MOUNTAIN, and WORLD with render p99 below 0.5 ms.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The
