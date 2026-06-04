@@ -156,6 +156,15 @@ architectural conclusion: the ugly raw procedural candidate is missing the
 accepted world-layer facts, while modes 1/2/3 normal preview are stable bridges
 for review.
 
+Latest review-state follow-up: the owner fly no longer lets debug shader mode
+or cull-disable experiments leak across mode/preset rebuilds. Every rebuild
+returns to normal material presentation, culling enabled, display detail
+enabled, and the expected morph default. `review_runtime` now dirties the scene
+into morph heatmap plus cull-disabled and proves a subsequent mode switch resets
+those controls. This removes another source of false "all modes look weird"
+manual reports; it does not promote WORLD or the raw close-debug mountain recipe
+to accepted content.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

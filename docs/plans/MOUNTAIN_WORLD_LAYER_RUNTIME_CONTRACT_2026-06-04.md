@@ -54,6 +54,11 @@ not change the contract outcome: raw `close_debug` is still
 `single_seam_safe_mountain_page_recipe` and still lacks pass-network,
 conditioning, and material facts.
 
+Latest review-state status: mode/preset rebuilds now also reset presentation
+diagnostics to normal material review state. The gate proves morph heatmap and
+cull-disabled experiments do not leak across modes 1/2/3. This makes manual
+visual comparison cleaner, while preserving the contract boundary above.
+
 ## Contract
 
 A runtime mountain world layer must provide these facts independently of any
@@ -267,3 +272,6 @@ single rendered page:
   preset changes. It proves the raw `MOUNTAIN/close_debug` candidate is using
   the intended close/debug relief view and source transform, then proves the
   accepted `MOUNTAIN/network_ref` bridge is restored to the reference view.
+- `review_runtime` now also gates review-state reset: after deliberately
+  enabling the morph heatmap and disabling culling, a mode switch restores
+  normal material mode, culling, display detail, and default morph state.

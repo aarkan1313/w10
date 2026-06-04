@@ -64,6 +64,7 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("is_legacy", false)), "default producer should not be LEGACY", errs)
 	_expect(not bool(snapshot.get("morph_enabled", true)), "runtime default morph should be off", errs)
 	_expect(bool(snapshot.get("detail_on", false)), "runtime default detail should be on", errs)
+	_expect_review_presentation_defaults(snapshot, "default", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 	_expect_reference_contract(snapshot, "default", errs)
 	var reference_center_page: Dictionary = snapshot.get("static_reference_center_page", {})
@@ -79,6 +80,7 @@ func _run() -> int:
 		errs
 	)
 
+	await _expect_mode_switch_resets_diagnostics(scene, errs)
 	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, reference_center_page, errs)
 	await _expect_close_debug_candidate(scene, errs)
 	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 1.0, 1700.0, {}, errs)
@@ -145,6 +147,32 @@ func _expect_mode_taxonomy(snapshot: Dictionary, label: String, errs: Array[Stri
 	_expect(str(snapshot.get("mode_role", "")) == expected_role, "%s expected role %s, got %s" % [label, expected_role, str(snapshot.get("mode_role", ""))], errs)
 	_expect(str(snapshot.get("mode_acceptance", "")) == expected_acceptance, "%s expected acceptance %s, got %s" % [label, expected_acceptance, str(snapshot.get("mode_acceptance", ""))], errs)
 	_expect(str(snapshot.get("mode_note", "")).contains(expected_note_fragment), "%s expected note to contain %s, got %s" % [label, expected_note_fragment, str(snapshot.get("mode_note", ""))], errs)
+
+func _send_key(scene: Node, keycode: int) -> void:
+	var event := InputEventKey.new()
+	event.pressed = true
+	event.keycode = keycode
+	scene.call("_input", event)
+
+func _expect_review_presentation_defaults(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
+	_expect(int(snapshot.get("debug_mode", -1)) == 0, "%s expected normal material debug mode" % label, errs)
+	_expect(not bool(snapshot.get("cull_disabled", true)), "%s expected culling enabled" % label, errs)
+	_expect(bool(snapshot.get("detail_on", false)), "%s expected display detail enabled" % label, errs)
+
+func _expect_mode_switch_resets_diagnostics(scene: Node, errs: Array[String]) -> void:
+	_send_key(scene, KEY_M)
+	_send_key(scene, KEY_K)
+	for _i in range(2):
+		await process_frame
+	var dirty := {}
+	if scene.has_method("debug_runtime_snapshot"):
+		dirty = scene.call("debug_runtime_snapshot")
+	else:
+		errs.append("scene missing debug_runtime_snapshot after dirtying diagnostics")
+		return
+	_expect(int(dirty.get("debug_mode", -1)) == 1, "diagnostic setup expected morph heatmap mode", errs)
+	_expect(bool(dirty.get("cull_disabled", false)), "diagnostic setup expected cull disabled", errs)
+	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, {}, errs)
 
 func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("static_reference", {})
@@ -309,6 +337,7 @@ func _expect_mode_switch(
 	_expect(int(snapshot.get("seed", 0)) == expected_seed, "%s expected seed=%d, got %d" % [mode, expected_seed, int(snapshot.get("seed", 0))], errs)
 	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - expected_view_relief_scale) < 0.001, "%s expected view relief scale %.3f, got %.3f" % [mode, expected_view_relief_scale, float(snapshot.get("view_relief_scale", 0.0))], errs)
 	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - expected_view_relief_ref) < 0.001, "%s expected view relief ref %.3f, got %.3f" % [mode, expected_view_relief_ref, float(snapshot.get("view_relief_ref", 0.0))], errs)
+	_expect_review_presentation_defaults(snapshot, mode, errs)
 	if mode == "MOUNTAIN":
 		var source_transform: Dictionary = snapshot.get("source_transform", {})
 		_expect(absf(float(source_transform.get("source_scale", 0.0)) - 3.515625) < 0.000001, "MOUNTAIN expected source scale=3.515625", errs)
@@ -353,6 +382,7 @@ func _expect_close_debug_candidate(scene: Node, errs: Array[String]) -> void:
 	_expect(absf(float(snapshot.get("feature_span_m", 0.0)) - 3500.0) < 0.001, "close-debug expected feature_span_m=3500", errs)
 	_expect(absf(float(snapshot.get("view_relief_scale", 0.0)) - 0.25) < 0.001, "close-debug expected relief scale=0.25", errs)
 	_expect(absf(float(snapshot.get("view_relief_ref", 0.0)) - 425.0) < 0.001, "close-debug expected relief ref=425", errs)
+	_expect_review_presentation_defaults(snapshot, "MOUNTAIN/close_debug", errs)
 	_expect_view_config(snapshot, "MOUNTAIN/close_debug", 0.25, 425.0, errs)
 	var source_transform: Dictionary = snapshot.get("source_transform", {})
 	_expect(absf(float(source_transform.get("source_scale", 0.0)) - 1.0) < 0.000001, "close-debug expected source scale=1", errs)
@@ -371,6 +401,7 @@ func _expect_close_debug_candidate(scene: Node, errs: Array[String]) -> void:
 	if scene.has_method("debug_runtime_snapshot"):
 		var restored: Dictionary = scene.call("debug_runtime_snapshot")
 		_expect(str(restored.get("preset", "")) == "network_ref", "MOUNTAIN preset should restore to network_ref", errs)
+		_expect_review_presentation_defaults(restored, "MOUNTAIN/restored_network", errs)
 		_expect_view_config(restored, "MOUNTAIN/restored_network", 1.0, 1700.0, errs)
 
 func _expect_world_preview_reports(snapshot: Dictionary, label: String, errs: Array[String]) -> void:

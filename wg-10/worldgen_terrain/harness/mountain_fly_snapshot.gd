@@ -13,6 +13,8 @@ func build(
 	camera: Object,
 	morph_enabled: bool,
 	detail_on: bool,
+	debug_mode: int,
+	cull_disabled: bool,
 	last_config_error: String
 ) -> Dictionary:
 	var stats := {}
@@ -113,6 +115,8 @@ func build(
 		"is_legacy": is_legacy,
 		"morph_enabled": morph_enabled,
 		"detail_on": detail_on,
+		"debug_mode": debug_mode,
+		"cull_disabled": cull_disabled,
 		"static_material_bound_tiles": _static_material_bound_tiles(rings),
 	}
 

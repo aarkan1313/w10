@@ -129,6 +129,16 @@
 > and stress gates still report zero hide/show, zero full events, and
 > `acquired_max=1` across modes 1/2/3. This fixes a harness/runtime state bug;
 > it does not make the raw procedural mountain candidate accepted content.
+> Follow-up review-state reset fix: mode/preset rebuilds now reset visual
+> diagnostics back to normal material review state: debug mode `0`, culling
+> enabled, display detail enabled, and default morph state except the explicit
+> LEGACY diagnostic. The smoke gate deliberately dirties the scene into morph
+> heatmap plus cull-disabled, switches mode, and proves the reset. Current
+> proof: `review_runtime` = 2/2 and `review_runtime_modes` = 2/2; scripted
+> modes 1/2/3 still have zero hide/show, zero full events, `acquired_max=1`,
+> CPU max below 14 ms, and render p99 about 0.746 ms. This targets the class of
+> owner reports where blue/yellow debug heatmaps or cull experiments made all
+> modes look wrong.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

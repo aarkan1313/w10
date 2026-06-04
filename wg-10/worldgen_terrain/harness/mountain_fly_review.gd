@@ -14,7 +14,8 @@ extends Node3D
 #       REFERENCE/MOUNTAIN/WORLD/LEGACY. WORLD and LEGACY are explicit diagnostics. The streamer/view
 #       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in REFERENCE mode
 #       so the owner review opens on the accepted mountain-network baseline; MOUNTAIN remains the
-#       explicit live candidate.
+#       explicit live candidate. Mode/preset rebuilds reset visual diagnostics to normal material
+#       review state so debug heatmaps do not leak across 1/2/3 comparisons.
 
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
@@ -123,12 +124,9 @@ func _exit_tree() -> void:
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_K:
-		_cull_disabled = not _cull_disabled
-		if _rings != null:
-			_rings.call("debug_disable_culling", _cull_disabled)
+		_set_cull_disabled(not _cull_disabled)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_M:
-		_debug_mode = (_debug_mode + 1) % 3
-		_runtime.set_debug_mode(_debug_mode)
+		_set_debug_mode((_debug_mode + 1) % 3)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_morph_enabled = not _morph_enabled
 		_reconfigure_view()
@@ -199,6 +197,8 @@ func _rebuild_runtime_pages(reason: String) -> void:
 	if err != "":
 		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
 		return
+	_reset_review_presentation()
+	_morph_enabled = bool(_runtime.default_morph_enabled()) if _runtime != null else false
 	_reconfigure_view()
 	_prev_states = PackedInt64Array()
 
@@ -260,6 +260,23 @@ func _debug_mode_label() -> String:
 		return "route"
 	return "material"
 
+func _set_debug_mode(mode: int) -> void:
+	_debug_mode = clampi(mode, 0, 2)
+	if _runtime != null:
+		_runtime.set_debug_mode(_debug_mode)
+
+func _set_cull_disabled(disabled: bool) -> void:
+	_cull_disabled = disabled
+	if _rings != null:
+		_rings.call("debug_disable_culling", _cull_disabled)
+
+func _reset_review_presentation() -> void:
+	_set_debug_mode(0)
+	_set_cull_disabled(false)
+	if _runtime != null:
+		_detail_on = bool(_runtime.default_detail_enabled())
+		_runtime.set_detail_enabled(_detail_on)
+
 func _reconfigure_view() -> void:
 	if _view == null or _pool == null or _streamer == null or _rings == null or _runtime == null:
 		return
@@ -297,10 +314,11 @@ func _apply_mode_reconfigure(reason: String) -> void:
 	if bool(_producer.is_legacy()):
 		_morph_enabled = true
 	else:
-		_morph_enabled = false
+		_morph_enabled = bool(_runtime.default_morph_enabled()) if _runtime != null else false
 	if err != "":
 		push_error("mountain_fly_review: %s reconfigure failed: %s" % [reason, err])
 		return
+	_reset_review_presentation()
 	_reconfigure_view()
 	# Reset the flip-log baseline so the post-reconfigure repage churn doesn't spam the HUD.
 	_prev_states = PackedInt64Array()
@@ -337,6 +355,8 @@ func debug_runtime_snapshot() -> Dictionary:
 		_camera,
 		_morph_enabled,
 		_detail_on,
+		_debug_mode,
+		_cull_disabled,
 		_last_config_error
 	)
 
