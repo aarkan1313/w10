@@ -40,9 +40,9 @@ needs the accepted world-layer producer/fact contract.
 The owner fly now opens on the accepted reference presentation without the
 synthetic display-detail layer. `DEFAULT_DETAIL_ENABLED=false` in
 `mountain_fly_runtime_config.gd`; `N` still toggles the detail layer on for
-explicit close-surface review. The shared clipmap page fade is shortened from
-`0.18 s` to `0.06 s` so newly resident pages do not visibly lag/settle behind
-the camera across modes 1/2/3.
+explicit close-surface review. The shared clipmap page fade is disabled for
+owner review so newly resident pages do not visibly lag/settle behind the camera
+across modes 1/2/3.
 
 Current proof:
 
@@ -60,6 +60,31 @@ Current proof:
 This is a renderer-presentation correction, not a final biome-content fix. The
 raw live mountain candidate still needs the accepted world-layer producer/fact
 contract before close-debug terrain should be judged as owner-accepted.
+
+### Runtime World-Layer Tile Boundary Checkpoint - 2026-06-04
+
+`tools/dem_pack/mountain_world_layer.py` now exposes a runtime-cacheable
+accepted mountain world-layer tile boundary:
+`build_runtime_world_layer_tile`, `source_origin_for_world_layer_tile`, and
+`sample_world_layer_tile_page`. This separates the future runtime producer/cache
+contract from the review JSON exporter. The tile carries stitched height,
+corridor, low-pass/floor/rock/snow material hint fields, pass-network facts,
+conditioning stats, and source/display mapping.
+
+Current proof:
+
+- `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s -p no:cacheprovider`
+  = 6 passed.
+- The new tile sampler matches the accepted stitched world-layer page sampler
+  for height, corridor, and all material fields to `1.0e-12`.
+- The same test keeps the live seam-safe gap visible:
+  mean absolute normalized delta `1.211743`, p95 `2.276974`, correlation
+  `-0.048456`.
+
+This is the next separation seam for the procedural runtime port. The Rust/Godot
+bridge still uses the accepted static payload for owner-visible height/material
+recovery until a generated world-layer producer consumes or mirrors this tile
+contract.
 
 ### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
 
@@ -937,6 +962,5 @@ look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
 keep extending manual-path instrumentation if owner fly still shows pop outside
 the gated sprint path, and move WORLD visual quality work behind a separated
 world-selection/producer path instead of the current synchronous page stream.
-Implemented pop mitigation: renderer page fade is now wall-clock based and
-shortened to `0.06 s`, so REPAGE smoothing does not become visible terrain
-lag/settle during owner motion.
+Implemented pop mitigation: renderer page fade is disabled for owner review, so
+REPAGE smoothing does not become visible terrain lag/settle during owner motion.

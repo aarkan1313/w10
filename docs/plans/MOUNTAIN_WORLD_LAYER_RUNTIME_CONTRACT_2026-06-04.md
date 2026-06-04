@@ -69,10 +69,11 @@ synchronous page misses.
 
 Latest owner-review presentation status: the review scene now opens with
 procedural display detail disabled, with `N` as the explicit opt-in toggle. The
-clipmap page transition fade is shortened to `0.06 s` so REPAGE smoothing does
-not read as terrain lagging/settling during flight. This keeps modes 1/2/3 on
-the accepted reference presentation path before any optional close-surface
-dressing is judged.
+clipmap page transition fade is disabled for owner review: the streamer/pin path
+keeps pages resident before display, and the old parent-to-fine settle window
+read as terrain lagging/popping during flight. This keeps modes 1/2/3 on the
+accepted reference presentation path before any optional close-surface dressing
+is judged.
 
 ## Contract
 
@@ -128,10 +129,11 @@ single rendered page:
    - CPU-authored/generated route and conditioning facts cached per large world
      tile, sampled into runtime page coordinates.
    `tools/dem_pack/mountain_world_layer.py` now owns the accepted
-   source/display mapping and runtime-page sampler
-   (`source_origin_for_display`, `sample_world_page`, `sample_payload_page`).
-   This is the contract the later Rust/GPU page producer should consume or
-   mirror.
+   source/display mapping, runtime-page sampler
+   (`source_origin_for_display`, `sample_world_page`, `sample_payload_page`),
+   and a runtime-cacheable world-layer tile boundary
+   (`build_runtime_world_layer_tile`, `sample_world_layer_tile_page`). This is
+   the contract the later Rust/GPU page producer should consume or mirror.
    Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
@@ -206,7 +208,7 @@ single rendered page:
   drift.
 - `review_runtime_modes` proves the current owner WORLD mode is only a bounded
   diagnostic preview: one active biome per page keeps streaming within budget
-  (latest WORLD `cpu_p99=7.686 ms`, `cpu_max=10.050 ms`, render p99 `0.505 ms`).
+  (latest WORLD `cpu_p99=9.952 ms`, `cpu_max=13.508 ms`, render p99 `0.749 ms`).
   A direct top-2/full WORLD height-compose attempt failed with ~1900-1950 ms
   update hitches, so full WORLD composition remains a background/cache task.
 - `REFERENCE` proves the renderer can display the accepted mountain-network
@@ -246,27 +248,28 @@ single rendered page:
   checks level, origin, world span, sample count, corridor coverage, and
   low/floor/rock/snow material hint means, so the bridge cannot drift to a
   different page-fact sample while still passing only screenshot-level checks.
-- Latest bridge proof after the RGBA material-facts fix: `cargo test -p
-  wg10_terrain --lib` = 231/0, `tools\build_rust.ps1` builds, `m3` = 10/10,
-  `review_runtime_visual` = 2/2, and `review_runtime_modes` = 2/2. The latest
-  mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 9.822/10.226 ms, MOUNTAIN 10.157/10.821 ms,
-  and WORLD 10.132/13.206 ms, with `acquired_max=1` and zero full events in all
-  three. Latest render p99 is REFERENCE 0.758 ms, MOUNTAIN 0.746 ms, and WORLD
-  0.747 ms. The latest visual capture shows MOUNTAIN/network matching the
-  REFERENCE view at the reviewed frame and along the sprint path, while the
-  material shader no longer uses the prior chalk-white static snow override.
-- The renderer page transition fade is now wall-clock based (`0.06 s`) instead
-  of frame-count based. This targets owner-visible REPAGE snap without making
-  newly resident pages visibly lag behind motion; it does not change page data,
-  reference facts, or WORLD composition.
+- Latest bridge proof after the no-settle owner-fly fix: `cargo fmt -p
+  wg10_terrain -- --check` passes, `cargo test -p wg10_terrain --lib` = 231/0,
+  `tools\build_rust.ps1` builds, `fast` = 8/8, `m3` = 10/10,
+  `review_runtime` = 2/2, `review_runtime_visual` = 2/2,
+  `review_runtime_modes` = 2/2, and `review_runtime_stress` = 1/1. The latest
+  mode gate reports zero hide/show/full events in REFERENCE, MOUNTAIN, and
+  WORLD; scripted motion CPU p99/max is REFERENCE 10.046/10.116 ms, MOUNTAIN
+  9.921/10.546 ms, and WORLD 9.952/13.508 ms, with `acquired_max=1` and zero
+  full events in all three. Latest render p99 is REFERENCE 0.748 ms, MOUNTAIN
+  0.748 ms, and WORLD 0.749 ms. The latest visual capture shows
+  MOUNTAIN/network and WORLD preview matching the REFERENCE view at the reviewed
+  frame and along the sprint path.
+- The renderer page transition fade is disabled for owner review. This targets
+  owner-visible REPAGE lag/settle without changing page data, reference facts,
+  or WORLD composition.
 - Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
   stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
   `0.002500` / `0.020000`.
 - Latest path bridge proof in `review_runtime_visual`: REFERENCE and
   MOUNTAIN/network were compared along an 8000 m/s page-boundary path at frames
-  80/160/240. Mean RGB deltas were `0.000043`, `0.000286`, and `0.000000`, and
-  p95 stayed within budget at `0.000000`, `0.001307`, and `0.000000`.
+  80/160/240. Mean/p95 RGB deltas are `0.000000/0.000000` for all three
+  sampled frames.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:
@@ -276,6 +279,11 @@ single rendered page:
   source/display mapping used by the live preset (`display 0,0 -> source
   207000,176000`) and samples height/floor/rock fields from the accepted
   world-layer payload without test-local duplicate sampling code.
+- The same pytest now proves the runtime-cacheable world-layer tile boundary
+  preserves the accepted page contract: tile sampling matches stitched
+  world-layer page sampling for height, corridor, and all material hint fields
+  to `1.0e-12`, while exposing pass-network, conditioning, material-hint, and
+  source/display mapping facts.
 - The same pytest contract now proves the accepted builder emits non-vacuous,
   bounded material hint fields (`low_pass_hint`, `floor_hint`, `rock_hint`,
   `snow_hint`) on chunks and aprons, with the stitched low-pass/floor hints

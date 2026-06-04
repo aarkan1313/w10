@@ -3,17 +3,17 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
-> **Read this first:** latest scoped runtime checkpoint in this tree paces the
-> owner fly stream to 1 synchronous page acquire per frame and gates the
-> owner-scene mode taxonomy (`mode_role`, `mode_acceptance`, `mode_note`).
-> It builds on `37eedc5 fix(slice4): smooth page repage fade by time`, tagged
-> `backup-slice4-page-fade-time-20260604-37eedc5`. The immediately preceding
-> runtime proof commit is `ff797fc test(slice4): guard mountain reference page
-> facts`, tagged
-> `backup-slice4-mountain-reference-page-guard-20260604-ff797fc`. `REFERENCE` remains
-> the accepted static mountain-network baseline streamed through the runtime
-> page pool. `MOUNTAIN/network_ref` now matches that baseline through a
-> reference-backed height/material/fact bridge
+> **Read this first:** latest scoped runtime checkpoint is
+> `2af7df4 fix(slice4): remove owner fly page settle`, tagged
+> `backup-slice4-no-page-settle-20260604-2af7df4`. It builds on
+> `067b14b refactor(slice4): expose mountain world-layer runtime tile`, tagged
+> `backup-slice4-runtime-world-layer-tile-20260604-067b14b`. The runtime tile
+> checkpoint separates the accepted mountain world-layer facts/sampling boundary
+> from review JSON export. The no-settle checkpoint disables the parent-to-fine
+> newly-bound-page height fade that read as terrain lag/popping during owner fly
+> movement. `REFERENCE` remains the accepted static mountain-network baseline
+> streamed through the runtime page pool. `MOUNTAIN/network_ref` now matches that
+> baseline through a reference-backed height/material/fact bridge
 > (`single_mountain_world_layer_reference_bridge`,
 > `height_source=bound_world_layer_reference_payload`,
 > `procedural_world_layer_height=false`). This recovers the owner-visible
@@ -25,11 +25,13 @@
 > 231/0, `tools\build_rust.ps1` builds, `fast` = 8/8, `m3` = 10/10,
 > `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
 > `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1. Latest
-> mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-> motion CPU p95/p99/max is REFERENCE 9.115/9.650/10.139 ms,
-> MOUNTAIN 9.369/10.094/16.754 ms, WORLD 9.495/10.238/12.695 ms, with
+> mode gate reports zero hide/show/full events in REFERENCE, MOUNTAIN, and
+> WORLD; scripted motion CPU p95/p99/max is REFERENCE 9.436/10.046/10.116 ms,
+> MOUNTAIN 9.316/9.921/10.546 ms, WORLD 9.233/9.952/13.508 ms, with
 > `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.748 ms, MOUNTAIN 0.748 ms, WORLD 0.745 ms. The REFERENCE vs
+> REFERENCE 0.748 ms, MOUNTAIN 0.748 ms, WORLD 0.749 ms. The manual stress gate
+> also passes six REFERENCE/MOUNTAIN/WORLD morph on/off movement cases with zero
+> hide/show/full events and GPU p99 below 0.65 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
 > 0.000000/0.000000 at the captured review frame. The visual gate also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
@@ -40,9 +42,9 @@
 > keep synchronous owner-fly page misses under frame budget while preserving the
 > low-frequency material story. The legacy
 > `m3_accept` wall-time gate now initializes the shader globals it renders with,
-> and passes at p99 2.84 ms in the full `m3` suite. The page transition fade is
-> wall-clock based and shortened to `0.06 s`, because the former `0.18 s` window
-> read as terrain lag/settle during owner motion. The owner fly also now starts
+> and passes at p99 2.41 ms in the full `m3` suite. The page transition fade is
+> disabled for owner review, because the previous settle window read as terrain
+> lag/settle during owner motion even when page residency was clean. The owner fly also now starts
 > with procedural display detail disabled; `N` remains the explicit detail
 > toggle. Modes 1/2/3 therefore open on the accepted reference presentation
 > instead of all sharing the same synthetic close-surface noise layer.

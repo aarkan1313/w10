@@ -150,8 +150,9 @@ Latest owner-review baseline follow-up: display detail is no longer enabled by
 default in `mountain_fly_review.tscn`; `N` remains the opt-in detail toggle.
 The default view now opens on the accepted reference payload without the shared
 synthetic close-surface noise layer contaminating modes 1/2/3. The clipmap
-page transition fade is also shortened from `0.18 s` to `0.06 s`, because the
-longer settle window read as terrain lag during manual motion. Current proof:
+page transition fade is now disabled for owner review, because the settle window
+read as terrain lag during manual motion even when page residency was clean.
+Current proof:
 Rust lib tests = 231/0, `fast` = 8/8, `m3` = 10/10, `review_runtime` = 2/2,
 `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
 `review_runtime_stress` = 1/1.

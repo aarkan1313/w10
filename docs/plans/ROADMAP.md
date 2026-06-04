@@ -16,10 +16,13 @@ stabilization and recovery:
   (`single_mountain_world_layer_reference_bridge`): it uses the accepted payload for
   height/material/facts and matches REFERENCE in the latest capture, but it is **not final
   procedural biome synthesis**.
-- Latest committed checkpoint is `37eedc5 fix(slice4): smooth page repage fade by time`
-  (`backup-slice4-page-fade-time-20260604-37eedc5`). It includes the preceding
-  REFERENCE-vs-MOUNTAIN center-page fact guard and the wall-clock page-fade
-  mitigation for high-FPS REPAGE snap.
+- Latest committed checkpoint is `2af7df4 fix(slice4): remove owner fly page settle`
+  (`backup-slice4-no-page-settle-20260604-2af7df4`). It builds on
+  `067b14b refactor(slice4): expose mountain world-layer runtime tile`
+  (`backup-slice4-runtime-world-layer-tile-20260604-067b14b`). The runtime tile
+  commit separates the accepted mountain world-layer facts/sampling boundary
+  from review JSON export; the no-settle commit removes the parent-to-fine page
+  fade that read as terrain lag/popping during owner fly movement.
 - `WORLD` remains diagnostic until multi-biome composition is moved off the synchronous fly stream
   or given a cheaper preview contract.
 - Current source-size audit found no Rust/GDScript/GLSL/Python source file over
