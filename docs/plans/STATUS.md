@@ -15,11 +15,16 @@
 > page-stable conditioning, material/dressing hints, and a facts/collision story.
 > The first numeric mountain-layer gap probe now exists:
 > `tools/dem_pack/test_mountain_world_layer_contract.py`. It proves the accepted
-> network payload contract and measures the current live seam-safe producer
-> against that accepted layer over the same mapped page:
+> network payload contract through the tracked
+> `tools/dem_pack/mountain_world_layer.py` source module. When the generated
+> local review payload is present, it measures the current live seam-safe
+> producer against that accepted layer over the same mapped page:
 > `mean_abs=1.211743`, `p95_abs=2.276974`, `peak_abs=3.200543`,
 > `corr=-0.048456`. This confirms the remaining mismatch is producer-contract
 > work, not a stale DLL, wrong command, or relief scalar issue.
+> `export_godot_mountain_network_chunks.py` is now a thin writer around that
+> module, removing the previous hidden dependency on the untracked
+> `export_godot_mountain_world_chunks.py` helper.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:

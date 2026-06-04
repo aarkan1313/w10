@@ -2,8 +2,9 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
-import export_godot_mountain_world_chunks as chunks
+import mountain_world_layer as layer
 import mountain_synthesis as mountain
 
 
@@ -13,6 +14,11 @@ SAMPLE_N = 65
 
 
 def _load_network_payload() -> dict:
+    if not NETWORK_PAYLOAD.exists():
+        pytest.skip(
+            "generated mountain_network_chunks.json is not checked in; run "
+            "python tools/dem_pack/export_godot_mountain_network_chunks.py"
+        )
     return json.loads(NETWORK_PAYLOAD.read_text(encoding="utf-8"))
 
 
@@ -39,7 +45,7 @@ def _bilinear_sample(field: np.ndarray, xs: np.ndarray, zs: np.ndarray, *, origi
 
 def _accepted_reference_page(payload: dict, *, display_origin_x: float, display_origin_z: float) -> np.ndarray:
     world = payload["seeds"][0]
-    field = chunks._stitch_grid(world["chunks"], int(payload["chunk_count"]), int(payload["chunk_n"]), "height")
+    field = layer.stitch_grid(world["chunks"], int(payload["chunk_count"]), int(payload["chunk_n"]), "height")
     world_span = float(payload["world_span_m"])
     display_min_x = -0.5 * world_span
     display_min_z = -0.5 * world_span
@@ -106,15 +112,30 @@ def _gap_metrics(reference: np.ndarray, live: np.ndarray) -> dict[str, float]:
     }
 
 
-def test_mountain_network_payload_declares_accepted_world_layer_contract():
+def test_mountain_world_layer_builder_declares_accepted_contract():
+    payload = layer.build_network_payload(styles=mountain.STYLES[:1], chunk_count=3, chunk_n=33)
+
+    assert payload["generator_version"] == layer.NETWORK_GENERATOR_VERSION
+    assert payload["source_scope"] == "coherent_full_field_carved_with_pass_network_sliced_for_review"
+    assert payload["chunk_count"] == 3
+    assert payload["chunk_n"] == 33
+    assert payload["feature_span_m"] == layer.FEATURE_SPAN_M
+    assert payload["height_scale_m"] == layer.HEIGHT_SCALE_M
+    assert np.isclose(payload["source_scene_ratio"], layer.SOURCE_CHUNK_SPAN_M / layer.DISPLAY_CHUNK_SPAN_M)
+    assert len(payload["seeds"]) == 1
+    assert len(payload["seeds"][0]["chunks"]) == 9
+    assert payload["seeds"][0]["pass_network"]["routes"] > 0
+
+
+def test_generated_mountain_network_payload_declares_accepted_world_layer_contract():
     payload = _load_network_payload()
 
     assert payload["source_scope"] == "coherent_full_field_carved_with_pass_network_sliced_for_review"
-    assert payload["chunk_count"] == chunks.CHUNK_COUNT
-    assert payload["chunk_n"] == chunks.CHUNK_N
-    assert payload["feature_span_m"] == chunks.FEATURE_SPAN_M
-    assert payload["height_scale_m"] == chunks.HEIGHT_SCALE_M
-    assert np.isclose(payload["source_scene_ratio"], chunks.SOURCE_CHUNK_SPAN_M / chunks.DISPLAY_CHUNK_SPAN_M)
+    assert payload["chunk_count"] == layer.CHUNK_COUNT
+    assert payload["chunk_n"] == layer.CHUNK_N
+    assert payload["feature_span_m"] == layer.FEATURE_SPAN_M
+    assert payload["height_scale_m"] == layer.HEIGHT_SCALE_M
+    assert np.isclose(payload["source_scene_ratio"], layer.SOURCE_CHUNK_SPAN_M / layer.DISPLAY_CHUNK_SPAN_M)
 
 
 def test_live_seamsafe_mountain_page_is_not_yet_the_accepted_network_layer():

@@ -16,6 +16,11 @@ is a separate world-layer artifact:
 4. Apply whole-field percentile/tanh conditioning.
 5. Slice the conditioned field into the 9x9 review payload.
 
+The tracked construction source for this contract is now
+`tools/dem_pack/mountain_world_layer.py`. The JSON exporter is deliberately a
+thin writer around that module, so tests and future Rust/GPU ports can depend
+on the world-layer contract instead of scraping an exporter implementation.
+
 The live `MOUNTAIN/network_ref` path now uses the same seed, relief family, and
 source window, but it still runs the seam-safe page recipe. That recipe has
 fixed affine constants, world-anchored kernels, flow-level gating, and no
@@ -60,8 +65,10 @@ single rendered page:
    The first version is allowed to prove "these are different"; the promotion
    version must prove the candidate closes the gap.
    Current probe: `tools/dem_pack/test_mountain_world_layer_contract.py`.
-   It samples the accepted network payload and the live seam-safe page over the
-   same mapped display/source window. Current measured gap:
+   It proves the tracked `mountain_world_layer.py` builder contract. When the
+   ignored generated review payload is present locally, it also samples the
+   accepted network payload and the live seam-safe page over the same mapped
+   display/source window. Current measured gap:
    `mean_abs=1.211743`, `p95_abs=2.276974`, `peak_abs=3.200543`,
    `corr=-0.048456`, `ref_ptp=1.584039`, `live_ptp=4.914207`.
 
@@ -107,9 +114,10 @@ single rendered page:
 - `REFERENCE` proves the renderer can display the accepted mountain-network
   geometry when fed the accepted payload.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
-  proves the accepted network payload contract and records the current
-  seam-safe live-producer gap: mean absolute normalized delta `1.211743`, p95
-  `2.276974`, and correlation `-0.048456` over the same mapped page.
+  proves the tracked world-layer builder contract. With the generated review
+  payload present, it also records the current seam-safe live-producer gap:
+  mean absolute normalized delta `1.211743`, p95 `2.276974`, and correlation
+  `-0.048456` over the same mapped page.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer.
