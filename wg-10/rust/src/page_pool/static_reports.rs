@@ -52,11 +52,41 @@ impl Wg10PagePool {
                 "live facts/collision story and procedural world-layer synthesis remain open",
             );
         } else if matches!(self.active_producer_kind(), Some(ProducerKind::World)) {
-            out.set("contract_kind", "grammar_routed_runtime_biome_composition");
-            out.set("source_scope", "grammar_routed_page_weight_field");
+            let preview_ref = self.world_preview_ref.as_ref();
+            out.set(
+                "contract_kind",
+                if preview_ref.is_some() {
+                    "world_route_reference_height_preview"
+                } else {
+                    "grammar_routed_runtime_biome_composition"
+                },
+            );
+            out.set(
+                "source_scope",
+                if preview_ref.is_some() {
+                    "grammar_route_over_accepted_reference_height"
+                } else {
+                    "grammar_routed_page_weight_field"
+                },
+            );
             out.set("has_source_display_mapping", true);
             out.set("has_mountain_macro_field", true);
-            out.set("blocking_gap", "WORLD composes runtime-biome pages but does not own the accepted mountain pass-network or conditioning facts");
+            out.set("has_world_preview_reference", preview_ref.is_some());
+            if let Some(reference) = preview_ref {
+                let has_pass_network = reference.pass_network_routes > 0;
+                let has_route_carving = reference.pass_network_carved_frac > 0.0;
+                let has_conditioning = reference_has_conditioning(reference);
+                out.set("height_source", "accepted_reference_payload_for_preview");
+                out.set("procedural_world_layer_height", false);
+                out.set("reference_source_scope", reference.source_scope.clone());
+                out.set("has_pass_network_routes", has_pass_network);
+                out.set("has_route_carving", has_route_carving);
+                out.set("has_page_stable_conditioning", has_conditioning);
+                out.set("has_material_hints", reference.has_material_hints);
+                out.set("blocking_gap", "WORLD route/weight diagnostics use accepted reference height for owner preview; full procedural WORLD height remains open until async/cache production");
+            } else {
+                out.set("blocking_gap", "WORLD composes runtime-biome pages but does not own the accepted mountain pass-network or conditioning facts");
+            }
         } else if matches!(self.active_producer_kind(), Some(ProducerKind::SingleBiome)) {
             let layer_ref = self.mountain_layer_ref.as_ref();
             out.set(
@@ -121,6 +151,32 @@ impl Wg10PagePool {
             };
         self.mountain_layer_ref = Some(reference);
         GString::new()
+    }
+
+    /// Bind the accepted mountain reference as the owner-facing WORLD preview height/materials.
+    ///
+    /// WORLD route and weight diagnostics still come from `configure_biome_world`; this only
+    /// replaces the synchronous owner-fly height page with the accepted reference height so mode 3
+    /// does not present the known one-biome-per-page WORLD compose artifact as terrain.
+    #[func]
+    pub fn bind_world_preview_reference(&mut self, payload_path: GString) -> GString {
+        if !matches!(self.active_producer_kind(), Some(ProducerKind::World)) {
+            return GString::from(
+                "bind_world_preview_reference: pool is not configured for WORLD biome synthesis",
+            );
+        }
+        let reference =
+            match StaticHeightRuntime::from_json_path(Path::new(&payload_path.to_string())) {
+                Ok(reference) => reference,
+                Err(e) => return GString::from(&e),
+            };
+        self.world_preview_ref = Some(reference);
+        GString::new()
+    }
+
+    pub(crate) fn has_world_preview_reference(&self) -> bool {
+        matches!(self.active_producer_kind(), Some(ProducerKind::World))
+            && self.world_preview_ref.is_some()
     }
 
     /// Diagnostic report for the accepted world-layer facts bound beside live MOUNTAIN.

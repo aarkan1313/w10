@@ -5,7 +5,7 @@ extends SceneTree
 # - REFERENCE: the accepted static mountain-network payload through the runtime renderer
 # - MOUNTAIN/network_ref: the reference-backed live bridge for the accepted mountain-network target
 # - MOUNTAIN/close_debug: local-scale diagnostic
-# - WORLD/network_ref: composed grammar-routed runtime plus route-color diagnostic
+# - WORLD/network_ref: grammar-routed diagnostics over accepted reference preview height
 # WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_*_fly_capture*.png
 
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
@@ -54,6 +54,9 @@ func _run() -> int:
 	if rc != 0:
 		return rc
 	rc = await _capture_mode(runtime, "world_network", MODE_WORLD, PRESET_NETWORK, OUT_WORLD, OUT_ROUTE)
+	if rc != 0:
+		return rc
+	rc = _assert_world_preview_matches_reference()
 	return rc
 
 func _capture_mode(runtime: Object, label: String, mode: String, preset: String, out_material: String, out_route: String) -> int:
@@ -158,6 +161,22 @@ func _assert_reference_bridge_match() -> int:
 		push_error("[wg10-biome-capture] reference/bridge size mismatch %s vs %s" % [str(reference.get_size()), str(mountain.get_size())])
 		return 1
 	return _assert_images_match(reference, mountain, "bridge_match")
+
+func _assert_world_preview_matches_reference() -> int:
+	var reference := Image.new()
+	var world := Image.new()
+	var err := reference.load(OUT_REFERENCE)
+	if err != OK:
+		push_error("[wg10-biome-capture] reference image load failed rc=%d" % err)
+		return 1
+	err = world.load(OUT_WORLD)
+	if err != OK:
+		push_error("[wg10-biome-capture] world preview image load failed rc=%d" % err)
+		return 1
+	if reference.get_size() != world.get_size():
+		push_error("[wg10-biome-capture] reference/world preview size mismatch %s vs %s" % [str(reference.get_size()), str(world.get_size())])
+		return 1
+	return _assert_images_match(reference, world, "world_preview_match")
 
 func _assert_reference_bridge_path(runtime: Object) -> int:
 	var reference := await _capture_bridge_path_images(runtime, "bridge_path_reference", MODE_REFERENCE)

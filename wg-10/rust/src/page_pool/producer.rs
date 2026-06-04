@@ -69,6 +69,8 @@ impl Wg10PagePool {
             Some(reference)
         } else if matches!(self.active_producer_kind(), Some(ProducerKind::SingleBiome)) {
             self.mountain_layer_ref.as_ref()
+        } else if matches!(self.active_producer_kind(), Some(ProducerKind::World)) {
+            self.world_preview_ref.as_ref()
         } else {
             None
         }
@@ -101,6 +103,10 @@ impl Wg10PagePool {
                 static_ref.write_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px)
             }
             Some(ProducerKind::World) => {
+                if let Some(reference) = self.world_preview_ref.as_ref() {
+                    return reference
+                        .write_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px);
+                }
                 let world = self
                     .biome_world
                     .as_ref()

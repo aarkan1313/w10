@@ -328,7 +328,14 @@ fn biome_material_mix_for_page(
     let pool_ref = pool.bind();
     let mode = pool_ref.biome_runtime_mode().to_string();
     if mode == "world" {
-        0.34
+        if pool_ref.has_world_preview_reference() {
+            // WORLD preview uses accepted reference material pages in normal mode. Keep the route
+            // colors available only through wg_dbg_mode=2 so the preview is not mistaken for raw
+            // composed WORLD terrain quality.
+            0.0
+        } else {
+            0.34
+        }
     } else if mode == "static_reference" {
         // Static-reference mode now binds per-texel material/corridor pages. Keep the older
         // page-average debug tint out of normal material mode so it does not mute the accepted

@@ -79,7 +79,7 @@ func _run() -> int:
 	)
 
 	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, reference_center_page, errs)
-	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, 425.0, {}, errs)
+	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 1.0, 1700.0, {}, errs)
 	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, {}, errs)
 	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, {}, errs)
 
@@ -129,7 +129,7 @@ func _expect_mode_taxonomy(snapshot: Dictionary, label: String, errs: Array[Stri
 	elif mode == "WORLD":
 		expected_role = "world_composition_diagnostic"
 		expected_acceptance = "diagnostic_not_owner_accepted"
-		expected_note_fragment = "one-biome-per-page"
+		expected_note_fragment = "reference height"
 		_expect(int(snapshot.get("world_active_biome_limit", -1)) == 1, "%s WORLD expected one active biome per page" % label, errs)
 	elif mode == "LEGACY":
 		expected_role = "legacy_atlas_regression"
@@ -200,6 +200,11 @@ func _expect_world_layer_contract_report(
 			_expect(bool(report.get("has_bound_world_layer_reference", false)), "%s live MOUNTAIN expected bound world-layer reference facts" % label, errs)
 			_expect(bool(report.get("height_consumes_world_layer_facts", false)), "%s live MOUNTAIN bridge should consume bound height facts" % label, errs)
 			_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s live MOUNTAIN reference source scope mismatch" % label, errs)
+	if expected_kind == "world_route_reference_height_preview":
+		_expect(str(report.get("height_source", "")) == "accepted_reference_payload_for_preview", "%s WORLD preview expected accepted reference height source" % label, errs)
+		_expect(not bool(report.get("procedural_world_layer_height", true)), "%s WORLD preview should not claim procedural height" % label, errs)
+		_expect(bool(report.get("has_world_preview_reference", false)), "%s WORLD preview expected bound reference height" % label, errs)
+		_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s WORLD preview reference source scope mismatch" % label, errs)
 	if expected_kind == "accepted_static_reference_visual_baseline":
 		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
 
@@ -299,8 +304,9 @@ func _expect_mode_switch(
 		_expect_mountain_layer_reference_contract(snapshot, mode, errs)
 		_expect_bound_page_matches_reference(expected_reference_center_page, snapshot.get("mountain_world_layer_reference_center_page", {}), errs)
 	if mode == "WORLD":
-		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)
+		_expect_world_layer_contract_report(snapshot, mode, "world_route_reference_height_preview", false, false, true, true, true, errs)
 		_expect_world_preview_reports(snapshot, mode, errs)
+		_expect(int(snapshot.get("static_material_bound_tiles", 0)) > 0, "%s WORLD preview expected bound reference material pages" % mode, errs)
 	if mode == "LEGACY":
 		_expect_world_layer_contract_report(snapshot, mode, "legacy_dem_kernel_atlas", false, false, false, false, false, errs)
 	if mode == "REFERENCE":
@@ -319,7 +325,7 @@ func _expect_world_preview_reports(snapshot: Dictionary, label: String, errs: Ar
 	_expect(int(weight_report.get("rows", 0)) == 17, "%s expected WORLD weight-field rows=17" % label, errs)
 	_expect(int(weight_report.get("cols", 0)) == 17, "%s expected WORLD weight-field cols=17" % label, errs)
 	_expect(int(weight_report.get("sample_count", 0)) == 289, "%s expected WORLD weight-field sample count=289" % label, errs)
-	_expect(int(weight_report.get("active_biomes", 0)) == 1, "%s owner WORLD preview should compose one active biome field" % label, errs)
+	_expect(int(weight_report.get("active_biomes", 0)) == 1, "%s owner WORLD route preview should expose one active biome field" % label, errs)
 	_expect(int(weight_report.get("max_texel_active_count", 0)) == 1, "%s owner WORLD preview should have one active biome per texel" % label, errs)
 	_expect(absf(float(weight_report.get("max_sum_delta", 1.0))) < 0.00001, "%s WORLD preview weights should remain normalized" % label, errs)
 	_expect(int(route_report.get("active_count", 0)) >= int(weight_report.get("active_biomes", 0)), "%s route report should explain at least the composed biome" % label, errs)

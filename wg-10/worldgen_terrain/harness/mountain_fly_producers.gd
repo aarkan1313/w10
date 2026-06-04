@@ -20,9 +20,10 @@ const WORLD_SEED := 1337
 const MOUNTAIN_REVIEW_SEED := 177
 const FLOW_ITERS := 192
 const FLOW_MAX_LEVEL := 2
-# WORLD review stays single-biome-per-page until multi-biome compose moves off the synchronous fly
-# stream. Top-2/full compose removes rectangular route pages but currently causes ~1.9s page-build
-# hitches in `review_runtime_modes`; treat WORLD as diagnostic, not accepted terrain.
+# WORLD review keeps route/weight diagnostics live, but binds the accepted reference payload for
+# owner-facing height. Top-2/full WORLD height compose removes rectangular route pages but currently
+# causes ~1.9s page-build hitches in `review_runtime_modes`; treat WORLD as diagnostic until
+# compose is async/cached.
 const WORLD_REVIEW_ACTIVE_BIOME_LIMIT := 1
 const FEATURE_SPAN_NETWORK_M := 90000.0
 const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
@@ -169,7 +170,7 @@ func mode_note() -> String:
 	if _mode == MODE_MOUNTAIN:
 		return "raw live mountain recipe debug"
 	if _mode == MODE_WORLD:
-		return "bounded one-biome-per-page diagnostic preview"
+		return "route diagnostic over accepted reference height preview"
 	return "legacy atlas renderer regression"
 
 func is_world() -> bool:
@@ -189,6 +190,8 @@ func view_relief_scale(default_scale: float) -> float:
 		return 1.0
 	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
 		return MOUNTAIN_NETWORK_VIEW_RELIEF_SCALE
+	if _mode == MODE_WORLD:
+		return 1.0
 	return default_scale
 
 func view_relief_ref(default_ref: float, default_scale: float) -> float:
@@ -203,7 +206,11 @@ func _configure_world(pool: Object) -> String:
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
 	if err != "":
 		return err
-	return str(pool.call("set_biome_world_active_limit", WORLD_REVIEW_ACTIVE_BIOME_LIMIT))
+	err = str(pool.call("set_biome_world_active_limit", WORLD_REVIEW_ACTIVE_BIOME_LIMIT))
+	if err != "":
+		return err
+	return str(pool.call("bind_world_preview_reference",
+		ProjectSettings.globalize_path(STATIC_REF_PAYLOAD)))
 
 func _configure_mountain(pool: Object) -> String:
 	var err := str(pool.call("configure_biome",

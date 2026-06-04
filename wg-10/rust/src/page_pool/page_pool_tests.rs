@@ -82,6 +82,7 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
     let mut mountain_layer_ref: Option<StaticHeightRuntime> = None;
+    let mut world_preview_ref: Option<StaticHeightRuntime> = None;
 
     Wg10PagePool::reset_configured_state(
         &mut policy,
@@ -97,6 +98,7 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
         &mut biome_world,
         &mut static_ref,
         &mut mountain_layer_ref,
+        &mut world_preview_ref,
     );
 
     // Every configure-set field is None — the acquire guard now correctly sees
@@ -112,6 +114,10 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     assert!(
         mountain_layer_ref.is_none(),
         "mountain_layer_ref must be cleared"
+    );
+    assert!(
+        world_preview_ref.is_none(),
+        "world_preview_ref must be cleared"
     );
     // Slot vectors emptied — no stale slot_wrap indexable by a stale policy.
     assert!(slot_tex.is_empty(), "slot_tex must be empty");
@@ -161,6 +167,7 @@ fn reset_is_idempotent_on_unconfigured_state() {
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
     let mut mountain_layer_ref: Option<StaticHeightRuntime> = None;
+    let mut world_preview_ref: Option<StaticHeightRuntime> = None;
 
     // Must not panic / must stay fully unconfigured.
     Wg10PagePool::reset_configured_state(
@@ -177,6 +184,7 @@ fn reset_is_idempotent_on_unconfigured_state() {
         &mut biome_world,
         &mut static_ref,
         &mut mountain_layer_ref,
+        &mut world_preview_ref,
     );
 
     assert!(
@@ -191,6 +199,7 @@ fn reset_is_idempotent_on_unconfigured_state() {
             && biome_world.is_none()
             && static_ref.is_none()
             && mountain_layer_ref.is_none()
+            && world_preview_ref.is_none()
     );
     assert!(
         slot_tex.is_empty()

@@ -38,6 +38,7 @@ impl Wg10PagePool {
                 &mut self.biome_world,
                 &mut self.static_ref,
                 &mut self.mountain_layer_ref,
+                &mut self.world_preview_ref,
             );
             return;
         }
@@ -57,6 +58,7 @@ impl Wg10PagePool {
         }
         self.static_ref = None;
         self.mountain_layer_ref = None;
+        self.world_preview_ref = None;
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
                 rd.free_rid(rid);
@@ -82,6 +84,7 @@ impl Wg10PagePool {
             &mut self.biome_world,
             &mut self.static_ref,
             &mut self.mountain_layer_ref,
+            &mut self.world_preview_ref,
         );
     }
 
@@ -104,6 +107,7 @@ impl Wg10PagePool {
         biome_world: &mut Option<BiomeWorldRuntime>,
         static_ref: &mut Option<super::StaticHeightRuntime>,
         mountain_layer_ref: &mut Option<super::StaticHeightRuntime>,
+        world_preview_ref: &mut Option<super::StaticHeightRuntime>,
     ) {
         *policy = None;
         slot_tex.clear();
@@ -120,6 +124,7 @@ impl Wg10PagePool {
         *biome_world = None;
         *static_ref = None;
         *mountain_layer_ref = None;
+        *world_preview_ref = None;
     }
 
     /// Exact predicate mirrored by the `acquire_page` guard.

@@ -34,10 +34,12 @@ The project currently has multiple terrain architectures alive at once:
      In the accepted `network_ref` preset it is currently a reference-backed
      visual bridge, not raw procedural height. The raw seam-safe live recipe
      remains visible through the close-debug preset and as the next procedural
-     world-layer target. WORLD mode remains available through direct key `3`; it
-     generates a texel-corner runtime-biome weight field per page, dispatches
-     each active biome context, and folds those core height fields through the
-     GPU compose passes before writing the page texture.
+     world-layer target. WORLD mode remains available through direct key `3`;
+     in the owner fly it keeps `configure_biome_world` route/weight diagnostics
+     live, but binds the accepted mountain reference height/material payload for
+     normal preview presentation. The raw procedural WORLD compose path still
+     exists and is proven by the `biome_world` gate, but it is not presented as
+     accepted owner terrain.
 
 4. **Runtime static-reference bridge**
    - Producer: `Wg10PagePool.configure_static_reference(...)`.
@@ -115,6 +117,17 @@ as softer hints rather than hard class colors and uses gentler manual lighting.
 This narrows the visible gap between modes 1/2 and the old chunk scene without
 changing producer data or promoting WORLD. The remaining WORLD artifacts are
 still composition/diagnostic-path issues, not mountain-reference bridge issues.
+
+Latest WORLD owner-preview follow-up: mode 3 now separates normal preview from
+route diagnostics. `WORLD/network_ref` still configures the grammar-routed
+runtime and exposes route/weight reports, but it binds the accepted reference
+height/material payload for owner-facing normal material mode. `terrain_view.rs`
+turns off the normal WORLD route tint when that preview reference is bound, and
+`review_runtime_visual` now proves REFERENCE vs WORLD/network preview at
+mean/p95 RGB delta `0.000000/0.000000`. The separate route capture still shows
+the biome route colors. The raw procedural WORLD path remains gated by
+`biome_world` and remains a future async/cache problem, not an accepted terrain
+mode.
 
 ## 2026-06-04 Deep-Dive Addendum
 

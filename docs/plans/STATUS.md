@@ -74,6 +74,27 @@
 > `m3` = 10/10, `review_runtime_visual` = 2/2, and
 > `review_runtime_modes` = 2/2. Latest scripted mode run still has zero
 > hide/show in REFERENCE, MOUNTAIN, and WORLD with render p99 below 0.5 ms.
+> Follow-up WORLD owner-preview fix: `WORLD/network_ref` now keeps the
+> `configure_biome_world` route/weight diagnostics live, but binds the accepted
+> mountain reference payload for normal owner-facing height and material
+> presentation. `terrain_view.rs` suppresses the normal WORLD route tint when
+> that preview reference is bound; route colors remain available only through
+> the explicit route-debug capture. This means modes 1/2/3 now share the same
+> accepted reference presentation in normal review, while raw procedural WORLD
+> compose remains separately gated by `biome_world` and is still not accepted
+> terrain. Current proof after this checkpoint: `cargo test -p wg10_terrain
+> --lib` = 227/0, `tools\build_rust.ps1` builds, `fast` = 8/8, `m3` = 10/10,
+> `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
+> `review_runtime_visual` = 2/2, and `biome_world` = 1/1. Latest scripted
+> motion has zero hide/show in REFERENCE, MOUNTAIN, and WORLD; CPU p99/max is
+> REFERENCE 12.054/12.603 ms, MOUNTAIN 12.732/14.281 ms, WORLD
+> 12.155/12.485 ms, with `acquired_max=1` and `full_events=0` in all three.
+> Latest render p99 is REFERENCE 0.493 ms, MOUNTAIN 0.411 ms, WORLD
+> 0.884 ms. `review_runtime_visual` proves REFERENCE vs MOUNTAIN/network at
+> mean/p95 RGB delta 0.000000/0.000000 and now also proves REFERENCE vs
+> WORLD/network preview at 0.000000/0.000000. Remaining owner reports of manual
+> flight popping/lag need a capture that follows the exact manual path; the
+> current scripted path does not reproduce hide/show or full-page stalls.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

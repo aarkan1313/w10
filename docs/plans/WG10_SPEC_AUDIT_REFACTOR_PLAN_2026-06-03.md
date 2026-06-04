@@ -6,6 +6,38 @@ current state, because much of the active WG10 work is presently untracked.
 
 ## Addendum - 2026-06-04 Stabilization
 
+### WORLD Reference Preview Checkpoint - 2026-06-04
+
+The latest owner-visible fix separates WORLD route diagnostics from owner-facing terrain
+presentation. `WORLD/network_ref` still calls `configure_biome_world`, keeps route/weight reports
+live, and writes the separate route-debug capture, but normal material mode now samples the accepted
+mountain reference height/material pages. `terrain_view.rs` suppresses the normal WORLD
+`biome_material_mix` route tint when a WORLD preview reference is bound, so mode 3 no longer shows
+diagnostic biome-color blocks as if they were terrain.
+
+Current proof:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite m3` = 10/10.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99/max:
+  REFERENCE `12.054/12.603 ms`, MOUNTAIN `12.732/14.281 ms`, WORLD `12.155/12.485 ms`; all three
+  have `acquired_max=1`, `full_events=0`, and zero hide/show. Latest render p99: REFERENCE
+  `0.493 ms`, MOUNTAIN `0.411 ms`, WORLD `0.884 ms`.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2. The visual gate now proves
+  REFERENCE vs MOUNTAIN/network at `mean=0.000000`, `p95=0.000000` and REFERENCE vs WORLD/network
+  preview at `mean=0.000000`, `p95=0.000000`.
+- `python tools\gate.py --suite biome_world` = 1/1, proving the raw procedural WORLD runtime path
+  still exists independently of the owner preview binding.
+
+This does not promote WORLD to accepted procedural terrain. It makes mode 3 a readable route
+diagnostic over the accepted reference preview while the expensive/unaccepted procedural WORLD
+height compose remains a separate gate and future async/cache target. Any remaining manual-flight
+pop/lag report should be captured with the owner's exact motion path; the current scripted path is
+not reproducing hide/show or full-page stalls.
+
 ### Owner Material Presentation Checkpoint - 2026-06-04
 
 The latest owner-visible fix is scoped to renderer presentation and stale gate setup, not page
