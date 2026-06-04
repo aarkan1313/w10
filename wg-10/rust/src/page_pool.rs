@@ -1,4 +1,4 @@
-//! Single owner of all page-texture RIDs (DESIGN §5.2).
+﻿//! Single owner of all page-texture RIDs (DESIGN §5.2).
 //!
 //! `Wg10PagePool` is the ONLY place that calls `texture_create` and `free_rid`
 //! on page textures.  It asks `PagePolicy` what to do (reuse / allocate /
@@ -21,7 +21,7 @@ use godot::prelude::*;
 use godot::classes::{RenderingServer, Texture2Drd};
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
-use crate::page_policy::{PagePolicy, PageKey, Decision};
+use crate::page_policy::{PagePolicy, PageKey};
 use crate::page_compute::{PageComputeContext, build_page_compute_context};
 use crate::biome_page_compute;
 use std::path::Path;
@@ -269,154 +269,6 @@ impl Wg10PagePool {
     #[func]
     pub fn uses_biome_path(&self) -> bool {
         self.use_biome_path
-    }
-
-    // -----------------------------------------------------------------------
-    // acquire_page
-    // -----------------------------------------------------------------------
-
-    /// Acquire (or compute) the page texture for `(level, origin_x, origin_z)`.
-    ///
-    /// On a cache hit the existing `Texture2Drd` is returned immediately.
-    /// On a miss a new R32F texture is created (or an existing slot is reused
-    /// for eviction) and the compute shader is dispatched into it.
-    ///
-    /// Returns `None` when:
-    ///   - `configure()` has not been called (or failed);
-    ///   - the global `RenderingDevice` is not available (windowed-only mode);
-    ///   - texture creation or shader dispatch fails;
-    ///   - all slots are protected (`Decision::Full`).
-    #[func]
-    pub fn acquire_page(
-        &mut self,
-        level:    i64,
-        origin_x: f64,
-        origin_z: f64,
-    ) -> Option<Gd<Texture2Drd>> {
-        // --- guards ---
-        // Accept EITHER configured path: legacy kernel (pack+pack_buffers+glsl_source+compute_ctx)
-        // OR biome (policy + biome_ctx). `is_configured()` is the single source of truth so the
-        // producer call sites' `.as_ref().unwrap()` can never unwrap a None ctx (the F7 lesson).
-        if !self.is_configured() {
-            godot_error!("Wg10PagePool: acquire_page called before configure()");
-            return None;
-        }
-
-        // --- global RenderingDevice ---
-        let mut rd = match RenderingServer::singleton().get_rendering_device() {
-            Some(r) => r,
-            None    => {
-                godot_error!("Wg10PagePool: global RenderingDevice unavailable (windowed-only mode)");
-                return None;
-            }
-        };
-
-        let key = PageKey {
-            level:    level as i32,
-            origin_x: origin_x as i64,
-            origin_z: origin_z as i64,
-        };
-
-        let decision = self.policy.as_mut().unwrap().acquire(key);
-
-        // Extract scalar parameters before the match so later arms can take
-        // references to pack/pack_buffers without fighting the borrow checker.
-        // glsl is cloned once (cheap vs. GPU dispatch cost); all other reads
-        // are scalars copied out of self before any mutable access to
-        // slot_tex/slot_wrap.  No unsafe required.
-        // Per-level page span: a level-L page covers world_span * 2^level (Fix #1, slice 5a).
-        // A flat world_span was only correct at level 0; coarser levels must cover 2^L more
-        // ground so the page matches the clipmap band (scheduler/RingLayout level_span).
-        let span_l = self.world_span * 2f64.powi(level as i32);
-        let (ox, oz, ws, ppx, sd) =
-            (origin_x, origin_z, span_l, self.page_px, self.seed);
-        // SCALE-INVARIANCE: this level's drainage-carve flag. `compute_biome_page_cached` derives its
-        // own spacing from (ws=span_l, ppx) -> each level bakes its blurs world-anchored to its span;
-        // flow_on gates the carve off on coarse levels (cheaper, macro surface). (Inert on the legacy
-        // kernel path, which ignores flow_on.)
-        let flow_on = level < self.biome_flow_max_level;
-
-        match decision {
-            // ----------------------------------------------------------------
-            Decision::Reuse(slot) => {
-                self.reused += 1;
-                self.slot_wrap[slot].clone()
-            }
-
-            // ----------------------------------------------------------------
-            Decision::Allocate(slot) => {
-                // Create a new R32F texture — the ONLY texture_create call in
-                // the whole crate for page textures.
-                let tex_rid = self.create_page_texture(&mut rd);
-                let tex_rid = match tex_rid {
-                    Some(r) => r,
-                    None    => {
-                        // texture_create failed; no texture exists to free.
-                        // Roll back the policy so it has no phantom-protected
-                        // slot (which would later panic an eviction .expect).
-                        self.policy.as_mut().unwrap().rollback(key);
-                        return None; // error already reported inside helper
-                    }
-                };
-
-                // Dispatch into the new texture using the CACHED compute context (slice 7) —
-                // no shader recompile, no buffer re-upload; just a uniform set + push + dispatch.
-                // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
-                let result = self.dispatch_page_compute(
-                    &mut rd, tex_rid, ox, oz, ws, ppx, sd, flow_on,
-                );
-
-                if let Err(e) = result {
-                    godot_error!("Wg10PagePool: compute_page_cached failed (slot {slot}): {e}");
-                    self.rollback_failed_allocate(&mut rd, key, tex_rid);
-                    return None;
-                }
-
-                // Wrap and store — mutable slot access after immutable refs end.
-                let mut wrap = Texture2Drd::new_gd();
-                wrap.set_texture_rd_rid(tex_rid);
-
-                self.slot_tex[slot]  = Some(tex_rid);
-                self.slot_wrap[slot] = Some(wrap.clone());
-                self.created += 1;
-                Some(wrap)
-            }
-
-            // ----------------------------------------------------------------
-            Decision::AllocateEvicting { slot, evicted: _ } => {
-                // Reuse the EXISTING texture RID — zero-churn eviction.
-                // No free_rid, no texture_create; recompute into the slot RID.
-                let tex_rid = self.slot_tex[slot]
-                    .expect("AllocateEvicting: slot must be occupied");
-
-                // Branch on the producer path: biome (Slice-4) vs legacy kernel atlas (default).
-                let result = self.dispatch_page_compute(
-                    &mut rd, tex_rid, ox, oz, ws, ppx, sd, flow_on,
-                );
-
-                if let Err(e) = result {
-                    godot_error!(
-                        "Wg10PagePool: compute_page_cached failed on eviction (slot {slot}): {e}"
-                    );
-                    self.rollback_failed_eviction(&mut rd, key, slot);
-                    return None;
-                }
-
-                // The Texture2Drd wrapper still points at the same RID; content
-                // was recomputed in place.  Clone increments the Godot refcount.
-                self.recomputed += 1;
-                self.slot_wrap[slot].clone()
-            }
-
-            // ----------------------------------------------------------------
-            Decision::Full => {
-                self.full_events += 1;
-                godot_warn!(
-                    "Wg10PagePool: all slots protected, returning null (Full)"
-                );
-                None
-            }
-        }
     }
 
     // -----------------------------------------------------------------------
