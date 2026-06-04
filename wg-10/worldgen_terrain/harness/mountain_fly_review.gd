@@ -306,8 +306,8 @@ func _reconfigure_view() -> void:
 		return
 	_view.call("configure", _pool, _streamer, _rings, NUM_LEVELS, BASE_SPAN, RELIEF_SCALE, _current_morph_region(), RELIEF_REF, LEAD_SECONDS)
 
-# Live producer toggle (B): free_all + reconfigure the SAME pool object between grammar-routed
-# WORLD, single MOUNTAIN, and LEGACY dem_v1 kernel atlas. The streamer/view hold the same pool ref and keep
+# Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
+# LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
 # working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
 func _cycle_producer_mode() -> void:
 	if _pool == null:

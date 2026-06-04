@@ -103,12 +103,17 @@
 > active_biomes=2 max_texel_active=2 min_sum=1.000000 max_sum=1.000000
 > max_sum_delta=0.000000`, followed by `status=pass runtime=world biome_path=true
 > nonzero=65536`.
-> The standalone visual capture now writes both
-> `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png` and
+> The standalone visual capture now writes four runtime artifacts:
+> `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
+> `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,
+> `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png`, and
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. Current evidence:
-> WORLD streams 45 pages and route colors are visible, but the normal WORLD material
-> still reads broad/flat in this sampled area. Treat that as an open content/material
-> issue, not as proof of accepted biome visuals.
+> MOUNTAIN/network_ref streams 45 pages and reads as broad snow/rock massifs from
+> an overview; MOUNTAIN/close_debug streams 45 pages but is visibly faceted/lumpy
+> at close range, so it remains a diagnostic scale, not an acceptance target.
+> WORLD streams 45 composed pages and route colors are visible, but the normal
+> WORLD material still reads broad/flat in this sampled area. Treat that as an
+> open content/material issue, not as proof of accepted biome visuals.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

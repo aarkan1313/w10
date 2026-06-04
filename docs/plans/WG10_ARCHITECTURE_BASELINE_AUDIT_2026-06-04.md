@@ -115,12 +115,16 @@ Validation:
   composed height to the page texture. `biome_world` reports
   `route_weight_field samples=289 active_biomes=2 max_sum_delta=0.000000` for
   the sampled live page.
-- `biome_fly_capture.gd` now writes two WORLD visual artifacts:
-  `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png` and
-  `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. The route
-  capture proves the renderer receives page route labels; the normal WORLD
-  material capture still reads broad/flat in the sampled area, so per-biome
-  materials/content remain open.
+- `biome_fly_capture.gd` now writes four visual artifacts:
+  `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
+  `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,
+  `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png`, and
+  `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. The mountain
+  network capture gives a separate visual proof for the scene's default producer;
+  the close-debug capture shows why that 3.5 km scale should remain diagnostic
+  only; the route capture proves the renderer receives page route labels; the
+  normal WORLD material capture still reads broad/flat in the sampled area, so
+  per-biome materials/content remain open.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
