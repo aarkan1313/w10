@@ -11,8 +11,8 @@ extends Node3D
 # KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
 #       P toggles runtime scale preset, B cycles modes, and 1/2/3/4 jump directly to
 #       REFERENCE/MOUNTAIN/WORLD/LEGACY. The streamer/view keep the same pool ref; on toggle we
-#       free_all + reconfigure live. Starts in MOUNTAIN mode so the mountain review scene reviews
-#       mountain content first; REFERENCE remains the accepted static-payload baseline.
+#       free_all + reconfigure live. Starts in REFERENCE mode so the owner review opens on the
+#       accepted mountain-network baseline; MOUNTAIN remains the explicit live candidate.
 
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"

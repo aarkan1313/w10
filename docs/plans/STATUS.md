@@ -47,15 +47,16 @@
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
-> `cargo test --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain --lib`
-> = **224 passed / 0 failed** after adding static-reference material-hint parsing.
+> `cargo test -p wg10_terrain --lib`
+> = **225 passed / 0 failed** after adding static-reference conditioning facts.
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
 > loads), `review_static_visual` = **1/1 pass** (captures the accepted static
 > baseline PNGs), `review_runtime` = **2/2 pass** (instantiates the owner
-> `mountain_fly_review.tscn` path, verifies `MOUNTAIN/network_ref` defaults, and
-> runs the sprint-speed visibility churn gate),
+> `mountain_fly_review.tscn` path, verifies accepted `REFERENCE` startup plus
+> the explicit `MOUNTAIN/network_ref` candidate, and runs the sprint-speed
+> visibility churn gate),
 > `review_runtime_visual` = **1/1 pass** (captures REFERENCE/static-payload,
 > MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/route PNGs through
 > the shared producer helper),
@@ -63,24 +64,27 @@
 > (`m3_accept` p99 5.25 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
 > cross-level macro ratio 0.066665 <= 0.08, latest fly GPU p99 0.108 ms).
-> Correct command sequence for this rerun was: clear `CARGO_TARGET_DIR` and run
-> `cargo build -p wg10_terrain` from `wg-10/rust`, then set `GODOT_BIN` to the
-> Godot 4.6.2 console executable and run `python tools\gate.py --suite biome_fly`,
+> Correct command sequence for Godot-facing Rust rebuilds is
+> `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` from the repo
+> root, then set `GODOT_BIN` to the Godot 4.6.2 console executable and run
+> `python tools\gate.py --suite biome_fly`,
 > `python tools\gate.py --suite review_runtime`, and
-> `python tools\gate.py --suite review_runtime_visual` from the repo root.
-> `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
-> `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
-> `close_debug` scale (`feature_span_m=3500`). The default live review preset now
-> uses the accepted mountain-network seed family (`runtime_seed=177`), `relief_m=1700`,
-> a MOUNTAIN/network-only view relief scale of `0.5`, and the accepted source-window
-> transform (`source_scale=3.515625`, source center `207000,176000`); `review_runtime`
-> proves runtime=`single`, biome_path=`true`, created=`45`, resident=`45`. `REFERENCE`
-> is available through `B` as a static
-> accepted-payload bridge, and `WORLD` remains available through `B` as the
-> biome-composition A/B path.
+> `python tools\gate.py --suite review_runtime_visual` from the repo root. Avoid
+> raw Cargo target-dir overrides for Godot review; they can build a DLL outside
+> the `.gdextension` load path.
+> `mountain_fly_review.tscn` now starts in `REFERENCE` mode so owner review opens
+> on the accepted mountain-network payload. The explicit `MOUNTAIN/network_ref`
+> candidate remains available through `2`/`B` on the accepted `network_ref` scale
+> (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug` scale
+> (`feature_span_m=3500`). That candidate uses the accepted mountain-network seed
+> family (`runtime_seed=177`), `relief_m=1700`, a MOUNTAIN/network-only view
+> relief scale of `0.5`, and the accepted source-window transform
+> (`source_scale=3.515625`, source center `207000,176000`); `review_runtime`
+> proves runtime=`single`, biome_path=`true` after switching to MOUNTAIN.
+> `WORLD` remains available through `B` as the biome-composition A/B path.
 >
 > Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has four
-> explicit producer modes: `MOUNTAIN` (default), `REFERENCE`, `LEGACY`, and
+> explicit producer modes: `REFERENCE` (default), `MOUNTAIN`, `LEGACY`, and
 > `WORLD`; `B` cycles them and the HUD/log prints the active mode. `REFERENCE`
 > calls `configure_static_reference(...)`, stitches
 > `mountain_network_chunks.json` into a 1153x1153 accepted height field, and
@@ -96,8 +100,8 @@
 > selector from the live WORLD fly, but it is still
 > not badlands-native (badlands falls back to desert), not per-biome material
 > complete, and not the Slice 4c atlas-removal/runtime-flip acceptance.
-> `cargo build --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain`
-> passes. The new `biome_world` windowed gate is **1/1 pass** when run outside
+> `tools\build_rust.ps1` is the Godot-facing DLL build command and passes. The
+> new `biome_world` windowed gate is **1/1 pass** when run outside
 > the sandbox (`python tools\gate.py --suite biome_world`): runtime=`world`,
 > `biome_path=true`, route diversity across the sampled page window includes
 > rainforest/wetland/tundra/volcanic/temperate/desert/grassland/coast/mountain/glacial/karst,
@@ -127,7 +131,7 @@
 > foreground spikes.
 > Follow-up baseline bridge: the new REFERENCE runtime capture proves the
 > runtime renderer can show the accepted mountain-network geometry when fed the
-> accepted payload. The default live MOUNTAIN capture now uses the same seed,
+> accepted payload. The explicit live MOUNTAIN capture now uses the same seed,
 > relief family, and source-window scale as that payload, so the remaining mountain
 > mismatch is isolated to the producer contract: the accepted payload was generated
 > by the old full-field diagnostic branch (`apron_px=0`, field-level zscore/norm,

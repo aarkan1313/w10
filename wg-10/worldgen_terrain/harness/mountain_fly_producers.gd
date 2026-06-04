@@ -36,7 +36,7 @@ const MODE_REFERENCE := 3
 const PRESET_NETWORK := 0
 const PRESET_CLOSE_DEBUG := 1
 
-var _mode := MODE_MOUNTAIN
+var _mode := MODE_REFERENCE
 var _preset := PRESET_NETWORK
 var _relief_m := RELIEF_M_DEFAULT
 

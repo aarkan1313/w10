@@ -22,26 +22,28 @@ The project currently has multiple terrain architectures alive at once:
    - Status: old runtime path, still useful as a renderer regression and A/B path, but not the intended final terrain content path.
 
 3. **Current biome live streaming architecture**
-   - Producers: `Wg10PagePool.configure_biome(...)` for the default single-mountain
-     fly mode, `Wg10PagePool.configure_biome_world(...)` for the WORLD composition A/B mode.
+   - Producers: `Wg10PagePool.configure_biome(...)` for the explicit
+     single-mountain candidate fly mode, `Wg10PagePool.configure_biome_world(...)`
+     for the WORLD composition A/B mode.
    - Shaders: `recipe_primitives.glsl` + `biome_page.glsl` + the 11 compiled
      `biome_<name>.glsl` fragments.
    - Renderer: same clipmap renderer as legacy.
    - Current scene: `wg-10/worldgen_terrain/harness/mountain_fly_review.tscn`
-   - Current behavior: MOUNTAIN mode starts first so the mountain review scene
-     reviews mountain content. WORLD mode remains available through `B`; it generates
-     a texel-corner runtime-biome weight field per page, dispatches each active
-     biome context, and folds those core height fields through the GPU compose
-     passes before writing the page texture.
+   - Current behavior: MOUNTAIN mode remains available through key `2`/`B` as
+     the live candidate. WORLD mode remains available through key `3`/`B`; it
+     generates a texel-corner runtime-biome weight field per page, dispatches
+     each active biome context, and folds those core height fields through the
+     GPU compose passes before writing the page texture.
 
 4. **Runtime static-reference bridge**
    - Producer: `Wg10PagePool.configure_static_reference(...)`.
    - Data source: `mountain_network_chunks.json`, stitched into the accepted
      1153x1153 height field and sampled into runtime R32F page textures.
    - Renderer: same clipmap renderer as the live runtime.
-   - Status: an explicit `REFERENCE` mode in `mountain_fly_review.tscn` and
-     `biome_fly_capture.gd`. This proves the renderer can display the accepted
-     mountain-network world layer, but it is not the final live biome producer.
+   - Status: the first mode in `mountain_fly_review.tscn` and an explicit
+     capture target in `biome_fly_capture.gd`. This proves the renderer can
+     display the accepted mountain-network world layer, but it is not the final
+     live biome producer.
 
 This explains the owner report:
 
@@ -54,7 +56,8 @@ This explains the owner report:
   learned the pass-network/conditioning contract.
 - The current live BIOME fly is proving page producer composition and renderer
   behavior, not full owner visual acceptance. The mountain review now starts on
-  single-mountain content again, while WORLD composition stays as an explicit A/B.
+  accepted `REFERENCE`, while single `MOUNTAIN` and WORLD composition stay as
+  explicit A/B modes.
   WORLD can compose active runtime-biome weights, but materials/content/facts and
   the owner fly review are still open.
 - The pop-in and morph issues have two pieces: renderer scheduling controls
@@ -142,8 +145,8 @@ geomorph blending.
 
 Validation:
 
-- `cargo build -p wg10_terrain` into the Godot-loaded target: passed.
-- `cargo test -p wg10_terrain --lib`: 221 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1`: passed.
+- `cargo test -p wg10_terrain --lib`: 225 passed / 0 failed.
 - `python tools\gate.py --suite review_static`: 1/1 passed. This suite now runs
   windowed because the accepted static review scene builds render/collision
   resources and the headless command shape was unreliable in the local Godot
@@ -174,30 +177,35 @@ Validation:
   macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.104 ms.
 - `python tools\gate.py --suite fast`: 8/8 passed after extracting
   `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
-  check locks the live review helper's default MOUNTAIN/network preset,
-  close-debug preset, REFERENCE mode, relief clamps, and B-cycle order. The runtime config check
+  check locks the review helper's accepted REFERENCE startup, explicit
+  MOUNTAIN/network candidate preset, close-debug preset, relief clamps, and
+  B-cycle order. The runtime config check
   locks the shared renderer defaults: 5 levels, 8192 m base span, 196608 m loaded
   edge, morph/detail default off, and the review sky color.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
-  loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
-  `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
-  close-up debug scale (`feature_span_m=3500`), so the manual review scale is
-  visible in the HUD. The default live review preset now uses `runtime_seed=177`,
-  `relief_m=1700`, a MOUNTAIN/network-only view relief scale of `0.5`, and the
-  accepted source-window transform (`source_scale=3.515625`, source center
-  `207000,176000`), matching the accepted mountain-network seed/relief/source
-  family without changing the global renderer relief scale.
+  loaded DLL. The scene now starts in `REFERENCE` mode so owner review opens on
+  the accepted mountain-network payload through the live page pool and renderer.
+  `MOUNTAIN/network_ref` remains the explicit live candidate through `2`/`B`; it
+  uses `runtime_seed=177`, `relief_m=1700`, a MOUNTAIN/network-only view relief
+  scale of `0.5`, and the accepted source-window transform
+  (`source_scale=3.515625`, source center `207000,176000`), matching the accepted
+  mountain-network seed/relief/source family without changing the global renderer
+  relief scale. `P` still exposes the old close-up debug scale
+  (`feature_span_m=3500`) while in MOUNTAIN mode.
 - `python tools\gate.py --suite review_runtime`: 2/2 passed. This windowed
   gate instantiates the actual `mountain_fly_review.tscn` owner scene, waits for
-  startup, then verifies `MOUNTAIN/network_ref`, runtime=`single`,
-  biome_path=`true`, seed=`177`, relief_m=`1700`, view relief scale=`0.5`,
-  source scale=`3.515625`, source offset=`207000,176000`, and real page startup
-  (`created=45`, `resident=45`). It also
+  startup, then verifies the accepted `REFERENCE` contract, including static
+  payload source scope, pass-network facts, material hint facts, page-sampled
+  corridor/material hints, view relief scale=`1.0`, identity source transform,
+  and real page startup. It also switches to `MOUNTAIN/network_ref` and verifies
+  runtime=`single`, biome_path=`true`, seed=`177`, relief_m=`1700`, view relief
+  scale=`0.5`, source scale=`3.515625`, and source offset=`207000,176000`. It
+  also
   runs `mountain_fly_visibility_churn_check.gd`, a sprint-speed motion gate over
   360 frames: `stream_events=24`, `resident=69`, `repage=72`, `hide=0`,
   `show=0`, `hidden_frames=0`, `max_hidden=0`. This specifically gates the
-  GDScript/Rust call signature, default scene wiring, and forward-motion
-  hide/show pop-in.
+  GDScript/Rust call signature, accepted default scene wiring, explicit live
+  candidate wiring, and forward-motion hide/show pop-in.
 - `python tools\gate.py --suite biome_world`: 1/1 passed when run outside the
   filesystem sandbox. The gate configures WORLD mode, builds the 11 cached
   runtime contexts plus the compose context, acquires one composed page, reads
@@ -230,7 +238,7 @@ Validation:
   `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. The mountain
   reference capture proves the runtime renderer can display the accepted
   mountain-network height layer. The mountain network capture gives a separate
-  visual proof for the scene's default live producer;
+  visual proof for the explicit live MOUNTAIN candidate;
   the close-debug capture shows why that 3.5 km scale should remain diagnostic
   only; the route capture proves the renderer receives page route labels; the
   normal WORLD material capture now receives a restrained route-color tint, so
@@ -257,9 +265,10 @@ Follow-up live visual rerun:
   accepted baseline is a conditioned 270 km source field with connected
   pass-network carving, sliced into the review scene.
 - The new REFERENCE capture restores the accepted mountain massifs through the
-  same runtime page pool and clipmap renderer. That isolates the default live
-  MOUNTAIN mismatch to the content/world-layer producer and material/dressing
-  layer; the renderer can show the accepted shape when fed the accepted payload.
+  same runtime page pool and clipmap renderer. That isolates the explicit live
+  MOUNTAIN candidate mismatch to the content/world-layer producer and
+  material/dressing layer; the renderer can show the accepted shape when fed the
+  accepted payload.
 - Tried and rejected presentation-only relief changes (`RELIEF_SCALE=0.5` and
   `1.0`): they can make silhouettes stronger, but they break close-debug/WORLD
   captures by pushing cameras into terrain or producing foreground spikes. The
@@ -275,19 +284,21 @@ is a coherent full-field mountain synthesis with connected pass-network carving.
 The mesh review is not a streaming page runtime. It is a baked inspection artifact
 that carries exactly the authored structure the owner liked.
 
-`mountain_fly_review.tscn` now defaults to MOUNTAIN mode and calls
-`configure_biome(...)` with the single mountain fragment, so the mountain review
-scene no longer starts by showing arbitrary WORLD grammar content. The separate
-WORLD mode remains available through `B`; it calls `configure_biome_world(...)`,
-asks the grammar for active runtime-biome weights, and composes the active GPU
-biome recipes into the streamed page texture.
+`mountain_fly_review.tscn` now defaults to REFERENCE mode and calls
+`configure_static_reference(...)`, so the mountain review scene starts on the
+accepted mountain-network payload through the same page pool and clipmap
+renderer. MOUNTAIN mode remains available through `2`/`B`; it calls
+`configure_biome(...)` with the single mountain fragment as the explicit live
+candidate, so live recipe review is still one keypress away without confusing it
+with the accepted baseline. The separate WORLD mode remains available through
+`B`; it calls `configure_biome_world(...)`, asks the grammar for active
+runtime-biome weights, and composes the active GPU biome recipes into the
+streamed page texture.
 
-`REFERENCE` mode is also available through `B`. It calls
-`configure_static_reference(...)` and streams the accepted generated network
-height payload through the live page pool. It is intentionally named as a
-reference bridge: it helps separate renderer review from live content-producer
-work, but it does not mean the live mountain recipe has reproduced the accepted
-pass-network/conditioning process.
+The default `REFERENCE` mode can be reached again through `B` after cycling. It
+is intentionally named as a reference bridge: it helps separate renderer review
+from live content-producer work, but it does not mean the live mountain recipe
+has reproduced the accepted pass-network/conditioning process.
 
 The accepted network exporter (`tools/dem_pack/export_godot_mountain_network_chunks.py`)
 does one more thing the live page recipe does not: it carves a connected pass
@@ -475,11 +486,11 @@ owner scene and visual evidence still start after this split.
 
 Third implemented step: the live review producer now owns explicit world and
 mountain-reference seed constants through `runtime_seed()` (renamed away from the
-GDScript built-in `seed()`), default MOUNTAIN/network relief is `1700m`, and only
-the MOUNTAIN/network review preset overrides the renderer's default view relief
-scale to `0.5`. `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so
-the smoke gate validates the owner scene through a stable debug surface instead
-of reaching into private fields.
+GDScript built-in `seed()`), the MOUNTAIN/network candidate relief is `1700m`,
+and only the MOUNTAIN/network review preset overrides the renderer's default view
+relief scale to `0.5`. `mountain_fly_review.gd` exposes
+`debug_runtime_snapshot()` so the smoke gate validates the owner scene through a
+stable debug surface instead of reaching into private fields.
 
 Fourth implemented step: `Wg10PagePool` now has an identity-default live-biome
 source transform seam. The MOUNTAIN/network review preset applies the accepted

@@ -3,7 +3,7 @@ extends SceneTree
 # One-shot CAPTURE: stream the live biome runtime through the same clipmap renderer as
 # mountain_fly_review.tscn and save visual evidence. It captures:
 # - REFERENCE: the accepted static mountain-network payload through the runtime renderer
-# - MOUNTAIN/network_ref: the mountain review default
+# - MOUNTAIN/network_ref: the explicit live candidate for the accepted mountain-network target
 # - MOUNTAIN/close_debug: local-scale diagnostic
 # - WORLD/network_ref: composed grammar-routed runtime plus route-color diagnostic
 # WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_*_fly_capture*.png

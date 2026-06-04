@@ -110,6 +110,10 @@ single rendered page:
    - candidate mountain layer has bounded seam/LOD deltas,
    - candidate layer moves numeric/visual metrics toward REFERENCE,
    - owner fly of `mountain_fly_review.tscn` accepts the result.
+   The review scene now opens in `REFERENCE` so the first viewport is the
+   accepted mountain-network baseline. `MOUNTAIN` remains the explicit live
+   candidate mode for checking whether the procedural producer has closed this
+   contract gap.
 
 ## Open Decisions
 
@@ -117,16 +121,16 @@ single rendered page:
   or a future terrain-fact database?
 - What is the smallest conditioning contract that preserves the accepted look
   without per-page normalization?
-- Should `REFERENCE` remain the first manual-review mode until the live world
-  layer closes the visual gap, or should `MOUNTAIN` remain first to keep pressure
-  on the live producer?
+- Resolved for the current review loop: `REFERENCE` is the first manual-review
+  mode until the live world layer closes the visual gap; `MOUNTAIN` remains
+  available as the explicit live candidate.
 - Which material hints are required for first acceptance versus later dressing?
 
 ## Current Proofs
 
-- `review_runtime` proves the owner scene starts in live `MOUNTAIN`, can jump to
-  `REFERENCE`, `WORLD`, `LEGACY`, and back to `MOUNTAIN`, and still passes the
-  sprint-speed zero-hide churn gate.
+- `review_runtime` proves the owner scene starts in accepted `REFERENCE`, can
+  jump to live `MOUNTAIN`, `WORLD`, `LEGACY`, and back to `REFERENCE`, and still
+  passes the sprint-speed zero-hide churn gate.
 - `review_runtime_visual` writes separate visual evidence for REFERENCE,
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes.
 - `REFERENCE` proves the renderer can display the accepted mountain-network
