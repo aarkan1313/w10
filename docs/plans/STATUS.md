@@ -4,7 +4,7 @@
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > **Read this first:** latest scoped runtime checkpoint in this tree paces the
-> owner fly stream to 2 synchronous page acquires per frame and gates the
+> owner fly stream to 1 synchronous page acquire per frame and gates the
 > owner-scene mode taxonomy (`mode_role`, `mode_acceptance`, `mode_note`).
 > It builds on `37eedc5 fix(slice4): smooth page repage fade by time`, tagged
 > `backup-slice4-page-fade-time-20260604-37eedc5`. The immediately preceding
@@ -24,17 +24,17 @@
 > `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
 > `review_runtime_visual` = 2/2. Latest mode gate reports zero hide/show in
 > REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
-> 21.752/23.468 ms, MOUNTAIN 22.181/23.143 ms, WORLD 6.437/10.566 ms, with
-> `acquired_max=2` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.325 ms, MOUNTAIN 0.370 ms, WORLD 0.216 ms. The REFERENCE vs
+> 12.073/12.672 ms, MOUNTAIN 12.226/12.806 ms, WORLD 4.497/8.850 ms, with
+> `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
+> REFERENCE 0.238 ms, MOUNTAIN 0.398 ms, WORLD 0.212 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
 > 0.000000/0.000000 at the captured review frame. The visual gate now also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
-> 80/160/240: mean RGB deltas were 0.000486, 0.000349, and 0.000000, with p95
-> 0.002614, 0.002614, and 0.000000. The page transition fade is wall-clock based (`0.18 s`),
-> and the owner fly now spreads page builds over fewer frames, so high-FPS
-> review no longer compresses REPAGE transitions into a near-hard snap or piles
-> four synchronous page builds into one update.
+> 80/160/240: mean RGB deltas were 0.002011, 0.000351, and 0.000000, with p95
+> 0.010458, 0.002614, and 0.000000. The page transition fade is wall-clock based (`0.18 s`),
+> and the owner fly now spreads page builds over more frames, so high-FPS review
+> no longer compresses REPAGE transitions into a near-hard snap or piles multiple
+> synchronous page builds into one update.
 > Follow-up review-control fix: `B` now cycles only the accepted owner-review
 > lane (`REFERENCE` <-> `MOUNTAIN/network_ref`). `WORLD` and `LEGACY` remain
 > direct-key diagnostics through `3` and `4`, so their known page-scale/legacy

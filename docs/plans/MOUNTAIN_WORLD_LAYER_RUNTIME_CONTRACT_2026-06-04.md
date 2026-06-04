@@ -213,14 +213,13 @@ single rendered page:
   checks level, origin, world span, sample count, corridor coverage, and
   low/floor/rock/snow material hint means, so the bridge cannot drift to a
   different page-fact sample while still passing only screenshot-level checks.
-- Latest bridge proof after rebuild: `cargo test -p wg10_terrain --lib` =
-  227/0, `fast` = 8/8, `review_runtime` = 2/2,
-  `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. The latest
+- Latest bridge proof after rebuild: `fast` = 8/8, `review_runtime` = 2/2,
+  `review_runtime_visual` = 2/2, and `review_runtime_modes` = 2/2. The latest
   mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 21.389/22.830 ms, MOUNTAIN 21.969/26.435 ms,
-  and WORLD 6.532/10.422 ms, with `acquired_max=2` and zero full events in all
-  three. Latest render p99 is REFERENCE 0.327 ms, MOUNTAIN 0.365 ms, and WORLD
-  0.215 ms. The latest visual capture shows MOUNTAIN/network matching the
+  motion CPU p99/max is REFERENCE 12.073/12.672 ms, MOUNTAIN 12.226/12.806 ms,
+  and WORLD 4.497/8.850 ms, with `acquired_max=1` and zero full events in all
+  three. Latest render p99 is REFERENCE 0.238 ms, MOUNTAIN 0.398 ms, and WORLD
+  0.212 ms. The latest visual capture shows MOUNTAIN/network matching the
   REFERENCE view at the reviewed frame and along the sprint path.
 - The renderer page transition fade is now wall-clock based (`0.18 s`) instead
   of frame-count based. This targets owner-visible REPAGE snap at high review
@@ -230,8 +229,8 @@ single rendered page:
   `0.002500` / `0.020000`.
 - Latest path bridge proof in `review_runtime_visual`: REFERENCE and
   MOUNTAIN/network were compared along an 8000 m/s page-boundary path at frames
-  80/160/240. Mean RGB deltas were `0.000024`, `0.000069`, and `0.000000`, and
-  p95 stayed `0.000000` for all three frames.
+  80/160/240. Mean RGB deltas were `0.002011`, `0.000351`, and `0.000000`, and
+  p95 stayed within budget at `0.010458`, `0.002614`, and `0.000000`.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:

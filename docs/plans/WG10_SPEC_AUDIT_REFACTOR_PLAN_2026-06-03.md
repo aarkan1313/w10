@@ -699,17 +699,17 @@ Latest gates with the editor closed:
 - `python tools\gate.py --suite fast` = 8/8.
 - `python tools\gate.py --suite review_runtime` = 2/2.
 - `python tools\gate.py --suite review_runtime_modes` = 2/2. The owner fly
-  stream is now paced to 2 synchronous page acquires per frame instead of 4.
-  Scripted motion CPU p99/max: REFERENCE 21.752/23.468 ms, MOUNTAIN
-  22.181/23.143 ms, WORLD 6.437/10.566 ms, with zero hide/show, zero full
-  events, and `acquired_max=2` in all three. Render p99: REFERENCE 0.325 ms,
-  MOUNTAIN 0.370 ms, WORLD 0.216 ms.
+  stream is now paced to 1 synchronous page acquire per frame instead of 4.
+  Scripted motion CPU p99/max: REFERENCE 12.073/12.672 ms, MOUNTAIN
+  12.226/12.806 ms, WORLD 4.497/8.850 ms, with zero hide/show, zero full
+  events, and `acquired_max=1` in all three. Render p99: REFERENCE 0.238 ms,
+  MOUNTAIN 0.398 ms, WORLD 0.212 ms.
 - `python tools\gate.py --suite review_runtime_visual` = 2/2. REFERENCE and
   MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
   at 57,600 sampled pixels for the captured review frame. The same gate now
   also compares REFERENCE vs MOUNTAIN/network along an 8000 m/s sprint path at
-  frames 80/160/240; mean RGB deltas were `0.000486`, `0.000349`, and
-  `0.000000`, with p95 `0.002614`, `0.002614`, and `0.000000`.
+  frames 80/160/240; mean RGB deltas were `0.002011`, `0.000351`, and
+  `0.000000`, with p95 `0.010458`, `0.002614`, and `0.000000`.
 
 Immediate fix direction: do not tune WORLD as if it were the accepted mountain
 look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
