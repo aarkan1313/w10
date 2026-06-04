@@ -1,16 +1,15 @@
 extends SceneTree
 
-# One-shot CAPTURE: set up the mountain biome streaming path (configure_biome), fly a few frames to
-# stream real pages, render to an offscreen SubViewport, and SAVE A PNG. This is the unfakeable proof
-# that the runtime producer renders REAL terrain (the perf gate's terrain_frac couldn't distinguish a
-# failed-but-counted page from a real one). WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_fly_capture.png
+# One-shot CAPTURE: set up the current WORLD biome streaming path, fly a few frames to stream real
+# pages, render to an offscreen SubViewport, and SAVE A PNG. This is visual evidence for the same
+# composed runtime producer used by mountain_fly_review.tscn's default WORLD mode. WINDOWED only.
+# Writes D:/tmp/wg10_biome_compose/biome_world_fly_capture.png
 
-const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
-const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
-const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
+const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
+const PACK_FILE := "terrain_pack.gate.json"
 const SHADER := "res://worldgen_terrain/shaders/ring_displace.gdshader"
 const APRON_PX := 160
-const FEATURE_SPAN_M := 3500.0  # scale-contract on-foot mountain (was 90000 = giant-massif sliver -> flat)
+const FEATURE_SPAN_M := 90000.0
 const FLOW_ITERS := 192
 const PAGE_PX := 256
 const SEED := 1337
@@ -27,7 +26,7 @@ const RELIEF_REF := 2000.0
 const DETAIL_AMP := 350.0
 const VIEW_SIZE := Vector2i(1280, 720)
 const SKY := Color(0.45, 0.62, 0.85)
-const OUT := "D:/tmp/wg10_biome_compose/biome_fly_capture.png"
+const OUT := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
 
 func _init() -> void:
 	quit(await _run())
@@ -39,19 +38,22 @@ func _run() -> int:
 	# Register BOTH global uniforms the render shader declares (ring_displace.gdshader: wg_dbg_mode +
 	# wg_detail_amp). Missing wg_dbg_mode -> the render pipeline's global-uniform descriptor set is
 	# incomplete -> "Uniforms were never supplied for set (3)" every draw (a HARNESS bug, not the producer).
-	if not RenderingServer.global_shader_parameter_get_list().has("wg_dbg_mode"):
-		RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	if not RenderingServer.global_shader_parameter_get_list().has("wg_detail_amp"):
-		RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, DETAIL_AMP)
+	# Match the live review scene: add directly instead of calling global_shader_parameter_get_list(),
+	# which Godot warns should not be used outside the editor.
+	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, DETAIL_AMP)
 	RenderingServer.global_shader_parameter_set("wg_detail_amp", DETAIL_AMP)
 
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
-	var err: String = str(pool.call("configure_biome",
-		ProjectSettings.globalize_path(PRIM), ProjectSettings.globalize_path(MACHINE),
-		ProjectSettings.globalize_path(MOUNTAIN),
+	var err: String = str(pool.call("configure_biome_world",
+		ProjectSettings.globalize_path(PACK_RES_DIR),
+		PACK_FILE,
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_M, FLOW_ITERS, 1000.0, 2, SEED))
 	if err != "":
-		push_error("[wg10-biome-capture] configure_biome failed: %s" % err); return 1
+		push_error("[wg10-biome-capture] configure_biome_world failed: %s" % err); return 1
+	var runtime_mode := str(pool.call("biome_runtime_mode"))
+	if runtime_mode != "world":
+		push_error("[wg10-biome-capture] expected runtime=world, got %s" % runtime_mode); return 1
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
 	streamer.call("configure", pool, NUM_LEVELS, BASE_SPAN, RADIUS_PAGES, LEAD_SECONDS, MAX_PER_FRAME)
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
