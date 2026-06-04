@@ -21,7 +21,7 @@ use godot::prelude::*;
 use godot::classes::{RenderingServer, Texture2Drd};
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
-use crate::page_policy::{PagePolicy, PageKey};
+use crate::page_policy::PagePolicy;
 use crate::page_compute::{PageComputeContext, build_page_compute_context};
 use crate::biome_page_compute;
 use std::path::Path;
@@ -29,6 +29,7 @@ use std::path::Path;
 mod acquire;
 mod configure;
 mod lifecycle;
+mod state_api;
 
 // ---------------------------------------------------------------------------
 // Wg10PagePool
@@ -262,142 +263,6 @@ impl Wg10PagePool {
         );
 
         GString::new()
-    }
-
-    /// True when the pool is producing pages via the GPU biome path (Slice-4). A perf/parity gate
-    /// asserts this to PROVE the biome producer is the one actually running (anti-fooling).
-    #[func]
-    pub fn uses_biome_path(&self) -> bool {
-        self.use_biome_path
-    }
-
-    // -----------------------------------------------------------------------
-    // release_page
-    // -----------------------------------------------------------------------
-
-    /// Unprotect a page (marks it LRU-eligible for eviction).  Idempotent.
-    #[func]
-    pub fn release_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {
-        if self.policy.is_none() {
-            godot_error!("Wg10PagePool: release_page called before configure()");
-            return;
-        }
-        let key = PageKey {
-            level:    level as i32,
-            origin_x: origin_x as i64,
-            origin_z: origin_z as i64,
-        };
-        self.policy.as_mut().unwrap().release(key);
-    }
-
-    // -----------------------------------------------------------------------
-    // stats
-    // -----------------------------------------------------------------------
-
-    /// Return a Dictionary with pool statistics:
-    ///   "created"      — textures allocated from scratch
-    ///   "reused"       — cache hits
-    ///   "recomputed"   — eviction-reuse (recomputed into existing texture)
-    ///   "full_events"  — times all slots were protected (Full)
-    ///   "resident"     — pages currently resident in the policy
-    #[func]
-    pub fn stats(&self) -> Dictionary<GString, Variant> {
-        let resident = self.policy
-            .as_ref()
-            .map(|p| p.resident_count() as i64)
-            .unwrap_or(0);
-
-        let mut d = Dictionary::<GString, Variant>::new();
-        d.set("created",     self.created);
-        d.set("reused",      self.reused);
-        d.set("recomputed",  self.recomputed);
-        d.set("full_events", self.full_events);
-        d.set("resident",    resident);
-        d
-    }
-
-    // -----------------------------------------------------------------------
-    // resident_keys
-    // -----------------------------------------------------------------------
-
-    /// Resident page keys as a flat array of (level, origin_x, origin_z) triples.
-    /// Read-only — the pool stays the sole RID owner; this only reports residency.
-    #[func]
-    pub fn resident_keys(&self) -> PackedInt64Array {
-        let mut out = PackedInt64Array::new();
-        if let Some(policy) = self.policy.as_ref() {
-            for key in policy.resident_keys() {
-                out.push(key.level as i64);
-                out.push(key.origin_x);
-                out.push(key.origin_z);
-            }
-        }
-        out
-    }
-
-    // -----------------------------------------------------------------------
-    // get_resident_page  (read-only — NEVER computes; the anti-WG9 render-path rule)
-    // -----------------------------------------------------------------------
-
-    /// Return the page texture for `(level, origin_x, origin_z)` IFF it is already resident,
-    /// else `None`. **Read-only: it NEVER allocates, evicts, or dispatches a compute** — it
-    /// is a pure slot lookup. A CONSUMER (e.g. `Wg10TerrainView`) uses this to fetch a page
-    /// to display without triggering synchronous page production on the render path (the
-    /// WG9 disease). Only the scheduler's `acquire_page` may compute; the view queries.
-    /// On a miss the caller falls back to a coarser resident page (never black).
-    #[func]
-    pub fn get_resident_page(
-        &self,
-        level:    i64,
-        origin_x: f64,
-        origin_z: f64,
-    ) -> Option<Gd<Texture2Drd>> {
-        let policy = self.policy.as_ref()?;
-        let key = PageKey {
-            level:    level as i32,
-            origin_x: origin_x as i64,
-            origin_z: origin_z as i64,
-        };
-        let slot = policy.slot_of(&key)?;
-        self.slot_wrap[slot].clone()
-    }
-
-    // -----------------------------------------------------------------------
-    // Display pinning (B2 — structural never-black; the view drives this)
-    // -----------------------------------------------------------------------
-
-    /// Clear all display pins, then the view re-pins exactly what it binds this frame.
-    /// Call at the START of the view's per-frame bind pass.
-    #[func]
-    pub fn clear_display_pins(&mut self) {
-        if let Some(p) = self.policy.as_mut() {
-            p.clear_display_pins();
-        }
-    }
-
-    /// Pin the page `(level, origin_x, origin_z)` as currently-displayed so it can NEVER be evicted/
-    /// recycled while on screen (B2). The view calls this for every page it binds — especially the
-    /// held coarse blanket — so a streamer `release` can't recycle the slot under a visible tile
-    /// (the page-A-geometry-with-page-B-pixels corruption). No-op if the page isn't resident.
-    #[func]
-    pub fn pin_displayed_page(&mut self, level: i64, origin_x: f64, origin_z: f64) {
-        if let Some(p) = self.policy.as_mut() {
-            p.pin_displayed(PageKey {
-                level: level as i32,
-                origin_x: origin_x as i64,
-                origin_z: origin_z as i64,
-            });
-        }
-    }
-
-    /// True if `(level, origin_x, origin_z)` is resident AND display-pinned. Gate/test introspection.
-    #[func]
-    pub fn is_displayed_pinned(&self, level: i64, origin_x: f64, origin_z: f64) -> bool {
-        self.policy.as_ref().map_or(false, |p| p.is_pinned(&PageKey {
-            level: level as i32,
-            origin_x: origin_x as i64,
-            origin_z: origin_z as i64,
-        }))
     }
 
     // -----------------------------------------------------------------------
