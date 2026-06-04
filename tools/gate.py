@@ -131,6 +131,7 @@ WINDOWED_SUITES = {
     "flow_converge",
     "biome_fly",
     "biome_world",
+    "review_static",
     "review_static_visual",
     "review_runtime",
     "review_runtime_visual",
