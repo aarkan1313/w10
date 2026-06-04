@@ -96,8 +96,11 @@ gate first exposed the all-mode failure (`repage_frame_max=18`, `repage=72`,
 zero hide/show/full), then passed after the fix (`repage_frame_max=8`,
 `repage=26`, zero hide/show/full across REFERENCE, MOUNTAIN/network,
 MOUNTAIN/close-debug, and WORLD preview). This addresses the renderer-side
-pop class; it does not promote raw `MOUNTAIN/close_debug` or full WORLD compose
-to accepted terrain.
+pop class. The progression visual repage gate now also holds the render camera
+fixed across L0/L1/L2 page-boundary crosses and compares terrain-mask pixels;
+latest 12-pair proof reports worst mean/p95/p99 RGB delta
+`0.000831/0.002614/0.020915`. This does not promote raw
+`MOUNTAIN/close_debug` or full WORLD compose to accepted terrain.
 
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,

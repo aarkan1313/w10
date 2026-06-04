@@ -45,7 +45,8 @@ Current work is Slice 4 stabilization and recovery:
 - `wg10_progression_review.tscn` is now the progression harness for the next
   chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
   WORLD/reference-preview as explicit steps with `review_progression` guarding
-  runtime modes, contract kinds, and scripted page-boundary motion.
+  runtime modes, contract kinds, scripted page-boundary motion, and fixed-camera
+  visual repage deltas at L0/L1/L2 page-boundary crosses.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same

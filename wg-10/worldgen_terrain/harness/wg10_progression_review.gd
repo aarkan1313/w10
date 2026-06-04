@@ -216,6 +216,8 @@ func debug_progression_snapshot() -> Dictionary:
 func set_probe_mode(enabled: bool) -> void:
 	_probe_mode = enabled
 	set_process(not enabled)
+	if _label != null:
+		_label.visible = not enabled
 
 func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) -> void:
 	if _camera != null:
@@ -224,6 +226,13 @@ func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) ->
 	if _view != null:
 		_view.call("update", pos_x, pos_z, vel_x, vel_z)
 	_refresh_label()
+
+func set_probe_camera_frame(eye: Vector3, look: Vector3) -> void:
+	if _camera == null:
+		return
+	_camera.look_at_from_position(eye, look, Vector3.UP)
+	if _camera.has_method("sync_mouse_from_rotation"):
+		_camera.call("sync_mouse_from_rotation")
 
 func debug_tile_states() -> PackedInt64Array:
 	if _rings == null:

@@ -31,7 +31,8 @@ Implemented follow-up checkpoint:
 - `wg-10/worldgen_terrain/harness/wg10_progression_review.gd`
 - `wg-10/worldgen_terrain/tests/wg10_progression_review_check.gd`
 - `wg-10/worldgen_terrain/tests/wg10_progression_motion_check.gd`
-- `python tools/gate.py --suite review_progression` = 2/2.
+- `wg-10/worldgen_terrain/tests/wg10_progression_repage_visual_check.gd`
+- `python tools/gate.py --suite review_progression` = 3/3.
 
 This new scene is the next-chat validation harness. It exposes four current
 steps with explicit status and expected contract:
@@ -59,13 +60,18 @@ Latest motion fix checkpoint:
   rows/columns rebind.
 - After the fix, `review_progression` passes with `repage_frame_max=8`,
   `repage=26`, `hide=0`, `show=0`, and `full_events=0` for all four steps.
+- Pixel-level repage proof now exists in
+  `wg10_progression_repage_visual_check.gd`: it holds the render camera fixed,
+  crosses L0/L1/L2 page boundaries in all four progression steps, and compares
+  terrain-mask before/after images. Latest proof checked 12 pairs with worst
+  mean/p95/p99 RGB delta `0.000831/0.002614/0.020915`.
 
 Latest proofs after the camera and clipmap fixes:
 
 - `python tools/gate.py --suite review_runtime` = 2/2.
 - `python tools/gate.py --suite review_runtime_modes` = 2/2.
 - `python tools/gate.py --suite review_runtime_visual` = 2/2.
-- `python tools/gate.py --suite review_progression` = 2/2.
+- `python tools/gate.py --suite review_progression` = 3/3.
 
 Mode-gate numbers after the toroidal slot fix:
 
@@ -137,7 +143,7 @@ Mode `4` / `LEGACY`:
 | Conditioning | Accepted payload includes whole-field conditioning stats. | Partial | Live producer lacks equivalent page-stable conditioning. |
 | Material/fact hints | Runtime material pages preserve low-pass/corridor, floor, rock, snow channels. | Partial | Works for accepted reference payload; final procedural material facts remain open. |
 | Facts/collision | Base facts API exists. | Open | Mountain world-layer facts are not yet the collision authority for final procedural content. |
-| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3; progression motion now bounds same-frame repage bursts to 8 after the toroidal slot fix. | Partial | Pixel-level REPAGE delta and strict single-frame owner-spike budgets remain open. |
+| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3; progression motion bounds same-frame repage bursts to 8; progression visual repage checks 12 fixed-camera boundary pairs with worst mean/p95/p99 RGB delta `0.000831/0.002614/0.020915`. | Partial | Strict single-frame owner-spike budgets remain open. |
 | Owner visual acceptance | Static network scene and runtime REFERENCE bridge match by silhouette/color gates. | Partial | Procedural MOUNTAIN and full WORLD are not accepted. |
 
 ## Architecture Audit
@@ -184,7 +190,9 @@ impossible to confuse.
 
 - A hand-style speed-pulse path passes for modes 1/2/3 with morph off/on.
 - Reference-backed MOUNTAIN and WORLD preview captures match REFERENCE.
-- It does not yet fail on abrupt REPAGE visual changes when tiles remain visible.
+- The progression suite now owns the fixed-camera pixel-delta repage proof; this
+  stress gate still focuses on hand-style path perf, hide/show/full events, and
+  bridge image matching.
 - It does not yet fail on single-frame spikes below the current max budget.
 
 `review_runtime_visual` proves:
@@ -199,6 +207,8 @@ impossible to confuse.
   explicit status and contract kinds.
 - The same scene survives scripted page-boundary motion with zero hide/show/full
   events and bounded repage bursts.
+- The same scene passes fixed-camera pixel-delta checks at L0/L1/L2
+  page-boundary crosses across all four current steps.
 - It does not prove future planned features until each step is added and gated.
 
 ## Fix Plan For "Slow, Laggy, Weird In 1/2/3"
@@ -219,16 +229,17 @@ impossible to confuse.
    - It caught the all-mode repage burst that older hide/show gates missed.
    - The toroidal slot fix reduced `repage_frame_max` from 18 to 8.
 
-4. Add a stricter owner-spike gate.
+4. Keep the visual REPAGE-delta gate.
+   - Implemented as `wg10_progression_repage_visual_check.gd`.
+   - It holds the camera fixed, crosses known page boundaries, and compares
+     terrain-mask images so normal camera motion cannot hide a renderer pop.
+   - Latest worst mean/p95/p99 RGB delta is
+     `0.000831/0.002614/0.020915`.
+
+5. Add a stricter owner-spike gate.
    - Current stress allows a one-frame `22.349 ms` MOUNTAIN morph-on spike.
    - Decide an owner review max budget and fail it explicitly.
    - Record frame, mode, morph state, acquired pages, and repage count.
-
-5. Add a visual REPAGE-delta gate.
-   - Current gates count REPAGE as acceptable if tiles never hide.
-   - The owner complaint is perceptual: content popping while moving forward.
-   - Capture pre/post repage frames, compare image delta in terrain mask, and
-     fail if the terrain change is too abrupt.
 
 6. Keep modes 1/2/3 honest.
    - Mode 1 is the accepted baseline.
@@ -321,6 +332,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'; python tools\gate.py --suite review_runtime
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'; python tools\gate.py --suite review_runtime_modes
 $env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'; python tools\gate.py --suite review_runtime_stress
+$env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'; python tools\gate.py --suite review_progression
 ```
 
 ## Next Definition Of Done
@@ -329,7 +341,9 @@ The next checkpoint is not "biomes look cool." It is:
 
 - The progression scene exists.
 - Steps 1-4 replay the current accepted bridge without ambiguity.
-- A stricter spike gate and a REPAGE visual-delta gate exist.
+- The progression scene has static, motion, and fixed-camera visual repage
+  gates.
+- A stricter owner-spike gate exists.
 - Raw procedural mountain remains visibly/numerically compared against the
   accepted baseline instead of being promoted by feel.
 - The docs continue to state which modes are accepted, bridge, prototype, or

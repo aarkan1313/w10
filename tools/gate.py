@@ -145,6 +145,7 @@ CHECKS = {
     "review_progression": [
         "worldgen_terrain/tests/wg10_progression_review_check.gd",
         "worldgen_terrain/tests/wg10_progression_motion_check.gd",
+        "worldgen_terrain/tests/wg10_progression_repage_visual_check.gd",
     ],
 }
 

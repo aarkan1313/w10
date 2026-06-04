@@ -19,14 +19,17 @@
 > **Progression harness follow-up:** `wg10_progression_review.tscn` now exists
 > with an explicit four-step current ladder: accepted REFERENCE baseline,
 > reference-backed MOUNTAIN bridge, raw MOUNTAIN close-debug candidate, and
-> bounded WORLD reference preview. `review_progression` = 2/2 now proves those
-> steps report their expected runtime modes/contract kinds and survive scripted
-> motion through page boundaries with bounded repage bursts.
-> Latest post-fix proof: `review_progression` = 2/2, `review_runtime` = 2/2,
+> bounded WORLD reference preview. `review_progression` = 3/3 now proves those
+> steps report their expected runtime modes/contract kinds, survive scripted
+> motion through page boundaries with bounded repage bursts, and pass a
+> fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses.
+> Latest post-fix proof: `review_progression` = 3/3, `review_runtime` = 2/2,
 > `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. The visual
-> gate confirms REFERENCE, MOUNTAIN/network, and WORLD preview match where they
-> are supposed to match; raw `MOUNTAIN/close_debug` and route/debug coloring
-> remain prototype/diagnostic and are not accepted terrain.
+> repage gate checked 12 before/after boundary pairs with worst mean/p95/p99
+> RGB delta `0.000831/0.002614/0.020915`. The visual bridge gate confirms
+> REFERENCE, MOUNTAIN/network, and WORLD preview match where they are supposed
+> to match; raw `MOUNTAIN/close_debug` and route/debug coloring remain
+> prototype/diagnostic and are not accepted terrain.
 > **Read this first:** latest scoped runtime-artifact checkpoint now has the
 > owner fly binding the JSON-ready accepted mountain world-layer tile payload in
 > `REFERENCE`, `MOUNTAIN/network_ref`, and `WORLD` preview. This replaces the
