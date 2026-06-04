@@ -87,8 +87,13 @@ single rendered page:
    First runtime-facing step: `Wg10PagePool.static_reference_report()` now
    exposes the accepted payload's generator version, source scope, height scale,
    feature span, corridor presence/fraction, and pass-network route summary.
-   `review_runtime` gates those facts in `REFERENCE` mode. The renderer still
-   consumes only height, so material/corridor rendering remains follow-up work.
+   `Wg10PagePool.static_reference_page_report(...)` samples corridor coverage
+   over a runtime page, and the REFERENCE renderer uses that page-level fact for
+   a restrained corridor tint/material mix. The accepted Python world-layer
+   builder now also emits page-stable material hint arrays per chunk:
+   `low_pass_hint`, `floor_hint`, `rock_hint`, and `snow_hint`, derived over the
+   coherent conditioned field before slicing. These are contract fields for the
+   runtime port; final per-pixel materials remain follow-up work.
 
 5. **Gate in layers.**
    Required gates before owner acceptance:
@@ -122,11 +127,18 @@ single rendered page:
   mountain-world facts, not just anonymous height data: source scope
   `coherent_full_field_carved_with_pass_network_sliced_for_review`, pass-network
   generator, nonzero routes, nonzero carved fraction, and corridor facts.
+- `review_runtime` now also proves a page-level REFERENCE corridor report exists
+  for the runtime renderer (`samples_px=17`, `has_corridor=true`), and the
+  renderer consumes that page report for static-reference corridor tinting.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:
   mean absolute normalized delta `1.211743`, p95 `2.276974`, and correlation
   `-0.048456` over the same mapped page.
+- The same pytest contract now proves the accepted builder emits non-vacuous,
+  bounded material hint fields (`low_pass_hint`, `floor_hint`, `rock_hint`,
+  `snow_hint`) on chunks and aprons, with the stitched low-pass/floor hints
+  covering the accepted corridor mask.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer.

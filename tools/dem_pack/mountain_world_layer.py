@@ -34,6 +34,7 @@ WORLD_ORIGIN_X_M = 72_000.0
 WORLD_ORIGIN_Z_M = 41_000.0
 SEED = 177
 HEIGHT_SCALE_M = 1700.0
+MATERIAL_HINT_FIELDS = ("low_pass_hint", "floor_hint", "rock_hint", "snow_hint")
 
 REVIEW_VARIANTS = (
     {"id": "mountain_dressed", "label": "mountain dressed", "relief": 1.0, "dressing": "review_biome"},
@@ -60,6 +61,74 @@ def condition_world(z: np.ndarray) -> tuple[np.ndarray, dict[str, float]]:
         "conditioned_max": float(np.max(shaped)),
         "conditioned_ptp": float(np.ptp(shaped)),
     }
+
+
+def _smoothstep(edge0: float, edge1: float, x: np.ndarray) -> np.ndarray:
+    t = np.clip((np.asarray(x, dtype=np.float64) - float(edge0)) / (float(edge1) - float(edge0) + 1.0e-9), 0.0, 1.0)
+    return t * t * (3.0 - 2.0 * t)
+
+
+def material_hint_fields(
+    height: np.ndarray,
+    corridor: np.ndarray,
+    *,
+    span_m: float,
+    height_scale_m: float = HEIGHT_SCALE_M,
+) -> dict[str, np.ndarray]:
+    """Derive page-stable material hints from the accepted world-layer facts.
+
+    These are world-layer descriptors, not final materials. They are generated
+    over the coherent conditioned field before slicing so chunks/pages inherit a
+    stable low-pass/floor/rock/snow signal instead of re-deriving hints from a
+    local page window.
+    """
+    h = np.asarray(height, dtype=np.float64)
+    corridor_bool = np.asarray(corridor, dtype=bool)
+    if h.ndim != 2:
+        raise ValueError("material_hint_fields: height must be a 2D field")
+    if corridor_bool.shape != h.shape:
+        raise ValueError("material_hint_fields: corridor shape must match height")
+    if min(h.shape) < 2:
+        raise ValueError("material_hint_fields: height dimensions must be >= 2")
+
+    cell_m = float(span_m) / float(max(h.shape[0], h.shape[1]) - 1)
+    dz, dx = np.gradient(h * float(height_scale_m), cell_m, cell_m)
+    slope = np.hypot(dx, dz)
+
+    h35 = float(np.percentile(h, 35.0))
+    h55 = float(np.percentile(h, 55.0))
+    h78 = float(np.percentile(h, 78.0))
+    h94 = float(np.percentile(h, 94.0))
+    slope45 = float(np.percentile(slope, 45.0))
+    slope88 = float(np.percentile(slope, 88.0))
+
+    corridor_hint = corridor_bool.astype(np.float64)
+    low_height = 1.0 - _smoothstep(h35, h78, h)
+    gentle = 1.0 - _smoothstep(slope45, slope88, slope)
+    floor_hint = np.clip(np.maximum(corridor_hint, low_height * gentle), 0.0, 1.0)
+    snow_hint = np.clip(_smoothstep(h78, h94, h) * (1.0 - 0.65 * corridor_hint), 0.0, 1.0)
+    rock_hint = np.clip(
+        _smoothstep(slope45, slope88, slope)
+        * (0.35 + 0.65 * _smoothstep(h55, h94, h))
+        * (1.0 - 0.55 * floor_hint),
+        0.0,
+        1.0,
+    )
+    return {
+        "low_pass_hint": corridor_hint,
+        "floor_hint": floor_hint,
+        "rock_hint": rock_hint,
+        "snow_hint": snow_hint,
+    }
+
+
+def material_hint_summary(hints: dict[str, np.ndarray]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for name in MATERIAL_HINT_FIELDS:
+        arr = np.asarray(hints[name], dtype=np.float64)
+        out[f"{name}_mean"] = float(np.mean(arr))
+        out[f"{name}_coverage"] = float(np.mean(arr >= 0.5))
+    return out
 
 
 def corridor_mask(result: dict[str, np.ndarray | mountain.MountainStyle]) -> np.ndarray:
@@ -119,6 +188,13 @@ def build_network_world(
 
     height, stats = condition_world(raw_carved)
     corridor = corridor_mask(result)
+    display_cell_m = display_total_m / float(world_n - 1)
+    material_hints = material_hint_fields(
+        height,
+        corridor,
+        span_m=display_total_m + 2.0 * display_cell_m,
+        height_scale_m=HEIGHT_SCALE_M,
+    )
     out_chunks: list[dict[str, object]] = []
     for z in range(int(chunk_count)):
         for x in range(int(chunk_count)):
@@ -128,9 +204,17 @@ def build_network_world(
             apron = height[start_z - 1 : start_z + chunk_n + 1, start_x - 1 : start_x + chunk_n + 1]
             core_corridor = corridor[start_z : start_z + chunk_n, start_x : start_x + chunk_n]
             apron_corridor = corridor[start_z - 1 : start_z + chunk_n + 1, start_x - 1 : start_x + chunk_n + 1]
+            core_hints = {
+                name: material_hints[name][start_z : start_z + chunk_n, start_x : start_x + chunk_n]
+                for name in MATERIAL_HINT_FIELDS
+            }
+            apron_hints = {
+                name: material_hints[name][start_z - 1 : start_z + chunk_n + 1, start_x - 1 : start_x + chunk_n + 1]
+                for name in MATERIAL_HINT_FIELDS
+            }
             display_origin_x = (float(x) - float(chunk_count) * 0.5) * float(display_chunk_span_m)
             display_origin_z = (float(z) - float(chunk_count) * 0.5) * float(display_chunk_span_m)
-            out_chunks.append({
+            chunk: dict[str, object] = {
                 "source": "full_field_slice_with_pass_network",
                 "chunk_x": int(x),
                 "chunk_z": int(z),
@@ -148,8 +232,16 @@ def build_network_world(
                 "apron_height": np.round(apron, 4).astype(float).ravel().tolist(),
                 "corridor": core_corridor.astype(int).ravel().tolist(),
                 "apron_corridor": apron_corridor.astype(int).ravel().tolist(),
-            })
+            }
+            for name in MATERIAL_HINT_FIELDS:
+                chunk[name] = np.round(core_hints[name], 4).astype(float).ravel().tolist()
+                chunk[f"apron_{name}"] = np.round(apron_hints[name], 4).astype(float).ravel().tolist()
+            out_chunks.append(chunk)
     stitched = stitch_grid(out_chunks, int(chunk_count), int(chunk_n), "height")
+    stitched_hints = {
+        name: stitch_grid(out_chunks, int(chunk_count), int(chunk_n), name)
+        for name in MATERIAL_HINT_FIELDS
+    }
     return {
         "seed": int(seed),
         "label": style.label,
@@ -157,6 +249,7 @@ def build_network_world(
         "corridor_height": float(np.percentile(stitched, 55.0)),
         "world_n": int(stitched.shape[0]),
         "stats": stats,
+        "material_hints": material_hint_summary(stitched_hints),
         "chunks": out_chunks,
         "pass_network": {
             "routes": len(carved["routes"]),

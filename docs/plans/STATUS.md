@@ -30,8 +30,14 @@
 > scale, feature span, corridor coverage, and pass-network route/carve summary.
 > `mountain_fly_review_smoke_check.gd` gates those facts when switching to
 > REFERENCE mode, so the accepted bridge is now a named mountain-world-layer
-> contract rather than an anonymous static height texture. Rendering still
-> consumes height only; corridor/material channels remain the next runtime port.
+> contract rather than an anonymous static height texture. Follow-up
+> `Wg10PagePool.static_reference_page_report(...)` samples corridor coverage
+> over a runtime page, the REFERENCE renderer applies a restrained corridor
+> tint/material mix from that page-level fact, and the smoke gate verifies the
+> page report exists. The accepted Python world-layer builder also now emits
+> four page-stable material hint fields per chunk (`low_pass_hint`,
+> `floor_hint`, `rock_hint`, `snow_hint`) plus a world summary; these are
+> contract/fact fields for the runtime port, not final per-pixel materials.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
@@ -123,6 +129,13 @@
 > before slicing, while the live runtime uses the seam-safe page branch with fixed
 > affine constants, scale-anchored kernels, flow-level gating, and no pass-network
 > fact. This is not a command invocation or relief scalar issue.
+> The accepted world-layer builder now carries the next material/fact seam:
+> `tools/dem_pack/mountain_world_layer.py` derives low/pass corridor, floor,
+> rock/slope, and snow/high hint fields over the coherent conditioned field
+> before slicing. Focused proof:
+> `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s -p no:cacheprovider`
+> = **4 passed** and still records the live seam-safe gap
+> `mean_abs=1.211743`, `p95_abs=2.276974`, `corr=-0.048456`.
 >
 > Runtime motion fix: the scheduler now maintains a camera-centred display ring
 > plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the

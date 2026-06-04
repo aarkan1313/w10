@@ -125,6 +125,18 @@ def test_mountain_world_layer_builder_declares_accepted_contract():
     assert len(payload["seeds"]) == 1
     assert len(payload["seeds"][0]["chunks"]) == 9
     assert payload["seeds"][0]["pass_network"]["routes"] > 0
+    assert payload["seeds"][0]["material_hints"]["low_pass_hint_coverage"] > 0.0
+    assert payload["seeds"][0]["material_hints"]["floor_hint_coverage"] > 0.0
+    assert payload["seeds"][0]["material_hints"]["rock_hint_coverage"] > 0.0
+    assert payload["seeds"][0]["material_hints"]["snow_hint_coverage"] > 0.0
+    chunk = payload["seeds"][0]["chunks"][0]
+    for field in layer.MATERIAL_HINT_FIELDS:
+        values = np.asarray(chunk[field], dtype=np.float64)
+        apron_values = np.asarray(chunk[f"apron_{field}"], dtype=np.float64)
+        assert values.shape == (33 * 33,)
+        assert apron_values.shape == (35 * 35,)
+        assert np.all(np.isfinite(values))
+        assert np.all((values >= 0.0) & (values <= 1.0))
 
 
 def test_generated_mountain_network_payload_declares_accepted_world_layer_contract():
@@ -159,3 +171,23 @@ def test_live_seamsafe_mountain_page_is_not_yet_the_accepted_network_layer():
     assert metrics["mean_abs"] > 0.20
     assert metrics["p95_abs"] > 0.45
     assert metrics["corr"] < 0.80
+
+
+def test_material_hints_are_world_layer_fields_not_page_local_rederives():
+    world = layer.build_network_world(mountain.STYLES[0], chunk_count=3, chunk_n=33)
+    floor = layer.stitch_grid(world["chunks"], 3, 33, "floor_hint")
+    rock = layer.stitch_grid(world["chunks"], 3, 33, "rock_hint")
+    snow = layer.stitch_grid(world["chunks"], 3, 33, "snow_hint")
+    low_pass = layer.stitch_grid(world["chunks"], 3, 33, "low_pass_hint")
+    corridor = layer.stitch_grid(world["chunks"], 3, 33, "corridor")
+
+    for field in (floor, rock, snow, low_pass):
+        assert field.shape == floor.shape
+        assert np.all(np.isfinite(field))
+        assert np.min(field) >= 0.0
+        assert np.max(field) <= 1.0
+
+    assert np.mean(low_pass[corridor > 0.5]) > 0.99
+    assert np.mean(floor[corridor > 0.5]) > 0.90
+    assert np.mean(rock >= 0.5) > 0.01
+    assert np.mean(snow >= 0.5) > 0.01
