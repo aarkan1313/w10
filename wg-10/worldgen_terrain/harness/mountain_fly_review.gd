@@ -328,6 +328,8 @@ func debug_runtime_snapshot() -> Dictionary:
 	var mountain_world_layer_reference_center_page := {}
 	var static_reference := {}
 	var static_reference_center_page := {}
+	var world_biome_report_center_page := {}
+	var world_biome_weight_field_center_page := {}
 	var runtime_mode := "missing"
 	var biome_path := false
 	if _pool != null:
@@ -340,6 +342,9 @@ func debug_runtime_snapshot() -> Dictionary:
 		static_reference_center_page = _pool.call("static_reference_page_report", 0, 0.0, 0.0, 17)
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
 		biome_path = bool(_pool.call("uses_biome_path"))
+		if runtime_mode == "world":
+			world_biome_report_center_page = _pool.call("debug_world_biome_report_for_page", 0, 0.0, 0.0)
+			world_biome_weight_field_center_page = _pool.call("debug_world_biome_weight_field_report_for_page", 0, 0.0, 0.0, 17)
 
 	var mode := "missing"
 	var preset := "missing"
@@ -392,6 +397,8 @@ func debug_runtime_snapshot() -> Dictionary:
 		"mountain_world_layer_reference_center_page": mountain_world_layer_reference_center_page,
 		"static_reference": static_reference,
 		"static_reference_center_page": static_reference_center_page,
+		"world_biome_report_center_page": world_biome_report_center_page,
+		"world_biome_weight_field_center_page": world_biome_weight_field_center_page,
 		"mode": mode,
 		"preset": preset,
 		"mode_role": mode_role,

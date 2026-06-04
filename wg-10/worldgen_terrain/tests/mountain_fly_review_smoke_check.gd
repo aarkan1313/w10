@@ -300,6 +300,7 @@ func _expect_mode_switch(
 		_expect_bound_page_matches_reference(expected_reference_center_page, snapshot.get("mountain_world_layer_reference_center_page", {}), errs)
 	if mode == "WORLD":
 		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)
+		_expect_world_preview_reports(snapshot, mode, errs)
 	if mode == "LEGACY":
 		_expect_world_layer_contract_report(snapshot, mode, "legacy_dem_kernel_atlas", false, false, false, false, false, errs)
 	if mode == "REFERENCE":
@@ -307,3 +308,18 @@ func _expect_mode_switch(
 		_expect_world_layer_contract_report(snapshot, mode, "accepted_static_reference_visual_baseline", true, false, true, true, true, errs)
 	var switched_stats: Dictionary = snapshot.get("stats", {})
 	_expect(int(switched_stats.get("resident", 0)) > 0, "%s expected resident pages after switch" % mode, errs)
+
+func _expect_world_preview_reports(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
+	var route_report: Dictionary = snapshot.get("world_biome_report_center_page", {})
+	var weight_report: Dictionary = snapshot.get("world_biome_weight_field_center_page", {})
+	_expect(not route_report.is_empty(), "%s expected WORLD route diagnostic report" % label, errs)
+	_expect(not weight_report.is_empty(), "%s expected WORLD weight-field diagnostic report" % label, errs)
+	if route_report.is_empty() or weight_report.is_empty():
+		return
+	_expect(int(weight_report.get("rows", 0)) == 17, "%s expected WORLD weight-field rows=17" % label, errs)
+	_expect(int(weight_report.get("cols", 0)) == 17, "%s expected WORLD weight-field cols=17" % label, errs)
+	_expect(int(weight_report.get("sample_count", 0)) == 289, "%s expected WORLD weight-field sample count=289" % label, errs)
+	_expect(int(weight_report.get("active_biomes", 0)) == 1, "%s owner WORLD preview should compose one active biome field" % label, errs)
+	_expect(int(weight_report.get("max_texel_active_count", 0)) == 1, "%s owner WORLD preview should have one active biome per texel" % label, errs)
+	_expect(absf(float(weight_report.get("max_sum_delta", 1.0))) < 0.00001, "%s WORLD preview weights should remain normalized" % label, errs)
+	_expect(int(route_report.get("active_count", 0)) >= int(weight_report.get("active_biomes", 0)), "%s route report should explain at least the composed biome" % label, errs)

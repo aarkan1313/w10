@@ -50,6 +50,14 @@
 > `diagnostic_not_owner_accepted`, and `LEGACY` is
 > `legacy_regression_not_accepted`. The WORLD diagnostic cap remains
 > one active biome per page and is now visible in the owner-scene snapshot.
+> Follow-up WORLD diagnostic guard: the owner snapshot now also exposes the
+> live pool's center-page WORLD route report and sampled weight-field report.
+> `review_runtime` proves the actual composed WORLD preview field is capped to
+> one active biome over a 17x17 page sample (`active_biomes=1`,
+> `max_texel_active_count=1`, normalized weights), so mode 3 cannot silently
+> switch back to full multi-biome compose while still passing only taxonomy
+> checks. This reinforces that WORLD remains diagnostic until compose is
+> backgrounded/cached or given a cheaper preview contract.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

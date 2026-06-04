@@ -39,6 +39,25 @@ This improves the accepted bridge readability for modes 1/2. It does not promote
 is still a bounded diagnostic preview with page-scale composition artifacts until multi-biome
 composition is backgrounded/cached or given a cheaper preview contract.
 
+### WORLD Preview Contract Guard - 2026-06-04
+
+The owner fly snapshot now exposes the live pool's WORLD page-center route report and sampled
+per-texel WORLD weight-field report for the center page. This closes a small but important audit
+gap: before this guard, tests proved the producer helper intended `WORLD_REVIEW_ACTIVE_BIOME_LIMIT=1`,
+but did not directly inspect the runtime field that the pool would feed to compose.
+
+Current proof:
+
+- `python tools\gate.py --suite review_runtime` = 2/2. The smoke check switches into WORLD and
+  proves the live sampled weight field is 17x17, normalized, and capped to one active biome
+  (`active_biomes=1`, `max_texel_active_count=1`).
+- `python tools\gate.py --suite fast` = 8/8. The producer helper still reports WORLD as
+  `diagnostic_not_owner_accepted` with the one-biome-per-page note.
+
+This does not make WORLD visually accepted. It makes the diagnostic contract harder to accidentally
+violate while the real fix remains moving multi-biome compose out of the synchronous owner fly path
+or replacing it with a cheaper preview contract.
+
 ### Current Owner-Visual Checkpoint - 2026-06-04
 
 The windowed scale-invariance and owner-runtime gates have now run on hardware. Current proof:

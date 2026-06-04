@@ -186,6 +186,15 @@ page-center selection, page/probe weights, or per-texel weight-field helpers.
 This keeps the diagnostic reports, pure route math, and producer dispatch as
 separate seams while preserving the same Godot API and gate behavior.
 
+Follow-up WORLD preview contract guard: `mountain_fly_review.gd` now exposes the
+live pool's center-page WORLD route report and sampled per-texel weight-field
+report through `debug_runtime_snapshot()`. `mountain_fly_review_smoke_check.gd`
+uses that snapshot after switching to WORLD and proves the actual preview field
+is still the bounded diagnostic contract: a 17x17 sample, normalized weights,
+`active_biomes=1`, and `max_texel_active_count=1`. This is deliberately a guard
+against accidentally presenting full multi-biome WORLD compose as accepted
+owner terrain; it does not promote mode 3.
+
 ## Current Checkpoint
 
 Branch: `slice4-gpu-page-integration`
