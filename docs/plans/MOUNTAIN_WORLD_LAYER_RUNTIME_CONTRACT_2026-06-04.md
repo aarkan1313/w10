@@ -169,7 +169,8 @@ single rendered page:
 - `review_runtime_visual` writes separate visual evidence for REFERENCE,
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes. It also
   compares the REFERENCE and reference-backed MOUNTAIN/network captures at the
-  reviewed frame and fails on drift.
+  reviewed frame and along a sprint-speed page-boundary path, and fails on
+  drift.
 - `review_runtime_modes` proves the current owner WORLD mode is only a bounded
   diagnostic preview: one active biome per page keeps streaming within budget
   (latest WORLD `cpu_p99=7.686 ms`, `cpu_max=10.050 ms`, render p99 `0.505 ms`).
@@ -216,16 +217,21 @@ single rendered page:
   227/0, `fast` = 8/8, `review_runtime` = 2/2,
   `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. The latest
   mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-  motion CPU p99/max is REFERENCE 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms,
-  and WORLD 8.617/10.980 ms. Latest render p99 is REFERENCE 0.342 ms,
-  MOUNTAIN 0.382 ms, and WORLD 0.216 ms. The latest visual capture shows
-  MOUNTAIN/network matching the REFERENCE view at the reviewed frame.
+  motion CPU p99/max is REFERENCE 21.389/22.830 ms, MOUNTAIN 21.969/26.435 ms,
+  and WORLD 6.532/10.422 ms, with `acquired_max=2` and zero full events in all
+  three. Latest render p99 is REFERENCE 0.327 ms, MOUNTAIN 0.365 ms, and WORLD
+  0.215 ms. The latest visual capture shows MOUNTAIN/network matching the
+  REFERENCE view at the reviewed frame and along the sprint path.
 - The renderer page transition fade is now wall-clock based (`0.18 s`) instead
   of frame-count based. This targets owner-visible REPAGE snap at high review
   FPS without changing page data, reference facts, or WORLD composition.
 - Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
   stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
   `0.002500` / `0.020000`.
+- Latest path bridge proof in `review_runtime_visual`: REFERENCE and
+  MOUNTAIN/network were compared along an 8000 m/s page-boundary path at frames
+  80/160/240. Mean RGB deltas were `0.000024`, `0.000069`, and `0.000000`, and
+  p95 stayed `0.000000` for all three frames.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:

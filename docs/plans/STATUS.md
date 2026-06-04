@@ -28,7 +28,10 @@
 > `acquired_max=2` and `full_events=0` in all three. Latest render p99 is
 > REFERENCE 0.327 ms, MOUNTAIN 0.365 ms, WORLD 0.215 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
-> 0.000000/0.000000. The page transition fade is wall-clock based (`0.18 s`),
+> 0.000000/0.000000 at the captured review frame. The visual gate now also
+> compares the same bridge along an 8000 m/s page-boundary path at frames
+> 80/160/240: mean RGB deltas were 0.000024, 0.000069, and 0.000000, with p95
+> 0.000000 for all three. The page transition fade is wall-clock based (`0.18 s`),
 > and the owner fly now spreads page builds over fewer frames, so high-FPS
 > review no longer compresses REPAGE transitions into a near-hard snap or piles
 > four synchronous page builds into one update.

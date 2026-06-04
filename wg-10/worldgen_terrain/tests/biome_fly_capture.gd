@@ -19,6 +19,8 @@ const OUT_ROUTE := "D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png
 const BRIDGE_SAMPLE_STRIDE := 4
 const BRIDGE_MEAN_RGB_DELTA_MAX := 0.0025
 const BRIDGE_P95_RGB_DELTA_MAX := 0.02
+const BRIDGE_PATH_SPEED := Vector2(8000.0, 0.0)
+const BRIDGE_PATH_SAMPLE_FRAMES := [80, 160, 240]
 
 const MODE_REFERENCE := "REFERENCE"
 const MODE_MOUNTAIN := "MOUNTAIN"
@@ -43,6 +45,9 @@ func _run() -> int:
 	if rc != 0:
 		return rc
 	rc = _assert_reference_bridge_match()
+	if rc != 0:
+		return rc
+	rc = await _assert_reference_bridge_path(runtime)
 	if rc != 0:
 		return rc
 	rc = await _capture_mode(runtime, "mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
@@ -152,6 +157,104 @@ func _assert_reference_bridge_match() -> int:
 	if reference.get_size() != mountain.get_size():
 		push_error("[wg10-biome-capture] reference/bridge size mismatch %s vs %s" % [str(reference.get_size()), str(mountain.get_size())])
 		return 1
+	return _assert_images_match(reference, mountain, "bridge_match")
+
+func _assert_reference_bridge_path(runtime: Object) -> int:
+	var reference := await _capture_bridge_path_images(runtime, "bridge_path_reference", MODE_REFERENCE)
+	if int(reference.get("rc", 1)) != 0:
+		push_error("[wg10-biome-capture] bridge path REFERENCE failed: %s" % str(reference.get("error", "failed")))
+		return 1
+	var mountain := await _capture_bridge_path_images(runtime, "bridge_path_mountain", MODE_MOUNTAIN)
+	if int(mountain.get("rc", 1)) != 0:
+		push_error("[wg10-biome-capture] bridge path MOUNTAIN failed: %s" % str(mountain.get("error", "failed")))
+		return 1
+
+	var ref_images: Array = reference.get("images", [])
+	var mountain_images: Array = mountain.get("images", [])
+	if ref_images.size() != mountain_images.size() or ref_images.size() != BRIDGE_PATH_SAMPLE_FRAMES.size():
+		push_error("[wg10-biome-capture] bridge path image count mismatch ref=%d mountain=%d expected=%d" % [
+			ref_images.size(), mountain_images.size(), BRIDGE_PATH_SAMPLE_FRAMES.size()])
+		return 1
+	for i in range(ref_images.size()):
+		var rc := _assert_images_match(ref_images[i], mountain_images[i], "bridge_path_f%d" % int(BRIDGE_PATH_SAMPLE_FRAMES[i]))
+		if rc != 0:
+			return rc
+	print("[wg10-biome-capture] bridge_path status=pass frames=%s speed=%d" % [
+		str(BRIDGE_PATH_SAMPLE_FRAMES), int(BRIDGE_PATH_SPEED.length())])
+	return 0
+
+func _capture_bridge_path_images(runtime: Object, label: String, mode: String) -> Dictionary:
+	runtime.set_debug_mode(0)
+	var pool: Object = ClassDB.instantiate("Wg10PagePool")
+	var producer: Object = load(PRODUCERS).new()
+	var producer_err := _configure_producer(producer, mode, PRESET_NETWORK)
+	if producer_err != "":
+		return {"rc": 1, "error": producer_err}
+	var err: String = producer.configure(pool)
+	if err != "":
+		return {"rc": 1, "error": "configure failed: %s" % err}
+
+	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
+	runtime.configure_streamer(streamer, pool)
+	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
+	runtime.configure_rings(rings)
+	var view: Object = ClassDB.instantiate("Wg10TerrainView")
+	var relief_scale := float(producer.view_relief_scale(float(runtime.default_relief_scale())))
+	var relief_ref := float(producer.view_relief_ref(float(runtime.default_relief_ref()), float(runtime.default_relief_scale())))
+	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()), relief_scale, relief_ref)
+
+	var vp := SubViewport.new()
+	vp.size = VIEW_SIZE
+	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	vp.own_world_3d = true
+	var env := Environment.new()
+	runtime.configure_review_environment(env)
+	var light := DirectionalLight3D.new()
+	light.rotation_degrees = Vector3(-50.0, 35.0, 0.0)
+	var cam := Camera3D.new()
+	cam.far = float(runtime.review_visual_edge_m())
+	cam.environment = env
+	vp.add_child(rings)
+	vp.add_child(light)
+	vp.add_child(cam)
+	get_root().add_child(vp)
+
+	var images: Array[Image] = []
+	var pos := Vector2.ZERO
+	var dt := 1.0 / 60.0
+	var last_frame := int(BRIDGE_PATH_SAMPLE_FRAMES[BRIDGE_PATH_SAMPLE_FRAMES.size() - 1])
+	for f in range(last_frame + 1):
+		pos += BRIDGE_PATH_SPEED * dt
+		view.call("update", pos.x, pos.y, BRIDGE_PATH_SPEED.x, BRIDGE_PATH_SPEED.y)
+		var cam_frame := _camera_frame(pos, float(producer.feature_span_m()))
+		var eye: Vector3 = cam_frame["eye"]
+		var look: Vector3 = cam_frame["look"]
+		cam.look_at_from_position(eye, look, Vector3.UP)
+		await process_frame
+		RenderingServer.force_draw()
+		await process_frame
+		if BRIDGE_PATH_SAMPLE_FRAMES.has(f):
+			var img: Image = vp.get_texture().get_image()
+			if img == null:
+				rings.call("unbind_all")
+				pool.call("free_all")
+				vp.queue_free()
+				return {"rc": 1, "error": "null path image at frame %d" % f}
+			images.append(img)
+
+	var st: Dictionary = pool.call("stats")
+	var pages := int(st.get("created", 0)) + int(st.get("recomputed", 0))
+	rings.call("unbind_all")
+	pool.call("free_all")
+	vp.queue_free()
+	print("[wg10-biome-capture] path_capture status=pass label=%s mode=%s frames=%s pages=%d" % [
+		label, mode, str(BRIDGE_PATH_SAMPLE_FRAMES), pages])
+	return {"rc": 0, "images": images, "error": ""}
+
+func _assert_images_match(reference: Image, mountain: Image, label: String) -> int:
+	if reference.get_size() != mountain.get_size():
+		push_error("[wg10-biome-capture] %s size mismatch %s vs %s" % [label, str(reference.get_size()), str(mountain.get_size())])
+		return 1
 	var size := reference.get_size()
 	var deltas: Array[float] = []
 	var total := 0.0
@@ -166,11 +269,11 @@ func _assert_reference_bridge_match() -> int:
 	var mean := total / float(deltas.size())
 	var p95 := deltas[int(floor(float(deltas.size() - 1) * 0.95))]
 	if mean > BRIDGE_MEAN_RGB_DELTA_MAX or p95 > BRIDGE_P95_RGB_DELTA_MAX:
-		push_error("[wg10-biome-capture] reference bridge mismatch mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
-			mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
+		push_error("[wg10-biome-capture] %s mismatch mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+			label, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
 		return 1
-	print("[wg10-biome-capture] bridge_match status=pass samples=%d stride=%d mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
-		deltas.size(), BRIDGE_SAMPLE_STRIDE, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
+	print("[wg10-biome-capture] %s status=pass samples=%d stride=%d mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+		label, deltas.size(), BRIDGE_SAMPLE_STRIDE, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
 	return 0
 
 func _configure_producer(producer: Object, mode: String, preset: String) -> String:

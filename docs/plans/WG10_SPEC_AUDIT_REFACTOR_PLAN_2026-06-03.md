@@ -653,12 +653,15 @@ Latest gates with the editor closed:
   MOUNTAIN 0.365 ms, WORLD 0.215 ms.
 - `python tools\gate.py --suite review_runtime_visual` = 1/1. REFERENCE and
   MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
-  at 57,600 sampled pixels.
+  at 57,600 sampled pixels for the captured review frame. The same gate now
+  also compares REFERENCE vs MOUNTAIN/network along an 8000 m/s sprint path at
+  frames 80/160/240; mean RGB deltas were `0.000024`, `0.000069`, and
+  `0.000000`, with p95 `0.000000` at all three frames.
 
 Immediate fix direction: do not tune WORLD as if it were the accepted mountain
 look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
-add manual-path instrumentation if owner fly still shows pop outside the gated
-camera path, and move WORLD visual quality work behind a separated
+keep extending manual-path instrumentation if owner fly still shows pop outside
+the gated sprint path, and move WORLD visual quality work behind a separated
 world-selection/producer path instead of the current synchronous page stream.
 Implemented pop mitigation: renderer page fade is now wall-clock based
 (`0.18 s`) instead of frame-count based, so high-FPS owner review does not
