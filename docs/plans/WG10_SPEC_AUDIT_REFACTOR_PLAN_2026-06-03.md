@@ -193,15 +193,31 @@ Current proof after the bridge:
   hide/show in all three. Latest render p99: REFERENCE 0.233 ms, MOUNTAIN 0.247 ms, WORLD
   0.216 ms.
 
-This checkpoint does not close owner visual acceptance. The latest captures still show why:
-`MOUNTAIN` has bound accepted facts/material hints, but live height still comes from the raw
-seam-safe page recipe. The report intentionally keeps `height_consumes_world_layer_facts=false`
-and `satisfies_mountain_world_layer_contract=false`. `WORLD` also remains diagnostic; its
-page-scale artifacts should not drive the mountain acceptance path.
+Follow-up visual recovery: `MOUNTAIN/network_ref` now writes height from the same bound
+mountain-world-layer payload it uses for material/fact pages. Its contract report names this as
+`single_mountain_world_layer_reference_bridge`, sets
+`height_source=bound_world_layer_reference_payload`, and keeps
+`procedural_world_layer_height=false`. The latest capture shows MOUNTAIN/network matching
+REFERENCE at the reviewed frame, and the latest gates still pass:
 
-Next visual target: make live `MOUNTAIN` height consume the accepted world-layer contract facts
-or a measured candidate equivalent, then prove the numeric gap against REFERENCE moves down before
-asking for another owner fly.
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99/max:
+  REFERENCE 31.577/40.887 ms, MOUNTAIN 35.781/42.245 ms, WORLD 8.431/19.247 ms, with zero
+  hide/show in all three. Latest render p99: REFERENCE 0.232 ms, MOUNTAIN 0.367 ms, WORLD
+  0.216 ms.
+
+This intentionally recovers a good reviewed visual before adding more biome complexity. It does
+not close final procedural acceptance: close-debug remains the raw live page recipe, and WORLD
+remains diagnostic until multi-biome composition is backgrounded/cached or given a cheaper preview
+contract.
+
+Next visual/procedural target: turn the reference-backed bridge into a generated world-layer
+producer or measured candidate equivalent, then prove its numeric gap against REFERENCE moves down
+without reintroducing page/LOD drift.
 
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the

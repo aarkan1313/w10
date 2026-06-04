@@ -76,7 +76,7 @@ func _run() -> int:
 		errs
 	)
 
-	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 0.5, 850.0, errs)
+	await _expect_mode_switch(scene, "MOUNTAIN", "single", true, false, false, 177, 1.0, 1700.0, errs)
 	await _expect_mode_switch(scene, "WORLD", "world", true, true, false, 1337, 0.25, 425.0, errs)
 	await _expect_mode_switch(scene, "LEGACY", "legacy", false, false, true, 1337, 0.25, 1700.0, errs)
 	await _expect_mode_switch(scene, "REFERENCE", "static_reference", true, false, false, 177, 1.0, 1700.0, errs)
@@ -152,9 +152,13 @@ func _expect_world_layer_contract_report(
 	_expect(str(report.get("blocking_gap", "")) != "", "%s expected an explicit blocking gap string" % label, errs)
 	if expected_kind == "single_seam_safe_mountain_page_recipe":
 		_expect(str(report.get("blocking_gap", "")).contains("pass-network"), "%s live MOUNTAIN gap should name pass-network" % label, errs)
+	if expected_kind == "single_mountain_world_layer_reference_bridge":
+		_expect(str(report.get("blocking_gap", "")).contains("reference-backed"), "%s live MOUNTAIN bridge gap should name reference-backed height" % label, errs)
+		_expect(str(report.get("height_source", "")) == "bound_world_layer_reference_payload", "%s live MOUNTAIN expected reference-backed height source" % label, errs)
+		_expect(not bool(report.get("procedural_world_layer_height", true)), "%s live MOUNTAIN bridge should not claim procedural height" % label, errs)
 		if expected_pass_network:
 			_expect(bool(report.get("has_bound_world_layer_reference", false)), "%s live MOUNTAIN expected bound world-layer reference facts" % label, errs)
-			_expect(not bool(report.get("height_consumes_world_layer_facts", true)), "%s live MOUNTAIN should not claim height consumes bound facts yet" % label, errs)
+			_expect(bool(report.get("height_consumes_world_layer_facts", false)), "%s live MOUNTAIN bridge should consume bound height facts" % label, errs)
 			_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s live MOUNTAIN reference source scope mismatch" % label, errs)
 	if expected_kind == "accepted_static_reference_visual_baseline":
 		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
@@ -214,7 +218,7 @@ func _expect_mode_switch(
 		_expect(absf(float(source_transform.get("source_scale", 0.0)) - 3.515625) < 0.000001, "MOUNTAIN expected source scale=3.515625", errs)
 		_expect(absf(float(source_transform.get("source_offset_x_m", 0.0)) - 207000.0) < 0.001, "MOUNTAIN expected source x offset=207000", errs)
 		_expect(absf(float(source_transform.get("source_offset_z_m", 0.0)) - 176000.0) < 0.001, "MOUNTAIN expected source z offset=176000", errs)
-		_expect_world_layer_contract_report(snapshot, mode, "single_seam_safe_mountain_page_recipe", false, true, true, true, true, errs)
+		_expect_world_layer_contract_report(snapshot, mode, "single_mountain_world_layer_reference_bridge", false, true, true, true, true, errs)
 		_expect_mountain_layer_reference_contract(snapshot, mode, errs)
 	if mode == "WORLD":
 		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)

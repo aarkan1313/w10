@@ -59,24 +59,33 @@ impl Wg10PagePool {
             out.set("blocking_gap", "WORLD composes runtime-biome pages but does not own the accepted mountain pass-network or conditioning facts");
         } else if matches!(self.active_producer_kind(), Some(ProducerKind::SingleBiome)) {
             let layer_ref = self.mountain_layer_ref.as_ref();
-            out.set("contract_kind", "single_seam_safe_mountain_page_recipe");
+            out.set(
+                "contract_kind",
+                if layer_ref.is_some() {
+                    "single_mountain_world_layer_reference_bridge"
+                } else {
+                    "single_seam_safe_mountain_page_recipe"
+                },
+            );
             out.set("source_scope", "display_to_source_transform_page_synthesis");
             out.set("explicit_live_candidate", true);
             out.set("live_world_layer_candidate", true);
             out.set("has_source_display_mapping", true);
             out.set("has_mountain_macro_field", true);
             out.set("has_bound_world_layer_reference", layer_ref.is_some());
-            out.set("height_consumes_world_layer_facts", false);
+            out.set("height_consumes_world_layer_facts", layer_ref.is_some());
             if let Some(reference) = layer_ref {
                 let has_pass_network = reference.pass_network_routes > 0;
                 let has_route_carving = reference.pass_network_carved_frac > 0.0;
                 let has_conditioning = reference_has_conditioning(reference);
                 out.set("reference_source_scope", reference.source_scope.clone());
+                out.set("height_source", "bound_world_layer_reference_payload");
+                out.set("procedural_world_layer_height", false);
                 out.set("has_pass_network_routes", has_pass_network);
                 out.set("has_route_carving", has_route_carving);
                 out.set("has_page_stable_conditioning", has_conditioning);
                 out.set("has_material_hints", reference.has_material_hints);
-                out.set("blocking_gap", "bound pass-network/material/conditioning facts exist, but the live GPU height producer still does not consume them; facts/collision story remains open");
+                out.set("blocking_gap", "height/material/facts are reference-backed for owner visual recovery; live procedural GPU height and facts/collision story remain open");
             } else {
                 out.set("blocking_gap", "missing pass-network routes, route carving, page-stable conditioning, material hints, and facts/collision story");
             }

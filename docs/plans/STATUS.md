@@ -87,6 +87,21 @@
 > `cpu_max=46.348 ms`; WORLD `cpu_p99=9.033 ms`, `cpu_max=10.894 ms`; zero
 > hide/show in all three. Latest render p99 is REFERENCE `0.233 ms`, MOUNTAIN
 > `0.247 ms`, WORLD `0.216 ms`.
+> Follow-up visual recovery on 2026-06-04: `MOUNTAIN/network_ref` now uses the
+> bound mountain world-layer payload for height as well as material/fact pages,
+> while still reporting runtime=`single` and `biome_path=true`. Its contract kind
+> is `single_mountain_world_layer_reference_bridge`, with
+> `height_source=bound_world_layer_reference_payload` and
+> `procedural_world_layer_height=false`; do not count this as final procedural
+> biome synthesis. The latest capture shows MOUNTAIN/network matching the
+> REFERENCE view at the reviewed frame. Current proof: `cargo test -p
+> wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds, `fast` = 8/8,
+> `review_runtime` = 2/2, `review_runtime_visual` = 1/1, and
+> `review_runtime_modes` = 2/2. Latest scripted motion: REFERENCE
+> `cpu_p99=31.577 ms`, `cpu_max=40.887 ms`; MOUNTAIN `cpu_p99=35.781 ms`,
+> `cpu_max=42.245 ms`; WORLD `cpu_p99=8.431 ms`, `cpu_max=19.247 ms`; zero
+> hide/show in all three. Latest render p99 is REFERENCE `0.232 ms`, MOUNTAIN
+> `0.367 ms`, WORLD `0.216 ms`.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

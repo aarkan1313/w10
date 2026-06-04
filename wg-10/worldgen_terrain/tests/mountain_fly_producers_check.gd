@@ -28,8 +28,8 @@ func _run() -> int:
 
 	_expect(bool(producers.set_mode_label("MOUNTAIN")), "set_mode_label MOUNTAIN should succeed", errs)
 	_expect(str(producers.mode_label()) == "MOUNTAIN", "set_mode_label should enter MOUNTAIN", errs)
-	_expect(absf(float(producers.view_relief_scale(0.25)) - 0.5) < 0.001, "mountain network view relief scale should match review preset", errs)
-	_expect(absf(float(producers.view_relief_ref(1700.0, 0.25)) - 850.0) < 0.001, "mountain network relief ref should follow displayed relief", errs)
+	_expect(absf(float(producers.view_relief_scale(0.25)) - 1.0) < 0.001, "mountain network view relief scale should match reference-backed height bridge", errs)
+	_expect(absf(float(producers.view_relief_ref(1700.0, 0.25)) - 1700.0) < 0.001, "mountain network relief ref should follow reference-backed height", errs)
 	_expect(absf(float(producers.source_scale()) - 3.515625) < 0.000001, "mountain network source scale should match accepted source/display ratio", errs)
 	_expect(absf(float(producers.source_offset_x_m()) - 207000.0) < 0.001, "mountain network source x offset should match accepted source center", errs)
 	_expect(absf(float(producers.source_offset_z_m()) - 176000.0) < 0.001, "mountain network source z offset should match accepted source center", errs)

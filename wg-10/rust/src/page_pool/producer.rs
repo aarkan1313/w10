@@ -130,6 +130,10 @@ impl Wg10PagePool {
                 )
             }
             Some(ProducerKind::SingleBiome) => {
+                if let Some(reference) = self.mountain_layer_ref.as_ref() {
+                    return reference
+                        .write_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px);
+                }
                 let ctx = self
                     .biome_ctx
                     .as_ref()
