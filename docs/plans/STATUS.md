@@ -13,6 +13,13 @@
 > defines the required live producer facts: explicit source/display mapping, mountain
 > macro field, connected pass-network routes, route carving before conditioning,
 > page-stable conditioning, material/dressing hints, and a facts/collision story.
+> The first numeric mountain-layer gap probe now exists:
+> `tools/dem_pack/test_mountain_world_layer_contract.py`. It proves the accepted
+> network payload contract and measures the current live seam-safe producer
+> against that accepted layer over the same mapped page:
+> `mean_abs=1.211743`, `p95_abs=2.276974`, `peak_abs=3.200543`,
+> `corr=-0.048456`. This confirms the remaining mismatch is producer-contract
+> work, not a stale DLL, wrong command, or relief scalar issue.
 > The June 3 scale-invariance chain is implemented through the GPU producer plumbing: Python
 > oracle world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
 > runtime kernel anchoring, and `flow_max_level` are committed. Latest Rust proof:
@@ -31,7 +38,12 @@
 > `m3` = **10/10 pass** after the display/prefetch scheduler split
 > (`m3_accept` p99 5.25 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.104 ms).
+> cross-level macro ratio 0.066665 <= 0.08, latest fly GPU p99 0.108 ms).
+> Correct command sequence for this rerun was: clear `CARGO_TARGET_DIR` and run
+> `cargo build -p wg10_terrain` from `wg-10/rust`, then set `GODOT_BIN` to the
+> Godot 4.6.2 console executable and run `python tools\gate.py --suite biome_fly`,
+> `python tools\gate.py --suite review_runtime`, and
+> `python tools\gate.py --suite review_runtime_visual` from the repo root.
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
 > `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
 > `close_debug` scale (`feature_span_m=3500`). The default live review preset now

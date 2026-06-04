@@ -59,6 +59,11 @@ single rendered page:
    - and, later, candidate mountain world-layer output.
    The first version is allowed to prove "these are different"; the promotion
    version must prove the candidate closes the gap.
+   Current probe: `tools/dem_pack/test_mountain_world_layer_contract.py`.
+   It samples the accepted network payload and the live seam-safe page over the
+   same mapped display/source window. Current measured gap:
+   `mean_abs=1.211743`, `p95_abs=2.276974`, `peak_abs=3.200543`,
+   `corr=-0.048456`, `ref_ptp=1.584039`, `live_ptp=4.914207`.
 
 3. **Choose the live world-layer shape.**
    Viable options:
@@ -101,6 +106,10 @@ single rendered page:
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes.
 - `REFERENCE` proves the renderer can display the accepted mountain-network
   geometry when fed the accepted payload.
+- `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
+  proves the accepted network payload contract and records the current
+  seam-safe live-producer gap: mean absolute normalized delta `1.211743`, p95
+  `2.276974`, and correlation `-0.048456` over the same mapped page.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer.
