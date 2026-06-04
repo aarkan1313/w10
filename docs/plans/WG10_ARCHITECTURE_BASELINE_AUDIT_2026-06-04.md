@@ -87,12 +87,13 @@ This explains the owner report:
   through compose; any remaining "ground looks bad" report needs a fresh owner
   fly against this composed runtime.
 
-Latest renderer-presentation follow-up: height repage already faded from parent
-to newly resident fine page, but static material pages and WORLD route tint were
-still switching instantly. `ring_displace.gdshader` now multiplies those
-presentation mixes by `page_fade`, so material/tint changes fade over the same
-short window as height. This addresses visual pop during REPAGE without changing
-producer data, page ownership, scheduling, or facts.
+Latest renderer-presentation follow-up: the owner fly no longer fades newly
+bound page height from parent to fine height. The zero-hide streamer/pin path
+already keeps pages resident before display, and the short settle window read as
+terrain lagging/popping while moving across modes 1/2/3. The shader still uses
+`page_fade` as a presentation uniform, but `clipmap_rings.rs` now sends it as
+immediate `1.0` for owner review. This changes presentation only; producer data,
+page ownership, scheduling, and facts are unchanged.
 
 Latest accepted-reference bridge proof: `review_runtime_visual` now captures the
 old static review scene and the runtime REFERENCE bridge under matching focus

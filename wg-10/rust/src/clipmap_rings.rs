@@ -18,11 +18,10 @@ use std::time::Instant;
 /// Tiles per level: a 3x3 neighborhood (radius 1).
 const TILES_PER_LEVEL: usize = 9;
 
-/// Wall-clock height fade for newly-bound pages. The fade starts from the parent page's height
-/// and ramps to the newly resident fine page, hiding repage pop-in without adding page work.
-/// Keep this short in the owner fly: the previous 0.18s window read as terrain lagging/settling
-/// during motion across modes 1/2/3.
-const PAGE_FADE_SECONDS: f32 = 0.06;
+/// Wall-clock height fade for newly-bound pages. Disabled for the owner fly:
+/// streamer prefetch keeps pages resident before display, and the old settle
+/// window read as terrain lagging/popping during motion across modes 1/2/3.
+const PAGE_FADE_SECONDS: f32 = 0.0;
 
 /// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
 /// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
@@ -215,7 +214,9 @@ impl Wg10ClipmapRings {
         }
         let now = Instant::now();
         let was_hidden = !self.tiles[idx].is_visible();
-        if self.bound_keys[idx] != next_key || was_hidden {
+        if PAGE_FADE_SECONDS <= 0.0 {
+            self.fade_values[idx] = 1.0;
+        } else if self.bound_keys[idx] != next_key || was_hidden {
             self.fade_values[idx] = 0.0;
         } else {
             let dt = now.duration_since(self.fade_last_update[idx]).as_secs_f32();

@@ -184,16 +184,17 @@
 > are unchanged. Proof: `cargo test -p wg10_terrain --lib` = 227/0,
 > `tools\build_rust.ps1` builds, `biome_world` = 1/1, and `review_runtime` =
 > 2/2.
-> Latest owner-visible repage presentation fix: `ring_displace.gdshader` now
-> fades static-reference material pages and WORLD route tint by the same
-> `page_fade` used for newly resident page height. This targets the remaining
-> "stuff pops in while moving" class where geometry was already zero-hide but
-> material/tint changed instantly on REPAGE. Proof after the shader patch:
-> `review_runtime_modes` = 2/2 with zero hide/show in REFERENCE, MOUNTAIN, and
-> WORLD; latest CPU p99/max is REFERENCE 21.560/23.315 ms, MOUNTAIN
-> 21.969/23.291 ms, WORLD 6.592/14.465 ms. Render p99 remains below 0.5 ms in
-> all three modes, and `review_runtime_visual` = 1/1 with REFERENCE vs
-> MOUNTAIN/network still matching within bridge budgets along the sprint path.
+> Latest owner-visible repage presentation fix: `clipmap_rings.rs` now disables
+> the newly-bound-page height settle window for the owner fly. The streamer
+> already preloads ahead, and the old parent-to-fine fade read as terrain
+> lagging/popping while moving even when hide/show/full-event counters were
+> clean. Proof after the no-settle patch: `review_runtime_modes` = 2/2 with
+> zero hide/show/full events in REFERENCE, MOUNTAIN, and WORLD; latest CPU p99
+> is REFERENCE 10.046 ms, MOUNTAIN 9.921 ms, WORLD 9.952 ms. Render p99 remains
+> below 0.75 ms in all three modes. `review_runtime_stress` = 1/1 across six
+> morph on/off movement cases with zero hide/show/full events, and
+> `review_runtime_visual` = 2/2 with REFERENCE vs MOUNTAIN/WORLD preview still
+> pixel-identical in the owner visual bridge.
 > Follow-up visual bridge guard: `review_runtime_visual` now also runs
 > `mountain_runtime_reference_static_compare.gd`, which captures the old static
 > `mountain_network_chunks_review.tscn` focus view and the runtime REFERENCE
