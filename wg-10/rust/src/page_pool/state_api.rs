@@ -29,6 +29,49 @@ impl Wg10PagePool {
         }
     }
 
+    /// Configure the source coordinate transform for live biome synthesis.
+    ///
+    /// Display page coordinates remain unchanged for the renderer/streamer. The live single-biome
+    /// producer samples source coordinates as:
+    /// `source = display * source_scale + source_offset`.
+    /// This lets review presets synthesize from an accepted large source window while still
+    /// displaying the result in the normal clipmap coordinate system. Identity is the default.
+    #[func]
+    pub fn set_biome_source_transform(
+        &mut self,
+        source_scale: f64,
+        source_offset_x_m: f64,
+        source_offset_z_m: f64,
+    ) -> GString {
+        if !source_scale.is_finite() || source_scale <= 0.0 {
+            return GString::from(&format!(
+                "set_biome_source_transform: source_scale must be finite and > 0, got {source_scale}"
+            ));
+        }
+        if !source_offset_x_m.is_finite() || !source_offset_z_m.is_finite() {
+            return GString::from("set_biome_source_transform: offsets must be finite");
+        }
+        if !self.use_biome_path || self.static_ref.is_some() {
+            return GString::from(
+                "set_biome_source_transform: pool is not configured for live biome synthesis",
+            );
+        }
+        self.biome_source_scale = source_scale;
+        self.biome_source_offset_x_m = source_offset_x_m;
+        self.biome_source_offset_z_m = source_offset_z_m;
+        GString::new()
+    }
+
+    /// Diagnostic report for the active biome source transform.
+    #[func]
+    pub fn biome_source_transform(&self) -> Dictionary<GString, Variant> {
+        let mut out = Dictionary::<GString, Variant>::new();
+        out.set("source_scale", self.biome_source_scale);
+        out.set("source_offset_x_m", self.biome_source_offset_x_m);
+        out.set("source_offset_z_m", self.biome_source_offset_z_m);
+        out
+    }
+
     /// Diagnostic: return the strongest page-center runtime biome for a world-routed page.
     ///
     /// This is deliberately read-only and does not allocate or dispatch page compute. Runtime

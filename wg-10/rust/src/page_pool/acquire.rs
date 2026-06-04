@@ -153,13 +153,18 @@ impl Wg10PagePool {
                     &field.weights,
                 )
             } else {
+                let source_origin_x =
+                    origin_x * self.biome_source_scale + self.biome_source_offset_x_m;
+                let source_origin_z =
+                    origin_z * self.biome_source_scale + self.biome_source_offset_z_m;
+                let source_world_span = world_span * self.biome_source_scale;
                 crate::biome_page_compute::compute_biome_page_cached(
                     rd,
                     self.biome_ctx.as_ref().unwrap(),
                     tex_rid,
-                    origin_x,
-                    origin_z,
-                    world_span,
+                    source_origin_x,
+                    source_origin_z,
+                    source_world_span,
                     page_px,
                     self.biome_feature_span_m,
                     seed,

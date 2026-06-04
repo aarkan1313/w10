@@ -31,6 +31,12 @@ impl Wg10PagePool {
         self.full_events = 0;
     }
 
+    pub(super) fn reset_biome_source_transform(&mut self) {
+        self.biome_source_scale = 1.0;
+        self.biome_source_offset_x_m = 0.0;
+        self.biome_source_offset_z_m = 0.0;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn install_legacy_configuration(
         &mut self,
@@ -52,6 +58,7 @@ impl Wg10PagePool {
         self.biome_ctx = None;
         self.biome_world = None;
         self.static_ref = None;
+        self.reset_biome_source_transform();
         self.page_px = page_px;
         self.world_span = world_span;
         self.seed = seed;
@@ -79,6 +86,7 @@ impl Wg10PagePool {
         self.biome_world = None;
         self.static_ref = None;
         self.biome_feature_span_m = feature_span_m;
+        self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
         self.page_px = page_px;
         self.world_span = world_span;
@@ -113,6 +121,7 @@ impl Wg10PagePool {
         });
         self.static_ref = None;
         self.biome_feature_span_m = feature_span_m;
+        self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
         self.page_px = page_px;
         self.world_span = world_span;
@@ -140,6 +149,7 @@ impl Wg10PagePool {
         self.biome_world = None;
         self.static_ref = Some(static_ref);
         self.biome_feature_span_m = feature_span_m;
+        self.reset_biome_source_transform();
         self.biome_flow_max_level = 0;
         self.page_px = page_px;
         self.world_span = world_span;

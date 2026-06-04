@@ -87,6 +87,9 @@ pub struct Wg10PagePool {
     biome_world:         Option<BiomeWorldRuntime>,
     static_ref:          Option<StaticHeightRuntime>,
     biome_feature_span_m: f64,
+    biome_source_scale: f64,
+    biome_source_offset_x_m: f64,
+    biome_source_offset_z_m: f64,
     /// SCALE-INVARIANCE: the FIRST clipmap level (0 = finest) that bakes WITHOUT the drainage carve.
     /// A page at `level` runs `flow_on = level < biome_flow_max_level`. Default 2 => flow on levels
     /// 0,1 (near camera, where carved valleys read), off 2.. (coarse, where the macro surface
@@ -122,6 +125,9 @@ impl IRefCounted for Wg10PagePool {
             biome_world:          None,
             static_ref:           None,
             biome_feature_span_m: 90000.0,
+            biome_source_scale: 1.0,
+            biome_source_offset_x_m: 0.0,
+            biome_source_offset_z_m: 0.0,
             biome_flow_max_level: 2,
             page_px:      256,
             world_span:   1000.0,

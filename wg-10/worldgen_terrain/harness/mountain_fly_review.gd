@@ -265,10 +265,12 @@ func _cycle_producer_mode() -> void:
 
 func debug_runtime_snapshot() -> Dictionary:
 	var stats := {}
+	var source_transform := {}
 	var runtime_mode := "missing"
 	var biome_path := false
 	if _pool != null:
 		stats = _pool.call("stats")
+		source_transform = _pool.call("biome_source_transform")
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
 		biome_path = bool(_pool.call("uses_biome_path"))
 
@@ -306,6 +308,7 @@ func debug_runtime_snapshot() -> Dictionary:
 		"runtime_mode": runtime_mode,
 		"biome_path": biome_path,
 		"stats": stats,
+		"source_transform": source_transform,
 		"mode": mode,
 		"preset": preset,
 		"seed": seed,

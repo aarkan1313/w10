@@ -119,7 +119,7 @@ Validation:
   non-vacuous (`diff=0.0124`), bounded, and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.078 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.104 ms.
 - `python tools\gate.py --suite fast`: 8/8 passed after extracting
   `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
   check locks the live review helper's default MOUNTAIN/network preset,
@@ -131,14 +131,16 @@ Validation:
   `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
   close-up debug scale (`feature_span_m=3500`), so the manual review scale is
   visible in the HUD. The default live review preset now uses `runtime_seed=177`,
-  `relief_m=1700`, and a MOUNTAIN/network-only view relief scale of `0.5`,
-  matching the accepted mountain-network seed/relief family without changing the
-  global renderer relief scale.
+  `relief_m=1700`, a MOUNTAIN/network-only view relief scale of `0.5`, and the
+  accepted source-window transform (`source_scale=3.515625`, source center
+  `207000,176000`), matching the accepted mountain-network seed/relief/source
+  family without changing the global renderer relief scale.
 - `python tools\gate.py --suite review_runtime`: 2/2 passed. This windowed
   gate instantiates the actual `mountain_fly_review.tscn` owner scene, waits for
   startup, then verifies `MOUNTAIN/network_ref`, runtime=`single`,
-  biome_path=`true`, seed=`177`, relief_m=`1700`, view relief scale=`0.5`, and
-  real page startup (`created=45`, `resident=45`). It also
+  biome_path=`true`, seed=`177`, relief_m=`1700`, view relief scale=`0.5`,
+  source scale=`3.515625`, source offset=`207000,176000`, and real page startup
+  (`created=45`, `resident=45`). It also
   runs `mountain_fly_visibility_churn_check.gd`, a sprint-speed motion gate over
   360 frames: `stream_events=24`, `resident=69`, `repage=72`, `hide=0`,
   `show=0`, `hidden_frames=0`, `max_hidden=0`. This specifically gates the
@@ -197,10 +199,11 @@ Follow-up live visual rerun:
   height.
 - The corrected final capture still does not match
   `mountain_network_chunks_review.tscn`. The current MOUNTAIN/network capture now
-  has mountain-scale relief after the seed/relief review-preset calibration, but
-  it remains a raw live page recipe over the current sampled region; the accepted
-  baseline is a conditioned 270 km source field with connected pass-network
-  carving, sliced into the review scene.
+  has dense mountain-scale relief after the seed/relief calibration and source-window
+  transform; it synthesizes from the accepted 270 km source window while rendering
+  over the 76.8 km review footprint. It remains a raw live page recipe, while the
+  accepted baseline is a conditioned 270 km source field with connected
+  pass-network carving, sliced into the review scene.
 - The new REFERENCE capture restores the accepted mountain massifs through the
   same runtime page pool and clipmap renderer. That isolates the default live
   MOUNTAIN mismatch to the content/world-layer producer and material/dressing
@@ -426,6 +429,14 @@ scale to `0.5`. `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so
 the smoke gate validates the owner scene through a stable debug surface instead
 of reaching into private fields.
 
+Fourth implemented step: `Wg10PagePool` now has an identity-default live-biome
+source transform seam. The MOUNTAIN/network review preset applies the accepted
+source/display mapping (`source_scale=3.515625`, center offset `207000,176000`)
+after `configure_biome(...)`, so the live recipe samples the same source window
+scale as the accepted network payload while the renderer, streamer, and page keys
+remain in display coordinates. This is a source-coordinate/world-layer fix; it
+does not implement the accepted full-field conditioning or pass-network carving.
+
 ### Phase 3 - Restore The Accepted Mountain Path In The Live Runtime
 
 Goal: make the live fly able to reproduce the accepted mountain-network read
@@ -441,11 +452,12 @@ Steps:
    - `mountain_close_live_debug`
    - carries `feature_span_m=3500.0`.
 3. Port or mirror the accepted world layer, not just its scalar defaults:
-   - sample the same source window (`world_origin_x_m=72000`,
-     `world_origin_z_m=41000`);
-   - apply a seam-safe equivalent of the full-field conditioning contract;
-   - decide whether the connected pass network is a runtime fact, a coarse
-     baked fact, or a static-reference-only acceptance target.
+   - same source-window sampling is now implemented for MOUNTAIN/network through
+     the page-pool source transform;
+   - remaining work is a seam-safe equivalent of the full-field conditioning
+     contract;
+   - decide whether the connected pass network is a runtime fact, a coarse baked
+     fact, or a static-reference-only acceptance target.
 4. Add harness toggle or separate scene that makes the selected preset explicit
    in HUD/log output.
 5. Compare screenshots/fly notes against `mountain_network_chunks_review.tscn`.
@@ -455,10 +467,12 @@ the producer cannot express the accepted terrain or because we selected a
 different preset.
 
 Implemented bridge: `REFERENCE` mode now streams the accepted generated payload
-through `Wg10PagePool` and the clipmap renderer. Remaining Phase 3 work is not a
-renderer bridge; it is deciding how much of the accepted full-field
-conditioning/pass-network process should become a live runtime fact versus a
-separate authored/static acceptance target.
+through `Wg10PagePool` and the clipmap renderer. Implemented live-source fix:
+MOUNTAIN/network now samples the same accepted source window scale. Remaining
+Phase 3 work is not a renderer bridge or scalar/source-coordinate fix; it is
+deciding how much of the accepted full-field conditioning/pass-network process
+should become a live runtime fact versus a separate authored/static acceptance
+target.
 
 ### Phase 4 - Implement Slice 4 Part B Before More Visual Tuning
 
