@@ -4,6 +4,12 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
+**Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
+`docs/plans/STATUS.md` top. Current work is Slice 4 stabilization: mountain biome GPU runtime
+scale-invariance is implemented through `flow_max_level`, and the missing cross-level macro gate is now
+wired, but Slice 4 is **not accepted** until the windowed 576 reproving, cross-level gate run, and owner
+re-fly pass. Keep broad refactors paused until that visual baseline exists.
+
 Last updated: 2026-05-31 (**Phase 5 ACTIVE — see the "▶ YOU ARE HERE" box under the Phase 5 header for the
 plain-language current state.** Short version: M0–M4 DONE (engine machinery; gates cargo 121 · fast 6/6 · gpu
 4/4 · m3 9/9 · dem_pack pytest 22). Phases 6–9 NOT started (gated on Phase 5). Phase 5 = prove the terrain

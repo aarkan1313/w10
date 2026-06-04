@@ -4,6 +4,20 @@ This audit is based on the current worktree in `D:\workflows\worldgen10` on
 branch `slice4-gpu-page-integration`. It treats untracked files as part of the
 current state, because much of the active WG10 work is presently untracked.
 
+## Addendum - 2026-06-04 Stabilization
+
+The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
+implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
+readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0
+and level 1 macro pages over identical world XZ points, and `tools/gate.py` wires it into
+`biome_fly` after the 576 parity gate. This does **not** mean the scale-invariant producer is
+accepted yet; the new gate still needs the editor-closed/windowed GPU run, followed by owner re-fly.
+
+The source-size finding is also partially retired by subsequent refactor commits. The former
+3.6k-line `biome_page_compute.rs` is now a module facade with focused children. Remaining refactor
+pressure is architectural rather than raw line count: `page_pool` still routes producer choice, the
+shader ABI is still manually mirrored, and the render/facts split remains unresolved for 4c.
+
 ## Evidence Checked
 
 - Branch/status: `git status --short -b`
@@ -381,4 +395,3 @@ Riskier abstraction:
   checks are windowed.
 - Do not claim the drainage-fact-cache spec is implemented because coarse levels
   can run `flow_on=false`. That is only a mitigation, not the cache subsystem.
-

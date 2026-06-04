@@ -1,5 +1,34 @@
 # WorldGen10 — Status
 
+> **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / SCALE-INVARIANCE PROOF DEBT.**
+> Branch `slice4-gpu-page-integration`, with backup ref
+> `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
+> The tracked source tree was clean at `0b0d8a0` before the stabilization edits. The June 3
+> scale-invariance chain is implemented through the GPU producer plumbing: Python oracle
+> world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
+> runtime kernel anchoring, and `flow_max_level` are committed. Latest editor-safe Rust proof:
+> `cargo test -p wg10_terrain --lib` = **217 passed / 0 failed** (same existing warnings:
+> `HashVal::Float` dead code, `FamilyWeights::is_empty` unused).
+>
+> Stabilization edits now add the missing spec gate wiring: `Wg10BiomePageCompute` exposes
+> `generate_runtime_page_flow(..., flow_on)` for readback-only proof runs, and
+> `worldgen_terrain/tests/biome_crosslevel_check.gd` is wired into the `biome_fly` suite after
+> the 576 parity gate. This is the T6 cross-level macro-agreement proof required by the
+> scale-invariant producer spec; it has not yet been windowed-run on hardware in this note.
+>
+> **Still not accepted / do not claim done:** T5 windowed 576 reproving on the rebuilt live DLL,
+> T6 windowed cross-level macro-agreement pass, and T7 owner re-fly of
+> `mountain_fly_review.tscn`. Slice 4c is also still open: runtime default flip, atlas-removal
+> audit, hardened perf gate, and owner acceptance are pending. Facts/collision still rely on
+> the legacy `height.rs` path until a follow-up facts story is designed or explicitly exempted.
+>
+> **Refactor state:** the former 3.6k-line `biome_page_compute.rs` has been split into
+> focused modules; current Rust hotspots are now mostly recipe-local (`recipes_glacial.rs` 452,
+> `biome_page_compute/local_compose.rs` 439, `recipes_desert.rs` 434, `recipes_karst.rs` 428).
+> Pause broad refactor until the scale-invariance gates and owner fly produce a stable visual
+> baseline; then continue at the producer boundary (`page_pool` routing, shader ABI manifest,
+> facts/render divergence).
+
 What is actually true right now. Update this whenever reality changes. If a
 manual fly contradicts a claim here, fix this file immediately. (Separating
 "what passed a counter gate" from "what is actually accepted" is the whole

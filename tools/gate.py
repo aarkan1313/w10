@@ -69,6 +69,9 @@ CHECKS = {
     # a parity proof AND the convergence measurement (can't false-pass: 256 must reach 1e-4 or FAIL).
     "biome_fly": [
         "worldgen_terrain/tests/biome_page_576_parity_check.gd",
+        # Scale-invariance proof: with flow_on=false, level L and L+1 must agree over the same
+        # world XZ within a relief-relative bar. This is the gate for the former 73% morph warp.
+        "worldgen_terrain/tests/biome_crosslevel_check.gd",
         # Task 6 §B DID-REAL-WORK perf gate (windowed). Flies a ~1000 m/s synthetic path with the
         # MOUNTAIN biome GPU producer (configure_biome -> inline flow relaxation at flow_iters)
         # streaming through the M3 pipeline; records REAL GPU-time p99. The §5 drainage-priority
