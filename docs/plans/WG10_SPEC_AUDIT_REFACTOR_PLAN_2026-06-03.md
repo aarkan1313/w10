@@ -629,13 +629,28 @@ architectures, not three equivalent quality views:
   Page-scale regions and samey/unfinished materials are expected there until
   WORLD composition is async/cached or replaced by a cheaper preview contract.
 
+The owner fly now exposes that taxonomy in the HUD/log/runtime snapshot, and
+`review_runtime` gates the strings so the scene cannot silently present a
+diagnostic path as accepted terrain:
+
+- `REFERENCE`: `mode_role=accepted_reference_baseline`,
+  `mode_acceptance=accepted_visual_baseline`.
+- `MOUNTAIN/network_ref`: `mode_role=reference_backed_mountain_bridge`,
+  `mode_acceptance=accepted_visual_bridge_not_final_procedural`.
+- `WORLD`: `mode_role=world_composition_diagnostic`,
+  `mode_acceptance=diagnostic_not_owner_accepted`, with
+  `world_active_biome_limit=1`.
+
 Latest gates with the editor closed:
 
+- `python tools\gate.py --suite fast` = 8/8.
 - `python tools\gate.py --suite review_runtime` = 2/2.
-- `python tools\gate.py --suite review_runtime_modes` = 2/2. Scripted motion
-  CPU p99/max: REFERENCE 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms, WORLD
-  8.617/10.980 ms, with zero hide/show in all three. Render p99: REFERENCE
-  0.342 ms, MOUNTAIN 0.382 ms, WORLD 0.216 ms.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. The owner fly
+  stream is now paced to 2 synchronous page acquires per frame instead of 4.
+  Scripted motion CPU p99/max: REFERENCE 21.389/22.830 ms, MOUNTAIN
+  21.969/26.435 ms, WORLD 6.532/10.422 ms, with zero hide/show, zero full
+  events, and `acquired_max=2` in all three. Render p99: REFERENCE 0.327 ms,
+  MOUNTAIN 0.365 ms, WORLD 0.215 ms.
 - `python tools\gate.py --suite review_runtime_visual` = 1/1. REFERENCE and
   MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
   at 57,600 sampled pixels.

@@ -3,8 +3,10 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
-> **Read this first:** latest committed checkpoint is
-> `37eedc5 fix(slice4): smooth page repage fade by time`, tagged
+> **Read this first:** latest scoped runtime checkpoint in this tree paces the
+> owner fly stream to 2 synchronous page acquires per frame and gates the
+> owner-scene mode taxonomy (`mode_role`, `mode_acceptance`, `mode_note`).
+> It builds on `37eedc5 fix(slice4): smooth page repage fade by time`, tagged
 > `backup-slice4-page-fade-time-20260604-37eedc5`. The immediately preceding
 > runtime proof commit is `ff797fc test(slice4): guard mountain reference page
 > facts`, tagged
@@ -18,17 +20,24 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
-> Current proof after the latest renderer fix: `cargo test -p wg10_terrain --lib`
-> = 227/0, `tools\build_rust.ps1` builds the Godot-facing extension,
+> Current proof after the latest owner-runtime fix: `fast` = 8/8,
 > `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
 > `review_runtime_visual` = 1/1. Latest mode gate reports zero hide/show in
 > REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
-> 32.593/41.244 ms, MOUNTAIN 40.265/43.680 ms, WORLD 8.617/10.980 ms. Latest
-> render p99 is REFERENCE 0.342 ms, MOUNTAIN 0.382 ms, WORLD 0.216 ms. The
-> REFERENCE vs MOUNTAIN/network visual bridge still has sampled mean/p95 RGB
-> delta 0.000000/0.000000. The page transition fade is now wall-clock based
-> (`0.18 s`) instead of frame-count based, so high-FPS review does not compress
-> REPAGE transitions into a near-hard snap.
+> 21.389/22.830 ms, MOUNTAIN 21.969/26.435 ms, WORLD 6.532/10.422 ms, with
+> `acquired_max=2` and `full_events=0` in all three. Latest render p99 is
+> REFERENCE 0.327 ms, MOUNTAIN 0.365 ms, WORLD 0.215 ms. The REFERENCE vs
+> MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
+> 0.000000/0.000000. The page transition fade is wall-clock based (`0.18 s`),
+> and the owner fly now spreads page builds over fewer frames, so high-FPS
+> review no longer compresses REPAGE transitions into a near-hard snap or piles
+> four synchronous page builds into one update.
+> `review_runtime` now also gates the owner-mode taxonomy explicitly:
+> `REFERENCE` is `accepted_visual_baseline`, `MOUNTAIN/network_ref` is
+> `accepted_visual_bridge_not_final_procedural`, `WORLD` is
+> `diagnostic_not_owner_accepted`, and `LEGACY` is
+> `legacy_regression_not_accepted`. The WORLD diagnostic cap remains
+> one active biome per page and is now visible in the owner-scene snapshot.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The

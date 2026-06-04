@@ -141,6 +141,39 @@ func mode_label() -> String:
 		return "REFERENCE"
 	return "LEGACY"
 
+func mode_role() -> String:
+	if _mode == MODE_REFERENCE:
+		return "accepted_reference_baseline"
+	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
+		return "reference_backed_mountain_bridge"
+	if _mode == MODE_MOUNTAIN:
+		return "live_mountain_recipe_debug"
+	if _mode == MODE_WORLD:
+		return "world_composition_diagnostic"
+	return "legacy_atlas_regression"
+
+func mode_acceptance() -> String:
+	if _mode == MODE_REFERENCE:
+		return "accepted_visual_baseline"
+	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
+		return "accepted_visual_bridge_not_final_procedural"
+	if _mode == MODE_WORLD:
+		return "diagnostic_not_owner_accepted"
+	if _mode == MODE_LEGACY:
+		return "legacy_regression_not_accepted"
+	return "prototype_not_accepted"
+
+func mode_note() -> String:
+	if _mode == MODE_REFERENCE:
+		return "static mountain-network baseline"
+	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
+		return "reference-backed bridge, not final procedural synthesis"
+	if _mode == MODE_MOUNTAIN:
+		return "raw live mountain recipe debug"
+	if _mode == MODE_WORLD:
+		return "bounded one-biome-per-page diagnostic preview"
+	return "legacy atlas renderer regression"
+
 func is_world() -> bool:
 	return _mode == MODE_WORLD
 

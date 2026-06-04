@@ -12,7 +12,7 @@ const BASE_SPAN_M := 8192.0
 const GRID_RES := 128
 const RADIUS_PAGES := 1
 const LEAD_SECONDS := 0.5
-const MAX_PER_FRAME := 4
+const MAX_PER_FRAME := 2
 const MORPH_REGION_ON := 0.15
 const MORPH_REGION_OFF := 0.0
 const RELIEF_SCALE := 0.25
@@ -39,6 +39,9 @@ func grid_res() -> int:
 
 func lead_seconds() -> float:
 	return LEAD_SECONDS
+
+func max_per_frame() -> int:
+	return MAX_PER_FRAME
 
 func detail_amp_m() -> float:
 	return DETAIL_AMP_M

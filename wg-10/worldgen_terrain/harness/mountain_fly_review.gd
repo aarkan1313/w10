@@ -202,11 +202,28 @@ func _producer_label() -> String:
 		return "UNKNOWN"
 	return str(_producer.mode_label())
 
+func _producer_role() -> String:
+	if _producer == null:
+		return "missing"
+	return str(_producer.mode_role())
+
+func _producer_acceptance() -> String:
+	if _producer == null:
+		return "missing"
+	return str(_producer.mode_acceptance())
+
+func _producer_note() -> String:
+	if _producer == null:
+		return "missing"
+	return str(_producer.mode_note())
+
 func _print_biome_state() -> void:
 	if _pool == null:
 		return
-	print("[fly] mode=%s runtime=%s biome_path=%s preset=%s feature_span_m=%.0f relief_m=%.0f" % [
+	print("[fly] mode=%s role=%s acceptance=%s runtime=%s biome_path=%s preset=%s feature_span_m=%.0f relief_m=%.0f" % [
 		_producer_label(),
+		_producer_role(),
+		_producer_acceptance(),
 		str(_pool.call("biome_runtime_mode")),
 		str(_pool.call("uses_biome_path")),
 		_mountain_preset_label(),
@@ -324,12 +341,16 @@ func debug_runtime_snapshot() -> Dictionary:
 
 	var mode := "missing"
 	var preset := "missing"
+	var mode_role := "missing"
+	var mode_acceptance := "missing"
+	var mode_note := "missing"
 	var seed := -1
 	var feature_span_m := 0.0
 	var relief_m := 0.0
 	var view_relief_scale := 0.0
 	var view_relief_ref := 0.0
 	var loaded_edge_m := 0.0
+	var world_active_biome_limit := -1
 	var is_world := false
 	var is_legacy := false
 	if _runtime != null:
@@ -337,6 +358,9 @@ func debug_runtime_snapshot() -> Dictionary:
 	if _producer != null:
 		mode = str(_producer.mode_label())
 		preset = str(_producer.preset_label())
+		mode_role = str(_producer.mode_role())
+		mode_acceptance = str(_producer.mode_acceptance())
+		mode_note = str(_producer.mode_note())
 		seed = int(_producer.runtime_seed())
 		feature_span_m = float(_producer.feature_span_m())
 		relief_m = float(_producer.relief_m())
@@ -344,6 +368,7 @@ func debug_runtime_snapshot() -> Dictionary:
 		var default_relief_ref := float(_runtime.default_relief_ref()) if _runtime != null else 1700.0
 		view_relief_scale = float(_producer.view_relief_scale(default_relief_scale))
 		view_relief_ref = float(_producer.view_relief_ref(default_relief_ref, default_relief_scale))
+		world_active_biome_limit = int(_producer.world_active_biome_limit())
 		is_world = bool(_producer.is_world())
 		is_legacy = bool(_producer.is_legacy())
 
@@ -367,12 +392,16 @@ func debug_runtime_snapshot() -> Dictionary:
 		"static_reference_center_page": static_reference_center_page,
 		"mode": mode,
 		"preset": preset,
+		"mode_role": mode_role,
+		"mode_acceptance": mode_acceptance,
+		"mode_note": mode_note,
 		"seed": seed,
 		"feature_span_m": feature_span_m,
 		"relief_m": relief_m,
 		"view_relief_scale": view_relief_scale,
 		"view_relief_ref": view_relief_ref,
 		"loaded_edge_m": loaded_edge_m,
+		"world_active_biome_limit": world_active_biome_limit,
 		"is_world": is_world,
 		"is_legacy": is_legacy,
 		"morph_enabled": _morph_enabled,
@@ -426,8 +455,10 @@ func _process(_delta: float) -> void:
 			_flip_log.pop_front()
 		var route_summary := _world_route_summary(p, v)
 		var route_line := "%s\n" % route_summary if route_summary != "" else ""
-		_dbg_label.text = "mode %s (1 ref 2 mountain 3 world 4 legacy | B cycles) | preset %s %.0fkm (P toggles) | debug %s (M cycles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
+		_dbg_label.text = "mode %s | status %s | role %s\npreset %s %.0fkm | debug %s | cull %s | morph %s\n%s%s" % [
 			_producer_label(),
+			_producer_acceptance(),
+			_producer_role(),
 			_mountain_preset_label(),
 			_feature_span_m() / 1000.0,
 			_debug_mode_label(),

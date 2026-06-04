@@ -49,6 +49,7 @@ func _run() -> int:
 
 	_expect(str(snapshot.get("mode", "")) == "REFERENCE", "expected default mode REFERENCE", errs)
 	_expect(str(snapshot.get("preset", "")) == "network_ref", "expected default preset network_ref", errs)
+	_expect_mode_taxonomy(snapshot, "default", errs)
 	_expect(int(snapshot.get("seed", 0)) == 177, "expected seed=177", errs)
 	_expect(absf(float(snapshot.get("feature_span_m", 0.0)) - 90000.0) < 0.001, "expected feature_span_m=90000", errs)
 	_expect(absf(float(snapshot.get("relief_m", 0.0)) - 1700.0) < 0.001, "expected relief_m=1700", errs)
@@ -106,6 +107,40 @@ func _expect(condition: bool, message: String, errs: Array[String]) -> void:
 func _expect_float_close(actual: float, expected: float, eps: float, message: String, errs: Array[String]) -> void:
 	if absf(actual - expected) > eps:
 		errs.append("%s: expected %.12f got %.12f" % [message, expected, actual])
+
+func _expect_mode_taxonomy(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
+	var mode := str(snapshot.get("mode", ""))
+	var preset := str(snapshot.get("preset", ""))
+	var expected_role := ""
+	var expected_acceptance := ""
+	var expected_note_fragment := ""
+	if mode == "REFERENCE":
+		expected_role = "accepted_reference_baseline"
+		expected_acceptance = "accepted_visual_baseline"
+		expected_note_fragment = "static mountain-network"
+	elif mode == "MOUNTAIN" and preset == "network_ref":
+		expected_role = "reference_backed_mountain_bridge"
+		expected_acceptance = "accepted_visual_bridge_not_final_procedural"
+		expected_note_fragment = "reference-backed"
+	elif mode == "MOUNTAIN":
+		expected_role = "live_mountain_recipe_debug"
+		expected_acceptance = "prototype_not_accepted"
+		expected_note_fragment = "raw live"
+	elif mode == "WORLD":
+		expected_role = "world_composition_diagnostic"
+		expected_acceptance = "diagnostic_not_owner_accepted"
+		expected_note_fragment = "one-biome-per-page"
+		_expect(int(snapshot.get("world_active_biome_limit", -1)) == 1, "%s WORLD expected one active biome per page" % label, errs)
+	elif mode == "LEGACY":
+		expected_role = "legacy_atlas_regression"
+		expected_acceptance = "legacy_regression_not_accepted"
+		expected_note_fragment = "legacy atlas"
+	else:
+		errs.append("%s unknown mode for taxonomy: %s" % [label, mode])
+		return
+	_expect(str(snapshot.get("mode_role", "")) == expected_role, "%s expected role %s, got %s" % [label, expected_role, str(snapshot.get("mode_role", ""))], errs)
+	_expect(str(snapshot.get("mode_acceptance", "")) == expected_acceptance, "%s expected acceptance %s, got %s" % [label, expected_acceptance, str(snapshot.get("mode_acceptance", ""))], errs)
+	_expect(str(snapshot.get("mode_note", "")).contains(expected_note_fragment), "%s expected note to contain %s, got %s" % [label, expected_note_fragment, str(snapshot.get("mode_note", ""))], errs)
 
 func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	var reference: Dictionary = snapshot.get("static_reference", {})
@@ -247,6 +282,7 @@ func _expect_mode_switch(
 
 	_expect(str(snapshot.get("last_config_error", "")) == "", "%s configure error: %s" % [mode, str(snapshot.get("last_config_error", ""))], errs)
 	_expect(str(snapshot.get("mode", "")) == mode, "expected mode %s, got %s" % [mode, str(snapshot.get("mode", ""))], errs)
+	_expect_mode_taxonomy(snapshot, mode, errs)
 	_expect(str(snapshot.get("runtime_mode", "")) == expected_runtime, "%s expected runtime=%s, got %s" % [mode, expected_runtime, str(snapshot.get("runtime_mode", ""))], errs)
 	_expect(bool(snapshot.get("biome_path", false)) == expected_biome_path, "%s biome_path mismatch" % mode, errs)
 	_expect(bool(snapshot.get("is_world", false)) == expected_world, "%s is_world mismatch" % mode, errs)

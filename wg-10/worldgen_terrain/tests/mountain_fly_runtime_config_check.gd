@@ -13,6 +13,7 @@ func _run() -> int:
 	_expect(absf(float(cfg.base_span_m()) - 8192.0) < 0.001, "base_span_m should be 8192", errs)
 	_expect(int(cfg.grid_res()) == 128, "grid_res should be 128", errs)
 	_expect(absf(float(cfg.lead_seconds()) - 0.5) < 0.001, "lead_seconds should be 0.5", errs)
+	_expect(int(cfg.max_per_frame()) == 2, "max_per_frame should be 2", errs)
 	_expect(absf(float(cfg.detail_amp_m()) - 350.0) < 0.001, "detail_amp_m should be 350", errs)
 	_expect(absf(float(cfg.default_relief_scale()) - 0.25) < 0.001, "default relief scale should be 0.25", errs)
 	_expect(absf(float(cfg.default_relief_ref()) - 1700.0) < 0.001, "default relief ref should be 1700", errs)
