@@ -138,12 +138,22 @@ clipmap pages stretched the payload edge into the horizon. The static-reference
 runtime now fades out-of-domain heights to a low neutral floor and treats
 out-of-domain corridor/material hints as empty. This makes the bridge honest
 about the accepted 76.8 km payload instead of presenting it as infinite
-terrain. The owner review mesh is also denser (`grid=256`) and starts with the
-bounded display detail layer enabled. Current proof includes Rust lib tests,
+terrain. The owner review mesh is also denser (`grid=256`), while display
+detail is now opt-in for owner review. Current proof includes Rust lib tests,
 `review_runtime`, `review_runtime_modes`, `review_runtime_visual`, and
 `review_runtime_stress`. The remaining close-range "ground looks bad" issue is
 not a streaming architecture failure; it is the unresolved live mountain
 world-layer content contract versus the accepted static artifact.
+
+Latest owner-review baseline follow-up: display detail is no longer enabled by
+default in `mountain_fly_review.tscn`; `N` remains the opt-in detail toggle.
+The default view now opens on the accepted reference payload without the shared
+synthetic close-surface noise layer contaminating modes 1/2/3. The clipmap
+page transition fade is also shortened from `0.18 s` to `0.06 s`, because the
+longer settle window read as terrain lag during manual motion. Current proof:
+Rust lib tests = 231/0, `fast` = 8/8, `m3` = 10/10, `review_runtime` = 2/2,
+`review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
+`review_runtime_stress` = 1/1.
 
 Latest owner-view reconfigure follow-up: `mountain_fly_review.gd` now
 reconfigures the actual `Wg10TerrainView` after preset/relief-driven producer
@@ -159,7 +169,7 @@ for review.
 Latest review-state follow-up: the owner fly no longer lets debug shader mode
 or cull-disable experiments leak across mode/preset rebuilds. Every rebuild
 returns to normal material presentation, culling enabled, display detail
-enabled, and the expected morph default. `review_runtime` now dirties the scene
+disabled, and the expected morph default. `review_runtime` now dirties the scene
 into morph heatmap plus cull-disabled and proves a subsequent mode switch resets
 those controls. This removes another source of false "all modes look weird"
 manual reports; it does not promote WORLD or the raw close-debug mountain recipe

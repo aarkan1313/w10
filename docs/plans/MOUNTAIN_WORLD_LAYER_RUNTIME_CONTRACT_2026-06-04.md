@@ -67,6 +67,13 @@ The fact texture is intentionally lower resolution than height (`page_px / 2`)
 because these are low-frequency presentation masks and the owner fly still uses
 synchronous page misses.
 
+Latest owner-review presentation status: the review scene now opens with
+procedural display detail disabled, with `N` as the explicit opt-in toggle. The
+clipmap page transition fade is shortened to `0.06 s` so REPAGE smoothing does
+not read as terrain lagging/settling during flight. This keeps modes 1/2/3 on
+the accepted reference presentation path before any optional close-surface
+dressing is judged.
+
 ## Contract
 
 A runtime mountain world layer must provide these facts independently of any
@@ -249,9 +256,10 @@ single rendered page:
   0.747 ms. The latest visual capture shows MOUNTAIN/network matching the
   REFERENCE view at the reviewed frame and along the sprint path, while the
   material shader no longer uses the prior chalk-white static snow override.
-- The renderer page transition fade is now wall-clock based (`0.18 s`) instead
-  of frame-count based. This targets owner-visible REPAGE snap at high review
-  FPS without changing page data, reference facts, or WORLD composition.
+- The renderer page transition fade is now wall-clock based (`0.06 s`) instead
+  of frame-count based. This targets owner-visible REPAGE snap without making
+  newly resident pages visibly lag behind motion; it does not change page data,
+  reference facts, or WORLD composition.
 - Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
   stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
   `0.002500` / `0.020000`.
@@ -282,7 +290,7 @@ single rendered page:
   accepted `MOUNTAIN/network_ref` bridge is restored to the reference view.
 - `review_runtime` now also gates review-state reset: after deliberately
   enabling the morph heatmap and disabling culling, a mode switch restores
-  normal material mode, culling, display detail, and default morph state.
+  normal material mode, culling, detail-off baseline, and default morph state.
 - `m3`, `review_runtime_visual`, and `review_runtime_modes` now prove the RGBA
   accepted-material fact presentation remains render-safe, stays within the
   owner-fly frame budget, and keeps the accepted reference bridge comparisons

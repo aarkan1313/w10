@@ -63,7 +63,7 @@ func _run() -> int:
 	_expect(not bool(snapshot.get("is_world", false)), "default producer should not be WORLD", errs)
 	_expect(not bool(snapshot.get("is_legacy", false)), "default producer should not be LEGACY", errs)
 	_expect(not bool(snapshot.get("morph_enabled", true)), "runtime default morph should be off", errs)
-	_expect(bool(snapshot.get("detail_on", false)), "runtime default detail should be on", errs)
+	_expect(not bool(snapshot.get("detail_on", true)), "runtime default detail should be off", errs)
 	_expect_review_presentation_defaults(snapshot, "default", errs)
 	_expect(absf(float(snapshot.get("loaded_edge_m", 0.0)) - 196608.0) < 0.001, "expected loaded_edge_m=196608", errs)
 	_expect_reference_contract(snapshot, "default", errs)
@@ -157,7 +157,7 @@ func _send_key(scene: Node, keycode: int) -> void:
 func _expect_review_presentation_defaults(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
 	_expect(int(snapshot.get("debug_mode", -1)) == 0, "%s expected normal material debug mode" % label, errs)
 	_expect(not bool(snapshot.get("cull_disabled", true)), "%s expected culling enabled" % label, errs)
-	_expect(bool(snapshot.get("detail_on", false)), "%s expected display detail enabled" % label, errs)
+	_expect(not bool(snapshot.get("detail_on", true)), "%s expected display detail disabled" % label, errs)
 
 func _expect_mode_switch_resets_diagnostics(scene: Node, errs: Array[String]) -> void:
 	_send_key(scene, KEY_M)

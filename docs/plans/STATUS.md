@@ -20,30 +20,32 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
-> Current proof after the latest accepted-material fact fix: `cargo fmt -p
+> Current proof after the latest owner-review baseline fix: `cargo fmt -p
 > wg10_terrain -- --check` passes, `cargo test -p wg10_terrain --lib` =
-> 231/0, `tools\build_rust.ps1` builds, `m3` = 10/10,
-> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. Latest mode
-> gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
-> motion CPU p99/max is REFERENCE 9.822/10.226 ms, MOUNTAIN 10.157/10.821 ms,
-> WORLD 10.132/13.206 ms, with `acquired_max=1` and `full_events=0` in all
-> three. Latest render p99 is REFERENCE 0.758 ms, MOUNTAIN 0.746 ms, WORLD
-> 0.747 ms. The REFERENCE vs
+> 231/0, `tools\build_rust.ps1` builds, `fast` = 8/8, `m3` = 10/10,
+> `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
+> `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1. Latest
+> mode gate reports zero hide/show in REFERENCE, MOUNTAIN, and WORLD; scripted
+> motion CPU p95/p99/max is REFERENCE 9.115/9.650/10.139 ms,
+> MOUNTAIN 9.369/10.094/16.754 ms, WORLD 9.495/10.238/12.695 ms, with
+> `acquired_max=1` and `full_events=0` in all three. Latest render p99 is
+> REFERENCE 0.748 ms, MOUNTAIN 0.748 ms, WORLD 0.745 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
 > 0.000000/0.000000 at the captured review frame. The visual gate also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
-> 80/160/240: mean RGB deltas were 0.000043, 0.000286, and 0.000000, with p95
-> 0.000000, 0.001307, and 0.000000. The static-reference material page now
+> 80/160/240, all now `0.000000/0.000000` mean/p95. The static-reference material page now
 > preserves the accepted facts as RGBA channels (`low_pass/corridor`, `floor`,
 > `rock`, `snow`) instead of collapsing them to a scalar class code. The material
 > fact texture is intentionally lower resolution than height (`page_px / 2`) to
 > keep synchronous owner-fly page misses under frame budget while preserving the
 > low-frequency material story. The legacy
 > `m3_accept` wall-time gate now initializes the shader globals it renders with,
-> and passes at p99 2.56 ms in the full `m3` suite. The page transition fade is wall-clock based (`0.18 s`),
-> and the owner fly now spreads page builds over more frames, so high-FPS review
-> no longer compresses REPAGE transitions into a near-hard snap or piles multiple
-> synchronous page builds into one update.
+> and passes at p99 2.84 ms in the full `m3` suite. The page transition fade is
+> wall-clock based and shortened to `0.06 s`, because the former `0.18 s` window
+> read as terrain lag/settle during owner motion. The owner fly also now starts
+> with procedural display detail disabled; `N` remains the explicit detail
+> toggle. Modes 1/2/3 therefore open on the accepted reference presentation
+> instead of all sharing the same synthetic close-surface noise layer.
 > Follow-up review-control fix: `B` now cycles only the accepted owner-review
 > lane (`REFERENCE` <-> `MOUNTAIN/network_ref`). `WORLD` and `LEGACY` remain
 > direct-key diagnostics through `3` and `4`, so their known page-scale/legacy
@@ -120,8 +122,8 @@
 > row/column into the horizon. `StaticHeightRuntime` now fades out-of-domain
 > height samples to a low neutral floor and treats out-of-domain corridor/material
 > hints as empty, so the finite reference no longer pretends to be infinite
-> terrain. The owner fly review mesh is now 256 subdivisions per page and starts
-> with bounded display detail enabled. Proof after this checkpoint: `cargo test
+> terrain. The owner fly review mesh is now 256 subdivisions per page; display
+> detail is now opt-in through `N` for manual review. Proof after this checkpoint: `cargo test
 > -p wg10_terrain --lib` = 229/0, `tools\build_rust.ps1` builds,
 > `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
 > `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1. Latest
@@ -146,7 +148,7 @@
 > it does not make the raw procedural mountain candidate accepted content.
 > Follow-up review-state reset fix: mode/preset rebuilds now reset visual
 > diagnostics back to normal material review state: debug mode `0`, culling
-> enabled, display detail enabled, and default morph state except the explicit
+> enabled, display detail disabled, and default morph state except the explicit
 > LEGACY diagnostic. The smoke gate deliberately dirties the scene into morph
 > heatmap plus cull-disabled, switches mode, and proves the reset. Current
 > proof: `review_runtime` = 2/2 and `review_runtime_modes` = 2/2; scripted

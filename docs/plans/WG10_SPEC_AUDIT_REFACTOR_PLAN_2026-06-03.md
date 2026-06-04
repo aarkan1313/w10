@@ -35,6 +35,32 @@ This fixes the material-fact separation debt in the accepted bridge. It does not
 complete final procedural biome material synthesis; raw live MOUNTAIN still
 needs the accepted world-layer producer/fact contract.
 
+### Owner-Review Baseline Presentation Checkpoint - 2026-06-04
+
+The owner fly now opens on the accepted reference presentation without the
+synthetic display-detail layer. `DEFAULT_DETAIL_ENABLED=false` in
+`mountain_fly_runtime_config.gd`; `N` still toggles the detail layer on for
+explicit close-surface review. The shared clipmap page fade is shortened from
+`0.18 s` to `0.06 s` so newly resident pages do not visibly lag/settle behind
+the camera across modes 1/2/3.
+
+Current proof:
+
+- `cargo fmt -p wg10_terrain -- --check` passes.
+- `cargo test -p wg10_terrain --lib` = 231 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the
+  Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite m3` = 10/10.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2.
+- `python tools\gate.py --suite review_runtime_stress` = 1/1.
+
+This is a renderer-presentation correction, not a final biome-content fix. The
+raw live mountain candidate still needs the accepted world-layer producer/fact
+contract before close-debug terrain should be judged as owner-accepted.
+
 ### Manual Stress And Finite-Reference Edge Checkpoint - 2026-06-04
 
 The manual owner-fly complaint now has a dedicated windowed gate:
@@ -911,6 +937,6 @@ look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,
 keep extending manual-path instrumentation if owner fly still shows pop outside
 the gated sprint path, and move WORLD visual quality work behind a separated
 world-selection/producer path instead of the current synchronous page stream.
-Implemented pop mitigation: renderer page fade is now wall-clock based
-(`0.18 s`) instead of frame-count based, so high-FPS owner review does not
-compress REPAGE transitions into a near-hard snap.
+Implemented pop mitigation: renderer page fade is now wall-clock based and
+shortened to `0.06 s`, so REPAGE smoothing does not become visible terrain
+lag/settle during owner motion.

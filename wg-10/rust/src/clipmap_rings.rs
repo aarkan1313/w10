@@ -20,7 +20,9 @@ const TILES_PER_LEVEL: usize = 9;
 
 /// Wall-clock height fade for newly-bound pages. The fade starts from the parent page's height
 /// and ramps to the newly resident fine page, hiding repage pop-in without adding page work.
-const PAGE_FADE_SECONDS: f32 = 0.18;
+/// Keep this short in the owner fly: the previous 0.18s window read as terrain lagging/settling
+/// during motion across modes 1/2/3.
+const PAGE_FADE_SECONDS: f32 = 0.06;
 
 /// Custom-AABB Y half-height (metres) for GPU-displaced tiles. The shader moves VERTEX.y, so each
 /// tile's real vertical extent must be declared to Godot's frustum culler or tiles vanish when
@@ -216,9 +218,7 @@ impl Wg10ClipmapRings {
         if self.bound_keys[idx] != next_key || was_hidden {
             self.fade_values[idx] = 0.0;
         } else {
-            let dt = now
-                .duration_since(self.fade_last_update[idx])
-                .as_secs_f32();
+            let dt = now.duration_since(self.fade_last_update[idx]).as_secs_f32();
             self.fade_values[idx] = (self.fade_values[idx] + dt / PAGE_FADE_SECONDS).min(1.0);
         }
         self.fade_last_update[idx] = now;
@@ -280,7 +280,9 @@ impl Wg10ClipmapRings {
     ) {
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
-            godot_error!("Wg10ClipmapRings::set_tile_debug_color: ({level},{dx},{dz}) out of range");
+            godot_error!(
+                "Wg10ClipmapRings::set_tile_debug_color: ({level},{dx},{dz}) out of range"
+            );
             return;
         }
         let Some(mat_res) = self.tiles[idx].get_material_override() else {
@@ -288,7 +290,9 @@ impl Wg10ClipmapRings {
             return;
         };
         let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
-            godot_error!("Wg10ClipmapRings::set_tile_debug_color: material is not a ShaderMaterial");
+            godot_error!(
+                "Wg10ClipmapRings::set_tile_debug_color: material is not a ShaderMaterial"
+            );
             return;
         };
         mat.set_shader_parameter("biome_debug_color", &color.to_variant());
@@ -306,7 +310,9 @@ impl Wg10ClipmapRings {
     ) {
         let idx = tile_index(level as i32, dx as i32, dz as i32);
         if idx >= self.tiles.len() {
-            godot_error!("Wg10ClipmapRings::set_tile_static_material: ({level},{dx},{dz}) out of range");
+            godot_error!(
+                "Wg10ClipmapRings::set_tile_static_material: ({level},{dx},{dz}) out of range"
+            );
             return;
         }
         let Some(mat_res) = self.tiles[idx].get_material_override() else {
@@ -314,7 +320,9 @@ impl Wg10ClipmapRings {
             return;
         };
         let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
-            godot_error!("Wg10ClipmapRings::set_tile_static_material: material is not a ShaderMaterial");
+            godot_error!(
+                "Wg10ClipmapRings::set_tile_static_material: material is not a ShaderMaterial"
+            );
             return;
         };
         mat.set_shader_parameter("static_material_tex", &material_tex.to_variant());

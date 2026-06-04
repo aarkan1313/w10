@@ -22,7 +22,10 @@ const RELIEF_SCALE := 0.25
 const RELIEF_REF := 1700.0
 const DETAIL_AMP_M := 350.0
 const DEFAULT_MORPH_ENABLED := false
-const DEFAULT_DETAIL_ENABLED := true
+# Owner review opens on the accepted mountain-network baseline. Keep procedural
+# display detail opt-in through N so modes 1/2/3 are not all contaminated by the
+# same synthetic close-surface noise.
+const DEFAULT_DETAIL_ENABLED := false
 const SKY := Color(0.45, 0.62, 0.85)
 # Accepted mountain-network display footprint. The streamer keeps a larger loaded edge for
 # fallback coverage, but the owner review camera/fog should not expose static-reference samples
