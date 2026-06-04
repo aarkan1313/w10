@@ -1,9 +1,9 @@
 extends SceneTree
 
 # One-shot CAPTURE: set up the current WORLD biome streaming path, fly a few frames to stream real
-# pages, render to an offscreen SubViewport, and SAVE A PNG. This is visual evidence for the same
-# composed runtime producer used by mountain_fly_review.tscn's default WORLD mode. WINDOWED only.
-# Writes D:/tmp/wg10_biome_compose/biome_world_fly_capture.png
+# pages, render to an offscreen SubViewport, and SAVE material + route-debug PNGs. This is visual
+# evidence for the same composed runtime producer used by mountain_fly_review.tscn's default WORLD
+# mode. WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_world_fly_capture*.png
 
 const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
 const PACK_FILE := "terrain_pack.gate.json"
@@ -27,6 +27,7 @@ const DETAIL_AMP := 350.0
 const VIEW_SIZE := Vector2i(1280, 720)
 const SKY := Color(0.45, 0.62, 0.85)
 const OUT := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
+const OUT_ROUTE := "D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png"
 
 func _init() -> void:
 	quit(await _run())
@@ -90,9 +91,9 @@ func _run() -> int:
 	for f in range(140):
 		pos += v * dt
 		view.call("update", pos.x, pos.y, v.x, v.y)
-		# oblique camera: above + behind, looking down-forward at the mountains
-		var eye := Vector3(pos.x - 1400.0, 1600.0, pos.y - 1400.0)
-		var look := Vector3(pos.x + 2400.0, 200.0, pos.y + 2400.0)
+		# Oblique camera: low enough to show surface relief, but still above the generated terrain.
+		var eye := Vector3(pos.x - 900.0, 720.0, pos.y - 900.0)
+		var look := Vector3(pos.x + 1800.0, 60.0, pos.y + 1800.0)
 		cam.look_at_from_position(eye, look, Vector3.UP)
 		await process_frame
 		RenderingServer.force_draw()
@@ -107,6 +108,13 @@ func _run() -> int:
 		push_error("[wg10-biome-capture] null image"); return 1
 	DirAccess.make_dir_recursive_absolute("D:/tmp/wg10_biome_compose")
 	var rc := img.save_png(OUT)
+
+	RenderingServer.global_shader_parameter_set("wg_dbg_mode", 2.0)
+	RenderingServer.force_draw()
+	await process_frame
+	var route_img: Image = vp.get_texture().get_image()
+	var route_rc := route_img.save_png(OUT_ROUTE) if route_img != null else ERR_DOES_NOT_EXIST
+
 	# Detach the ring materials from the pool's page textures BEFORE freeing them, else the next
 	# (teardown) draw rebuilds each tile material's uniform set against a freed page RID ->
 	# "Texture (binding 1) is not a valid texture". Unbind, then free.
@@ -114,6 +122,8 @@ func _run() -> int:
 	pool.call("free_all")
 	if rc != OK:
 		push_error("[wg10-biome-capture] save_png failed rc=%d" % rc); return 1
-	print("[wg10-biome-capture] status=pass wrote %s pages=%d biome_path=%s size=%dx%d" % [
-		OUT, pages, str(biome), VIEW_SIZE.x, VIEW_SIZE.y])
+	if route_rc != OK:
+		push_error("[wg10-biome-capture] save_route_png failed rc=%d" % route_rc); return 1
+	print("[wg10-biome-capture] status=pass wrote %s and %s pages=%d biome_path=%s size=%dx%d" % [
+		OUT, OUT_ROUTE, pages, str(biome), VIEW_SIZE.x, VIEW_SIZE.y])
 	return 0

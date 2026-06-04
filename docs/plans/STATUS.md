@@ -17,27 +17,28 @@
 >
 > Editor-closed/windowed hardware gates on 2026-06-04:
 > `review_static` = **1/1 pass** (the accepted `mountain_network_chunks_review.tscn` baseline
-> loads), `m3` = **9/9 pass** after the new page-fade renderer change (`m3_accept` p99
-> 5.81 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass** (macro 576 maxd
-> 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002, cross-level macro ratio
-> 0.066665 <= 0.08, fly GPU p99 0.105 ms after the live material update).
-> `mountain_fly_review.tscn` now starts on the accepted `network_ref` scale
-> (`feature_span_m=90000`) and exposes `P` to toggle the old `close_debug`
-> scale (`feature_span_m=3500`). A direct scene smoke launch after the DLL
-> rebuild printed `biome_path=true preset=network_ref feature_span_m=90000
-> relief_m=1000`, so the earlier 11-vs-12 `configure_biome` call error was a
-> stale loaded extension, not the current source.
+> loads), `m3` = **9/9 pass** after the new lit-material/route-debug renderer pass
+> (`m3_accept` p99 5.17 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
+> (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
+> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.109 ms).
+> `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
+> `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
+> `close_debug` scale (`feature_span_m=3500`). A direct scene smoke launch after
+> the DLL rebuild printed `mode=MOUNTAIN runtime=single biome_path=true
+> preset=network_ref feature_span_m=90000 relief_m=1000`, so the scene name now
+> matches the review target. `WORLD` remains available through `B` as the
+> biome-composition A/B path.
 >
 > Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has three
-> explicit producer modes: `WORLD` (default), `MOUNTAIN`, and `LEGACY`; `B`
+> explicit producer modes: `MOUNTAIN` (default), `LEGACY`, and `WORLD`; `B`
 > cycles them and the HUD/log prints the active mode. `WORLD` calls
 > `configure_biome_world(...)`, loads the pack grammar without resolving the
 > legacy kernel atlas, builds cached GPU contexts for the 11 currently ported
 > biome fragments plus a cached compose context, generates a texel-corner
 > runtime-biome weight field per page, dispatches each active GPU biome recipe,
 > and folds the resulting core fields through the GPU compose passes before
-> writing the page texture. This removes the all-mountain default and the
-> whole-page dominant-biome selector from the live WORLD fly, but it is still
+> writing the page texture. This removes the old whole-page dominant-biome
+> selector from the live WORLD fly, but it is still
 > not badlands-native (badlands falls back to desert), not per-biome material
 > complete, and not the Slice 4c atlas-removal/runtime-flip acceptance.
 > `cargo build --target-dir D:\workflows\worldgen10\wg-10\rust\target -p wg10_terrain`
@@ -51,10 +52,12 @@
 >
 > Visual renderer fix in this pass: the live streaming shader no longer uses the
 > blue/yellow height-debug ramp as the normal material. `ring_displace.gdshader`
-> now derives a mountain-style palette from displayed height plus a slope estimate,
-> while `M` still switches to the morph heatmap. This does not solve per-biome
-> materials, but it removes one major reason the live fly looked nothing like
-> the accepted mountain-network review even when the height producer was correct.
+> now derives a lit terrain palette from displayed height, slope, and world-space
+> detail, while `M` cycles material -> morph heatmap -> WORLD route-color
+> diagnostic. The route-color mode proves the renderer receives page route labels,
+> not final per-biome material blending. This does not solve per-biome materials,
+> but it separates "mountain review" from "WORLD composition debug" and removes
+> one reason the live fly read unlike the accepted mountain-network review.
 >
 > Pop-in audit evidence: `biome_world` still reports child/parent route disagreement
 > for the old page-center route diagnostic. Current windowed result: `lod_route_mismatch=183/867`
@@ -62,8 +65,9 @@
 > biome than at least one coarser fallback/morph parent under a single-biome selector.
 > The live WORLD producer now composes per-page weight fields instead of using that
 > selector, but `mountain_fly_review.tscn`
-> now prints the routed biome per clipmap level in the yellow debug HUD so the owner
-> fly can correlate any remaining visible pops with route changes and streaming state.
+> now prints the routed biome per clipmap level in the yellow debug HUD and can show
+> route colors with `M`, so the owner fly can correlate any remaining visible pops
+> with route changes and streaming state.
 > This is evidence for why the selector was wrong, not proof that the composed live
 > path is visually accepted.
 > The WORLD routing helper is now split into `page_pool/world_route.rs` and
@@ -99,6 +103,12 @@
 > active_biomes=2 max_texel_active=2 min_sum=1.000000 max_sum=1.000000
 > max_sum_delta=0.000000`, followed by `status=pass runtime=world biome_path=true
 > nonzero=65536`.
+> The standalone visual capture now writes both
+> `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png` and
+> `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. Current evidence:
+> WORLD streams 45 pages and route colors are visible, but the normal WORLD material
+> still reads broad/flat in this sampled area. Treat that as an open content/material
+> issue, not as proof of accepted biome visuals.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

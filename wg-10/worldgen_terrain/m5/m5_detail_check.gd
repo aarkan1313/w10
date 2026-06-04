@@ -43,10 +43,8 @@ func _run() -> int:
 		push_error("[wg10-m5] no RenderingDevice — run WINDOWED")
 		return 2
 
-	if not RenderingServer.global_shader_parameter_get_list().has("wg_detail_amp"):
-		RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
-	if not RenderingServer.global_shader_parameter_get_list().has("wg_dbg_mode"):
-		RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_add("wg_detail_amp", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
+	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 
 	var pool: Object = ClassDB.instantiate("Wg10PagePool")
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)

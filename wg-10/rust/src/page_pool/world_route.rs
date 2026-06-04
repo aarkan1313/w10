@@ -1,9 +1,10 @@
 //! Grammar-to-runtime-biome routing helpers for `Wg10PagePool`.
 //!
-//! This module owns the current WORLD-mode route decision: sample grammar at
-//! the page center, aggregate family weights by available runtime biome, and
-//! select the strongest biome. Full Slice 4 Part B should replace this hard
-//! page route with per-pixel active-biome weights feeding the compose producer.
+//! This module owns WORLD-mode grammar-to-runtime-biome mapping.
+//!
+//! Page-center selection remains available for diagnostics and HUD route labels.
+//! Runtime WORLD production uses the texel-corner weight field so active biome
+//! weights feed the compose producer instead of choosing one biome for the page.
 
 use std::collections::BTreeMap;
 

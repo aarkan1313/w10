@@ -27,10 +27,11 @@ impl Wg10PagePool {
         }
     }
 
-    /// Diagnostic: return the runtime biome selected for a world-routed page.
+    /// Diagnostic: return the strongest page-center runtime biome for a world-routed page.
     ///
-    /// This mirrors the exact page-center selector used by `acquire_page`. It is deliberately
-    /// read-only and does not allocate or dispatch page compute.
+    /// This is deliberately read-only and does not allocate or dispatch page compute. Runtime
+    /// WORLD production composes the texel-corner weight field; this selector is only a label/debug
+    /// proxy for HUDs and route-color diagnostics.
     #[func]
     pub fn debug_world_biome_for_page(&self, level: i64, origin_x: f64, origin_z: f64) -> GString {
         let Some(world) = self.biome_world.as_ref() else {
@@ -40,11 +41,11 @@ impl Wg10PagePool {
         GString::from(&self.select_world_biome_name(world, origin_x, origin_z, world_span))
     }
 
-    /// Diagnostic: report page-center runtime-biome weight stats used by WORLD routing.
+    /// Diagnostic: report page-center runtime-biome weight stats used by WORLD route labels.
     ///
-    /// This intentionally mirrors the current hard page selector. If `runner_up_weight` is
-    /// material, the current runtime is discarding real grammar weight that the compose producer
-    /// should eventually consume instead of choosing one biome for the whole page.
+    /// Runtime WORLD page production consumes a per-texel weight field. These page-center stats
+    /// remain useful for explaining route labels, coarse/fine disagreement, and material runner-up
+    /// weight that a whole-page label cannot show.
     #[func]
     pub fn debug_world_biome_report_for_page(
         &self,
@@ -115,10 +116,10 @@ impl Wg10PagePool {
         out
     }
 
-    /// Diagnostic: sample the per-texel runtime-biome weight field that the future WORLD compose
-    /// producer should consume. This is CPU-side today, but it uses the same texel-corner page
-    /// mapping as the runtime page producer and folds grammar families into supported runtime
-    /// biome names exactly like the current route selector.
+    /// Diagnostic: sample the per-texel runtime-biome weight field consumed by the WORLD compose
+    /// producer. This is CPU-side today, but it uses the same texel-corner page mapping as the
+    /// runtime page producer and folds grammar families into supported runtime biome names exactly
+    /// like the runtime field.
     #[func]
     pub fn debug_world_biome_weight_field_report_for_page(
         &self,

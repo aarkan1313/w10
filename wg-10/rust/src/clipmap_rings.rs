@@ -257,6 +257,26 @@ impl Wg10ClipmapRings {
         self.bound_keys[idx] = next_key;
     }
 
+    /// Set the per-tile WORLD route diagnostic color used when `wg_dbg_mode == 2`.
+    /// The color is presentation-only; it does not affect page data, producer routing, or facts.
+    #[func]
+    pub fn set_tile_debug_color(&mut self, level: i64, dx: i64, dz: i64, color: Color) {
+        let idx = tile_index(level as i32, dx as i32, dz as i32);
+        if idx >= self.tiles.len() {
+            godot_error!("Wg10ClipmapRings::set_tile_debug_color: ({level},{dx},{dz}) out of range");
+            return;
+        }
+        let Some(mat_res) = self.tiles[idx].get_material_override() else {
+            godot_error!("Wg10ClipmapRings::set_tile_debug_color: tile has no material");
+            return;
+        };
+        let Ok(mut mat) = mat_res.try_cast::<ShaderMaterial>() else {
+            godot_error!("Wg10ClipmapRings::set_tile_debug_color: material is not a ShaderMaterial");
+            return;
+        };
+        mat.set_shader_parameter("biome_debug_color", &color.to_variant());
+    }
+
     /// Drop every tile material's reference to the pool's page textures, and hide all tiles.
     ///
     /// MUST be called BEFORE the pool's `free_all()` whenever the page textures are about to be

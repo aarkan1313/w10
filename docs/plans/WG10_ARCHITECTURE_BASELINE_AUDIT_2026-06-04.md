@@ -22,15 +22,17 @@ The project currently has multiple terrain architectures alive at once:
    - Status: old runtime path, still useful as a renderer regression and A/B path, but not the intended final terrain content path.
 
 3. **Current biome live streaming architecture**
-   - Producers: `Wg10PagePool.configure_biome_world(...)` for the default WORLD
-     fly mode, `Wg10PagePool.configure_biome(...)` for the single-mountain A/B mode.
+   - Producers: `Wg10PagePool.configure_biome(...)` for the default single-mountain
+     fly mode, `Wg10PagePool.configure_biome_world(...)` for the WORLD composition A/B mode.
    - Shaders: `recipe_primitives.glsl` + `biome_page.glsl` + the 11 compiled
      `biome_<name>.glsl` fragments.
    - Renderer: same clipmap renderer as legacy.
    - Current scene: `wg-10/worldgen_terrain/harness/mountain_fly_review.tscn`
-   - Current behavior: WORLD mode generates a texel-corner runtime-biome weight
-     field per page, dispatches each active biome context, and folds those core
-     height fields through the GPU compose passes before writing the page texture.
+   - Current behavior: MOUNTAIN mode starts first so the mountain review scene
+     reviews mountain content. WORLD mode remains available through `B`; it generates
+     a texel-corner runtime-biome weight field per page, dispatches each active
+     biome context, and folds those core height fields through the GPU compose
+     passes before writing the page texture.
 
 This explains the owner report:
 
@@ -38,8 +40,9 @@ This explains the owner report:
   world artifact: broad 90 km feature structure plus explicit connected pass
   carving and review dressing.
 - The current live BIOME fly is proving page producer composition and renderer
-  behavior, not full owner visual acceptance. It can now leave the all-mountain
-  path and compose active runtime-biome weights, but materials/content/facts and
+  behavior, not full owner visual acceptance. The mountain review now starts on
+  single-mountain content again, while WORLD composition stays as an explicit A/B.
+  WORLD can compose active runtime-biome weights, but materials/content/facts and
   the owner fly review are still open.
 - The pop-in and morph issues have two pieces: renderer scheduling still controls
   hide/show and geomorph timing, while the route diagnostics explain why the old
@@ -80,15 +83,19 @@ Validation:
   failed because that generic check is stale against its current
   `biome_compose_world_v2_scale_contract` payload; do not use it as the accepted
   network-baseline proof.
-- `python tools\gate.py --suite m3`: 9/9 passed after the page-fade renderer
-  change. `m3_accept` p99 = 5.81 ms against the 6.0 ms budget.
+- `python tools\gate.py --suite m3`: 9/9 passed after the lit-material and
+  route-debug renderer changes. `m3_accept` p99 = 5.17 ms against the 6.0 ms
+  budget; `m5_detail_check` remained non-vacuous (`diff=0.0124`), bounded,
+  and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.105 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.109 ms.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
-  loaded DLL. The scene now starts on the accepted `network_ref` scale
-  (`feature_span_m=90000`) and exposes `P` for the old close-up debug scale
-  (`feature_span_m=3500`), so the manual review scale is visible in the HUD.
+  loaded DLL. The scene now starts in `MOUNTAIN` mode on the accepted
+  `network_ref` scale (`feature_span_m=90000`) and exposes `P` for the old
+  close-up debug scale (`feature_span_m=3500`), so the manual review scale is
+  visible in the HUD. Smoke log: `mode=MOUNTAIN runtime=single biome_path=true
+  preset=network_ref feature_span_m=90000 relief_m=1000`.
 - `python tools\gate.py --suite biome_world`: 1/1 passed when run outside the
   filesystem sandbox. The gate configures WORLD mode, builds the 11 cached
   runtime contexts plus the compose context, acquires one composed page, reads
@@ -108,6 +115,12 @@ Validation:
   composed height to the page texture. `biome_world` reports
   `route_weight_field samples=289 active_biomes=2 max_sum_delta=0.000000` for
   the sampled live page.
+- `biome_fly_capture.gd` now writes two WORLD visual artifacts:
+  `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png` and
+  `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. The route
+  capture proves the renderer receives page route labels; the normal WORLD
+  material capture still reads broad/flat in the sampled area, so per-biome
+  materials/content remain open.
 
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
@@ -118,11 +131,12 @@ is a coherent full-field mountain synthesis with connected pass-network carving.
 The mesh review is not a streaming page runtime. It is a baked inspection artifact
 that carries exactly the authored structure the owner liked.
 
-`mountain_fly_review.tscn` now defaults to WORLD mode and calls
-`configure_biome_world(...)`, which asks the grammar for active runtime-biome
-weights and composes the active GPU biome recipes into the streamed page texture.
-The separate MOUNTAIN mode still calls `configure_biome(...)` with a single
-mountain fragment for A/B review.
+`mountain_fly_review.tscn` now defaults to MOUNTAIN mode and calls
+`configure_biome(...)` with the single mountain fragment, so the mountain review
+scene no longer starts by showing arbitrary WORLD grammar content. The separate
+WORLD mode remains available through `B`; it calls `configure_biome_world(...)`,
+asks the grammar for active runtime-biome weights, and composes the active GPU
+biome recipes into the streamed page texture.
 
 ### 2. The scale context changed
 

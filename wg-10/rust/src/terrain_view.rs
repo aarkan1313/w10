@@ -221,6 +221,18 @@ impl Wg10TerrainView {
                         Vector2::new(cco_x as f32, cco_z as f32),                    // coarse (parent) origin
                         Vector2::new(level_center_x as f32, level_center_z as f32),  // this level's neighborhood centre
                     );
+                    let debug_color = debug_color_for_page(
+                        self.pool.as_ref().unwrap(),
+                        level as i64,
+                        po_x,
+                        po_z,
+                    );
+                    rings.bind_mut().set_tile_debug_color(
+                        level as i64,
+                        dx as i64,
+                        dz as i64,
+                        debug_color,
+                    );
                 }
             }
         }
@@ -232,5 +244,37 @@ impl Wg10TerrainView {
             Some(pool) => pool.bind().stats(),
             None => Dictionary::<GString, Variant>::new(),
         }
+    }
+}
+
+fn debug_color_for_page(pool: &Gd<Wg10PagePool>, level: i64, origin_x: f64, origin_z: f64) -> Color {
+    let pool_ref = pool.bind();
+    let mode = pool_ref.biome_runtime_mode().to_string();
+    if mode == "world" {
+        let biome = pool_ref
+            .debug_world_biome_for_page(level, origin_x, origin_z)
+            .to_string();
+        biome_route_color(&biome)
+    } else if mode == "single" {
+        biome_route_color("mountain")
+    } else {
+        Color::from_rgba(0.34, 0.38, 0.43, 1.0)
+    }
+}
+
+fn biome_route_color(name: &str) -> Color {
+    match name {
+        "coast" => Color::from_rgba(0.16, 0.46, 0.68, 1.0),
+        "desert" => Color::from_rgba(0.78, 0.62, 0.25, 1.0),
+        "glacial" => Color::from_rgba(0.78, 0.88, 0.92, 1.0),
+        "grassland" => Color::from_rgba(0.32, 0.60, 0.24, 1.0),
+        "karst" => Color::from_rgba(0.52, 0.52, 0.40, 1.0),
+        "mountain" => Color::from_rgba(0.42, 0.43, 0.38, 1.0),
+        "rainforest" => Color::from_rgba(0.10, 0.42, 0.24, 1.0),
+        "temperate" => Color::from_rgba(0.24, 0.52, 0.32, 1.0),
+        "tundra" => Color::from_rgba(0.55, 0.62, 0.58, 1.0),
+        "volcanic" => Color::from_rgba(0.42, 0.22, 0.18, 1.0),
+        "wetland" => Color::from_rgba(0.18, 0.38, 0.34, 1.0),
+        _ => Color::from_rgba(0.45, 0.45, 0.45, 1.0),
     }
 }

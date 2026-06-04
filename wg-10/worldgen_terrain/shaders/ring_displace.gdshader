@@ -19,14 +19,19 @@ uniform float relief_scale = 1.0;         // authoritative world-relief multipli
 uniform float morph_region = 0.0;         // transition width as a fraction of the half-extent (0 = no morph)
 uniform float relief_ref = 2000.0;        // color gradient normalization
 uniform float page_fade = 1.0;            // temporal fade for newly resident pages: 0 parent -> 1 fine
+uniform vec4 biome_debug_color : source_color = vec4(0.45, 0.45, 0.45, 1.0);
 
 varying float v_render_height;     // DISPLAYED height (base + M5 detail); NOT the facts/collision height
 varying float v_morph;             // debug: the geomorph factor t (0 fine .. 1 coarse) per vertex
 varying float v_slope;             // displayed rise/run estimate for terrain material selection
+varying vec3 v_terrain_normal;      // manual lighting normal derived from the displayed height field
+varying float v_detail_norm;        // displayed world-space detail, normalized by wg_detail_amp
 // GLOBAL debug mode (one RenderingServer.global_shader_parameter for the whole scene, so a key in
 // the review scene flips it with no per-tile material access / no Rust rebuild):
 // 0 = normal height color · 1 = morph-band heatmap (blue fine / green blend / red coarse).
 global uniform float wg_dbg_mode;
+// Additional mode: wg_dbg_mode=2 uses biome_debug_color, a per-tile page-center WORLD route
+// diagnostic. It is not final per-biome material blending.
 // M5 detail: GLOBAL amplitude knob (one RenderingServer.global_shader_parameter for the
 // whole scene, set by the harness / gate). 0.0 = no detail (byte-identical to pre-M5).
 // Detail is added to VERTEX.y after the displayed base height is formed; the page-data
@@ -121,6 +126,7 @@ void vertex() {
 	// world.xz -> abutting tiles agree on shared edges (edge-safe). Slice 1 = flat amp
 	// (no modulation/fade yet).
 	float detail = wg_fbm_detail(world.xz) * wg_detail_amp;
+	v_detail_norm = abs(wg_detail_amp) > 1e-6 ? clamp(detail / wg_detail_amp, -1.0, 1.0) : 0.0;
 	// v_render_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
 	// facts/collision height: collision reads the separate CPU facts path, not this varying.
 	v_render_height = h + detail;
@@ -137,6 +143,7 @@ void vertex() {
 	float sx = ((h_r - h_l) * relief_scale) / (2.0 * cell_m);
 	float sz = ((h_u - h_d) * relief_scale) / (2.0 * cell_m);
 	v_slope = length(vec2(sx, sz));
+	v_terrain_normal = normalize(vec3(-sx, 1.0, -sz));
 	VERTEX.y = (h + detail) * relief_scale;
 }
 
@@ -168,13 +175,29 @@ vec3 wg_mountain_palette(float h, float slope) {
 	return base;
 }
 
+vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
+	// Manual lighting keeps the shader unshaded for deterministic debug modes while restoring
+	// relief readability to the normal view. This changes presentation only, not page data.
+	vec3 light_dir = normalize(vec3(-0.45, 0.78, -0.35));
+	float ndl = max(dot(normalize(n), light_dir), 0.0);
+	float lit = 0.58 + 0.42 * ndl;
+	vec3 shaded = base * lit;
+	float cool_shadow = clamp(1.0 - ndl, 0.0, 1.0) * 0.16;
+	shaded = mix(shaded, vec3(shaded.r * 0.88, shaded.g * 0.94, shaded.b * 1.05), cool_shadow);
+	float slope_shadow = clamp((slope - 0.42) / 0.65, 0.0, 0.18);
+	return shaded * (1.0 - slope_shadow);
+}
+
 void fragment() {
-	if (wg_dbg_mode > 0.5) {
+	if (wg_dbg_mode > 1.5) {
+		ALBEDO = biome_debug_color.rgb;
+	} else if (wg_dbg_mode > 0.5) {
 		// morph-band heatmap: blue = pure fine (t=0), red = pure coarse (t=1), green = the blend
 		// in between. A hard LOD pop shows as an abrupt blue->red edge with NO green; a proper
 		// geomorph shows a WIDE green gradient where fine eases into coarse.
 		ALBEDO = vec3(v_morph, 1.0 - abs(v_morph - 0.5) * 2.0, 1.0 - v_morph);
 	} else {
-		ALBEDO = wg_mountain_palette(v_render_height, v_slope);
+		vec3 material = wg_mountain_palette(v_render_height, v_slope) * (1.0 + v_detail_norm * 0.10);
+		ALBEDO = wg_apply_terrain_light(clamp(material, vec3(0.0), vec3(1.0)), v_terrain_normal, v_slope);
 	}
 }

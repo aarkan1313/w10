@@ -8,9 +8,10 @@ extends Node3D
 # LAUNCH: run this scene (windowed). Fly with WASD (+ Shift to sprint to ~1000s m/s), mouse to
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
-# KEYS: K toggle cull-disable, M morph-band heatmap, O morph on/off, N detail on/off, P toggles
-#       runtime scale preset, and B cycles WORLD -> MOUNTAIN -> LEGACY. The streamer/view keep the
-#       same pool ref; on toggle we free_all + reconfigure live. Starts in WORLD mode.
+# KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
+#       P toggles runtime scale preset, and B cycles MOUNTAIN -> LEGACY -> WORLD. The streamer/view
+#       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in MOUNTAIN mode so
+#       the mountain review scene reviews mountain content first; WORLD remains the biome-composition A/B.
 
 # --- BIOME (mountain GPU producer) constants — replaces the legacy PACK/GLSL trio ---
 const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
@@ -74,12 +75,12 @@ var _dbg_label: Label
 var _prev_states: PackedInt64Array = PackedInt64Array()
 var _flip_log: Array[String] = []
 var _cull_disabled := false
-var _morph_view := false
+var _debug_mode := 0
 var _morph_enabled := false # Runtime biome modes start with morph OFF: fine/coarse surfaces still differ visibly.
 var _detail_on := false   # start OFF so the FIRST N press turns detail ON (matches the m5 gate's 0.0
 						  # baseline + the operator's "N enables detail" expectation; the scene used to
 						  # start ON so N first turned it OFF — see STATUS M5 fly finding).
-var _producer_mode := MODE_WORLD   # B cycles WORLD -> MOUNTAIN -> LEGACY.
+var _producer_mode := MODE_MOUNTAIN   # B cycles MOUNTAIN -> LEGACY -> WORLD.
 var _mountain_preset := MOUNTAIN_PRESET_NETWORK
 var _frame := 0
 
@@ -138,8 +139,7 @@ func _ready() -> void:
 	overlay.call("bind_sources", profiler, _view)
 
 	# DEBUG: register the global shader debug-mode param (used by ring_displace's wg_dbg_mode).
-	# Press M to toggle the MORPH-BAND HEATMAP: blue=fine, green=blend, red=coarse. A hard LOD pop
-	# shows as a blue->red edge with NO green; a proper geomorph shows a wide green gradient.
+	# Press M to cycle NORMAL -> MORPH-BAND HEATMAP -> WORLD ROUTE COLOR.
 	RenderingServer.global_shader_parameter_add("wg_dbg_mode", RenderingServer.GLOBAL_VAR_TYPE_FLOAT, 0.0)
 	# M5: global detail amplitude (read by ring_displace's wg_detail_amp). Register at 0.0 (detail OFF
 	# at load, matching _detail_on=false + the m5 gate convention); N toggles to DETAIL_AMP and back.
@@ -202,8 +202,8 @@ func _input(event: InputEvent) -> void:
 		if _rings != null:
 			_rings.call("debug_disable_culling", _cull_disabled)
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_M:
-		_morph_view = not _morph_view
-		RenderingServer.global_shader_parameter_set("wg_dbg_mode", 1.0 if _morph_view else 0.0)
+		_debug_mode = (_debug_mode + 1) % 3
+		RenderingServer.global_shader_parameter_set("wg_dbg_mode", float(_debug_mode))
 	elif event is InputEventKey and event.pressed and event.keycode == KEY_O:
 		_morph_enabled = not _morph_enabled
 		_reconfigure_view()
@@ -294,6 +294,13 @@ func _world_route_summary(p: Vector3, v: Vector3) -> String:
 func _current_morph_region() -> float:
 	return MORPH_REGION_ON if _morph_enabled else MORPH_REGION_OFF
 
+func _debug_mode_label() -> String:
+	if _debug_mode == 1:
+		return "morph"
+	if _debug_mode == 2:
+		return "route"
+	return "material"
+
 func _reconfigure_view() -> void:
 	if _view == null or _pool == null or _streamer == null or _rings == null:
 		return
@@ -361,10 +368,11 @@ func _process(_delta: float) -> void:
 			_flip_log.pop_front()
 		var route_summary := _world_route_summary(p, v)
 		var route_line := "%s\n" % route_summary if route_summary != "" else ""
-		_dbg_label.text = "mode %s (B cycles) | preset %s %.0fkm (P toggles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
+		_dbg_label.text = "mode %s (B cycles) | preset %s %.0fkm (P toggles) | debug %s (M cycles) | cull %s (K toggles) | morph %s (O toggles)\n%s%s" % [
 			_producer_label(),
 			_mountain_preset_label(),
 			_feature_span_m() / 1000.0,
+			_debug_mode_label(),
 			"DISABLED" if _cull_disabled else "on",
 			"on" if _morph_enabled else "off",
 			route_line,
