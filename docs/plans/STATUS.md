@@ -22,19 +22,23 @@
 > given a cheaper preview contract.
 > Current proof after the latest owner-runtime fix: `fast` = 8/8,
 > `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
-> `review_runtime_visual` = 1/1. Latest mode gate reports zero hide/show in
+> `review_runtime_visual` = 2/2. Latest mode gate reports zero hide/show in
 > REFERENCE, MOUNTAIN, and WORLD; scripted motion CPU p99/max is REFERENCE
-> 21.389/22.830 ms, MOUNTAIN 21.969/26.435 ms, WORLD 6.532/10.422 ms, with
+> 21.752/23.468 ms, MOUNTAIN 22.181/23.143 ms, WORLD 6.437/10.566 ms, with
 > `acquired_max=2` and `full_events=0` in all three. Latest render p99 is
-> REFERENCE 0.327 ms, MOUNTAIN 0.365 ms, WORLD 0.215 ms. The REFERENCE vs
+> REFERENCE 0.325 ms, MOUNTAIN 0.370 ms, WORLD 0.216 ms. The REFERENCE vs
 > MOUNTAIN/network visual bridge still has sampled mean/p95 RGB delta
 > 0.000000/0.000000 at the captured review frame. The visual gate now also
 > compares the same bridge along an 8000 m/s page-boundary path at frames
-> 80/160/240: mean RGB deltas were 0.000024, 0.000069, and 0.000000, with p95
-> 0.000000 for all three. The page transition fade is wall-clock based (`0.18 s`),
+> 80/160/240: mean RGB deltas were 0.000486, 0.000349, and 0.000000, with p95
+> 0.002614, 0.002614, and 0.000000. The page transition fade is wall-clock based (`0.18 s`),
 > and the owner fly now spreads page builds over fewer frames, so high-FPS
 > review no longer compresses REPAGE transitions into a near-hard snap or piles
 > four synchronous page builds into one update.
+> Follow-up review-control fix: `B` now cycles only the accepted owner-review
+> lane (`REFERENCE` <-> `MOUNTAIN/network_ref`). `WORLD` and `LEGACY` remain
+> direct-key diagnostics through `3` and `4`, so their known page-scale/legacy
+> artifacts are no longer presented as part of the target visual loop.
 > `review_runtime` now also gates the owner-mode taxonomy explicitly:
 > `REFERENCE` is `accepted_visual_baseline`, `MOUNTAIN/network_ref` is
 > `accepted_visual_bridge_not_final_procedural`, `WORLD` is
@@ -265,9 +269,10 @@
 > `mountain_fly_review.tscn` path, verifies accepted `REFERENCE` startup plus
 > the explicit `MOUNTAIN/network_ref` candidate, and runs the sprint-speed
 > visibility churn gate),
-> `review_runtime_visual` = **1/1 pass** (captures REFERENCE/static-payload,
+> `review_runtime_visual` = **2/2 pass** (captures REFERENCE/static-payload,
 > MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/route PNGs through
-> the shared producer helper),
+> the shared producer helper and compares the static accepted focus mask against
+> runtime REFERENCE),
 > `m3` = **10/10 pass** after the display/prefetch scheduler split
 > (`m3_accept` p99 5.25 ms / 6.0 ms budget), `review_runtime_modes` = **2/2 pass**
 > after the owner-visual fix (REFERENCE/MOUNTAIN/WORLD zero hide/show; render p99
@@ -292,11 +297,13 @@
 > relief scale of `1.0`, and the accepted source-window transform
 > (`source_scale=3.515625`, source center `207000,176000`); `review_runtime`
 > proves runtime=`single`, biome_path=`true` after switching to MOUNTAIN.
-> `WORLD` remains available through `B` as the biome-composition A/B path.
+> `WORLD` remains available through direct key `3` as the biome-composition
+> diagnostic path, not through the owner-review `B` cycle.
 >
 > Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has four
 > explicit producer modes: `REFERENCE` (default), `MOUNTAIN`, `LEGACY`, and
-> `WORLD`; `B` cycles them and the HUD/log prints the active mode. `REFERENCE`
+> `WORLD`; `B` cycles only the accepted `REFERENCE`/`MOUNTAIN` review lane, and
+> direct keys expose every mode while the HUD/log prints the active mode. `REFERENCE`
 > calls `configure_static_reference(...)`, stitches
 > `mountain_network_chunks.json` into a 1153x1153 accepted height field, and
 > uploads sampled R32F pages through the same `Wg10PagePool`/clipmap renderer
@@ -473,7 +480,7 @@
 > and view configuration. The owner scene now also has direct architecture-mode
 > keys: `1` REFERENCE accepted payload, `2` MOUNTAIN/network reference-backed
 > visual bridge with close-debug raw recipe preset available, `3` WORLD compose,
-> and `4` LEGACY atlas; `B` still cycles the same modes. Follow-up hardening: the
+> and `4` LEGACY atlas; `B` cycles only REFERENCE and MOUNTAIN/network. Follow-up hardening: the
 > producer helper exposes
 > `runtime_seed()` instead of `seed()` to avoid the GDScript built-in RNG seeder, and
 > `mountain_fly_review.gd` exposes `debug_runtime_snapshot()` so `review_runtime`
@@ -482,9 +489,9 @@
 > transform seam so review presets can separate display coordinates from source
 > synthesis coordinates without touching the renderer. Current `fast` = **8/8 pass**.
 > Current `review_runtime` also proves direct scene reconfiguration through
-> MOUNTAIN -> REFERENCE -> WORLD -> LEGACY -> MOUNTAIN, then runs the sprint churn
-> gate. This locks the four live architectures as explicit review modes instead
-> of hidden toggles.
+> MOUNTAIN -> REFERENCE and direct-key WORLD/LEGACY diagnostics, then runs the
+> sprint churn gate. This locks the accepted owner cycle separately from the
+> diagnostic live architectures instead of hiding them in one toggle.
 > Continue refactor only at clear ownership boundaries: renderer streaming/pop-in, producer
 > routing/page compute, biome grammar/composition, and review harness taxonomy. Do not treat
 > the live WORLD fly as accepted just because it now composes biome recipe heights; owner visual

@@ -9,11 +9,12 @@ extends Node3D
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
 # KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
-#       P toggles runtime scale preset, G reframes to the accepted-review camera, B cycles modes,
-#       and 1/2/3/4 jump directly to
-#       REFERENCE/MOUNTAIN/WORLD/LEGACY. The streamer/view keep the same pool ref; on toggle we
-#       free_all + reconfigure live. Starts in REFERENCE mode so the owner review opens on the
-#       accepted mountain-network baseline; MOUNTAIN remains the explicit live candidate.
+#       P toggles runtime scale preset, G reframes to the accepted-review camera, B cycles accepted
+#       REFERENCE/MOUNTAIN review modes, and 1/2/3/4 jump directly to
+#       REFERENCE/MOUNTAIN/WORLD/LEGACY. WORLD and LEGACY are explicit diagnostics. The streamer/view
+#       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in REFERENCE mode
+#       so the owner review opens on the accepted mountain-network baseline; MOUNTAIN remains the
+#       explicit live candidate.
 
 # Producer modes, scale presets, relief, and pool configure calls live in a helper.
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
@@ -301,9 +302,10 @@ func _apply_mode_reconfigure(reason: String) -> void:
 	_prev_states = PackedInt64Array()
 	_print_biome_state()
 
-# Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
-# accepted REFERENCE payload, LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
-# working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
+# Live producer toggle (B): free_all + reconfigure the SAME pool object between accepted
+# REFERENCE payload and reference-backed MOUNTAIN. WORLD and LEGACY stay direct-key diagnostics.
+# The streamer/view hold the same pool ref and keep working — next update re-acquires pages
+# from the freshly-configured pool. Prints the new state.
 func _cycle_producer_mode() -> void:
 	if _pool == null or _producer == null:
 		return

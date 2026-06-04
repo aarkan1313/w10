@@ -14,7 +14,7 @@ The windowed scale-invariance and owner-runtime gates have now run on hardware. 
 - `python tools\gate.py --suite fast` = 8/8.
 - `python tools\gate.py --suite review_runtime` = 2/2.
 - `python tools\gate.py --suite review_runtime_modes` = 2/2.
-- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2.
 - `python tools\gate.py --suite biome_fly` = 4/4, including cross-level macro ratio
   0.066665 <= 0.08.
 
@@ -689,22 +689,27 @@ diagnostic path as accepted terrain:
   `mode_acceptance=diagnostic_not_owner_accepted`, with
   `world_active_biome_limit=1`.
 
+The `B` review cycle is intentionally narrower than the direct mode keys:
+`B` compares only `REFERENCE` and `MOUNTAIN/network_ref`. `WORLD` remains
+reachable through key `3` and `LEGACY` through key `4`, but they are no longer
+part of the owner-acceptance cycle.
+
 Latest gates with the editor closed:
 
 - `python tools\gate.py --suite fast` = 8/8.
 - `python tools\gate.py --suite review_runtime` = 2/2.
 - `python tools\gate.py --suite review_runtime_modes` = 2/2. The owner fly
   stream is now paced to 2 synchronous page acquires per frame instead of 4.
-  Scripted motion CPU p99/max: REFERENCE 21.389/22.830 ms, MOUNTAIN
-  21.969/26.435 ms, WORLD 6.532/10.422 ms, with zero hide/show, zero full
-  events, and `acquired_max=2` in all three. Render p99: REFERENCE 0.327 ms,
-  MOUNTAIN 0.365 ms, WORLD 0.215 ms.
-- `python tools\gate.py --suite review_runtime_visual` = 1/1. REFERENCE and
+  Scripted motion CPU p99/max: REFERENCE 21.752/23.468 ms, MOUNTAIN
+  22.181/23.143 ms, WORLD 6.437/10.566 ms, with zero hide/show, zero full
+  events, and `acquired_max=2` in all three. Render p99: REFERENCE 0.325 ms,
+  MOUNTAIN 0.370 ms, WORLD 0.216 ms.
+- `python tools\gate.py --suite review_runtime_visual` = 2/2. REFERENCE and
   MOUNTAIN/network sampled image delta remains mean `0.000000`, p95 `0.000000`
   at 57,600 sampled pixels for the captured review frame. The same gate now
   also compares REFERENCE vs MOUNTAIN/network along an 8000 m/s sprint path at
-  frames 80/160/240; mean RGB deltas were `0.000024`, `0.000069`, and
-  `0.000000`, with p95 `0.000000` at all three frames.
+  frames 80/160/240; mean RGB deltas were `0.000486`, `0.000349`, and
+  `0.000000`, with p95 `0.002614`, `0.002614`, and `0.000000`.
 
 Immediate fix direction: do not tune WORLD as if it were the accepted mountain
 look. Keep `REFERENCE`/`MOUNTAIN network_ref` as the mountain acceptance lane,

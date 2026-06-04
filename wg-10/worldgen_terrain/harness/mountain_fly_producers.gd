@@ -54,14 +54,12 @@ func configure(pool: Object) -> String:
 	return _configure_legacy(pool)
 
 func cycle_mode() -> void:
-	if _mode == MODE_MOUNTAIN:
-		_mode = MODE_REFERENCE
-	elif _mode == MODE_REFERENCE:
-		_mode = MODE_LEGACY
-	elif _mode == MODE_LEGACY:
-		_mode = MODE_WORLD
-	else:
+	# Keep the B-cycle on the owner-acceptance lane. WORLD and LEGACY remain
+	# direct-key diagnostics so their known artifacts are not reviewed as target terrain.
+	if _mode == MODE_REFERENCE:
 		_mode = MODE_MOUNTAIN
+	else:
+		_mode = MODE_REFERENCE
 
 func set_mode_label(label: String) -> bool:
 	var normalized := label.to_upper()

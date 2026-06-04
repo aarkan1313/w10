@@ -29,11 +29,12 @@ The project currently has multiple terrain architectures alive at once:
      `biome_<name>.glsl` fragments.
    - Renderer: same clipmap renderer as legacy.
    - Current scene: `wg-10/worldgen_terrain/harness/mountain_fly_review.tscn`
-   - Current behavior: MOUNTAIN mode remains available through key `2`/`B`.
+   - Current behavior: MOUNTAIN mode remains available through key `2` and the
+     accepted owner-review `B` cycle.
      In the accepted `network_ref` preset it is currently a reference-backed
      visual bridge, not raw procedural height. The raw seam-safe live recipe
      remains visible through the close-debug preset and as the next procedural
-     world-layer target. WORLD mode remains available through key `3`/`B`; it
+     world-layer target. WORLD mode remains available through direct key `3`; it
      generates a texel-corner runtime-biome weight field per page, dispatches
      each active biome context, and folds those core height fields through the
      GPU compose passes before writing the page texture.
@@ -244,7 +245,7 @@ Validation:
   `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
   check locks the review helper's accepted REFERENCE startup, explicit
   MOUNTAIN/network candidate preset, close-debug preset, relief clamps, and
-  B-cycle order. The runtime config check
+  accepted-only B-cycle order. The runtime config check
   locks the shared renderer defaults: 5 levels, 8192 m base span, 196608 m loaded
   edge, morph/detail default off, and the review sky color.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
@@ -358,14 +359,15 @@ renderer. MOUNTAIN mode remains available through `2`/`B`; it calls
 `configure_biome(...)` with the single mountain fragment as the explicit live
 candidate, so live recipe review is still one keypress away without confusing it
 with the accepted baseline. The separate WORLD mode remains available through
-`B`; it calls `configure_biome_world(...)`, asks the grammar for active
+direct key `3`; it calls `configure_biome_world(...)`, asks the grammar for active
 runtime-biome weights, and composes the active GPU biome recipes into the
 streamed page texture.
 
-The default `REFERENCE` mode can be reached again through `B` after cycling. It
-is intentionally named as a reference bridge: it helps separate renderer review
-from live content-producer work, but it does not mean the live mountain recipe
-has reproduced the accepted pass-network/conditioning process.
+The `B` cycle now stays on `REFERENCE` <-> `MOUNTAIN/network_ref` so the owner
+comparison lane stays separate from WORLD/LEGACY diagnostics. `REFERENCE` is
+intentionally named as a reference bridge: it helps separate renderer review from
+live content-producer work, but it does not mean the live mountain recipe has
+reproduced the accepted pass-network/conditioning process.
 
 The accepted network exporter (`tools/dem_pack/export_godot_mountain_network_chunks.py`)
 does one more thing the live page recipe does not: it carves a connected pass
