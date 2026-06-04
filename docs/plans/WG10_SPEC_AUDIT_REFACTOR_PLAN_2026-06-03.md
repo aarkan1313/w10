@@ -329,11 +329,13 @@ world-layer contract. `REFERENCE` remains the accepted static baseline bridge; `
 and `WORLD` remain explicit candidates/prototypes.
 
 Current source-size check also retires the old 3.6k-line source finding. The former
-`biome_page_compute.rs` hotspot is now split, and the first static-reference split reduces
-`wg-10/rust/src/page_pool/static_reference.rs` to runtime sampling/texture upload while moving
-payload work into `static_reference/payload.rs`. The remaining refactor pressure is not "split a
-giant biome file"; it is separation of producer facts, page-pool routing, renderer presentation,
-and review artifacts.
+`biome_page_compute.rs` hotspot is now split, `static_reference.rs` is down to the
+runtime holder / JSON entrypoint / height upload path, and no scanned Rust,
+GDScript, GLSL, or Python source file under `wg-10/rust/src`,
+`wg-10/worldgen_terrain/harness`, `wg-10/worldgen_terrain/tests`, or
+`tools/dem_pack` is at or above 800 lines. The remaining refactor pressure is not
+"split a giant biome file"; it is separation of producer facts, page-pool routing,
+renderer presentation, and review artifacts.
 
 Owner-visual fixes landed in the review path:
 
@@ -420,7 +422,9 @@ projection now lives in `page_pool/static_reference/presentation.rs`. The root
 path (115 lines). Current split sizes:
 
 - `static_reference.rs` = 115 lines.
-- `static_reference/payload.rs` = 556 lines.
+- `static_reference/payload.rs` = 439 lines.
+- `static_reference/payload/runtime_tile.rs` = 279 lines.
+- `static_reference/payload/tests.rs` = 276 lines.
 - `static_reference/sampling.rs` = 126 lines.
 - `static_reference/presentation.rs` = 71 lines.
 
@@ -617,22 +621,24 @@ open.
 
 ## Bottom Line
 
-The main problem is not that "a lot" of source files exceed 1000 lines. The
-current source-size hotspot is much more specific:
+The main problem is no longer that a lot of source files exceed 1000 lines. The
+current source-size scan has no tracked Rust/GDScript/GLSL/Python source file at
+or above 800 lines in the scanned runtime, harness, test, and dem-pack paths.
 
 | Lines | File | Meaning |
 |---:|---|---|
-| 3693 | `wg-10/rust/src/biome_page_compute.rs` | Too many responsibilities in one file |
-| 982 | `wg-10/rust/src/page_pool.rs` | Borderline too large and mixing legacy/biome producer concerns |
-| 888 | `wg-10/rust/src/recipes_volcanic.rs` | Large but domain-local recipe code |
-| 745 | `tools/dem_pack/export_godot_rough_world_chunks.py` | Large review/export tool |
-| 695 | `wg-10/worldgen_terrain/harness/mountain_world_chunks_review.gd` | Large harness |
+| 745 | `tools/dem_pack/export_godot_rough_world_chunks.py` | Large review/export tool, not the live owner fly |
+| 695 | `wg-10/worldgen_terrain/harness/mountain_world_chunks_review.gd` | Large accepted static review harness |
+| 602 | `tools/dem_pack/mountain_world_layer.py` | Accepted world-layer builder and runtime-tile contract |
+| 582 | `wg-10/worldgen_terrain/harness/biome_transition_world_review.gd` | Large transition review harness |
+| 566 | `wg-10/rust/src/recipes_karst.rs` | Large but domain-local recipe code |
 
-The destabilizing file is `biome_page_compute.rs`. It has become a combined
-shader ABI manifest, gaussian-kernel builder, pass scheduler, per-biome recipe
-schedule library, compose engine, runtime producer, readback test bridge,
-GDExtension class, and test module. That concentration makes every next change
-look risky, even when the math is well tested.
+The old destabilizing file, `biome_page_compute.rs`, has been split by runtime
+context, dispatch, compose, schedules, tests, and ABI responsibilities. The
+active risk is now architectural ownership: live `MOUNTAIN` still needs to
+consume the accepted world-layer contract procedurally, WORLD remains a bounded
+diagnostic preview until compose is cached/backgrounded, and renderer
+presentation/facts/collision still need explicit seams.
 
 The project is also deliberately mid-migration. The legacy kernel-atlas path is
 still live in several render/facts tests, while the new biome producer path is

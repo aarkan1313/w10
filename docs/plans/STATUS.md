@@ -173,10 +173,10 @@
 > a renderer-presentation cleanup, not final procedural mountain synthesis.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
-> `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The
+> `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is at or above 800 lines. The
 > largest current source files found were `tools/dem_pack/export_godot_rough_world_chunks.py`
 > at 745 lines, `mountain_world_chunks_review.gd` at 695 lines, and
-> `biome_transition_world_review.gd` at 582 lines. The remaining architecture
+> `tools/dem_pack/mountain_world_layer.py` at 602 lines. The remaining architecture
 > risk is producer ownership, WORLD preview/compose taxonomy, and fact/collision
 > alignment, not a single still-overgrown runtime file.
 > Latest behavior-preserving page-pool split: WORLD active-limit and route/weight
@@ -270,6 +270,16 @@
 > mode 2 is the live producer to fix, and mode 3 remains a diagnostic WORLD preview
 > until multi-biome composition is made async/cached or given a cheaper preview
 > contract.
+> Follow-up static-reference payload split on 2026-06-04: the runtime-tile schema
+> and loader moved into
+> `wg-10/rust/src/page_pool/static_reference/payload/runtime_tile.rs`, and the
+> payload-focused tests moved into
+> `wg-10/rust/src/page_pool/static_reference/payload/tests.rs`. The remaining
+> `payload.rs` owns the accepted review-payload schema, validation helpers, and
+> old chunk stitching. Current split sizes: `payload.rs` 439 lines,
+> `payload/runtime_tile.rs` 279 lines, and `payload/tests.rs` 276 lines. Current
+> proof: `cargo test -p wg10_terrain --lib page_pool::static_reference::payload
+> -- --nocapture` = 8/0 and `cargo test -p wg10_terrain --lib` = 233/0.
 > Follow-up report separation on 2026-06-04: accepted-baseline report surfaces moved
 > into `wg-10/rust/src/page_pool/static_reports.rs`. This owns
 > `mountain_world_layer_contract_report()`, `static_reference_report()`,

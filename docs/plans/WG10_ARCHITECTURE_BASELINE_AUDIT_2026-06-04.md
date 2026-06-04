@@ -253,9 +253,10 @@ runtime pages, then port that seam into Rust/GPU instead of inventing another
 page-local mountain recipe.
 
 Current source-size check also changes the refactor framing. No tracked Rust,
-GDScript, GLSL, or Python source file is over 1000 lines after the split. The
-remaining large tracked files are mostly docs/history, generated fixtures, or
-old review harnesses. The runtime GPU producer hotspot was
+GDScript, GLSL, or Python source file in the scanned runtime, harness, test, or
+dem-pack paths is at or above 800 lines after the split. The remaining large
+tracked files are mostly docs/history, generated fixtures, or old review
+harnesses. The runtime GPU producer hotspot was
 `wg-10/rust/src/biome_page_compute/runtime_context.rs`, which mixed cached
 context construction, single-biome dispatch, and WORLD composition dispatch.
 That file is now split by ownership:
@@ -268,6 +269,14 @@ That file is now split by ownership:
 
 The refactor risk is now producer ownership and mode taxonomy, not a single
 giant terrain source file.
+
+Follow-up static-reference payload split: the runtime-tile schema and loader now
+live in `wg-10/rust/src/page_pool/static_reference/payload/runtime_tile.rs`, and
+the payload-focused tests live in
+`wg-10/rust/src/page_pool/static_reference/payload/tests.rs`. The current split
+is `payload.rs` 439 lines, `payload/runtime_tile.rs` 279 lines, and
+`payload/tests.rs` 276 lines, proven by the focused payload tests and full Rust
+lib suite.
 
 Follow-up page-pool split: WORLD-only active-limit and route/weight diagnostic
 reports now live in `wg-10/rust/src/page_pool/world_reports.rs`. Generic
