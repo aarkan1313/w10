@@ -24,11 +24,12 @@ the accepted pass-network, route-carving, page-stable conditioning, and facts/ma
 world-layer contract. `REFERENCE` remains the accepted static baseline bridge; `MOUNTAIN`
 and `WORLD` remain explicit candidates/prototypes.
 
-Current source-size check also retires the old 3.6k-line source finding. The largest tracked
-source hotspot is now `wg-10/rust/src/page_pool/static_reference.rs` at about 778 lines, while
-files above 1000 lines are docs/history. The next refactor pressure is not "split a giant
-biome file"; it is separation of producer facts, page-pool routing, renderer presentation, and
-review artifacts.
+Current source-size check also retires the old 3.6k-line source finding. The former
+`biome_page_compute.rs` hotspot is now split, and the first static-reference split reduces
+`wg-10/rust/src/page_pool/static_reference.rs` to runtime sampling/texture upload while moving
+payload work into `static_reference/payload.rs`. The remaining refactor pressure is not "split a
+giant biome file"; it is separation of producer facts, page-pool routing, renderer presentation,
+and review artifacts.
 
 Owner-visual fixes landed in the review path:
 
@@ -38,17 +39,51 @@ Owner-visual fixes landed in the review path:
 - REFERENCE material pages blend into terrain shading rather than replacing it;
 - the owner-scene smoke test proves static material page textures are bound.
 
-Next refactor target: split the static-reference bridge into payload loading/validation, page
-sampling, material-code presentation, and report/diagnostic surfaces. After that, move producer
-selection out of `Wg10PagePool` into an explicit producer interface so REFERENCE, MOUNTAIN, WORLD,
-and LEGACY are not routed by one pool implementation.
+Static-reference separation is now underway: payload loading/validation has been split out first.
+Remaining static-reference seams are page sampling, material-code presentation, and
+report/diagnostic surfaces. After that, move producer selection out of `Wg10PagePool` into an
+explicit producer interface so REFERENCE, MOUNTAIN, WORLD, and LEGACY are not routed by one pool
+implementation.
+
+### Static-Reference Split Checkpoint - 2026-06-04
+
+The first static-reference separation pass is complete. `static_reference.rs` is reduced from the
+former payload/runtime/report mix to runtime sampling and page texture upload, while
+`static_reference/payload.rs` now owns the JSON schema, contract validation, chunk stitching,
+material-hint validation, conditioning-stat validation, and payload-focused tests.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest render p99:
+  REFERENCE 0.415 ms, MOUNTAIN 0.247 ms, WORLD 0.474 ms, with zero hide/show churn.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+
+Visual read after the proof: runtime lag/page visibility is no longer the primary measured
+failure. The remaining owner-visible problems are architectural:
+
+- Mode 1 / `REFERENCE` is the accepted static bridge and still the visual baseline.
+- Mode 2 / `MOUNTAIN` is a raw seam-safe GPU recipe candidate. It does not yet port the accepted
+  pass-network, route carving, page-stable conditioning, material hints as live facts, or final
+  dressing.
+- Mode 3 / `WORLD` is still a composed prototype and currently exposes page-scale composition/LOD
+  boundaries in capture.
+
+Next refactor target: split static-reference sampling/material presentation from report surfaces,
+then move producer selection out of `Wg10PagePool` into explicit producer implementations. Next
+visual target: make live `MOUNTAIN` reproduce the accepted mountain-world-layer contract before
+trying to tune biome palettes or add more biomes.
 
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
 readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0
 and level 1 macro pages over identical world XZ points, and `tools/gate.py` wires it into
-`biome_fly` after the 576 parity gate. This does **not** mean the scale-invariant producer is
-accepted yet; the new gate still needs the editor-closed/windowed GPU run, followed by owner re-fly.
+`biome_fly` after the 576 parity gate. The editor-closed/windowed GPU run has now passed. This does
+**not** mean the live producer is visually accepted; it means the former 73% cross-level macro warp
+has a passing proof and the remaining defects are content-contract and presentation issues.
 
 The source-size finding is also partially retired by subsequent refactor commits. The former
 3.6k-line `biome_page_compute.rs` is now a module facade with focused children. Remaining refactor

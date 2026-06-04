@@ -15,6 +15,18 @@
 > static material pages are blended into terrain shading (`0.58`) instead of replacing
 > the palette outright, and `mountain_fly_review_smoke_check.gd` now proves the owner
 > scene has bound those material page textures.
+> Follow-up refactor/proof on 2026-06-04: the first static-reference separation pass
+> moved JSON payload schema, validation, stitching, material-hint validation, and payload
+> tests into `wg-10/rust/src/page_pool/static_reference/payload.rs`. The remaining
+> `static_reference.rs` now owns runtime sampling and page texture upload. Current proof:
+> `cargo test -p wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds the
+> Godot-facing extension, `fast` = 8/8, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 1/1.
+> The fresh visual captures confirm the owner concern: performance/churn gates are green,
+> but mode 2 (`MOUNTAIN`) is still a raw live recipe candidate without the accepted
+> pass-network/material/facts world-layer contract, and mode 3 (`WORLD`) still exposes
+> page-scale composition/LOD boundaries. Those are architecture/content-port issues, not
+> page-pool speed failures.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly
