@@ -7,7 +7,7 @@ render_mode unshaded, cull_disabled;
 // abutting pages return the identical boundary value -> the shared edge joins.
 uniform sampler2D height_tex : filter_linear, repeat_disable;        // this level's R32F page (pool Texture2DRD)
 uniform sampler2D coarse_height_tex : filter_linear, repeat_disable; // next-coarser level's page (for the morph)
-uniform sampler2D static_material_tex : filter_nearest, repeat_disable; // static-reference material/corridor class codes
+uniform sampler2D static_material_tex : filter_linear, repeat_disable; // static-reference material/corridor soft class codes
 uniform float world_span = 8192.0;        // this level's page world span
 uniform float coarse_span = 8192.0;       // the coarser level's page world span
 uniform vec2 page_origin = vec2(0.0);     // this fine page's WORLD lower-XZ corner; page covers [origin, origin+world_span]
@@ -193,17 +193,24 @@ vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
 }
 
 vec3 wg_static_reference_material(float code, vec3 base) {
-	float cls = floor(code + 0.5);
-	if (cls < 0.5) {
+	// The R32F material page is a temporary presentation projection of separate accepted
+	// corridor/floor/rock/snow facts. Treat it as a soft code field so filtering blends class
+	// edges instead of drawing blocky categorical material slabs in the owner fly.
+	float corridor_w = clamp(1.0 - abs(code - 1.0), 0.0, 1.0);
+	float rock_w = clamp(1.0 - abs(code - 2.0), 0.0, 1.0);
+	float snow_w = clamp(1.0 - abs(code - 3.0), 0.0, 1.0);
+	corridor_w = corridor_w * corridor_w * (3.0 - 2.0 * corridor_w);
+	rock_w = rock_w * rock_w * (3.0 - 2.0 * rock_w);
+	snow_w = snow_w * snow_w * (3.0 - 2.0 * snow_w);
+	float total_w = corridor_w + rock_w + snow_w;
+	if (total_w <= 1e-5) {
 		return base;
 	}
-	if (cls < 1.5) {
-		return vec3(0.18, 0.39, 0.33);
-	}
-	if (cls < 2.5) {
-		return mix(base, vec3(0.46, 0.45, 0.41), 0.70);
-	}
-	return mix(base, vec3(0.82, 0.84, 0.78), 0.64);
+	vec3 corridor = vec3(0.18, 0.39, 0.33);
+	vec3 rock = mix(base, vec3(0.46, 0.45, 0.41), 0.70);
+	vec3 snow = mix(base, vec3(0.82, 0.84, 0.78), 0.64);
+	vec3 target = (corridor * corridor_w + rock * rock_w + snow * snow_w) / total_w;
+	return mix(base, target, clamp(total_w, 0.0, 1.0));
 }
 
 void fragment() {

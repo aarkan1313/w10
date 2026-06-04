@@ -27,9 +27,12 @@ func _run() -> int:
 		_expect(absf(mix - 0.34) < 0.0001, "biome_material_mix not bound", errs)
 
 	var shader_source := FileAccess.get_file_as_string(ProjectSettings.globalize_path(SHADER))
+	_expect(shader_source.contains("static_material_tex : filter_linear"), "static material texture should be linearly filtered for soft presentation", errs)
 	_expect(shader_source.contains("float material_fade = clamp(page_fade, 0.0, 1.0);"), "shader should derive material_fade from page_fade", errs)
 	_expect(shader_source.contains("float accepted_material_mix = static_material_mix * material_fade * 0.62;"), "static material mix should fade and stay presentation-softened", errs)
 	_expect(shader_source.contains("biome_material_mix * material_fade"), "WORLD route tint should fade with page_fade", errs)
+	_expect(shader_source.contains("float corridor_w = clamp(1.0 - abs(code - 1.0), 0.0, 1.0);"), "static material codes should blend corridor weight softly", errs)
+	_expect(shader_source.contains("float total_w = corridor_w + rock_w + snow_w;"), "static material blend should combine soft class weights", errs)
 	_expect(shader_source.contains("vec3(0.18, 0.39, 0.33)"), "static corridor material should match accepted corridor blend target", errs)
 	_expect(shader_source.contains("mix(base, vec3(0.46, 0.45, 0.41), 0.70)"), "static rock material should blend instead of replacing terrain color", errs)
 	_expect(shader_source.contains("mix(base, vec3(0.82, 0.84, 0.78), 0.64)"), "static snow material should blend instead of replacing terrain color", errs)

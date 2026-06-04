@@ -165,6 +165,14 @@ those controls. This removes another source of false "all modes look weird"
 manual reports; it does not promote WORLD or the raw close-debug mountain recipe
 to accepted content.
 
+Latest accepted-material presentation follow-up: the runtime bridge still uses
+the accepted static material facts, but the shader no longer treats the
+temporary one-channel material page as nearest-neighbor hard classes. It now
+linearly filters the code texture and blends corridor/rock/snow targets with
+soft class weights. This reduces the blocky material slabs visible in focus
+captures while preserving the same height/fact payload and the same
+REFERENCE/MOUNTAIN/WORLD bridge contracts.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

@@ -59,6 +59,13 @@ diagnostics to normal material review state. The gate proves morph heatmap and
 cull-disabled experiments do not leak across modes 1/2/3. This makes manual
 visual comparison cleaner, while preserving the contract boundary above.
 
+Latest material-presentation status: the accepted material facts are still
+projected into a temporary one-channel runtime page, but the renderer now treats
+that code page as a soft presentation field: linear filtering plus blended
+corridor/rock/snow weights. This reduces blocky accepted-material slabs without
+changing height, fact reports, or the requirement for a real multi-channel
+material/facts layer later.
+
 ## Contract
 
 A runtime mountain world layer must provide these facts independently of any
@@ -275,3 +282,6 @@ single rendered page:
 - `review_runtime` now also gates review-state reset: after deliberately
   enabling the morph heatmap and disabling culling, a mode switch restores
   normal material mode, culling, display detail, and default morph state.
+- `m3`, `review_runtime_visual`, and `review_runtime_modes` now prove the soft
+  accepted-material presentation remains render-safe and keeps the accepted
+  reference bridge comparisons within budget.

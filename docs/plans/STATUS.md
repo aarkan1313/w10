@@ -139,6 +139,17 @@
 > CPU max below 14 ms, and render p99 about 0.746 ms. This targets the class of
 > owner reports where blue/yellow debug heatmaps or cull experiments made all
 > modes look wrong.
+> Follow-up accepted-material presentation fix: the runtime bridge still uses
+> the temporary one-channel static material page, but `ring_displace.gdshader`
+> now samples it with linear filtering and interprets class codes as soft
+> corridor/rock/snow weights instead of snapping to hard categorical slabs. The
+> focus capture is visibly less blocky in close mountain review, while height,
+> facts, page ownership, and the accepted reference payload are unchanged.
+> Proof: `m3` = 10/10, `review_runtime_visual` = 2/2, and
+> `review_runtime_modes` = 2/2. Latest modes 1/2/3 still have zero hide/show,
+> zero full events, `acquired_max=1`, CPU max <= 13.3 ms, and GPU p99 about
+> 0.745 ms. This is a renderer-presentation cleanup, not final procedural
+> mountain synthesis.
 > Current source-size audit: no Rust/GDScript/GLSL/Python source file under
 > `wg-10/rust/src`, `wg-10/worldgen_terrain/harness`,
 > `wg-10/worldgen_terrain/tests`, or `tools/dem_pack` is over 1000 lines. The
