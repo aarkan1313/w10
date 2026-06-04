@@ -28,6 +28,21 @@
 > mountain network look but does not complete final procedural biome synthesis.
 > `WORLD` remains diagnostic until multi-biome composition is async/cached or
 > given a cheaper preview contract.
+> Latest checkpoint adds two stabilizers for the current owner report that
+> modes 1/2/3 looked slow and wrong: bound world-layer references are now a
+> distinct page-pool state wrapper rather than raw static-baseline state, and
+> runtime review presentation is color-gated against the old static
+> `mountain_network_chunks_review.tscn` focus view. The new visual guard reports
+> `static_frac=0.789`, `runtime_frac=0.776`, `iou=0.984`, and
+> `mean_color_delta=0.076` (budget `0.130`). Latest gates after the presentation
+> fix: `fast` = 8/8, `review_runtime_modes` = 2/2,
+> `review_runtime_visual` = 2/2, `review_runtime_stress` = 1/1, and focused
+> `ring_material_tint_check.gd` passes. Scripted modes 1/2/3 still report zero
+> hide/show/full events; latest motion CPU p99/max is REFERENCE 9.707/9.825 ms,
+> MOUNTAIN 10.024/10.115 ms, WORLD 9.824/16.527 ms, and render GPU p99 is
+> REFERENCE 0.750 ms, MOUNTAIN 0.750 ms, WORLD 0.743 ms. This fixes a concrete
+> presentation/gate hole; it does not make raw procedural MOUNTAIN or full WORLD
+> composition accepted content.
 > Current proof after the runtime-tile binding fix: `cargo test -p
 > wg10_terrain --lib page_pool::static_reference::payload -- --nocapture` =
 > 8/0, `cargo test -p wg10_terrain --lib` = 233/0,

@@ -27,6 +27,10 @@ stabilization and recovery:
   that read as terrain lag/popping during owner fly movement.
 - `WORLD` remains diagnostic until multi-biome composition is moved off the synchronous fly stream
   or given a cheaper preview contract.
+- The runtime review presentation is now gated against the old accepted static
+  mountain-network focus view by terrain silhouette and terrain color distance,
+  so matching the footprint while drifting into a wrong/washed-out look is no
+  longer allowed to pass `review_runtime_visual`.
 - Current source-size audit found no Rust/GDScript/GLSL/Python source file over
   1000 lines in the active terrain/runtime/tooling paths; the next refactor risk
   is ownership and mode taxonomy, not one giant still-unsplit source file.

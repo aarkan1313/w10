@@ -43,6 +43,14 @@ reference-backed visual recovery bridge, not final procedural synthesis: the rep
 `height_source=bound_world_layer_reference_payload`, and
 `procedural_world_layer_height=false`.
 
+Latest ownership split: bound world-layer references now use an explicit
+`BoundWorldLayerReference` wrapper. This keeps "accepted static baseline as the
+active producer" separate from "accepted world-layer facts bound beside another
+active producer" in the page pool state, while preserving the same loaded
+`StaticHeightRuntime` payload underneath. The wrapper also caches the
+display-to-source transform used by `MOUNTAIN/network_ref`, so GDScript does not
+duplicate scene-scale constants.
+
 Latest owner-view status: the fly harness now reconfigures the actual
 `Wg10TerrainView` whenever the active producer is rebuilt after a preset or
 relief change. The runtime snapshot records `view.config_report()`, and the
@@ -74,6 +82,16 @@ keeps pages resident before display, and the old parent-to-fine settle window
 read as terrain lagging/popping during flight. This keeps modes 1/2/3 on the
 accepted reference presentation path before any optional close-surface dressing
 is judged.
+
+Latest visual-acceptance status: the runtime fly presentation now uses the same
+warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,
+and the ring shader lighting is tuned toward that old static scene rather than
+the colder diagnostic palette. `review_runtime_visual` now measures terrain
+color distance as well as silhouette: latest static-vs-runtime REFERENCE focus
+comparison is `static_frac=0.789`, `runtime_frac=0.776`, `iou=0.984`, and
+`mean_color_delta=0.076` against a `0.130` budget. This closes the previous gate
+hole where the runtime bridge could match the accepted footprint but still look
+wrong.
 
 ## Contract
 
@@ -219,7 +237,9 @@ single rendered page:
   MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes. It also
   compares the REFERENCE and reference-backed MOUNTAIN/network captures at the
   reviewed frame and along a sprint-speed page-boundary path, and fails on
-  drift.
+  drift. It now also compares runtime REFERENCE against the old static
+  mountain-network focus view with both silhouette and terrain-color budgets
+  (`mean_color_delta=0.076` latest).
 - `review_runtime_modes` proves the current owner WORLD mode is only a bounded
   diagnostic preview: one active biome per page keeps streaming within budget
   (latest WORLD `cpu_p99=9.952 ms`, `cpu_max=13.508 ms`, render p99 `0.749 ms`).

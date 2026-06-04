@@ -81,8 +81,8 @@ fn reset_clears_all_configured_state_no_half_configured_residue() {
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
-    let mut mountain_layer_ref: Option<StaticHeightRuntime> = None;
-    let mut world_preview_ref: Option<StaticHeightRuntime> = None;
+    let mut mountain_layer_ref: Option<BoundWorldLayerReference> = None;
+    let mut world_preview_ref: Option<BoundWorldLayerReference> = None;
 
     Wg10PagePool::reset_configured_state(
         &mut policy,
@@ -166,8 +166,8 @@ fn reset_is_idempotent_on_unconfigured_state() {
     let mut biome_ctx: Option<biome_page_compute::BiomePageComputeContext> = None;
     let mut biome_world: Option<BiomeWorldRuntime> = None;
     let mut static_ref: Option<StaticHeightRuntime> = None;
-    let mut mountain_layer_ref: Option<StaticHeightRuntime> = None;
-    let mut world_preview_ref: Option<StaticHeightRuntime> = None;
+    let mut mountain_layer_ref: Option<BoundWorldLayerReference> = None;
+    let mut world_preview_ref: Option<BoundWorldLayerReference> = None;
 
     // Must not panic / must stay fully unconfigured.
     Wg10PagePool::reset_configured_state(

@@ -106,8 +106,8 @@ impl Wg10PagePool {
         biome_ctx: &mut Option<biome_page_compute::BiomePageComputeContext>,
         biome_world: &mut Option<BiomeWorldRuntime>,
         static_ref: &mut Option<super::StaticHeightRuntime>,
-        mountain_layer_ref: &mut Option<super::StaticHeightRuntime>,
-        world_preview_ref: &mut Option<super::StaticHeightRuntime>,
+        mountain_layer_ref: &mut Option<super::BoundWorldLayerReference>,
+        world_preview_ref: &mut Option<super::BoundWorldLayerReference>,
     ) {
         *policy = None;
         slot_tex.clear();

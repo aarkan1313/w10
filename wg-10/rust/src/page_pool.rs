@@ -34,11 +34,13 @@ mod producer;
 mod state_api;
 mod static_reference;
 mod static_reports;
+mod world_layer_reference;
 mod world_producer;
 mod world_reports;
 mod world_route;
 
 use static_reference::StaticHeightRuntime;
+use world_layer_reference::BoundWorldLayerReference;
 
 struct BiomeWorldRuntime {
     pack: pack::Pack,
@@ -92,8 +94,8 @@ pub struct Wg10PagePool {
     biome_ctx: Option<biome_page_compute::BiomePageComputeContext>,
     biome_world: Option<BiomeWorldRuntime>,
     static_ref: Option<StaticHeightRuntime>,
-    mountain_layer_ref: Option<StaticHeightRuntime>,
-    world_preview_ref: Option<StaticHeightRuntime>,
+    mountain_layer_ref: Option<BoundWorldLayerReference>,
+    world_preview_ref: Option<BoundWorldLayerReference>,
     biome_feature_span_m: f64,
     biome_source_scale: f64,
     biome_source_offset_x_m: f64,

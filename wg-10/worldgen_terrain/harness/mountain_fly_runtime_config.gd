@@ -26,7 +26,7 @@ const DEFAULT_MORPH_ENABLED := false
 # display detail opt-in through N so modes 1/2/3 are not all contaminated by the
 # same synthetic close-surface noise.
 const DEFAULT_DETAIL_ENABLED := false
-const SKY := Color(0.45, 0.62, 0.85)
+const SKY := Color(0.68, 0.76, 0.84)
 # Accepted mountain-network display footprint. The streamer keeps a larger loaded edge for
 # fallback coverage, but the owner review camera/fog should not expose static-reference samples
 # outside the accepted 9x9 payload.
@@ -88,6 +88,9 @@ func configure_review_environment(env: Environment) -> void:
 	var edge := REVIEW_VISUAL_EDGE_M
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = SKY
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.94, 0.91, 0.82)
+	env.ambient_light_energy = 1.65
 	env.fog_enabled = true
 	env.fog_mode = Environment.FOG_MODE_DEPTH
 	env.fog_depth_begin = edge * 0.38

@@ -41,8 +41,8 @@ func _run() -> int:
 	_expect(not shader_source.contains("abs(code -"), "static material presentation should not decode scalar class codes", errs)
 	_expect(not shader_source.contains("vec3(0.74, 0.78, 0.72)"), "static snow material should not use a flat replacement tint", errs)
 	_expect(not shader_source.contains("vec3(0.90, 0.88, 0.76)"), "static snow material should not use chalk-white override", errs)
-	_expect(shader_source.contains("float lit = 0.64 + 0.36 * ndl;"), "terrain lighting should keep softened directional contrast", errs)
-	_expect(shader_source.contains("0.12);"), "terrain lighting should keep softened slope shadow", errs)
+	_expect(shader_source.contains("float lit = 0.86 + 0.22 * ndl;"), "terrain lighting should keep accepted-review brightness", errs)
+	_expect(shader_source.contains("0.06);"), "terrain lighting should keep softened slope shadow", errs)
 
 	rings.queue_free()
 	if not errs.is_empty():

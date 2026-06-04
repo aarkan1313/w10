@@ -23,7 +23,7 @@ func _run() -> int:
 	_expect(absf(float(cfg.morph_region(true)) - 0.15) < 0.001, "morph on region should be 0.15", errs)
 	_expect(absf(float(cfg.loaded_edge_m()) - 196608.0) < 0.001, "loaded edge should be 196608m", errs)
 	_expect(absf(float(cfg.review_visual_edge_m()) - 76800.0) < 0.001, "review visual edge should be 76800m", errs)
-	_expect(cfg.sky_color() == Color(0.45, 0.62, 0.85), "sky color should match review scene", errs)
+	_expect(cfg.sky_color() == Color(0.68, 0.76, 0.84), "sky color should match accepted static review scene", errs)
 
 	if not errs.is_empty():
 		for err in errs:

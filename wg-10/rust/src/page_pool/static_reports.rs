@@ -4,6 +4,7 @@ use godot::prelude::*;
 use std::path::Path;
 
 use super::producer::ProducerKind;
+use super::world_layer_reference::BoundWorldLayerReference;
 use super::{StaticHeightRuntime, Wg10PagePool};
 
 #[godot_api(secondary)]
@@ -75,7 +76,8 @@ impl Wg10PagePool {
             out.set("has_source_display_mapping", true);
             out.set("has_mountain_macro_field", true);
             out.set("has_world_preview_reference", preview_ref.is_some());
-            if let Some(reference) = preview_ref {
+            if let Some(bound_reference) = preview_ref {
+                let reference = bound_reference.reference();
                 let has_pass_network = reference.pass_network_routes > 0;
                 let has_route_carving = reference.pass_network_carved_frac > 0.0;
                 let has_conditioning = reference_has_conditioning(reference);
@@ -111,7 +113,8 @@ impl Wg10PagePool {
             out.set("has_mountain_macro_field", true);
             out.set("has_bound_world_layer_reference", layer_ref.is_some());
             out.set("height_consumes_world_layer_facts", layer_ref.is_some());
-            if let Some(reference) = layer_ref {
+            if let Some(bound_reference) = layer_ref {
+                let reference = bound_reference.reference();
                 let has_pass_network = reference.pass_network_routes > 0;
                 let has_route_carving = reference.pass_network_carved_frac > 0.0;
                 let has_conditioning = reference_has_conditioning(reference);
@@ -156,18 +159,14 @@ impl Wg10PagePool {
             );
         }
         let reference =
-            match StaticHeightRuntime::from_json_path(Path::new(&payload_path.to_string())) {
+            match BoundWorldLayerReference::from_json_path(Path::new(&payload_path.to_string())) {
                 Ok(reference) => reference,
                 Err(e) => return GString::from(&e),
             };
-        let (source_scale, source_offset_x_m, source_offset_z_m) =
-            match reference.source_transform_for_display() {
-                Ok(transform) => transform,
-                Err(e) => return GString::from(&e),
-            };
-        self.biome_source_scale = source_scale;
-        self.biome_source_offset_x_m = source_offset_x_m;
-        self.biome_source_offset_z_m = source_offset_z_m;
+        let source_transform = reference.source_transform();
+        self.biome_source_scale = source_transform.scale;
+        self.biome_source_offset_x_m = source_transform.offset_x_m;
+        self.biome_source_offset_z_m = source_transform.offset_z_m;
         self.mountain_layer_ref = Some(reference);
         GString::new()
     }
@@ -185,7 +184,7 @@ impl Wg10PagePool {
             );
         }
         let reference =
-            match StaticHeightRuntime::from_json_path(Path::new(&payload_path.to_string())) {
+            match BoundWorldLayerReference::from_json_path(Path::new(&payload_path.to_string())) {
                 Ok(reference) => reference,
                 Err(e) => return GString::from(&e),
             };
@@ -206,7 +205,7 @@ impl Wg10PagePool {
         let Some(reference) = self.mountain_layer_ref.as_ref() else {
             return Dictionary::<GString, Variant>::new();
         };
-        reference_report_dict(reference)
+        reference_report_dict(reference.reference())
     }
 
     /// Diagnostic report for the accepted static mountain world-layer payload.
@@ -243,6 +242,7 @@ impl Wg10PagePool {
         samples_px: usize,
     ) -> Option<f64> {
         let reference = self.mountain_layer_ref.as_ref()?;
+        let reference = reference.reference();
         if !reference.has_corridor {
             return None;
         }
@@ -275,6 +275,7 @@ impl Wg10PagePool {
         samples_px: usize,
     ) -> Option<(f64, f64, f64, f64)> {
         let reference = self.mountain_layer_ref.as_ref()?;
+        let reference = reference.reference();
         if !reference.has_material_hints {
             return None;
         }
@@ -323,7 +324,7 @@ impl Wg10PagePool {
             return Dictionary::<GString, Variant>::new();
         };
         reference_page_report_dict(
-            reference,
+            reference.reference(),
             self.world_span,
             level,
             origin_x,

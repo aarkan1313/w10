@@ -16,11 +16,12 @@ const OUT_STATIC := "D:/tmp/wg10_biome_compose/mountain_static_focus_compare.png
 const OUT_RUNTIME := "D:/tmp/wg10_biome_compose/mountain_runtime_reference_focus_compare.png"
 const MASK_STRIDE := 4
 const SKY_STATIC := Color(0.68, 0.76, 0.84)
-const SKY_RUNTIME := Color(0.45, 0.62, 0.85)
+const SKY_RUNTIME := Color(0.68, 0.76, 0.84)
 const SKY_DELTA_STATIC := 0.045
 const SKY_DELTA_RUNTIME := 0.060
 const MIN_TERRAIN_FRAC := 0.34
 const MIN_MASK_IOU := 0.55
+const MAX_MEAN_TERRAIN_COLOR_DELTA := 0.13
 
 func _init() -> void:
 	quit(await _run())
@@ -47,6 +48,7 @@ func _run() -> int:
 	var static_frac := float(stats["static_frac"])
 	var runtime_frac := float(stats["runtime_frac"])
 	var iou := float(stats["iou"])
+	var mean_color_delta := float(stats["mean_color_delta"])
 
 	var errs: Array[String] = []
 	if static_frac < MIN_TERRAIN_FRAC:
@@ -55,21 +57,25 @@ func _run() -> int:
 		errs.append("runtime terrain_frac %.3f < %.3f" % [runtime_frac, MIN_TERRAIN_FRAC])
 	if iou < MIN_MASK_IOU:
 		errs.append("terrain mask IoU %.3f < %.3f" % [iou, MIN_MASK_IOU])
+	if mean_color_delta > MAX_MEAN_TERRAIN_COLOR_DELTA:
+		errs.append("terrain color delta %.3f > %.3f" % [mean_color_delta, MAX_MEAN_TERRAIN_COLOR_DELTA])
 
 	if not errs.is_empty():
 		for err in errs:
 			push_error(err)
-		print("[wg10-runtime-static-visual] status=fail static_frac=%.3f runtime_frac=%.3f iou=%.3f" % [
+		print("[wg10-runtime-static-visual] status=fail static_frac=%.3f runtime_frac=%.3f iou=%.3f mean_color_delta=%.3f" % [
 			static_frac,
 			runtime_frac,
 			iou,
+			mean_color_delta,
 		])
 		return 1
 
-	print("[wg10-runtime-static-visual] status=pass static_frac=%.3f runtime_frac=%.3f iou=%.3f wrote=%s,%s" % [
+	print("[wg10-runtime-static-visual] status=pass static_frac=%.3f runtime_frac=%.3f iou=%.3f mean_color_delta=%.3f wrote=%s,%s" % [
 		static_frac,
 		runtime_frac,
 		iou,
+		mean_color_delta,
 		OUT_STATIC,
 		OUT_RUNTIME,
 	])
@@ -186,23 +192,28 @@ func _mask_compare(static_img: Image, runtime_img: Image) -> Dictionary:
 	var intersection := 0
 	var union := 0
 	var samples := 0
+	var color_delta_sum := 0.0
 	for y in range(0, size.y, MASK_STRIDE):
 		for x in range(0, size.x, MASK_STRIDE):
 			samples += 1
-			var s_hit := _is_terrain(static_img.get_pixel(x, y), SKY_STATIC, SKY_DELTA_STATIC)
-			var r_hit := _is_terrain(runtime_img.get_pixel(x, y), SKY_RUNTIME, SKY_DELTA_RUNTIME)
+			var s_color := static_img.get_pixel(x, y)
+			var r_color := runtime_img.get_pixel(x, y)
+			var s_hit := _is_terrain(s_color, SKY_STATIC, SKY_DELTA_STATIC)
+			var r_hit := _is_terrain(r_color, SKY_RUNTIME, SKY_DELTA_RUNTIME)
 			if s_hit:
 				static_hits += 1
 			if r_hit:
 				runtime_hits += 1
 			if s_hit and r_hit:
 				intersection += 1
+				color_delta_sum += (absf(s_color.r - r_color.r) + absf(s_color.g - r_color.g) + absf(s_color.b - r_color.b)) / 3.0
 			if s_hit or r_hit:
 				union += 1
 	return {
 		"static_frac": float(static_hits) / float(maxi(samples, 1)),
 		"runtime_frac": float(runtime_hits) / float(maxi(samples, 1)),
 		"iou": float(intersection) / float(maxi(union, 1)),
+		"mean_color_delta": color_delta_sum / float(maxi(intersection, 1)),
 	}
 
 func _is_terrain(color: Color, sky: Color, delta: float) -> bool:

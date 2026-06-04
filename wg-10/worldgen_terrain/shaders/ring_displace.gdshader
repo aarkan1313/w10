@@ -184,12 +184,12 @@ vec3 wg_apply_terrain_light(vec3 base, vec3 n, float slope) {
 	// relief readability to the normal view. This changes presentation only, not page data.
 	vec3 light_dir = normalize(vec3(-0.45, 0.78, -0.35));
 	float ndl = max(dot(normalize(n), light_dir), 0.0);
-	float lit = 0.64 + 0.36 * ndl;
-	vec3 shaded = base * lit;
-	float cool_shadow = clamp(1.0 - ndl, 0.0, 1.0) * 0.08;
+	float lit = 0.86 + 0.22 * ndl;
+	vec3 shaded = base * lit * vec3(1.08, 1.06, 0.96);
+	float cool_shadow = clamp(1.0 - ndl, 0.0, 1.0) * 0.025;
 	shaded = mix(shaded, vec3(shaded.r * 0.88, shaded.g * 0.94, shaded.b * 1.05), cool_shadow);
-	float slope_shadow = clamp((slope - 0.42) / 0.65, 0.0, 0.12);
-	return shaded * (1.0 - slope_shadow);
+	float slope_shadow = clamp((slope - 0.42) / 0.65, 0.0, 0.06);
+	return clamp(shaded * (1.0 - slope_shadow), vec3(0.0), vec3(1.0));
 }
 
 vec3 wg_static_reference_material(vec4 facts, vec3 base) {
