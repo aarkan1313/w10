@@ -110,7 +110,11 @@ impl StaticHeightRuntime {
         })
     }
 
-    fn sample_indices(&self, x_m: f64, z_m: f64) -> (usize, usize, usize, usize, f32, f32) {
+    pub(super) fn sample_indices(
+        &self,
+        x_m: f64,
+        z_m: f64,
+    ) -> (usize, usize, usize, usize, f32, f32) {
         let u = ((x_m - self.origin_x_m) / self.span_x_m).clamp(0.0, 1.0);
         let v = ((z_m - self.origin_z_m) / self.span_z_m).clamp(0.0, 1.0);
         let gx = u * (self.grid_n - 1) as f64;

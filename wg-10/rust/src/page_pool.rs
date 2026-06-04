@@ -17,13 +17,13 @@
 //! key (which could later panic an eviction `.expect`), no stale mapping returning
 //! wrong/null content on re-acquire.
 
-use godot::prelude::*;
-use godot::classes::{RenderingServer, Texture2Drd};
-use crate::pack;
-use crate::gpu_compute::{build_pack_buffers, PackBuffers};
-use crate::page_policy::PagePolicy;
-use crate::page_compute::{PageComputeContext, build_page_compute_context};
 use crate::biome_page_compute;
+use crate::gpu_compute::{build_pack_buffers, PackBuffers};
+use crate::pack;
+use crate::page_compute::{build_page_compute_context, PageComputeContext};
+use crate::page_policy::PagePolicy;
+use godot::classes::{RenderingServer, Texture2Drd};
+use godot::prelude::*;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -31,9 +31,9 @@ mod acquire;
 mod configure;
 mod lifecycle;
 mod producer;
+mod state_api;
 mod static_reference;
 mod static_reports;
-mod state_api;
 mod world_route;
 
 use static_reference::StaticHeightRuntime;
@@ -73,23 +73,24 @@ const RUNTIME_BIOMES: [&str; 11] = [
 #[derive(GodotClass)]
 #[class(base=RefCounted)]
 pub struct Wg10PagePool {
-    policy:       Option<PagePolicy>,
-    slot_tex:     Vec<Option<Rid>>,
-    slot_wrap:    Vec<Option<Gd<Texture2Drd>>>,
-    slot_material_tex:  Vec<Option<Rid>>,
+    policy: Option<PagePolicy>,
+    slot_tex: Vec<Option<Rid>>,
+    slot_wrap: Vec<Option<Gd<Texture2Drd>>>,
+    slot_material_tex: Vec<Option<Rid>>,
     slot_material_wrap: Vec<Option<Gd<Texture2Drd>>>,
-    pack:         Option<pack::Pack>,
+    pack: Option<pack::Pack>,
     pack_buffers: Option<PackBuffers>,
-    glsl_source:  Option<String>,
-    compute_ctx:  Option<PageComputeContext>,
+    glsl_source: Option<String>,
+    compute_ctx: Option<PageComputeContext>,
 
     // Biome GPU producer path (Slice-4). Active producer identity is derived from exactly one of
     // the producer contexts below. The original `biome_ctx` is the proven single recipe path used
     // by parity/perf gates. `biome_world` is the grammar-routed runtime path: it owns grammar-only
     // pack data and a cached context per compiled recipe.
-    biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
-    biome_world:         Option<BiomeWorldRuntime>,
-    static_ref:          Option<StaticHeightRuntime>,
+    biome_ctx: Option<biome_page_compute::BiomePageComputeContext>,
+    biome_world: Option<BiomeWorldRuntime>,
+    static_ref: Option<StaticHeightRuntime>,
+    mountain_layer_ref: Option<StaticHeightRuntime>,
     biome_feature_span_m: f64,
     biome_source_scale: f64,
     biome_source_offset_x_m: f64,
@@ -100,15 +101,15 @@ pub struct Wg10PagePool {
     /// suffices and the two flow passes are too costly). Set by `configure_biome`.
     biome_flow_max_level: i64,
 
-    page_px:      i64,
-    world_span:   f64,
-    seed:         i64,
+    page_px: i64,
+    world_span: f64,
+    seed: i64,
 
     // stats
-    created:      i64,
-    reused:       i64,
-    recomputed:   i64,
-    full_events:  i64,
+    created: i64,
+    reused: i64,
+    recomputed: i64,
+    full_events: i64,
 
     base: Base<RefCounted>,
 }
@@ -117,30 +118,31 @@ pub struct Wg10PagePool {
 impl IRefCounted for Wg10PagePool {
     fn init(base: Base<RefCounted>) -> Self {
         Self {
-            policy:       None,
-            slot_tex:     Vec::new(),
-            slot_wrap:    Vec::new(),
-            slot_material_tex:  Vec::new(),
+            policy: None,
+            slot_tex: Vec::new(),
+            slot_wrap: Vec::new(),
+            slot_material_tex: Vec::new(),
             slot_material_wrap: Vec::new(),
-            pack:         None,
+            pack: None,
             pack_buffers: None,
-            glsl_source:  None,
-            compute_ctx:  None,
-            biome_ctx:            None,
-            biome_world:          None,
-            static_ref:           None,
+            glsl_source: None,
+            compute_ctx: None,
+            biome_ctx: None,
+            biome_world: None,
+            static_ref: None,
+            mountain_layer_ref: None,
             biome_feature_span_m: 90000.0,
             biome_source_scale: 1.0,
             biome_source_offset_x_m: 0.0,
             biome_source_offset_z_m: 0.0,
             biome_flow_max_level: 2,
-            page_px:      256,
-            world_span:   1000.0,
-            seed:         0,
-            created:      0,
-            reused:       0,
-            recomputed:   0,
-            full_events:  0,
+            page_px: 256,
+            world_span: 1000.0,
+            seed: 0,
+            created: 0,
+            reused: 0,
+            recomputed: 0,
+            full_events: 0,
             base,
         }
     }
@@ -167,13 +169,13 @@ impl Wg10PagePool {
     #[func]
     pub fn configure(
         &mut self,
-        pack_dir:   GString,
-        pack_file:  GString,
-        glsl_path:  GString,
-        capacity:   i64,
-        page_px:    i64,
+        pack_dir: GString,
+        pack_file: GString,
+        glsl_path: GString,
+        capacity: i64,
+        page_px: i64,
         world_span: f64,
-        seed:       i64,
+        seed: i64,
     ) -> GString {
         // --- F8: free-before-reconfigure ---
         // A second configure() would otherwise overwrite slot_tex / slot_wrap /
@@ -185,20 +187,18 @@ impl Wg10PagePool {
         self.free_before_reconfigure();
 
         // --- load pack ---
-        let pack = match pack::load_pack_dir(
-            Path::new(&pack_dir.to_string()),
-            &pack_file.to_string(),
-        ) {
-            Ok(p)  => p,
-            Err(e) => return GString::from(&format!("pack: {e}")),
-        };
+        let pack =
+            match pack::load_pack_dir(Path::new(&pack_dir.to_string()), &pack_file.to_string()) {
+                Ok(p) => p,
+                Err(e) => return GString::from(&format!("pack: {e}")),
+            };
 
         // --- build pack buffers ---
         let pb = build_pack_buffers(&pack);
 
         // --- load GLSL ---
         let glsl = match std::fs::read_to_string(glsl_path.to_string()) {
-            Ok(s)  => s,
+            Ok(s) => s,
             Err(e) => return GString::from(&format!("glsl: {e}")),
         };
 
@@ -209,16 +209,18 @@ impl Wg10PagePool {
         // pool is only meaningfully configured windowed (like every pool user).
         let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
             Some(r) => r,
-            None    => return GString::from("configure: global RenderingDevice unavailable (windowed-only)"),
+            None => {
+                return GString::from(
+                    "configure: global RenderingDevice unavailable (windowed-only)",
+                )
+            }
         };
         let ctx = match build_page_compute_context(&mut rd0, &pb, &glsl) {
-            Ok(c)  => c,
+            Ok(c) => c,
             Err(e) => return GString::from(&format!("compute context: {e}")),
         };
 
-        self.install_legacy_configuration(
-            pack, pb, glsl, ctx, capacity, page_px, world_span, seed,
-        );
+        self.install_legacy_configuration(pack, pb, glsl, ctx, capacity, page_px, world_span, seed);
 
         GString::new()
     }
@@ -237,44 +239,48 @@ impl Wg10PagePool {
     #[allow(clippy::too_many_arguments)]
     pub fn configure_biome(
         &mut self,
-        primitives_glsl_path: GString,   // res://.../recipe_primitives.glsl
-        machine_glsl_path:    GString,   // res://.../biome_page.glsl
-        mountain_glsl_path:   GString,   // res://.../biome_mountain.glsl  (the fragment)
-        capacity:   i64,
-        page_px:    i64,                 // core px (256) — the apron is added internally
-        apron_px:   i64,                 // 160 for mountain
-        world_span: f64,                 // world metres per page
-        feature_span_m: f64,             // 90000.0 for mountain
-        flow_iters: i64,                 // production convergence count (192 per memory)
-        relief_m:   f64,                 // VERTICAL SCALE (metres): normalized recipe height * this -> metres
-                                         // before the page texture write (the render shader expects metres).
-                                         // The tunable vertical-scale knob (~1000 for mountain).
-        flow_max_level: i64,             // SCALE-INVARIANCE: first level (0=finest) baked WITHOUT the
-                                         // drainage carve. A page at `level` runs flow_on = level <
-                                         // flow_max_level. 2 => flow on levels 0,1; off 2.. (coarse).
-        seed:       i64,
+        primitives_glsl_path: GString, // res://.../recipe_primitives.glsl
+        machine_glsl_path: GString,    // res://.../biome_page.glsl
+        mountain_glsl_path: GString,   // res://.../biome_mountain.glsl  (the fragment)
+        capacity: i64,
+        page_px: i64,        // core px (256) — the apron is added internally
+        apron_px: i64,       // 160 for mountain
+        world_span: f64,     // world metres per page
+        feature_span_m: f64, // 90000.0 for mountain
+        flow_iters: i64,     // production convergence count (192 per memory)
+        relief_m: f64,       // VERTICAL SCALE (metres): normalized recipe height * this -> metres
+        // before the page texture write (the render shader expects metres).
+        // The tunable vertical-scale knob (~1000 for mountain).
+        flow_max_level: i64, // SCALE-INVARIANCE: first level (0=finest) baked WITHOUT the
+        // drainage carve. A page at `level` runs flow_on = level <
+        // flow_max_level. 2 => flow on levels 0,1; off 2.. (coarse).
+        seed: i64,
     ) -> GString {
         // --- F8: free-before-reconfigure (mirror `configure`) ---
         self.free_before_reconfigure();
 
         // --- read the 3 GLSL sources ---
         let prim = match std::fs::read_to_string(primitives_glsl_path.to_string()) {
-            Ok(s)  => s,
+            Ok(s) => s,
             Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
         };
         let machine = match std::fs::read_to_string(machine_glsl_path.to_string()) {
-            Ok(s)  => s,
+            Ok(s) => s,
             Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
         };
         let mountain = match std::fs::read_to_string(mountain_glsl_path.to_string()) {
-            Ok(s)  => s,
+            Ok(s) => s,
             Err(e) => return GString::from(&format!("configure_biome: glsl: {e}")),
         };
 
         // --- global RenderingDevice (windowed-only) ---
         let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
             Some(r) => r,
-            None    => return GString::from("configure_biome: global RenderingDevice unavailable (windowed-only)"),
+            None => {
+                return GString::from(
+                    "configure_biome: global RenderingDevice unavailable (windowed-only)",
+                )
+            }
         };
 
         // --- build the cached biome compute context on the global rd ---
@@ -288,7 +294,7 @@ impl Wg10PagePool {
             flow_iters as usize,
             relief_m as f32,
         ) {
-            Ok(c)  => c,
+            Ok(c) => c,
             Err(e) => return GString::from(&format!("configure_biome: context: {e}")),
         };
 
@@ -352,8 +358,8 @@ impl Wg10PagePool {
             Some(p) => p.to_path_buf(),
             None => {
                 return GString::from(&format!(
-                    "configure_biome_world: cannot derive shader dir from pack dir {pack_dir_path:?}"
-                ))
+                "configure_biome_world: cannot derive shader dir from pack dir {pack_dir_path:?}"
+            ))
             }
         };
         let shader_dir = worldgen_dir.join("shaders");
@@ -361,15 +367,19 @@ impl Wg10PagePool {
         let machine_path = shader_dir.join("biome_page.glsl");
         let prim = match std::fs::read_to_string(&prim_path) {
             Ok(s) => s,
-            Err(e) => return GString::from(&format!(
-                "configure_biome_world: primitives {prim_path:?}: {e}"
-            )),
+            Err(e) => {
+                return GString::from(&format!(
+                    "configure_biome_world: primitives {prim_path:?}: {e}"
+                ))
+            }
         };
         let machine = match std::fs::read_to_string(&machine_path) {
             Ok(s) => s,
-            Err(e) => return GString::from(&format!(
-                "configure_biome_world: machine {machine_path:?}: {e}"
-            )),
+            Err(e) => {
+                return GString::from(&format!(
+                    "configure_biome_world: machine {machine_path:?}: {e}"
+                ))
+            }
         };
 
         let mut rd0 = match RenderingServer::singleton().get_rendering_device() {
@@ -418,9 +428,7 @@ impl Wg10PagePool {
                     for (_, ctx) in contexts {
                         biome_page_compute::free_biome_page_context(&mut rd0, &ctx);
                     }
-                    return GString::from(&format!(
-                        "configure_biome_world: context {biome}: {e}"
-                    ));
+                    return GString::from(&format!("configure_biome_world: context {biome}: {e}"));
                 }
             };
             contexts.insert(biome.to_string(), ctx);
@@ -492,11 +500,7 @@ impl Wg10PagePool {
             };
 
         self.install_static_reference_configuration(
-            static_ref,
-            capacity,
-            page_px,
-            world_span,
-            seed,
+            static_ref, capacity, page_px, world_span, seed,
         );
 
         GString::new()

@@ -59,6 +59,7 @@ impl Wg10PagePool {
         self.biome_ctx = None;
         self.biome_world = None;
         self.static_ref = None;
+        self.mountain_layer_ref = None;
         self.reset_biome_source_transform();
         self.page_px = page_px;
         self.world_span = world_span;
@@ -85,6 +86,7 @@ impl Wg10PagePool {
         self.biome_ctx = Some(biome_ctx);
         self.biome_world = None;
         self.static_ref = None;
+        self.mountain_layer_ref = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
@@ -120,6 +122,7 @@ impl Wg10PagePool {
             active_limit: usize::MAX,
         });
         self.static_ref = None;
+        self.mountain_layer_ref = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
@@ -147,6 +150,7 @@ impl Wg10PagePool {
         self.biome_ctx = None;
         self.biome_world = None;
         self.static_ref = Some(static_ref);
+        self.mountain_layer_ref = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = 0;

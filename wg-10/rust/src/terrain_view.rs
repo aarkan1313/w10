@@ -230,12 +230,12 @@ impl Wg10TerrainView {
                         Vector2::new(cco_x as f32, cco_z as f32), // coarse (parent) origin
                         Vector2::new(level_center_x as f32, level_center_z as f32), // this level's neighborhood centre
                     );
-                    let static_material_tex =
-                        self.pool
-                            .as_ref()
-                            .unwrap()
-                            .bind()
-                            .get_resident_static_material_page(level as i64, po_x, po_z);
+                    let static_material_tex = self
+                        .pool
+                        .as_ref()
+                        .unwrap()
+                        .bind()
+                        .get_resident_static_material_page(level as i64, po_x, po_z);
                     if let Some(material_tex) = static_material_tex {
                         rings.bind_mut().set_tile_static_material(
                             level as i64,
@@ -302,6 +302,17 @@ fn debug_color_for_page(
             biome_route_color("mountain")
         }
     } else if mode == "single" {
+        if let Some((low_pass, floor, rock, snow)) = pool_ref
+            .mountain_world_layer_material_hint_means_for_page(level, origin_x, origin_z, 17)
+        {
+            return static_reference_material_color(low_pass, floor, rock, snow);
+        }
+        let corridor_frac = pool_ref
+            .mountain_world_layer_corridor_fraction_for_page(level, origin_x, origin_z, 17)
+            .unwrap_or(0.0);
+        if corridor_frac > 0.02 {
+            return Color::from_rgba(0.24, 0.48, 0.35, 1.0);
+        }
         biome_route_color("mountain")
     } else {
         Color::from_rgba(0.34, 0.38, 0.43, 1.0)

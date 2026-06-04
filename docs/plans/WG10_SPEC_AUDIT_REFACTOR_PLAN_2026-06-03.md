@@ -173,6 +173,36 @@ behavior-neutral page-pool cleanup is needed. Next visual target is still higher
 start porting the accepted mountain-world-layer facts into the live `MOUNTAIN` producer rather
 than tuning mode 3.
 
+### Live-MOUNTAIN Fact Bridge Checkpoint - 2026-06-04
+
+The first non-static mountain-world-layer bridge is now in the live `MOUNTAIN/network_ref` path.
+`Wg10PagePool` can bind the accepted mountain payload as a separate reference beside the live
+single-biome producer, and the contract/report surfaces expose its pass-network, route-carving,
+page-stable conditioning, corridor, and material-hint facts. The renderer can also use the bound
+reference as a material-page source for live `MOUNTAIN`.
+
+Current proof after the bridge:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99/max:
+  REFERENCE 31.273/40.549 ms, MOUNTAIN 25.059/46.348 ms, WORLD 9.033/10.894 ms, with zero
+  hide/show in all three. Latest render p99: REFERENCE 0.233 ms, MOUNTAIN 0.247 ms, WORLD
+  0.216 ms.
+
+This checkpoint does not close owner visual acceptance. The latest captures still show why:
+`MOUNTAIN` has bound accepted facts/material hints, but live height still comes from the raw
+seam-safe page recipe. The report intentionally keeps `height_consumes_world_layer_facts=false`
+and `satisfies_mountain_world_layer_contract=false`. `WORLD` also remains diagnostic; its
+page-scale artifacts should not drive the mountain acceptance path.
+
+Next visual target: make live `MOUNTAIN` height consume the accepted world-layer contract facts
+or a measured candidate equivalent, then prove the numeric gap against REFERENCE moves down before
+asking for another owner fly.
+
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
 readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0

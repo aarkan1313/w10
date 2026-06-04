@@ -37,6 +37,7 @@ impl Wg10PagePool {
                 &mut self.biome_ctx,
                 &mut self.biome_world,
                 &mut self.static_ref,
+                &mut self.mountain_layer_ref,
             );
             return;
         }
@@ -55,6 +56,7 @@ impl Wg10PagePool {
             biome_page_compute::free_biome_page_context(&mut rd, &world.compose_ctx);
         }
         self.static_ref = None;
+        self.mountain_layer_ref = None;
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
                 rd.free_rid(rid);
@@ -79,6 +81,7 @@ impl Wg10PagePool {
             &mut self.biome_ctx,
             &mut self.biome_world,
             &mut self.static_ref,
+            &mut self.mountain_layer_ref,
         );
     }
 
@@ -100,6 +103,7 @@ impl Wg10PagePool {
         biome_ctx: &mut Option<biome_page_compute::BiomePageComputeContext>,
         biome_world: &mut Option<BiomeWorldRuntime>,
         static_ref: &mut Option<super::StaticHeightRuntime>,
+        mountain_layer_ref: &mut Option<super::StaticHeightRuntime>,
     ) {
         *policy = None;
         slot_tex.clear();
@@ -115,6 +119,7 @@ impl Wg10PagePool {
         *biome_ctx = None;
         *biome_world = None;
         *static_ref = None;
+        *mountain_layer_ref = None;
     }
 
     /// Exact predicate mirrored by the `acquire_page` guard.
@@ -129,7 +134,10 @@ impl Wg10PagePool {
     }
 
     /// Create a new R32F SAMPLING texture for static-reference material codes.
-    pub(super) fn create_static_material_texture(&self, rd: &mut Gd<RenderingDevice>) -> Option<Rid> {
+    pub(super) fn create_static_material_texture(
+        &self,
+        rd: &mut Gd<RenderingDevice>,
+    ) -> Option<Rid> {
         self.create_r32_texture(rd, "static material")
     }
 

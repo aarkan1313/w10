@@ -152,8 +152,28 @@ func _expect_world_layer_contract_report(
 	_expect(str(report.get("blocking_gap", "")) != "", "%s expected an explicit blocking gap string" % label, errs)
 	if expected_kind == "single_seam_safe_mountain_page_recipe":
 		_expect(str(report.get("blocking_gap", "")).contains("pass-network"), "%s live MOUNTAIN gap should name pass-network" % label, errs)
+		if expected_pass_network:
+			_expect(bool(report.get("has_bound_world_layer_reference", false)), "%s live MOUNTAIN expected bound world-layer reference facts" % label, errs)
+			_expect(not bool(report.get("height_consumes_world_layer_facts", true)), "%s live MOUNTAIN should not claim height consumes bound facts yet" % label, errs)
+			_expect(str(report.get("reference_source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s live MOUNTAIN reference source scope mismatch" % label, errs)
 	if expected_kind == "accepted_static_reference_visual_baseline":
 		_expect(str(report.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s REFERENCE contract report source scope mismatch" % label, errs)
+
+func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: String, errs: Array[String]) -> void:
+	var reference: Dictionary = snapshot.get("mountain_world_layer_reference", {})
+	_expect(str(reference.get("source_scope", "")) == "coherent_full_field_carved_with_pass_network_sliced_for_review", "%s bound mountain layer missing source scope" % label, errs)
+	_expect(str(reference.get("generator_version", "")).contains("pass_network"), "%s bound mountain layer missing pass-network generator version" % label, errs)
+	_expect(bool(reference.get("has_corridor", false)), "%s bound mountain layer expected corridor facts" % label, errs)
+	_expect(bool(reference.get("has_material_hints", false)), "%s bound mountain layer expected material hints" % label, errs)
+	_expect(int(reference.get("pass_network_routes", 0)) > 0, "%s bound mountain layer expected pass-network routes" % label, errs)
+	_expect(float(reference.get("pass_network_carved_frac", 0.0)) > 0.0, "%s bound mountain layer expected carved fraction" % label, errs)
+	_expect(bool(reference.get("has_conditioning_stats", false)), "%s bound mountain layer expected conditioning stats" % label, errs)
+	var center_page: Dictionary = snapshot.get("mountain_world_layer_reference_center_page", {})
+	_expect(bool(center_page.get("has_corridor", false)), "%s bound mountain layer center page expected corridor facts" % label, errs)
+	_expect(bool(center_page.get("has_material_hints", false)), "%s bound mountain layer center page expected material hints" % label, errs)
+	_expect(float(center_page.get("floor_hint_mean", -1.0)) >= 0.0, "%s bound mountain layer expected floor hint mean" % label, errs)
+	_expect(float(center_page.get("rock_hint_mean", -1.0)) >= 0.0, "%s bound mountain layer expected rock hint mean" % label, errs)
+	_expect(int(snapshot.get("static_material_bound_tiles", 0)) > 0, "%s live MOUNTAIN expected bound material fact pages" % label, errs)
 
 func _expect_mode_switch(
 	scene: Node,
@@ -194,7 +214,8 @@ func _expect_mode_switch(
 		_expect(absf(float(source_transform.get("source_scale", 0.0)) - 3.515625) < 0.000001, "MOUNTAIN expected source scale=3.515625", errs)
 		_expect(absf(float(source_transform.get("source_offset_x_m", 0.0)) - 207000.0) < 0.001, "MOUNTAIN expected source x offset=207000", errs)
 		_expect(absf(float(source_transform.get("source_offset_z_m", 0.0)) - 176000.0) < 0.001, "MOUNTAIN expected source z offset=176000", errs)
-		_expect_world_layer_contract_report(snapshot, mode, "single_seam_safe_mountain_page_recipe", false, true, false, false, false, errs)
+		_expect_world_layer_contract_report(snapshot, mode, "single_seam_safe_mountain_page_recipe", false, true, true, true, true, errs)
+		_expect_mountain_layer_reference_contract(snapshot, mode, errs)
 	if mode == "WORLD":
 		_expect_world_layer_contract_report(snapshot, mode, "grammar_routed_runtime_biome_composition", false, false, false, false, false, errs)
 	if mode == "LEGACY":

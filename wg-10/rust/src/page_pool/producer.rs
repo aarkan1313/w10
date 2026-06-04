@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 
 use crate::page_compute::compute_page_cached;
 
-use super::{world_route, BiomeWorldRuntime, Wg10PagePool};
+use super::{world_route, BiomeWorldRuntime, StaticHeightRuntime, Wg10PagePool};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ProducerKind {
@@ -65,6 +65,21 @@ impl Wg10PagePool {
             .is_some_and(ProducerKind::uses_biome_path)
     }
 
+    fn active_material_reference(&self) -> Option<&StaticHeightRuntime> {
+        if let Some(reference) = self.static_ref.as_ref() {
+            Some(reference)
+        } else if matches!(self.active_producer_kind(), Some(ProducerKind::SingleBiome)) {
+            self.mountain_layer_ref.as_ref()
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn has_active_presentation_materials(&self) -> bool {
+        self.active_material_reference()
+            .is_some_and(|reference| reference.has_presentation_materials())
+    }
+
     /// Dispatch the active producer path into an already-owned page texture RID.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn dispatch_page_compute(
@@ -91,8 +106,13 @@ impl Wg10PagePool {
                     .biome_world
                     .as_ref()
                     .ok_or("WORLD producer missing runtime")?;
-                let field =
-                    self.world_biome_weight_field(world, origin_x, origin_z, world_span, page_px as usize);
+                let field = self.world_biome_weight_field(
+                    world,
+                    origin_x,
+                    origin_z,
+                    world_span,
+                    page_px as usize,
+                );
                 crate::biome_page_compute::compute_biome_world_page_composed(
                     rd,
                     &world.contexts,
@@ -137,10 +157,7 @@ impl Wg10PagePool {
                     .compute_ctx
                     .as_ref()
                     .ok_or("legacy producer missing compute context")?;
-                let pack = self
-                    .pack
-                    .as_ref()
-                    .ok_or("legacy producer missing pack")?;
+                let pack = self.pack.as_ref().ok_or("legacy producer missing pack")?;
                 let pack_buffers = self
                     .pack_buffers
                     .as_ref()
@@ -171,11 +188,7 @@ impl Wg10PagePool {
         world_span: f64,
         page_px: i64,
     ) -> Result<(), String> {
-        let wants_material = self
-            .static_ref
-            .as_ref()
-            .is_some_and(|reference| reference.has_presentation_materials());
-        if !wants_material {
+        if !self.has_active_presentation_materials() {
             return Ok(());
         }
 
@@ -193,17 +206,11 @@ impl Wg10PagePool {
             }
         };
 
-        let Some(static_ref) = self.static_ref.as_ref() else {
+        let Some(material_ref) = self.active_material_reference() else {
             return Ok(());
         };
-        static_ref.write_material_page_texture(
-            rd,
-            tex_rid,
-            origin_x,
-            origin_z,
-            world_span,
-            page_px,
-        )
+        material_ref
+            .write_material_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px)
     }
 
     pub(super) fn select_world_biome_name(

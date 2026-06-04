@@ -298,11 +298,7 @@ impl Wg10PagePool {
         origin_x: f64,
         origin_z: f64,
     ) -> Option<Gd<Texture2Drd>> {
-        if !self
-            .static_ref
-            .as_ref()
-            .is_some_and(|reference| reference.has_presentation_materials())
-        {
+        if !self.has_active_presentation_materials() {
             return None;
         }
         let policy = self.policy.as_ref()?;

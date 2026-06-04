@@ -182,7 +182,13 @@ func _configure_mountain(pool: Object) -> String:
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
 	if err != "":
 		return err
-	return str(pool.call("set_biome_source_transform", source_scale(), source_offset_x_m(), source_offset_z_m()))
+	err = str(pool.call("set_biome_source_transform", source_scale(), source_offset_x_m(), source_offset_z_m()))
+	if err != "":
+		return err
+	if _preset == PRESET_NETWORK:
+		return str(pool.call("bind_mountain_world_layer_reference",
+			ProjectSettings.globalize_path(STATIC_REF_PAYLOAD)))
+	return ""
 
 func _configure_reference(pool: Object) -> String:
 	return str(pool.call("configure_static_reference",

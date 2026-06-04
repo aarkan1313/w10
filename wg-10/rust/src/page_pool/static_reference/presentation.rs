@@ -51,19 +51,39 @@ impl StaticHeightRuntime {
     }
 
     fn sample_material_code(&self, x_m: f64, z_m: f64) -> f32 {
-        if self.sample_corridor(x_m, z_m) {
-            return 1.0;
+        let (x0, z0, x1, z1, tx, tz) = self.sample_indices(x_m, z_m);
+        if let Some(corridor) = self.corridor_grid.as_ref() {
+            let ix = if tx >= 0.5 { x1 } else { x0 };
+            let iz = if tz >= 0.5 { z1 } else { z0 };
+            if corridor[iz * self.grid_n + ix] != 0 {
+                return 1.0;
+            }
         }
-        let Some(hints) = self.sample_material_hints(x_m, z_m) else {
+
+        let Some(hints) = self.material_hints.as_ref() else {
             return 0.0;
         };
-        let floorish = hints.floor.max(hints.low_pass);
-        if hints.snow >= hints.rock && hints.snow >= floorish && hints.snow > 0.08 {
+        let sample = |grid: &Vec<f32>| -> f64 {
+            let h00 = grid[z0 * self.grid_n + x0];
+            let h10 = grid[z0 * self.grid_n + x1];
+            let h01 = grid[z1 * self.grid_n + x0];
+            let h11 = grid[z1 * self.grid_n + x1];
+            let hx0 = h00 + (h10 - h00) * tx;
+            let hx1 = h01 + (h11 - h01) * tx;
+            (hx0 + (hx1 - hx0) * tz) as f64
+        };
+        let low_pass = sample(&hints.low_pass);
+        let floor = sample(&hints.floor);
+        let rock = sample(&hints.rock);
+        let snow = sample(&hints.snow);
+
+        let floorish = floor.max(low_pass);
+        if snow >= rock && snow >= floorish && snow > 0.08 {
             3.0
-        } else if hints.rock >= floorish && hints.rock > 0.08 {
+        } else if rock >= floorish && rock > 0.08 {
             2.0
         } else if floorish > 0.08 {
-            1.0
+            return 1.0;
         } else {
             0.0
         }

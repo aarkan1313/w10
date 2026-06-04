@@ -70,6 +70,23 @@
 > motion numbers: REFERENCE `cpu_p99=34.839 ms`, MOUNTAIN `cpu_p99=9.369 ms`,
 > WORLD `cpu_p99=7.792 ms`, zero hide/show in all three; render p99 is
 > REFERENCE `0.326 ms`, MOUNTAIN `0.251 ms`, WORLD `0.470 ms`.
+> Follow-up live-MOUNTAIN fact bridge on 2026-06-04: `MOUNTAIN/network_ref`
+> now binds the accepted mountain world-layer payload as a separate
+> fact/material reference beside the live single-biome producer. The bridge
+> exposes pass-network, carving, page-stable conditioning, corridor, and
+> material-hint facts in `mountain_world_layer_contract_report()` plus
+> page-sampled reference reports, and the live renderer can consume those bound
+> material pages. This is not yet the final visual fix: live GPU height still
+> comes from the seam-safe page recipe and `height_consumes_world_layer_facts`
+> remains false, so the contract still reports
+> `satisfies_mountain_world_layer_contract=false`. Current proof:
+> `cargo test -p wg10_terrain --lib` = 227/0, `tools\build_rust.ps1` builds,
+> `fast` = 8/8, `review_runtime` = 2/2, `review_runtime_visual` = 1/1, and
+> `review_runtime_modes` = 2/2. Latest scripted motion: REFERENCE
+> `cpu_p99=31.273 ms`, `cpu_max=40.549 ms`; MOUNTAIN `cpu_p99=25.059 ms`,
+> `cpu_max=46.348 ms`; WORLD `cpu_p99=9.033 ms`, `cpu_max=10.894 ms`; zero
+> hide/show in all three. Latest render p99 is REFERENCE `0.233 ms`, MOUNTAIN
+> `0.247 ms`, WORLD `0.216 ms`.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly
