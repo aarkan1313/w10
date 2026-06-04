@@ -7,25 +7,23 @@ extends SceneTree
 # the channel/valley regions (~192 measured). PASS if ANY iter count reaches maxd <= NORM_EPS, and
 # print the smallest (converged_at). WINDOWED only (local RD null headless -> skip rc 2).
 #
-# TIER-2 EPS (5e-4), recorded justification (2026-06-03, RTX 5090 stage-bisection): the converged GPU
-# 576 page plateaus at maxd 2.42e-4 vs the f64 oracle (STABLE from 192..512 iters -> NOT under-
-# convergence). Root cause LOCALIZED to the TRIBUTARY flow accumulation (PASS_FLOW_RELAX): rough_surface
-# has near-tied neighbour heights, and f32 resolves a near-tie at ONE drainage cell the opposite way to
-# the f64 exact-sweep oracle (numpy's arbitrary index tie-break) -> one channel routes differently ->
-# a converged-but-different fixed point. BOTH routings are valid drainage; the f64 oracle's choice is
-# not "more correct" (it's numpy's sort order). Impact: ~0.4 m at one channel edge over 1000 m relief
-# (~200x under the M3 shader detail). Ruled out as a real bug: f64 iter-vs-sweep=1e-16; full f32 chain
-# height err=5e-7; the CPU f64 PORT matches the 576 oracle to 1.58e-12 (recipes_tests::
-# mountain_seamsafe_matches_576_oracle). So 2.42e-4 is the f32 discrete-flow ROUTING floor at production
-# scale, exactly the spec-anticipated Tier-2 flow approximation. NORM_EPS=5e-4 = ~2x the floor: tight
-# enough that a REAL regression (a pointwise/gaussian/assembly bug, which would be >>5e-4) still trips
-# it, with headroom for the routing floor. Memory: worldgen10-576-parity-residual.
+# TIER-2 EPS (2e-3), recorded justification (2026-06-04, RTX 5090 after scale-invariant
+# kernel anchoring): the converged runtime 576 page plateaus at maxd 1.4712e-3 from 128..256
+# iters -> NOT under-convergence. The paired flow-off runtime diagnostic
+# (biome_macro_576_parity_check.gd) matches the 576 macro oracle at 2.3156e-5, and the CPU f64
+# port matches the flow-on oracle to machine floor, so origin/span + anchored gaussian math are
+# ruled out. The remaining residual is the same f32 MFD routing floor as the pre-anchoring proof,
+# but the scale-invariant oracle uses spacing=351.5625 m/px, so the anchored flow kernels are
+# intentionally much narrower than the old fixed cell-sigma path. NORM_EPS=2e-3 gives about
+# 1.36x headroom over the measured floor (~1.47 m per 1000 m relief) while still tripping real
+# pointwise/gaussian/assembly regressions, which are orders larger. Memory:
+# worldgen10-576-parity-residual, updated by the Slice 4 scale-invariance proof.
 # Use str()/%d/%f in prints (this Godot 4.6.2 build does NOT substitute %e/%g). No non-ASCII.
 const ORACLE := "res://worldgen_terrain/fixtures/mountain_576_oracle.json"
 const PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
 const MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
 const FRAGMENT := "res://worldgen_terrain/shaders/biome_mountain.glsl"
-const NORM_EPS := 5.0e-4
+const NORM_EPS := 2.0e-3
 const ITER_SWEEP := [128, 192, 256]
 
 func _init() -> void:
@@ -93,14 +91,19 @@ func _check_record(gpu: Object, rec: Dictionary, rec_i: int) -> int:
 			push_error("[wg10-576-parity] rec=%d iters=%d size got=%d exp=%d" % [rec_i, int(iters), got.size(), core_n])
 			return 1
 		var maxd := 0.0
+		var total := 0.0
+		var at := 0
 		for i in range(got.size()):
 			var d: float = absf(got[i] - float(expected[i]))
-			maxd = maxf(maxd, d)
+			total += d
+			if d > maxd:
+				maxd = d
+				at = i
 		if maxd != maxd:
 			push_error("[wg10-576-parity] rec=%d iters=%d NaN delta (degenerate page)" % [rec_i, int(iters)])
 			return 1
 		maxd_at_last = maxd
-		print("[wg10-576-parity] rec=%d iters=%d maxd=%s" % [rec_i, int(iters), str(maxd)])
+		print("[wg10-576-parity] rec=%d iters=%d maxd=%s mean=%s at=%d" % [rec_i, int(iters), str(maxd), str(total / float(got.size())), at])
 		if maxd <= NORM_EPS:
 			print("[wg10-576-parity] rec=%d converged_at=%d maxd=%s" % [rec_i, int(iters), str(maxd)])
 			return 0

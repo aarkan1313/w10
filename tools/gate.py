@@ -62,12 +62,13 @@ CHECKS = {
     "flow_converge": [
         "worldgen_terrain/tests/page_flow_convergence_check.gd",
     ],
-    # Slice-4b Task 4 PRODUCTION-SCALE cross-oracle parity (windowed). The RUNTIME mountain page
-    # producer (build_biome_page_context + compute_biome_page_cached) at 256-core/576-padded vs the
-    # independent Python f64 EXACT-sweep oracle. Closes the audit gap that cross-engine parity was
-    # only ever proven at the tiny 344-padded fixture. Sweeps flow_iters [128,192,256] so it is BOTH
-    # a parity proof AND the convergence measurement (can't false-pass: 256 must reach 1e-4 or FAIL).
+    # Slice-4b Task 4/5 PRODUCTION-SCALE runtime proofs (windowed). These exercise the live runtime
+    # mountain page producer (build_biome_page_context + compute_biome_page_cached) at
+    # 256-core/576-padded. The flow-off macro check isolates origin/span + anchored gaussian parity;
+    # the flow-on check sweeps flow_iters [128,192,256] against the independent f64 oracle and uses
+    # the recorded Tier-2 f32 flow-routing floor.
     "biome_fly": [
+        "worldgen_terrain/tests/biome_macro_576_parity_check.gd",
         "worldgen_terrain/tests/biome_page_576_parity_check.gd",
         # Scale-invariance proof: with flow_on=false, level L and L+1 must agree over the same
         # world XZ within a relief-relative bar. This is the gate for the former 73% morph warp.
