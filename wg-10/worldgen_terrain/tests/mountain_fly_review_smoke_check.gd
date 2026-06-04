@@ -181,6 +181,7 @@ func _expect_reference_contract(snapshot: Dictionary, label: String, errs: Array
 	_expect(str(reference.get("generator_version", "")).contains("pass_network"), "%s REFERENCE missing pass-network generator version" % label, errs)
 	_expect(absf(float(reference.get("height_scale_m", 0.0)) - 1700.0) < 0.001, "%s REFERENCE expected height_scale_m=1700" % label, errs)
 	_expect(absf(float(reference.get("feature_span_m", 0.0)) - 90000.0) < 0.001, "%s REFERENCE expected feature_span_m=90000" % label, errs)
+	_expect_runtime_tile_source_mapping(reference, "%s REFERENCE" % label, errs)
 	_expect(bool(reference.get("has_corridor", false)), "%s REFERENCE expected corridor facts" % label, errs)
 	_expect(float(reference.get("corridor_frac", 0.0)) > 0.0, "%s REFERENCE expected nonzero corridor coverage" % label, errs)
 	_expect(bool(reference.get("has_material_hints", false)), "%s REFERENCE expected material hint facts" % label, errs)
@@ -223,6 +224,8 @@ func _expect_world_layer_contract_report(
 	_expect(bool(report.get("has_material_hints", false)) == expected_material_hints, "%s material hint flag mismatch" % label, errs)
 	_expect(not bool(report.get("satisfies_mountain_world_layer_contract", true)), "%s should not claim full live mountain contract yet" % label, errs)
 	_expect(str(report.get("blocking_gap", "")) != "", "%s expected an explicit blocking gap string" % label, errs)
+	if expected_kind != "legacy_dem_kernel_atlas":
+		_expect(bool(report.get("has_source_display_mapping", false)), "%s expected loaded source/display mapping facts" % label, errs)
 	if expected_kind == "single_seam_safe_mountain_page_recipe":
 		_expect(str(report.get("blocking_gap", "")).contains("pass-network"), "%s live MOUNTAIN gap should name pass-network" % label, errs)
 	if expected_kind == "single_mountain_world_layer_reference_bridge":
@@ -255,6 +258,7 @@ func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: Stri
 	var reference: Dictionary = snapshot.get("mountain_world_layer_reference", {})
 	_expect(str(reference.get("source_scope", "")) == ACCEPTED_RUNTIME_TILE_SOURCE_SCOPE, "%s bound mountain layer missing source scope" % label, errs)
 	_expect(str(reference.get("generator_version", "")).contains("pass_network"), "%s bound mountain layer missing pass-network generator version" % label, errs)
+	_expect_runtime_tile_source_mapping(reference, "%s bound mountain layer" % label, errs)
 	_expect(bool(reference.get("has_corridor", false)), "%s bound mountain layer expected corridor facts" % label, errs)
 	_expect(bool(reference.get("has_material_hints", false)), "%s bound mountain layer expected material hints" % label, errs)
 	_expect(int(reference.get("pass_network_routes", 0)) > 0, "%s bound mountain layer expected pass-network routes" % label, errs)
@@ -266,6 +270,18 @@ func _expect_mountain_layer_reference_contract(snapshot: Dictionary, label: Stri
 	_expect(float(center_page.get("floor_hint_mean", -1.0)) >= 0.0, "%s bound mountain layer expected floor hint mean" % label, errs)
 	_expect(float(center_page.get("rock_hint_mean", -1.0)) >= 0.0, "%s bound mountain layer expected rock hint mean" % label, errs)
 	_expect(int(snapshot.get("static_material_bound_tiles", 0)) > 0, "%s live MOUNTAIN expected bound material fact pages" % label, errs)
+
+func _expect_runtime_tile_source_mapping(reference: Dictionary, label: String, errs: Array[String]) -> void:
+	_expect(bool(reference.get("has_source_display_mapping", false)), "%s expected explicit source/display mapping" % label, errs)
+	_expect_float_close(float(reference.get("display_origin_x_m", 0.0)), -38400.0, 0.001, "%s display origin x" % label, errs)
+	_expect_float_close(float(reference.get("display_origin_z_m", 0.0)), -38400.0, 0.001, "%s display origin z" % label, errs)
+	_expect_float_close(float(reference.get("display_span_x_m", 0.0)), 76800.0, 0.001, "%s display span x" % label, errs)
+	_expect_float_close(float(reference.get("display_span_z_m", 0.0)), 76800.0, 0.001, "%s display span z" % label, errs)
+	_expect_float_close(float(reference.get("source_origin_x_m", 0.0)), 72000.0, 0.001, "%s source origin x" % label, errs)
+	_expect_float_close(float(reference.get("source_origin_z_m", 0.0)), 41000.0, 0.001, "%s source origin z" % label, errs)
+	_expect_float_close(float(reference.get("source_span_x_m", 0.0)), 270000.0, 0.001, "%s source span x" % label, errs)
+	_expect_float_close(float(reference.get("source_span_z_m", 0.0)), 270000.0, 0.001, "%s source span z" % label, errs)
+	_expect_float_close(float(reference.get("source_scene_ratio", 0.0)), 3.515625, 0.000001, "%s source scene ratio" % label, errs)
 
 func _expect_bound_page_matches_reference(expected: Dictionary, actual: Dictionary, errs: Array[String]) -> void:
 	_expect(not expected.is_empty(), "MOUNTAIN missing default REFERENCE center-page baseline", errs)

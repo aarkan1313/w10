@@ -9,6 +9,10 @@ fn one_chunk_review_payload(corridor: Option<Vec<i64>>) -> StaticReviewPayload {
         chunk_n: 2,
         chunk_span_m: 10.0,
         world_span_m: 10.0,
+        source_world_span_m: None,
+        source_scene_ratio: None,
+        world_origin_x_m: None,
+        world_origin_z_m: None,
         height_scale_m: 100.0,
         feature_span_m: 90_000.0,
         seeds: vec![StaticSeed {
@@ -75,6 +79,10 @@ fn runtime_tile_payload_with_hints() -> StaticRuntimeTilePayload {
             field_origin_x_m: -5.0,
             field_origin_z_m: -5.0,
             field_span_m: 10.0,
+            source_origin_x_m: 100.0,
+            source_origin_z_m: 200.0,
+            source_span_m: 35.15625,
+            source_scene_ratio: 3.515625,
             height_scale_m: 100.0,
             pass_network: Some(StaticPassNetwork {
                 routes: 12,
@@ -224,6 +232,11 @@ fn runtime_tile_payload_contract_metadata_and_materials_are_preserved() {
     assert!(rt.has_corridor);
     assert!((rt.corridor_frac - 0.5).abs() < 1.0e-12);
     assert!(rt.has_material_hints);
+    assert_eq!(rt.source_origin_x_m, 100.0);
+    assert_eq!(rt.source_origin_z_m, 200.0);
+    assert_eq!(rt.source_span_x_m, 35.15625);
+    assert_eq!(rt.source_span_z_m, 35.15625);
+    assert_eq!(rt.source_scene_ratio, 3.515625);
     assert!((rt.material_hint_fracs.low_pass - 0.5).abs() < 1.0e-12);
     assert!((rt.material_hint_fracs.floor - 0.5).abs() < 1.0e-12);
     assert!((rt.material_hint_fracs.rock - 0.75).abs() < 1.0e-12);
@@ -261,6 +274,10 @@ fn runtime_tile_json_payload_deserializes_through_static_payload() {
                 "field_origin_x_m": -5.0,
                 "field_origin_z_m": -5.0,
                 "field_span_m": 10.0,
+                "source_origin_x_m": 100.0,
+                "source_origin_z_m": 200.0,
+                "source_span_m": 35.15625,
+                "source_scene_ratio": 3.515625,
                 "height_scale_m": 100.0,
                 "pass_network": {
                     "routes": 12,

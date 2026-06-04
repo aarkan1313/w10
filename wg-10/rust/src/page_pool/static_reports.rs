@@ -41,7 +41,10 @@ impl Wg10PagePool {
             out.set("contract_kind", "accepted_static_reference_visual_baseline");
             out.set("source_scope", reference.source_scope.clone());
             out.set("accepted_visual_baseline", true);
-            out.set("has_source_display_mapping", true);
+            out.set(
+                "has_source_display_mapping",
+                reference_has_source_display_mapping(reference),
+            );
             out.set("has_mountain_macro_field", true);
             out.set("has_pass_network_routes", has_pass_network);
             out.set("has_route_carving", has_route_carving);
@@ -79,6 +82,10 @@ impl Wg10PagePool {
                 out.set("height_source", "accepted_reference_payload_for_preview");
                 out.set("procedural_world_layer_height", false);
                 out.set("reference_source_scope", reference.source_scope.clone());
+                out.set(
+                    "has_source_display_mapping",
+                    reference_has_source_display_mapping(reference),
+                );
                 out.set("has_pass_network_routes", has_pass_network);
                 out.set("has_route_carving", has_route_carving);
                 out.set("has_page_stable_conditioning", has_conditioning);
@@ -111,6 +118,10 @@ impl Wg10PagePool {
                 out.set("reference_source_scope", reference.source_scope.clone());
                 out.set("height_source", "bound_world_layer_reference_payload");
                 out.set("procedural_world_layer_height", false);
+                out.set(
+                    "has_source_display_mapping",
+                    reference_has_source_display_mapping(reference),
+                );
                 out.set("has_pass_network_routes", has_pass_network);
                 out.set("has_route_carving", has_route_carving);
                 out.set("has_page_stable_conditioning", has_conditioning);
@@ -320,12 +331,36 @@ fn reference_has_conditioning(reference: &StaticHeightRuntime) -> bool {
         && reference.conditioning_stats.conditioned_ptp > 0.0
 }
 
+fn reference_has_source_display_mapping(reference: &StaticHeightRuntime) -> bool {
+    reference.source_origin_x_m.is_finite()
+        && reference.source_origin_z_m.is_finite()
+        && reference.source_span_x_m.is_finite()
+        && reference.source_span_z_m.is_finite()
+        && reference.source_scene_ratio.is_finite()
+        && reference.source_span_x_m > 0.0
+        && reference.source_span_z_m > 0.0
+        && reference.source_scene_ratio > 0.0
+}
+
 fn reference_report_dict(reference: &StaticHeightRuntime) -> Dictionary<GString, Variant> {
     let mut out = Dictionary::<GString, Variant>::new();
     out.set("generator_version", reference.generator_version.clone());
     out.set("source_scope", reference.source_scope.clone());
     out.set("height_scale_m", reference.height_scale_m);
     out.set("feature_span_m", reference.feature_span_m);
+    out.set(
+        "has_source_display_mapping",
+        reference_has_source_display_mapping(reference),
+    );
+    out.set("display_origin_x_m", reference.origin_x_m);
+    out.set("display_origin_z_m", reference.origin_z_m);
+    out.set("display_span_x_m", reference.span_x_m);
+    out.set("display_span_z_m", reference.span_z_m);
+    out.set("source_origin_x_m", reference.source_origin_x_m);
+    out.set("source_origin_z_m", reference.source_origin_z_m);
+    out.set("source_span_x_m", reference.source_span_x_m);
+    out.set("source_span_z_m", reference.source_span_z_m);
+    out.set("source_scene_ratio", reference.source_scene_ratio);
     out.set("has_corridor", reference.has_corridor);
     out.set("corridor_frac", reference.corridor_frac);
     out.set("has_material_hints", reference.has_material_hints);

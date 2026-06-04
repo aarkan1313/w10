@@ -1,7 +1,8 @@
 use serde::Deserialize;
 
 use super::{
-    height_percentile, material_hint_fractions, validate_conditioning_stats, StaticPassNetwork,
+    height_percentile, material_hint_fractions, validate_conditioning_stats,
+    validate_source_display_mapping, StaticPassNetwork,
 };
 use crate::page_pool::static_reference::{
     StaticConditioningStats, StaticHeightRuntime, StaticMaterialHintGrids,
@@ -30,6 +31,10 @@ pub(super) struct StaticRuntimeTile {
     pub(super) field_origin_x_m: f64,
     pub(super) field_origin_z_m: f64,
     pub(super) field_span_m: f64,
+    pub(super) source_origin_x_m: f64,
+    pub(super) source_origin_z_m: f64,
+    pub(super) source_span_m: f64,
+    pub(super) source_scene_ratio: f64,
     pub(super) height_scale_m: f64,
     pub(super) pass_network: Option<StaticPassNetwork>,
     pub(super) stats: Option<StaticConditioningStats>,
@@ -134,6 +139,14 @@ impl StaticHeightRuntime {
                 tile.height_scale_m, payload.height_scale_m
             ));
         }
+        validate_source_display_mapping(
+            "static reference runtime tile",
+            tile.source_origin_x_m,
+            tile.source_origin_z_m,
+            tile.source_span_m,
+            tile.source_span_m,
+            tile.source_scene_ratio,
+        )?;
 
         let grid_n = payload.field_n;
         let grid_len = grid_n
@@ -233,6 +246,11 @@ impl StaticHeightRuntime {
             source_scope: tile.source_scope.clone(),
             height_scale_m: payload.height_scale_m,
             feature_span_m: payload.feature_span_m,
+            source_origin_x_m: tile.source_origin_x_m,
+            source_origin_z_m: tile.source_origin_z_m,
+            source_span_x_m: tile.source_span_m,
+            source_span_z_m: tile.source_span_m,
+            source_scene_ratio: tile.source_scene_ratio,
             has_corridor,
             corridor_frac,
             has_material_hints,

@@ -141,7 +141,8 @@ single rendered page:
    mirror.
    Current Rust bridge seam: `StaticHeightRuntime` can now load the exported
    runtime tile payload shape directly, preserving height scale, corridor,
-   pass-network, conditioning, and low-pass/floor/rock/snow material facts.
+   pass-network, conditioning, low-pass/floor/rock/snow material facts, and the
+   explicit display/source origin, span, and ratio fields.
    Current owner-fly bridge: REFERENCE, MOUNTAIN/network, and WORLD preview now
    bind that runtime tile artifact. This is still a reference-backed bridge, not
    final procedural world-layer synthesis.
@@ -302,8 +303,13 @@ single rendered page:
   covering the accepted corridor mask.
 - `cargo test -p wg10_terrain --lib page_pool::static_reference::payload -- --nocapture`
   now proves the Rust static-reference loader accepts the exported runtime tile
-  schema and preserves height, corridor, pass-network, conditioning, and
-  material facts; focused result: 8 passed / 0 failed.
+  schema and preserves height, corridor, pass-network, conditioning, material
+  facts, and source/display mapping fields; focused result: 8 passed / 0
+  failed.
+- `review_runtime` now gates the real runtime-tile source/display mapping for
+  REFERENCE and `MOUNTAIN/network_ref`: display origin `-38400,-38400`, display
+  span `76800`, source origin `72000,41000`, source span `270000`, and
+  `source_scene_ratio=3.515625`.
 - `cargo test -p wg10_terrain --lib` now passes 233 / 0 after the loader split.
 - `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
   `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1 after

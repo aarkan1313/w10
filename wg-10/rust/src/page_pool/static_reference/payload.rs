@@ -29,6 +29,10 @@ pub(super) struct StaticReviewPayload {
     chunk_n: usize,
     chunk_span_m: f64,
     world_span_m: f64,
+    source_world_span_m: Option<f64>,
+    source_scene_ratio: Option<f64>,
+    world_origin_x_m: Option<f64>,
+    world_origin_z_m: Option<f64>,
     height_scale_m: f64,
     feature_span_m: f64,
     seeds: Vec<StaticSeed>,
@@ -302,6 +306,22 @@ impl StaticHeightRuntime {
         let has_material_hints = material_hints.is_some();
         let outside_height_m = height_percentile(&grid, 0.05);
         let edge_fade_m = span_x.min(span_z) * 0.08;
+        let source_scene_ratio = payload.source_scene_ratio.unwrap_or_else(|| {
+            payload.source_world_span_m.unwrap_or(payload.world_span_m) / payload.world_span_m
+        });
+        let source_span = payload
+            .source_world_span_m
+            .unwrap_or(payload.world_span_m * source_scene_ratio);
+        let source_origin_x_m = payload.world_origin_x_m.unwrap_or(min_x);
+        let source_origin_z_m = payload.world_origin_z_m.unwrap_or(min_z);
+        validate_source_display_mapping(
+            "static reference",
+            source_origin_x_m,
+            source_origin_z_m,
+            source_span,
+            source_span,
+            source_scene_ratio,
+        )?;
 
         Ok(Self {
             grid,
@@ -318,6 +338,11 @@ impl StaticHeightRuntime {
             source_scope: payload.source_scope,
             height_scale_m: payload.height_scale_m,
             feature_span_m: payload.feature_span_m,
+            source_origin_x_m,
+            source_origin_z_m,
+            source_span_x_m: source_span,
+            source_span_z_m: source_span,
+            source_scene_ratio,
             has_corridor,
             corridor_frac,
             has_material_hints,
@@ -461,6 +486,34 @@ fn validate_conditioning_stats(stats: StaticConditioningStats) -> Result<(), Str
     }
     if stats.p05 > stats.p50 || stats.p50 > stats.p95 || stats.p95 <= stats.p05 {
         return Err("static reference: conditioning stats percentiles must satisfy p05 <= p50 <= p95 with p95 > p05".into());
+    }
+    Ok(())
+}
+
+fn validate_source_display_mapping(
+    label: &str,
+    source_origin_x_m: f64,
+    source_origin_z_m: f64,
+    source_span_x_m: f64,
+    source_span_z_m: f64,
+    source_scene_ratio: f64,
+) -> Result<(), String> {
+    for (name, value) in [
+        ("source_origin_x_m", source_origin_x_m),
+        ("source_origin_z_m", source_origin_z_m),
+        ("source_span_x_m", source_span_x_m),
+        ("source_span_z_m", source_span_z_m),
+        ("source_scene_ratio", source_scene_ratio),
+    ] {
+        if !value.is_finite() {
+            return Err(format!("{label}: {name} must be finite"));
+        }
+    }
+    if source_span_x_m <= 0.0 || source_span_z_m <= 0.0 {
+        return Err(format!("{label}: source span must be > 0"));
+    }
+    if source_scene_ratio <= 0.0 {
+        return Err(format!("{label}: source_scene_ratio must be > 0"));
     }
     Ok(())
 }

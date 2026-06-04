@@ -75,6 +75,23 @@
 > switch back to full multi-biome compose while still passing only taxonomy
 > checks. This reinforces that WORLD remains diagnostic until compose is
 > backgrounded/cached or given a cheaper preview contract.
+> Follow-up source/display mapping gate: the Rust static-reference runtime now
+> stores and reports the accepted runtime tile's explicit display/source
+> mapping instead of only claiming `has_source_display_mapping=true`. The Godot
+> smoke gate checks display origin `-38400,-38400`, display span `76800`, source
+> origin `72000,41000`, source span `270000`, and
+> `source_scene_ratio=3.515625` for the accepted bridge. Current proof:
+> `cargo fmt -p wg10_terrain -- --check` passes,
+> `cargo test -p wg10_terrain --lib page_pool::static_reference::payload -- --nocapture`
+> = 8/8, `cargo test -p wg10_terrain --lib` = 233/233,
+> `tools\build_rust.ps1` builds, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. Latest
+> scripted motion has zero hide/show/full events in REFERENCE, MOUNTAIN, and
+> WORLD; CPU p99/max is REFERENCE 9.729/10.079 ms, MOUNTAIN 10.038/10.133 ms,
+> WORLD 9.817/16.880 ms, and render GPU p99 is REFERENCE 0.752 ms, MOUNTAIN
+> 0.750 ms, WORLD 0.750 ms. The visual gate again proves REFERENCE vs
+> MOUNTAIN/network and REFERENCE vs WORLD preview at mean/p95 RGB delta
+> `0.000000/0.000000`.
 > Follow-up harness separation: the owner-fly runtime snapshot/report builder
 > now lives in `wg-10/worldgen_terrain/harness/mountain_fly_snapshot.gd`.
 > `mountain_fly_review.gd` still exposes the same `debug_runtime_snapshot()`
