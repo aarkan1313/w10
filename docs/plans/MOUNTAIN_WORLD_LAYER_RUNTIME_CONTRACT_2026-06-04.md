@@ -21,11 +21,14 @@ The tracked construction source for this contract is now
 thin writer around that module, so tests and future Rust/GPU ports can depend
 on the world-layer contract instead of scraping an exporter implementation.
 
-The live `MOUNTAIN/network_ref` path now uses the same seed, relief family, and
+The raw procedural mountain page path uses the same seed, relief family, and
 source window, but it still runs the seam-safe page recipe. That recipe has
 fixed affine constants, world-anchored kernels, flow-level gating, and no
 pass-network or whole-field conditioning fact. It is correct for page-stable
 runtime synthesis, but it is not the same accepted mountain-network world layer.
+In the reviewed `MOUNTAIN/network_ref` mode, that raw path is currently bypassed
+by the reference-backed bridge described below so the owner-visible mountain
+network look is stable while the procedural world-layer producer is designed.
 
 Latest bridge status: live `MOUNTAIN/network_ref` now binds the accepted
 mountain payload beside the live producer as a fact/material/height reference.
@@ -188,9 +191,10 @@ single rendered page:
   conditioned spans, and ordered `p05/p95` percentiles).
 - `review_runtime` now also proves `mountain_world_layer_contract_report()`
   classifies startup `REFERENCE` as
-  `accepted_static_reference_visual_baseline`, classifies live `MOUNTAIN` as
-  `single_seam_safe_mountain_page_recipe`, and does not let any current mode
-  claim `satisfies_mountain_world_layer_contract=true`.
+  `accepted_static_reference_visual_baseline`, classifies reviewed
+  `MOUNTAIN/network_ref` as
+  `single_mountain_world_layer_reference_bridge`, and does not let any current
+  mode claim `satisfies_mountain_world_layer_contract=true`.
 - `review_runtime` now also proves live `MOUNTAIN/network_ref` binds the
   accepted mountain world-layer reference facts: bound source scope
   `coherent_full_field_carved_with_pass_network_sliced_for_review`, nonzero

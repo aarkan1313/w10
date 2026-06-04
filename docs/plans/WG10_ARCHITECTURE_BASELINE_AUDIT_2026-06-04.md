@@ -23,14 +23,17 @@ The project currently has multiple terrain architectures alive at once:
 
 3. **Current biome live streaming architecture**
    - Producers: `Wg10PagePool.configure_biome(...)` for the explicit
-     single-mountain candidate fly mode, `Wg10PagePool.configure_biome_world(...)`
+     single-mountain fly mode, `Wg10PagePool.configure_biome_world(...)`
      for the WORLD composition A/B mode.
    - Shaders: `recipe_primitives.glsl` + `biome_page.glsl` + the 11 compiled
      `biome_<name>.glsl` fragments.
    - Renderer: same clipmap renderer as legacy.
    - Current scene: `wg-10/worldgen_terrain/harness/mountain_fly_review.tscn`
-   - Current behavior: MOUNTAIN mode remains available through key `2`/`B` as
-     the live candidate. WORLD mode remains available through key `3`/`B`; it
+   - Current behavior: MOUNTAIN mode remains available through key `2`/`B`.
+     In the accepted `network_ref` preset it is currently a reference-backed
+     visual bridge, not raw procedural height. The raw seam-safe live recipe
+     remains visible through the close-debug preset and as the next procedural
+     world-layer target. WORLD mode remains available through key `3`/`B`; it
      generates a texel-corner runtime-biome weight field per page, dispatches
      each active biome context, and folds those core height fields through the
      GPU compose passes before writing the page texture.
@@ -45,6 +48,19 @@ The project currently has multiple terrain architectures alive at once:
      display the accepted mountain-network world layer, but it is not the final
      live biome producer.
 
+5. **Reference-backed MOUNTAIN visual bridge**
+   - Producer state: `configure_biome(...)` plus
+     `bind_mountain_world_layer_reference(...)`.
+   - Data source: the same accepted `mountain_network_chunks.json` payload used
+     by REFERENCE.
+   - Status: `MOUNTAIN/network_ref` reports runtime=`single` and
+     biome_path=`true`, but its contract kind is
+     `single_mountain_world_layer_reference_bridge` with
+     `height_source=bound_world_layer_reference_payload` and
+     `procedural_world_layer_height=false`. This recovers the owner-visible
+     mountain-network look in the live review mode while keeping the final
+     procedural producer gap explicit.
+
 This explains the owner report:
 
 - The old network-chunk scene looked better because it used the accepted mountain
@@ -55,9 +71,9 @@ This explains the owner report:
   against the same mountain world layer without pretending the biome recipe has
   learned the pass-network/conditioning contract.
 - The current live BIOME fly is proving page producer composition and renderer
-  behavior, not full owner visual acceptance. The mountain review now starts on
-  accepted `REFERENCE`, while single `MOUNTAIN` and WORLD composition stay as
-  explicit A/B modes.
+  behavior. The mountain review now starts on accepted `REFERENCE`; reviewed
+  `MOUNTAIN/network_ref` matches that baseline through the reference-backed
+  bridge; WORLD composition stays as an explicit diagnostic mode.
   WORLD can compose active runtime-biome weights, but materials/content/facts and
   the owner fly review are still open.
 - The pop-in and morph issues have two pieces: renderer scheduling controls
@@ -70,10 +86,12 @@ This explains the owner report:
 
 ## 2026-06-04 Deep-Dive Addendum
 
-The latest source-window fix makes live `MOUNTAIN/network_ref` sample the same
+The latest source-window fix made the raw live mountain recipe sample the same
 270 km source window that the accepted static payload came from, but that did
-not make the live recipe match the accepted mountain-network scene. The current
-evidence says this is expected.
+not make the recipe match the accepted mountain-network scene. The current
+evidence says this is expected. The reviewed `MOUNTAIN/network_ref` mode now
+uses the accepted payload as a reference-backed height/material/fact bridge
+while the procedural world-layer producer remains open.
 
 The accepted payload generator is:
 
@@ -105,10 +123,11 @@ separate prototype.
 
 The runtime now exposes that distinction directly through
 `Wg10PagePool.mountain_world_layer_contract_report()`. `review_runtime` gates
-that `REFERENCE` reports the accepted static visual baseline facts, live
-`MOUNTAIN` reports `single_seam_safe_mountain_page_recipe` with a pass-network
-blocking gap, and no active mode claims full mountain-world-layer contract
-satisfaction yet.
+that `REFERENCE` reports the accepted static visual baseline facts, reviewed
+`MOUNTAIN/network_ref` reports
+`single_mountain_world_layer_reference_bridge` with reference-backed
+height/material/facts, and no active mode claims full procedural
+mountain-world-layer contract satisfaction yet.
 
 The accepted Python world-layer now also owns the runtime-page sampling seam:
 `source_origin_for_display`, `sample_world_page`, and `sample_payload_page`.
@@ -267,7 +286,9 @@ Validation:
   visual capture share producer constants, `configure_biome*` call shape,
   clipmap/view constants, morph/detail defaults, fog, and loaded edge.
 
-Follow-up live visual rerun:
+Follow-up live visual rerun (historical, superseded for reviewed
+`MOUNTAIN/network_ref` by
+`7e0fb98 fix(slice4): recover mountain network visual bridge`):
 
 - `ring_displace.gdshader` now colors terrain from the same displayed height used
   for `VERTEX.y`, after `relief_scale`. This fixes a presentation bug where the

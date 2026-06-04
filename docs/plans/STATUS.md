@@ -3,6 +3,18 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
+> **Read this first:** latest committed checkpoint is
+> `7e0fb98 fix(slice4): recover mountain network visual bridge`, tagged
+> `backup-slice4-mountain-visual-bridge-20260604-7e0fb98`. `REFERENCE` remains
+> the accepted static mountain-network baseline streamed through the runtime
+> page pool. `MOUNTAIN/network_ref` now matches that baseline through a
+> reference-backed height/material/fact bridge
+> (`single_mountain_world_layer_reference_bridge`,
+> `height_source=bound_world_layer_reference_payload`,
+> `procedural_world_layer_height=false`). This recovers the owner-visible
+> mountain network look but does not complete final procedural biome synthesis.
+> `WORLD` remains diagnostic until multi-biome composition is async/cached or
+> given a cheaper preview contract.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:
@@ -232,6 +244,10 @@
 > normal mode (`biome_material_mix=0.34`, gated by `ring_material_tint_check.gd`),
 > so composed WORLD no longer reads as one undifferentiated mountain palette. This
 > is a visual-readability bridge, not final per-pixel biome material blending.
+> Historical note, superseded by
+> `7e0fb98 fix(slice4): recover mountain network visual bridge`: the following
+> live-MOUNTAIN mismatch described the raw recipe before MOUNTAIN/network_ref
+> became reference-backed for height/material/facts.
 > Follow-up shader fix: the palette now uses the same displayed height as
 > `VERTEX.y` (`(h + detail) * relief_scale`) instead of coloring against unscaled
 > page metres. This removed the misleading snow/gray wash. The follow-up producer
@@ -335,11 +351,11 @@
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. Current evidence:
 > REFERENCE streams 45 pages from `mountain_network_chunks.json` and visibly
 > restores the accepted mountain massifs through the runtime renderer.
-> MOUNTAIN/network_ref streams 45 pages but still does not match the accepted
-> `mountain_network_chunks_review.tscn` look; after the review-preset seed/relief
-> calibration and source-window transform it has dense mountain-scale relief, but
-> remains raw/faceted live page content rather than the conditioned
-> full-field/pass-network mountain artifact.
+> MOUNTAIN/network_ref now streams the same accepted mountain world-layer payload
+> through the live single-producer mode as a reference-backed height/material/fact
+> bridge; the latest capture matches REFERENCE at the reviewed frame and the
+> contract reports `procedural_world_layer_height=false` so it cannot be mistaken
+> for final procedural synthesis.
 > MOUNTAIN/close_debug streams 45 pages but is visibly faceted/lumpy at close range,
 > so it remains a diagnostic scale, not an acceptance target.
 > WORLD streams 45 composed pages and route colors are visible; the normal WORLD
@@ -348,10 +364,11 @@
 > proof of accepted biome visuals.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
-> is pending. The forward-motion hide/show pop now has an automated zero-hide
-> runtime gate, but the owner still needs to fly the scene to judge remaining
-> visual quality, terrain content, and any non-hide artifacts. Per-biome materials/content
-> still need review. Slice 4c is also still open: runtime default flip,
+> is pending after the reference-backed visual bridge. The forward-motion hide/show pop now has
+> an automated zero-hide runtime gate, and the latest capture shows the reviewed
+> MOUNTAIN/network bridge matching REFERENCE, but the owner still needs to fly
+> the scene to judge remaining visual quality, terrain content, and any non-hide
+> artifacts. Per-biome materials/content still need review. Slice 4c is also still open: runtime default flip,
 > atlas-removal audit, hardened perf gate, and owner acceptance are pending.
 > Facts/collision still rely on the legacy `height.rs` path until a follow-up facts story is
 > designed or explicitly exempted.
@@ -370,7 +387,8 @@
 > locked by `mountain_fly_runtime_config_check.gd`; the owner scene and runtime visual
 > capture share levels, span, lead, morph/detail defaults, fog/loaded edge, shader path,
 > and view configuration. The owner scene now also has direct architecture-mode
-> keys: `1` REFERENCE accepted payload, `2` live MOUNTAIN recipe, `3` WORLD compose,
+> keys: `1` REFERENCE accepted payload, `2` MOUNTAIN/network reference-backed
+> visual bridge with close-debug raw recipe preset available, `3` WORLD compose,
 > and `4` LEGACY atlas; `B` still cycles the same modes. Follow-up hardening: the
 > producer helper exposes
 > `runtime_seed()` instead of `seed()` to avoid the GDScript built-in RNG seeder, and

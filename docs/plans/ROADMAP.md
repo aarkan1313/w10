@@ -5,10 +5,24 @@ in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
 **Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
-`docs/plans/STATUS.md` top. Current work is Slice 4 stabilization: mountain biome GPU runtime
-scale-invariance is implemented through `flow_max_level`, and the missing cross-level macro gate is now
-wired, but Slice 4 is **not accepted** until the windowed 576 reproving, cross-level gate run, and owner
-re-fly pass. Keep broad refactors paused until that visual baseline exists.
+`docs/plans/STATUS.md` top plus
+`docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md`. Current work is Slice 4
+stabilization and recovery:
+
+- The scale-invariant biome producer work is implemented and gated (`flow_max_level`,
+  windowed 576 parity, cross-level macro agreement, runtime mode gates).
+- `REFERENCE` is the accepted mountain-network visual baseline streamed through the live page pool.
+- `MOUNTAIN/network_ref` is now a reference-backed visual bridge
+  (`single_mountain_world_layer_reference_bridge`): it uses the accepted payload for
+  height/material/facts and matches REFERENCE in the latest capture, but it is **not final
+  procedural biome synthesis**.
+- `WORLD` remains diagnostic until multi-biome composition is moved off the synchronous fly stream
+  or given a cheaper preview contract.
+
+Next roadmap target: keep the recovered visual baseline stable while converting the
+reference-backed mountain bridge into a generated/procedural world-layer producer with the same
+pass-network, conditioning, material/fact, and facts/collision contract. Broad refactors should stay
+attached to that target.
 
 Last updated: 2026-05-31 (**Phase 5 ACTIVE — see the "▶ YOU ARE HERE" box under the Phase 5 header for the
 plain-language current state.** Short version: M0–M4 DONE (engine machinery; gates cargo 121 · fast 6/6 · gpu
