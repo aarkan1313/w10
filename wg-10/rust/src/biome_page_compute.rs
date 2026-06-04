@@ -30,6 +30,7 @@ use godot::classes::{
 };
 
 mod abi;
+mod compose_api;
 mod helpers;
 mod kernels;
 mod schedule_coast;
@@ -100,21 +101,6 @@ impl Wg10BiomePageCompute {
         self.primitives_src = Some(prim);
         self.machine_src = Some(machine);
         GString::new()
-    }
-
-    /// Load the biome FRAGMENT used to satisfy the machine's `biome_pass()` declaration during
-    /// COMPOSE (any biome works -- mountain by convention; the compose passes are inline in main()
-    /// and never reach the fragment). Returns "" on success, an error string otherwise. Call once
-    /// before `compose_fields` / `blend_pair`.
-    #[func]
-    pub fn load_compose_fragment(&mut self, fragment_path: GString) -> GString {
-        match std::fs::read_to_string(fragment_path.to_string()) {
-            Ok(s) => {
-                self.compose_fragment = Some(s);
-                GString::new()
-            }
-            Err(e) => GString::from(format!("compose fragment glsl: {e}").as_str()),
-        }
     }
 
     /// Run the FULL mountain pass chain for ONE page (style = ALPINE_BRANCHING, matching the
@@ -398,105 +384,6 @@ impl Wg10BiomePageCompute {
             sl[i] = core[i] as f64;
         }
         out
-    }
-
-    /// COMPOSE entry (Slice-4b.11): GPU port of `biome_compose::compose_biomes`. Composes
-    /// `n_fields` per-recipe height fields (concatenated row-major in `fields_flat`, each
-    /// `rows*cols` long) by their per-pixel weights (`weights_flat`, same layout) into one field.
-    /// `mode_is_field` chooses the blend mode (true="field", false="height_favored"); the favored
-    /// path is applied EXACTLY for n_fields==2 (the fold uses FIELD blend for 3+ -- mirrors the
-    /// oracle). Returns the composed field (length rows*cols) or an EMPTY array on error.
-    /// Readback ONLY here (test/gate entry). WINDOWED only (local RD null headless).
-    #[allow(clippy::too_many_arguments)]
-    #[func]
-    pub fn compose_fields(
-        &self,
-        fields_flat: PackedFloat64Array,
-        weights_flat: PackedFloat64Array,
-        n_fields: i64,
-        rows: i64,
-        cols: i64,
-        mode_is_field: bool,
-        favor_strength: f64,
-        relief_confidence_floor: f64,
-    ) -> PackedFloat64Array {
-        let rows = rows as usize;
-        let cols = cols as usize;
-        let n = rows * cols;
-        let nf = n_fields as usize;
-        if nf == 0 {
-            godot_error!("compose_fields: n_fields must be >= 1");
-            return PackedFloat64Array::new();
-        }
-        if fields_flat.len() != nf * n || weights_flat.len() != nf * n {
-            godot_error!(
-                "compose_fields: fields/weights flat len mismatch (got {}/{}, expected {})",
-                fields_flat.len(), weights_flat.len(), nf * n
-            );
-            return PackedFloat64Array::new();
-        }
-        // un-flatten into per-recipe f32 fields (the GPU is f32 throughout).
-        let ff = fields_flat.as_slice();
-        let wf = weights_flat.as_slice();
-        let mut fields: Vec<Vec<f32>> = Vec::with_capacity(nf);
-        let mut weights: Vec<Vec<f32>> = Vec::with_capacity(nf);
-        for k in 0..nf {
-            fields.push(ff[k * n..(k + 1) * n].iter().map(|&x| x as f32).collect());
-            weights.push(wf[k * n..(k + 1) * n].iter().map(|&x| x as f32).collect());
-        }
-        match self.run_compose_inner(
-            &fields, &weights, rows, cols, mode_is_field,
-            favor_strength as f32, relief_confidence_floor as f32,
-        ) {
-            Ok(out) => f32s_to_packed_f64(&out),
-            Err(e) => {
-                godot_error!("Wg10BiomePageCompute::compose_fields error: {e}");
-                PackedFloat64Array::new()
-            }
-        }
-    }
-
-    /// BLEND-PAIR entry (Slice-4b.11): GPU port of `biome_compose::blend_field` (mode_is_field=true)
-    /// and `biome_compose::blend_height_favored` (mode_is_field=false). A SINGLE blend of `a`/`b`
-    /// at per-pixel weight `w_a` (NOT the running-accumulator fold -- w_a is used DIRECTLY, exactly
-    /// as the two standalone oracle functions do). Returns the blended field (length rows*cols) or
-    /// an EMPTY array on error. Readback ONLY here. WINDOWED only.
-    #[allow(clippy::too_many_arguments)]
-    #[func]
-    pub fn blend_pair(
-        &self,
-        a: PackedFloat64Array,
-        b: PackedFloat64Array,
-        w_a: PackedFloat64Array,
-        rows: i64,
-        cols: i64,
-        mode_is_field: bool,
-        favor_strength: f64,
-        relief_confidence_floor: f64,
-    ) -> PackedFloat64Array {
-        let rows = rows as usize;
-        let cols = cols as usize;
-        let n = rows * cols;
-        if a.len() != n || b.len() != n || w_a.len() != n {
-            godot_error!(
-                "blend_pair: a/b/w_a len mismatch (got {}/{}/{}, expected {})",
-                a.len(), b.len(), w_a.len(), n
-            );
-            return PackedFloat64Array::new();
-        }
-        let a32: Vec<f32> = a.as_slice().iter().map(|&x| x as f32).collect();
-        let b32: Vec<f32> = b.as_slice().iter().map(|&x| x as f32).collect();
-        let w32: Vec<f32> = w_a.as_slice().iter().map(|&x| x as f32).collect();
-        match self.run_blend_inner(
-            &a32, &b32, &w32, rows, cols, mode_is_field,
-            favor_strength as f32, relief_confidence_floor as f32,
-        ) {
-            Ok(out) => f32s_to_packed_f64(&out),
-            Err(e) => {
-                godot_error!("Wg10BiomePageCompute::blend_pair error: {e}");
-                PackedFloat64Array::new()
-            }
-        }
     }
 
 }
