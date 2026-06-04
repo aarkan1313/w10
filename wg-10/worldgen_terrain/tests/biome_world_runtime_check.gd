@@ -70,6 +70,11 @@ func _run() -> int:
 	var mean_runner_up := 0.0
 	var mean_top := 0.0
 	var weakest_top := 1.0
+	var corner_mixed_pages := 0
+	var max_corner_mismatches := 0
+	var max_probe_active := 0
+	var weakest_probe_top := 1.0
+	var max_probe_runner_up := 0.0
 	for ix in range(-route_radius, route_radius + 1, route_step):
 		for iz in range(-route_radius, route_radius + 1, route_step):
 			var report = pool.call(
@@ -83,6 +88,10 @@ func _run() -> int:
 			var active := int(report.get("active_count", 0))
 			var top := float(report.get("selected_weight", 0.0))
 			var runner := float(report.get("runner_up_weight", 0.0))
+			var corner_mismatches := int(report.get("corner_route_mismatches", 0))
+			var probe_active := int(report.get("max_probe_active_count", active))
+			var probe_top := float(report.get("min_probe_top_weight", top))
+			var probe_runner := float(report.get("max_probe_runner_up_weight", runner))
 			weight_samples += 1
 			max_active = max(max_active, active)
 			mean_top += top
@@ -93,6 +102,12 @@ func _run() -> int:
 				multi_active_pages += 1
 			if runner >= MATERIAL_RUNNER_UP:
 				ambiguous_pages += 1
+			if corner_mismatches > 0:
+				corner_mixed_pages += 1
+			max_corner_mismatches = max(max_corner_mismatches, corner_mismatches)
+			max_probe_active = max(max_probe_active, probe_active)
+			weakest_probe_top = minf(weakest_probe_top, probe_top)
+			max_probe_runner_up = maxf(max_probe_runner_up, probe_runner)
 	if weight_samples == 0:
 		push_error("[wg10-biome-world] no route weight samples")
 		return 1
@@ -112,6 +127,13 @@ func _run() -> int:
 	if multi_active_pages == 0:
 		push_error("[wg10-biome-world] route weights collapsed; no active compose weights visible")
 		return 1
+	print("[wg10-biome-world] route_inpage corner_mixed=%d max_corner_mismatches=%d max_probe_active=%d weakest_probe_top=%f max_probe_runner_up=%f" % [
+		corner_mixed_pages,
+		max_corner_mismatches,
+		max_probe_active,
+		weakest_probe_top,
+		max_probe_runner_up,
+	])
 
 	var lod_route_samples := 0
 	var lod_route_mismatches := 0

@@ -194,6 +194,15 @@ impl Wg10PagePool {
         world_route::biome_weights_for_page(self.seed, world, origin_x, origin_z, world_span)
     }
 
+    pub(super) fn world_biome_weights_at(
+        &self,
+        world: &BiomeWorldRuntime,
+        x: f64,
+        z: f64,
+    ) -> std::collections::BTreeMap<String, f64> {
+        world_route::biome_weights_at_point(self.seed, world, x, z)
+    }
+
     /// Roll back a failed compute into a newly-created texture.
     pub(super) fn rollback_failed_allocate(
         &mut self,

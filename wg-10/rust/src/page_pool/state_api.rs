@@ -5,7 +5,7 @@ use godot::prelude::*;
 
 use crate::page_policy::PageKey;
 
-use super::Wg10PagePool;
+use super::{world_route, Wg10PagePool};
 
 #[godot_api(secondary)]
 impl Wg10PagePool {
@@ -64,10 +64,43 @@ impl Wg10PagePool {
         let mut ranked: Vec<(&String, &f64)> = weights.iter().collect();
         ranked.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
 
+        let selected = world_route::selected_biome_name(&weights);
         let selected_weight = ranked.first().map(|(_, weight)| **weight).unwrap_or(0.0);
         let runner_up_weight = ranked.get(1).map(|(_, weight)| **weight).unwrap_or(0.0);
         let weight_sum: f64 = weights.values().sum();
         let active_count = weights.values().filter(|w| **w > 1.0e-9).count() as i64;
+
+        let probes = [
+            (origin_x, origin_z),
+            (origin_x + world_span, origin_z),
+            (origin_x, origin_z + world_span),
+            (origin_x + world_span, origin_z + world_span),
+        ];
+        let mut corner_route_mismatches = 0i64;
+        let mut max_probe_active_count = active_count;
+        let mut min_probe_top_weight = selected_weight;
+        let mut max_probe_runner_up_weight = runner_up_weight;
+        for (x, z) in probes {
+            let probe_weights = self.world_biome_weights_at(world, x, z);
+            let probe_selected = world_route::selected_biome_name(&probe_weights);
+            if probe_selected != selected {
+                corner_route_mismatches += 1;
+            }
+            let mut probe_ranked: Vec<(&String, &f64)> = probe_weights.iter().collect();
+            probe_ranked.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+            let probe_top = probe_ranked
+                .first()
+                .map(|(_, weight)| **weight)
+                .unwrap_or(0.0);
+            let probe_runner_up = probe_ranked
+                .get(1)
+                .map(|(_, weight)| **weight)
+                .unwrap_or(0.0);
+            let probe_active = probe_weights.values().filter(|w| **w > 1.0e-9).count() as i64;
+            max_probe_active_count = max_probe_active_count.max(probe_active);
+            min_probe_top_weight = min_probe_top_weight.min(probe_top);
+            max_probe_runner_up_weight = max_probe_runner_up_weight.max(probe_runner_up);
+        }
 
         out.set("selected_weight", selected_weight);
         out.set("runner_up_weight", runner_up_weight);
@@ -75,6 +108,10 @@ impl Wg10PagePool {
         out.set("weight_sum", weight_sum);
         out.set("center_x", center_x);
         out.set("center_z", center_z);
+        out.set("corner_route_mismatches", corner_route_mismatches);
+        out.set("max_probe_active_count", max_probe_active_count);
+        out.set("min_probe_top_weight", min_probe_top_weight);
+        out.set("max_probe_runner_up_weight", max_probe_runner_up_weight);
         out
     }
 

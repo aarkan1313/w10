@@ -72,6 +72,14 @@
 > measurable bridge toward Slice 4 Part B: the current selector is discarding active
 > weights, and the larger visible pop risk remains the 21% child/parent route mismatch
 > until WORLD routing becomes per-pixel compose instead of whole-page selection.
+> Follow-up in-page route probe: current windowed `biome_world` reports
+> `route_inpage corner_mixed=0 max_corner_mismatches=0 max_probe_active=4
+> weakest_probe_top=0.711914 max_probe_runner_up=0.288086`. In this sampled window,
+> page footprints are not crossing dominant-route boundaries at their corners, but
+> corners can have material runner-up weights. This further narrows the current
+> forward-motion artifact: the hard evidence points first at cross-LOD route changes,
+> while full compose remains required to consume non-dominant active weights and avoid
+> treating biome transitions as single-recipe pages.
 >
 > **Still not accepted / do not claim done:** T7 owner re-fly of `mountain_fly_review.tscn`
 > is pending, the reported forward-motion pop-in still needs an owner/runtime

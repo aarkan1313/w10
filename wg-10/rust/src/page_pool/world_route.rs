@@ -20,7 +20,16 @@ pub(super) fn biome_weights_for_page(
 ) -> BTreeMap<String, f64> {
     let cx = origin_x + world_span * 0.5;
     let cz = origin_z + world_span * 0.5;
-    let weights = grammar::family_weights(cx, cz, seed, &world.pack);
+    biome_weights_at_point(seed, world, cx, cz)
+}
+
+pub(super) fn biome_weights_at_point(
+    seed: i64,
+    world: &BiomeWorldRuntime,
+    x: f64,
+    z: f64,
+) -> BTreeMap<String, f64> {
+    let weights = grammar::family_weights(x, z, seed, &world.pack);
     let mut by_biome: BTreeMap<String, f64> = BTreeMap::new();
     for &(family_idx, weight) in weights.entries() {
         let Some(family_id) = world.pack.family_ids.get(family_idx as usize) else {
