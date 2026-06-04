@@ -10,6 +10,7 @@ const MOUNTAIN := "res://worldgen_terrain/shaders/biome_mountain.glsl"
 const PACK_RES_DIR := "res://worldgen_terrain/packs/dem_v1"
 const PACK_FILE := "terrain_pack.gate.json"
 const GLSL := "res://worldgen_terrain/shaders/height_page.glsl"
+const STATIC_REF_PAYLOAD := "res://worldgen_terrain/generated/review/mountain_network_chunks.json"
 
 const PAGE_PX := 256
 const APRON_PX := 160
@@ -25,6 +26,7 @@ const RELIEF_M_DEFAULT := 1000.0
 const MODE_WORLD := 0
 const MODE_MOUNTAIN := 1
 const MODE_LEGACY := 2
+const MODE_REFERENCE := 3
 
 const PRESET_NETWORK := 0
 const PRESET_CLOSE_DEBUG := 1
@@ -38,15 +40,19 @@ func configure(pool: Object) -> String:
 		return _configure_world(pool)
 	if _mode == MODE_MOUNTAIN:
 		return _configure_mountain(pool)
+	if _mode == MODE_REFERENCE:
+		return _configure_reference(pool)
 	return _configure_legacy(pool)
 
 func cycle_mode() -> void:
-	if _mode == MODE_WORLD:
-		_mode = MODE_MOUNTAIN
-	elif _mode == MODE_MOUNTAIN:
+	if _mode == MODE_MOUNTAIN:
+		_mode = MODE_REFERENCE
+	elif _mode == MODE_REFERENCE:
 		_mode = MODE_LEGACY
-	else:
+	elif _mode == MODE_LEGACY:
 		_mode = MODE_WORLD
+	else:
+		_mode = MODE_MOUNTAIN
 
 func set_mode_label(label: String) -> bool:
 	var normalized := label.to_upper()
@@ -58,6 +64,9 @@ func set_mode_label(label: String) -> bool:
 		return true
 	if normalized == "LEGACY":
 		_mode = MODE_LEGACY
+		return true
+	if normalized == "REFERENCE":
+		_mode = MODE_REFERENCE
 		return true
 	return false
 
@@ -83,6 +92,8 @@ func relief_m() -> float:
 	return _relief_m
 
 func feature_span_m() -> float:
+	if _mode == MODE_REFERENCE:
+		return FEATURE_SPAN_NETWORK_M
 	if _preset == PRESET_CLOSE_DEBUG:
 		return FEATURE_SPAN_CLOSE_DEBUG_M
 	return FEATURE_SPAN_NETWORK_M
@@ -97,6 +108,8 @@ func mode_label() -> String:
 		return "WORLD"
 	if _mode == MODE_MOUNTAIN:
 		return "MOUNTAIN"
+	if _mode == MODE_REFERENCE:
+		return "REFERENCE"
 	return "LEGACY"
 
 func is_world() -> bool:
@@ -104,6 +117,12 @@ func is_world() -> bool:
 
 func is_legacy() -> bool:
 	return _mode == MODE_LEGACY
+
+func is_reference() -> bool:
+	return _mode == MODE_REFERENCE
+
+func view_relief_scale(default_scale: float) -> float:
+	return 1.0 if _mode == MODE_REFERENCE else default_scale
 
 func _configure_world(pool: Object) -> String:
 	return str(pool.call("configure_biome_world",
@@ -117,6 +136,11 @@ func _configure_mountain(pool: Object) -> String:
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, SEED))
+
+func _configure_reference(pool: Object) -> String:
+	return str(pool.call("configure_static_reference",
+		ProjectSettings.globalize_path(STATIC_REF_PAYLOAD),
+		CAPACITY, PAGE_PX, BASE_SPAN, SEED))
 
 func _configure_legacy(pool: Object) -> String:
 	var pack_os := ProjectSettings.globalize_path(PACK_RES_DIR)

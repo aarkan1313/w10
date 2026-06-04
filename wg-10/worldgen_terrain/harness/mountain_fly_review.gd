@@ -3,13 +3,13 @@ extends Node3D
 # Mountain/live-world fly review scene: the thin assembly point the OWNER flies to manually review
 # runtime biome producers through the SAME proven M3 pipeline (pool -> streamer -> rings ->
 # Wg10TerrainView -> fly camera -> profiler -> overlay). COPY of m3_review.gd, with producer modes
-# for grammar-routed WORLD, single MOUNTAIN, and LEGACY kernel atlas.
+# for grammar-routed WORLD, single MOUNTAIN, accepted REFERENCE payload, and LEGACY kernel atlas.
 #
 # LAUNCH: run this scene (windowed). Fly with WASD (+ Shift to sprint to ~1000s m/s), mouse to
 # look, Space/C up/down, ESC to release the mouse. Watch the HUD: fps, frame p99, resident pages.
 #
 # KEYS: K toggle cull-disable, M cycles normal/morph/route debug, O morph on/off, N detail on/off,
-#       P toggles runtime scale preset, and B cycles MOUNTAIN -> LEGACY -> WORLD. The streamer/view
+#       P toggles runtime scale preset, and B cycles MOUNTAIN -> REFERENCE -> LEGACY -> WORLD. The streamer/view
 #       keep the same pool ref; on toggle we free_all + reconfigure live. Starts in MOUNTAIN mode so
 #       the mountain review scene reviews mountain content first; WORLD remains the biome-composition A/B.
 
@@ -229,10 +229,13 @@ func _debug_mode_label() -> String:
 func _reconfigure_view() -> void:
 	if _view == null or _pool == null or _streamer == null or _rings == null or _runtime == null:
 		return
-	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled)
+	var relief_scale := float(_runtime.default_relief_scale())
+	if _producer != null:
+		relief_scale = float(_producer.view_relief_scale(relief_scale))
+	_runtime.configure_view(_view, _pool, _streamer, _rings, _morph_enabled, relief_scale)
 
 # Live producer toggle (B): free_all + reconfigure the SAME pool object between single MOUNTAIN,
-# LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
+# accepted REFERENCE payload, LEGACY dem_v1 kernel atlas, and grammar-routed WORLD. The streamer/view hold the same pool ref and keep
 # working — next update re-acquires pages from the freshly-configured pool. Prints the new state.
 func _cycle_producer_mode() -> void:
 	if _pool == null or _producer == null:

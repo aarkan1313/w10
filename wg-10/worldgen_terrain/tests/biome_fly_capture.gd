@@ -2,6 +2,7 @@ extends SceneTree
 
 # One-shot CAPTURE: stream the live biome runtime through the same clipmap renderer as
 # mountain_fly_review.tscn and save visual evidence. It captures:
+# - REFERENCE: the accepted static mountain-network payload through the runtime renderer
 # - MOUNTAIN/network_ref: the mountain review default
 # - MOUNTAIN/close_debug: local-scale diagnostic
 # - WORLD/network_ref: composed grammar-routed runtime plus route-color diagnostic
@@ -10,11 +11,13 @@ extends SceneTree
 const PRODUCERS := "res://worldgen_terrain/harness/mountain_fly_producers.gd"
 const RUNTIME_CONFIG := "res://worldgen_terrain/harness/mountain_fly_runtime_config.gd"
 const VIEW_SIZE := Vector2i(1280, 720)
+const OUT_REFERENCE := "D:/tmp/wg10_biome_compose/biome_mountain_reference_fly_capture.png"
 const OUT_MOUNTAIN_NETWORK := "D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png"
 const OUT_MOUNTAIN_CLOSE := "D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png"
 const OUT_WORLD := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
 const OUT_ROUTE := "D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png"
 
+const MODE_REFERENCE := "REFERENCE"
 const MODE_MOUNTAIN := "MOUNTAIN"
 const MODE_WORLD := "WORLD"
 const PRESET_NETWORK := "network_ref"
@@ -30,7 +33,10 @@ func _run() -> int:
 	var runtime: Object = load(RUNTIME_CONFIG).new()
 	runtime.register_shader_globals(bool(runtime.default_detail_enabled()))
 
-	var rc := await _capture_mode(runtime, "mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
+	var rc := await _capture_mode(runtime, "mountain_reference", MODE_REFERENCE, PRESET_NETWORK, OUT_REFERENCE, "")
+	if rc != 0:
+		return rc
+	rc = await _capture_mode(runtime, "mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
 	if rc != 0:
 		return rc
 	rc = await _capture_mode(runtime, "mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
@@ -51,7 +57,7 @@ func _capture_mode(runtime: Object, label: String, mode: String, preset: String,
 	if err != "":
 		push_error("[wg10-biome-capture] %s configure failed: %s" % [label, err]); return 1
 	var runtime_mode := str(pool.call("biome_runtime_mode"))
-	var expected_runtime := "world" if mode == MODE_WORLD else "single"
+	var expected_runtime := "static_reference" if mode == MODE_REFERENCE else ("world" if mode == MODE_WORLD else "single")
 	if runtime_mode != expected_runtime:
 		push_error("[wg10-biome-capture] %s expected runtime=%s, got %s" % [label, expected_runtime, runtime_mode]); return 1
 	var streamer: Object = ClassDB.instantiate("Wg10Streamer")
@@ -59,7 +65,8 @@ func _capture_mode(runtime: Object, label: String, mode: String, preset: String,
 	var rings: Object = ClassDB.instantiate("Wg10ClipmapRings")
 	runtime.configure_rings(rings)
 	var view: Object = ClassDB.instantiate("Wg10TerrainView")
-	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()))
+	var relief_scale := float(producer.view_relief_scale(float(runtime.default_relief_scale())))
+	runtime.configure_view(view, pool, streamer, rings, bool(runtime.default_morph_enabled()), relief_scale)
 
 	var vp := SubViewport.new()
 	vp.size = VIEW_SIZE

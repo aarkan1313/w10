@@ -120,7 +120,16 @@ impl Wg10PagePool {
         flow_on: bool,
     ) -> Result<(), String> {
         if self.use_biome_path {
-            if let Some(world) = self.biome_world.as_ref() {
+            if let Some(static_ref) = self.static_ref.as_ref() {
+                static_ref.write_page_texture(
+                    rd,
+                    tex_rid,
+                    origin_x,
+                    origin_z,
+                    world_span,
+                    page_px,
+                )
+            } else if let Some(world) = self.biome_world.as_ref() {
                 let field = self.world_biome_weight_field(
                     world,
                     origin_x,

@@ -35,6 +35,7 @@ impl Wg10PagePool {
                 &mut self.use_biome_path,
                 &mut self.biome_ctx,
                 &mut self.biome_world,
+                &mut self.static_ref,
             );
             return;
         }
@@ -52,6 +53,7 @@ impl Wg10PagePool {
             }
             biome_page_compute::free_biome_page_context(&mut rd, &world.compose_ctx);
         }
+        self.static_ref = None;
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
                 rd.free_rid(rid);
@@ -69,6 +71,7 @@ impl Wg10PagePool {
             &mut self.use_biome_path,
             &mut self.biome_ctx,
             &mut self.biome_world,
+            &mut self.static_ref,
         );
     }
 
@@ -88,6 +91,7 @@ impl Wg10PagePool {
         use_biome_path: &mut bool,
         biome_ctx: &mut Option<biome_page_compute::BiomePageComputeContext>,
         biome_world: &mut Option<BiomeWorldRuntime>,
+        static_ref: &mut Option<super::StaticHeightRuntime>,
     ) {
         *policy = None;
         slot_tex.clear();
@@ -100,6 +104,7 @@ impl Wg10PagePool {
         *use_biome_path = false;
         *biome_ctx = None;
         *biome_world = None;
+        *static_ref = None;
     }
 
     /// Exact predicate mirrored by the `acquire_page` guard.
@@ -111,7 +116,8 @@ impl Wg10PagePool {
                 && self.glsl_source.is_some()
                 && self.compute_ctx.is_some())
                 || self.biome_ctx.is_some()
-                || self.biome_world.is_some())
+                || self.biome_world.is_some()
+                || self.static_ref.is_some())
     }
 
     /// Create a new R32F STORAGE+SAMPLING texture of `page_px x page_px`.
@@ -124,7 +130,8 @@ impl Wg10PagePool {
         fmt.set_usage_bits(
             TextureUsageBits::STORAGE_BIT
                 | TextureUsageBits::SAMPLING_BIT
-                | TextureUsageBits::CAN_COPY_FROM_BIT,
+                | TextureUsageBits::CAN_COPY_FROM_BIT
+                | TextureUsageBits::CAN_UPDATE_BIT,
         );
 
         let view = RdTextureView::new_gd();

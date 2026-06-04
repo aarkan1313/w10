@@ -18,7 +18,9 @@ impl Wg10PagePool {
     /// Human-readable active producer mode for diagnostics/HUDs.
     #[func]
     pub fn biome_runtime_mode(&self) -> GString {
-        if self.biome_world.is_some() {
+        if self.static_ref.is_some() {
+            GString::from("static_reference")
+        } else if self.biome_world.is_some() {
             GString::from("world")
         } else if self.biome_ctx.is_some() {
             GString::from("single")

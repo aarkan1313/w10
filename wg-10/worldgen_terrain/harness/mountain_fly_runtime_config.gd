@@ -34,6 +34,9 @@ func lead_seconds() -> float:
 func detail_amp_m() -> float:
 	return DETAIL_AMP_M
 
+func default_relief_scale() -> float:
+	return RELIEF_SCALE
+
 func default_morph_enabled() -> bool:
 	return DEFAULT_MORPH_ENABLED
 
@@ -56,8 +59,8 @@ func configure_streamer(streamer: Object, pool: Object) -> void:
 func configure_rings(rings: Object) -> void:
 	rings.call("configure", NUM_LEVELS, BASE_SPAN_M, GRID_RES, SHADER)
 
-func configure_view(view: Object, pool: Object, streamer: Object, rings: Object, morph_enabled: bool) -> void:
-	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN_M, RELIEF_SCALE, morph_region(morph_enabled), RELIEF_REF, LEAD_SECONDS)
+func configure_view(view: Object, pool: Object, streamer: Object, rings: Object, morph_enabled: bool, relief_scale := RELIEF_SCALE) -> void:
+	view.call("configure", pool, streamer, rings, NUM_LEVELS, BASE_SPAN_M, relief_scale, morph_region(morph_enabled), RELIEF_REF, LEAD_SECONDS)
 
 func configure_review_environment(env: Environment) -> void:
 	var edge := loaded_edge_m()

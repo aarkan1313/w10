@@ -34,11 +34,24 @@ The project currently has multiple terrain architectures alive at once:
      biome context, and folds those core height fields through the GPU compose
      passes before writing the page texture.
 
+4. **Runtime static-reference bridge**
+   - Producer: `Wg10PagePool.configure_static_reference(...)`.
+   - Data source: `mountain_network_chunks.json`, stitched into the accepted
+     1153x1153 height field and sampled into runtime R32F page textures.
+   - Renderer: same clipmap renderer as the live runtime.
+   - Status: an explicit `REFERENCE` mode in `mountain_fly_review.tscn` and
+     `biome_fly_capture.gd`. This proves the renderer can display the accepted
+     mountain-network world layer, but it is not the final live biome producer.
+
 This explains the owner report:
 
 - The old network-chunk scene looked better because it used the accepted mountain
   world artifact: broad 90 km feature structure plus explicit connected pass
   carving and review dressing.
+- The new `REFERENCE` mode now streams that accepted height payload through the
+  runtime page pool and clipmap renderer, so the live renderer can be compared
+  against the same mountain world layer without pretending the biome recipe has
+  learned the pass-network/conditioning contract.
 - The current live BIOME fly is proving page producer composition and renderer
   behavior, not full owner visual acceptance. The mountain review now starts on
   single-mountain content again, while WORLD composition stays as an explicit A/B.
@@ -78,10 +91,13 @@ geomorph blending.
 Validation:
 
 - `cargo build -p wg10_terrain` into the Godot-loaded target: passed.
-- `cargo test -p wg10_terrain --lib`: 220 passed / 0 failed.
-- `python tools\gate.py --suite review_static`: 1/1 passed. This suite is now
-  scoped to `mountain_network_chunks_review.tscn`, the accepted baseline. An
-  earlier attempt that also included `mountain_world_chunks_review_check.gd`
+- `cargo test -p wg10_terrain --lib`: 221 passed / 0 failed.
+- `python tools\gate.py --suite review_static`: 1/1 passed. This suite now runs
+  windowed because the accepted static review scene builds render/collision
+  resources and the headless command shape was unreliable in the local Godot
+  runtime. It is scoped to `mountain_network_chunks_review.tscn`, the accepted
+  baseline.
+  An earlier attempt that also included `mountain_world_chunks_review_check.gd`
   failed because that generic check is stale against its current
   `biome_compose_world_v2_scale_contract` payload; do not use it as the accepted
   network-baseline proof.
@@ -95,18 +111,19 @@ Validation:
   wired as `python tools\gate.py --suite review_static_visual`.
 - `python tools\gate.py --suite m3`: 10/10 passed after the lit-material,
   route-debug, WORLD route-tint, and display/prefetch scheduler changes.
-  `m3_accept` p99 = 5.64 ms against the 6.0 ms budget;
+  Latest rerun after the reference bridge: `m3_accept` p99 = 5.25 ms against
+  the 6.0 ms budget;
   `ring_material_tint_check.gd` proves
   `biome_debug_color` and WORLD `biome_material_mix=0.34` are bound through the
   actual `Wg10ClipmapRings` material API; `m5_detail_check` remained
   non-vacuous (`diff=0.0124`), bounded, and edge-safe.
 - `python tools\gate.py --suite biome_fly`: 4/4 passed. Production 576 macro
   maxd = 2.3156e-5 <= 5e-4, full 576 maxd = 0.001471 <= 0.002, cross-level
-  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.106 ms.
+  macro ratio = 0.066665 <= 0.08, biome fly GPU p99 = 0.076 ms.
 - `python tools\gate.py --suite fast`: 8/8 passed after extracting
   `mountain_fly_producers.gd` and `mountain_fly_runtime_config.gd`. The producer
   check locks the live review helper's default MOUNTAIN/network preset,
-  close-debug preset, relief clamps, and B-cycle order. The runtime config check
+  close-debug preset, REFERENCE mode, relief clamps, and B-cycle order. The runtime config check
   locks the shared renderer defaults: 5 levels, 8192 m base span, 196608 m loaded
   edge, morph/detail default off, and the review sky color.
 - Direct smoke launch of `mountain_fly_review.tscn`: passed after rebuilding the
@@ -143,19 +160,27 @@ Validation:
   composed height to the page texture. `biome_world` reports
   `route_weight_field samples=289 active_biomes=2 max_sum_delta=0.000000` for
   the sampled live page.
-- `biome_fly_capture.gd` now writes four visual artifacts:
+- `Wg10PagePool.configure_static_reference(...)` now loads the accepted
+  `mountain_network_chunks.json` payload, stitches the 9x9 chunk heights into a
+  single accepted height field, and uploads sampled page textures with
+  `RenderingDevice.texture_update`. Page textures now include
+  `CAN_UPDATE_BIT`, and the mode reports runtime=`static_reference`.
+- `biome_fly_capture.gd` now writes five visual artifacts:
+  `D:/tmp/wg10_biome_compose/biome_mountain_reference_fly_capture.png`,
   `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
   `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,
   `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png`, and
   `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. The mountain
-  network capture gives a separate visual proof for the scene's default producer;
+  reference capture proves the runtime renderer can display the accepted
+  mountain-network height layer. The mountain network capture gives a separate
+  visual proof for the scene's default live producer;
   the close-debug capture shows why that 3.5 km scale should remain diagnostic
   only; the route capture proves the renderer receives page route labels; the
   normal WORLD material capture now receives a restrained route-color tint, so
   per-biome regions no longer collapse to the same mountain palette. Final
   per-pixel biome materials/content remain open.
 - `python tools\gate.py --suite review_runtime_visual`: 1/1 passed. This
-  regenerates the four live runtime PNG artifacts above and now routes producer
+  regenerates the five live runtime PNG artifacts above and now routes producer
   mode/preset configuration through `mountain_fly_producers.gd` and renderer
   setup through `mountain_fly_runtime_config.gd`, so the owner scene and runtime
   visual capture share producer constants, `configure_biome*` call shape,
@@ -172,6 +197,10 @@ Follow-up live visual rerun:
   recipe over the current sampled region; the accepted baseline is a conditioned
   270 km source field with connected pass-network carving, sliced into the
   review scene.
+- The new REFERENCE capture restores the accepted mountain massifs through the
+  same runtime page pool and clipmap renderer. That isolates the default live
+  MOUNTAIN mismatch to the content/world-layer producer and material/dressing
+  layer; the renderer can show the accepted shape when fed the accepted payload.
 - Tried and rejected presentation-only relief changes (`RELIEF_SCALE=0.5` and
   `1.0`): they can make silhouettes stronger, but they break close-debug/WORLD
   captures by pushing cameras into terrain or producing foreground spikes. The
@@ -193,6 +222,13 @@ scene no longer starts by showing arbitrary WORLD grammar content. The separate
 WORLD mode remains available through `B`; it calls `configure_biome_world(...)`,
 asks the grammar for active runtime-biome weights, and composes the active GPU
 biome recipes into the streamed page texture.
+
+`REFERENCE` mode is also available through `B`. It calls
+`configure_static_reference(...)` and streams the accepted generated network
+height payload through the live page pool. It is intentionally named as a
+reference bridge: it helps separate renderer review from live content-producer
+work, but it does not mean the live mountain recipe has reproduced the accepted
+pass-network/conditioning process.
 
 The accepted network exporter (`tools/dem_pack/export_godot_mountain_network_chunks.py`)
 does one more thing the live page recipe does not: it carves a connected pass
@@ -269,6 +305,8 @@ Proven or strongly supported:
 - The first WORLD runtime compose gate (`biome_world`) passes and proves
   `configure_biome_world` can build recipe contexts plus the compose context,
   acquire a composed page, and write a non-degenerate texture.
+- The REFERENCE runtime bridge passes visual capture and proves the same
+  clipmap renderer can show the accepted mountain-network height payload.
 
 Not proven yet:
 
@@ -403,6 +441,12 @@ Steps:
 Exit: when the live mountain runtime looks wrong, we know whether it is because
 the producer cannot express the accepted terrain or because we selected a
 different preset.
+
+Implemented bridge: `REFERENCE` mode now streams the accepted generated payload
+through `Wg10PagePool` and the clipmap renderer. Remaining Phase 3 work is not a
+renderer bridge; it is deciding how much of the accepted full-field
+conditioning/pass-network process should become a live runtime fact versus a
+separate authored/static acceptance target.
 
 ### Phase 4 - Implement Slice 4 Part B Before More Visual Tuning
 

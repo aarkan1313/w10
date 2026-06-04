@@ -21,23 +21,30 @@
 > baseline PNGs), `review_runtime` = **2/2 pass** (instantiates the owner
 > `mountain_fly_review.tscn` path, verifies `MOUNTAIN/network_ref` defaults, and
 > runs the sprint-speed visibility churn gate),
-> `review_runtime_visual` = **1/1 pass** (captures MOUNTAIN/network, MOUNTAIN/close,
-> WORLD/material, and WORLD/route PNGs through the shared producer helper),
+> `review_runtime_visual` = **1/1 pass** (captures REFERENCE/static-payload,
+> MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/route PNGs through
+> the shared producer helper),
 > `m3` = **10/10 pass** after the display/prefetch scheduler split
-> (`m3_accept` p99 5.64 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
+> (`m3_accept` p99 5.25 ms / 6.0 ms budget), and `biome_fly` = **4/4 pass**
 > (macro 576 maxd 2.3156e-5 <= 5e-4, full 576 maxd 0.001471 <= 0.002,
-> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.106 ms).
+> cross-level macro ratio 0.066665 <= 0.08, fly GPU p99 0.076 ms).
 > `mountain_fly_review.tscn` now starts in single `MOUNTAIN` mode on the accepted
 > `network_ref` scale (`feature_span_m=90000`) and exposes `P` to toggle the old
 > `close_debug` scale (`feature_span_m=3500`). A direct scene smoke launch after
 > the DLL rebuild printed `mode=MOUNTAIN runtime=single biome_path=true
 > preset=network_ref feature_span_m=90000 relief_m=1000`, so the scene name now
-> matches the review target. `WORLD` remains available through `B` as the
+> matches the review target. `REFERENCE` is available through `B` as a static
+> accepted-payload bridge, and `WORLD` remains available through `B` as the
 > biome-composition A/B path.
 >
-> Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has three
-> explicit producer modes: `MOUNTAIN` (default), `LEGACY`, and `WORLD`; `B`
-> cycles them and the HUD/log prints the active mode. `WORLD` calls
+> Follow-up runtime architecture fix: `mountain_fly_review.tscn` now has four
+> explicit producer modes: `MOUNTAIN` (default), `REFERENCE`, `LEGACY`, and
+> `WORLD`; `B` cycles them and the HUD/log prints the active mode. `REFERENCE`
+> calls `configure_static_reference(...)`, stitches
+> `mountain_network_chunks.json` into a 1153x1153 accepted height field, and
+> uploads sampled R32F pages through the same `Wg10PagePool`/clipmap renderer
+> with view relief scale 1.0. This is a renderer/content-baseline bridge, not a
+> replacement for the live biome recipe. `WORLD` calls
 > `configure_biome_world(...)`, loads the pack grammar without resolving the
 > legacy kernel atlas, builds cached GPU contexts for the 11 currently ported
 > biome fragments plus a cached compose context, generates a texel-corner
@@ -71,6 +78,12 @@
 > the accepted static pass-network artifact. Presentation relief experiments
 > (`RELIEF_SCALE=0.5` and `1.0`) were rejected because they break close-debug/WORLD
 > captures by driving the camera into terrain or creating foreground spikes.
+> Follow-up baseline bridge: the new REFERENCE runtime capture proves the
+> runtime renderer can show the accepted mountain-network geometry when fed the
+> accepted payload. The default live MOUNTAIN capture still remains flat by
+> comparison, so the remaining mountain mismatch is now isolated to the live
+> content/world-layer producer and material/dressing, not the clipmap renderer
+> or command invocation.
 >
 > Runtime motion fix: the scheduler now maintains a camera-centred display ring
 > plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the
@@ -136,11 +149,14 @@
 > (`chunks=9`, `feature_span_m=90000`, `1280x720`). It is now wired as the
 > `review_static_visual` gate suite. These are comparison evidence for the
 > owner-liked offline artifact, not proof that the live runtime matches it.
-> The standalone visual capture now writes four runtime artifacts:
+> The standalone visual capture now writes five runtime artifacts:
+> `D:/tmp/wg10_biome_compose/biome_mountain_reference_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_mountain_network_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png`, and
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. Current evidence:
+> REFERENCE streams 45 pages from `mountain_network_chunks.json` and visibly
+> restores the accepted mountain massifs through the runtime renderer.
 > MOUNTAIN/network_ref streams 45 pages but still does not match the accepted
 > `mountain_network_chunks_review.tscn` look; after the shader height-color fix it
 > reads as a broad low-relief field with sparse ridge breaks, not the conditioned

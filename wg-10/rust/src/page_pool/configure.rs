@@ -7,7 +7,7 @@ use crate::page_compute::PageComputeContext;
 use crate::page_policy::PagePolicy;
 use std::collections::BTreeMap;
 
-use super::{BiomeWorldRuntime, Wg10PagePool};
+use super::{BiomeWorldRuntime, StaticHeightRuntime, Wg10PagePool};
 
 impl Wg10PagePool {
     /// Release any existing configured GPU state before applying a new configuration.
@@ -51,6 +51,7 @@ impl Wg10PagePool {
         self.use_biome_path = false;
         self.biome_ctx = None;
         self.biome_world = None;
+        self.static_ref = None;
         self.page_px = page_px;
         self.world_span = world_span;
         self.seed = seed;
@@ -76,6 +77,7 @@ impl Wg10PagePool {
         self.use_biome_path = true;
         self.biome_ctx = Some(biome_ctx);
         self.biome_world = None;
+        self.static_ref = None;
         self.biome_feature_span_m = feature_span_m;
         self.biome_flow_max_level = flow_max_level;
         self.page_px = page_px;
@@ -109,8 +111,36 @@ impl Wg10PagePool {
             contexts,
             compose_ctx,
         });
+        self.static_ref = None;
         self.biome_feature_span_m = feature_span_m;
         self.biome_flow_max_level = flow_max_level;
+        self.page_px = page_px;
+        self.world_span = world_span;
+        self.seed = seed;
+        self.reset_stats();
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn install_static_reference_configuration(
+        &mut self,
+        static_ref: StaticHeightRuntime,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+        seed: i64,
+    ) {
+        let feature_span_m = static_ref.feature_span_m;
+        self.init_policy_slots(capacity);
+        self.pack = None;
+        self.pack_buffers = None;
+        self.glsl_source = None;
+        self.compute_ctx = None;
+        self.use_biome_path = true;
+        self.biome_ctx = None;
+        self.biome_world = None;
+        self.static_ref = Some(static_ref);
+        self.biome_feature_span_m = feature_span_m;
+        self.biome_flow_max_level = 0;
         self.page_px = page_px;
         self.world_span = world_span;
         self.seed = seed;

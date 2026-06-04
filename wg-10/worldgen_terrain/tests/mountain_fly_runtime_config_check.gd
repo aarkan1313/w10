@@ -14,6 +14,7 @@ func _run() -> int:
 	_expect(int(cfg.grid_res()) == 64, "grid_res should be 64", errs)
 	_expect(absf(float(cfg.lead_seconds()) - 0.5) < 0.001, "lead_seconds should be 0.5", errs)
 	_expect(absf(float(cfg.detail_amp_m()) - 350.0) < 0.001, "detail_amp_m should be 350", errs)
+	_expect(absf(float(cfg.default_relief_scale()) - 0.25) < 0.001, "default relief scale should be 0.25", errs)
 	_expect(not bool(cfg.default_morph_enabled()), "default morph should be off", errs)
 	_expect(not bool(cfg.default_detail_enabled()), "default detail should be off", errs)
 	_expect(absf(float(cfg.morph_region(false)) - 0.0) < 0.001, "morph off region should be 0", errs)

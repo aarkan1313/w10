@@ -30,8 +30,11 @@ use std::path::Path;
 mod acquire;
 mod configure;
 mod lifecycle;
+mod static_reference;
 mod state_api;
 mod world_route;
+
+use static_reference::StaticHeightRuntime;
 
 struct BiomeWorldRuntime {
     pack: pack::Pack,
@@ -82,6 +85,7 @@ pub struct Wg10PagePool {
     use_biome_path:      bool,
     biome_ctx:           Option<biome_page_compute::BiomePageComputeContext>,
     biome_world:         Option<BiomeWorldRuntime>,
+    static_ref:          Option<StaticHeightRuntime>,
     biome_feature_span_m: f64,
     /// SCALE-INVARIANCE: the FIRST clipmap level (0 = finest) that bakes WITHOUT the drainage carve.
     /// A page at `level` runs `flow_on = level < biome_flow_max_level`. Default 2 => flow on levels
@@ -116,6 +120,7 @@ impl IRefCounted for Wg10PagePool {
             use_biome_path:       false,
             biome_ctx:            None,
             biome_world:          None,
+            static_ref:           None,
             biome_feature_span_m: 90000.0,
             biome_flow_max_level: 2,
             page_px:      256,
@@ -444,6 +449,42 @@ impl Wg10PagePool {
             world_span,
             feature_span_m,
             flow_max_level,
+            seed,
+        );
+
+        GString::new()
+    }
+
+    // -----------------------------------------------------------------------
+    // configure_static_reference  (accepted mountain-network payload bridge)
+    // -----------------------------------------------------------------------
+
+    /// Configure the pool to stream a generated static height payload through the
+    /// runtime page/clipmap renderer. This is an owner-review reference mode: it
+    /// proves the renderer can show the accepted mountain-network world layer,
+    /// but it does not replace the live biome recipe/world producer.
+    #[func]
+    pub fn configure_static_reference(
+        &mut self,
+        payload_path: GString,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+        seed: i64,
+    ) -> GString {
+        self.free_before_reconfigure();
+
+        let static_ref =
+            match StaticHeightRuntime::from_json_path(Path::new(&payload_path.to_string())) {
+                Ok(reference) => reference,
+                Err(e) => return GString::from(&e),
+            };
+
+        self.install_static_reference_configuration(
+            static_ref,
+            capacity,
+            page_px,
+            world_span,
             seed,
         );
 
