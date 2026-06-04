@@ -20,6 +20,7 @@ const WORLD_SEED := 1337
 const MOUNTAIN_REVIEW_SEED := 177
 const FLOW_ITERS := 192
 const FLOW_MAX_LEVEL := 2
+const WORLD_REVIEW_ACTIVE_BIOME_LIMIT := 1
 const FEATURE_SPAN_NETWORK_M := 90000.0
 const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
 const RELIEF_M_DEFAULT := 1700.0
@@ -154,10 +155,13 @@ func view_relief_scale(default_scale: float) -> float:
 	return default_scale
 
 func _configure_world(pool: Object) -> String:
-	return str(pool.call("configure_biome_world",
+	var err := str(pool.call("configure_biome_world",
 		ProjectSettings.globalize_path(PACK_RES_DIR),
 		PACK_FILE,
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
+	if err != "":
+		return err
+	return str(pool.call("set_biome_world_active_limit", WORLD_REVIEW_ACTIVE_BIOME_LIMIT))
 
 func _configure_mountain(pool: Object) -> String:
 	var err := str(pool.call("configure_biome",

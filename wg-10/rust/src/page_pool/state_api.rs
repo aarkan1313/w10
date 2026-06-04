@@ -72,6 +72,26 @@ impl Wg10PagePool {
         out
     }
 
+    /// Limit active runtime biomes for WORLD page production.
+    ///
+    /// `active_limit <= 0` means full compose. The owner fly scene uses a bounded preview until
+    /// WORLD page production is off the frame loop; the full multi-biome compose path stays
+    /// available for proof gates and future background production.
+    #[func]
+    pub fn set_biome_world_active_limit(&mut self, active_limit: i64) -> GString {
+        let Some(world) = self.biome_world.as_mut() else {
+            return GString::from(
+                "set_biome_world_active_limit: pool is not configured for WORLD biome synthesis",
+            );
+        };
+        world.active_limit = if active_limit <= 0 {
+            usize::MAX
+        } else {
+            active_limit as usize
+        };
+        GString::new()
+    }
+
     /// Diagnostic report for the mountain world-layer acceptance contract.
     ///
     /// This deliberately separates "what producer is active" from "which

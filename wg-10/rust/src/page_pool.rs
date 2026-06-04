@@ -40,6 +40,7 @@ struct BiomeWorldRuntime {
     pack: pack::Pack,
     contexts: BTreeMap<String, biome_page_compute::BiomePageComputeContext>,
     compose_ctx: biome_page_compute::BiomePageComputeContext,
+    active_limit: usize,
 }
 
 const RUNTIME_BIOMES: [&str; 11] = [

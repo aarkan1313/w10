@@ -118,6 +118,7 @@ impl Wg10PagePool {
             pack,
             contexts,
             compose_ctx,
+            active_limit: usize::MAX,
         });
         self.static_ref = None;
         self.biome_feature_span_m = feature_span_m;

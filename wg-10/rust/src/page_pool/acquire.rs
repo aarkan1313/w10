@@ -244,6 +244,17 @@ impl Wg10PagePool {
         page_px: usize,
     ) -> world_route::BiomeWeightField {
         let supported = |biome: &str| world.contexts.contains_key(biome);
+        if world.active_limit == 1 {
+            return world_route::single_biome_weight_field_for_page(
+                self.seed,
+                &world.pack,
+                origin_x,
+                origin_z,
+                world_span,
+                page_px,
+                &supported,
+            );
+        }
         world_route::biome_weight_field_for_page(
             self.seed,
             &world.pack,
@@ -251,6 +262,7 @@ impl Wg10PagePool {
             origin_z,
             world_span,
             page_px,
+            world.active_limit,
             &supported,
         )
     }

@@ -88,6 +88,34 @@ where
     ))
 }
 
+pub(super) fn single_biome_weight_field_for_page<F>(
+    seed: i64,
+    pack: &Pack,
+    origin_x: f64,
+    origin_z: f64,
+    world_span: f64,
+    page_px: usize,
+    is_supported: &F,
+) -> BiomeWeightField
+where
+    F: Fn(&str) -> bool,
+{
+    let n = page_px * page_px;
+    BiomeWeightField {
+        names: vec![select_biome_name_for_page(
+            seed,
+            pack,
+            origin_x,
+            origin_z,
+            world_span,
+            is_supported,
+        )],
+        weights: vec![vec![1.0; n]],
+        rows: page_px,
+        cols: page_px,
+    }
+}
+
 pub(super) fn biome_weight_field_for_page<F>(
     seed: i64,
     pack: &Pack,
@@ -95,6 +123,7 @@ pub(super) fn biome_weight_field_for_page<F>(
     origin_z: f64,
     world_span: f64,
     page_px: usize,
+    active_limit: usize,
     is_supported: &F,
 ) -> BiomeWeightField
 where
@@ -115,6 +144,8 @@ where
         }
     }
 
+    limit_active_biomes(&mut by_biome, active_limit, n);
+
     let mut names = Vec::with_capacity(by_biome.len());
     let mut weights = Vec::with_capacity(by_biome.len());
     for (name, field) in by_biome {
@@ -126,6 +157,38 @@ where
         weights,
         rows: page_px,
         cols: page_px,
+    }
+}
+
+fn limit_active_biomes(
+    by_biome: &mut BTreeMap<String, Vec<f32>>,
+    active_limit: usize,
+    sample_count: usize,
+) {
+    if active_limit == 0 || active_limit >= by_biome.len() {
+        return;
+    }
+
+    let mut ranked: Vec<(String, f32)> = by_biome
+        .iter()
+        .map(|(name, weights)| (name.clone(), weights.iter().copied().sum()))
+        .collect();
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    ranked.truncate(active_limit);
+    let keep: Vec<String> = ranked.into_iter().map(|(name, _)| name).collect();
+    by_biome.retain(|name, _| keep.iter().any(|keep_name| keep_name == name));
+
+    for idx in 0..sample_count {
+        let sum: f32 = by_biome.values().map(|weights| weights[idx]).sum();
+        if sum > 1.0e-9 {
+            for weights in by_biome.values_mut() {
+                weights[idx] /= sum;
+            }
+        } else if let Some(first) = keep.first() {
+            if let Some(weights) = by_biome.get_mut(first) {
+                weights[idx] = 1.0;
+            }
+        }
     }
 }
 
@@ -175,7 +238,16 @@ mod tests {
     fn weight_field_is_partition_of_unity_per_texel() {
         let pack = grammar_pack();
         let supported = |biome: &str| matches!(biome, "mountain" | "desert" | "wetland");
-        let field = biome_weight_field_for_page(1337, &pack, -2048.0, 512.0, 4096.0, 9, &supported);
+        let field = biome_weight_field_for_page(
+            1337,
+            &pack,
+            -2048.0,
+            512.0,
+            4096.0,
+            9,
+            usize::MAX,
+            &supported,
+        );
 
         assert_eq!(field.rows, 9);
         assert_eq!(field.cols, 9);
@@ -199,10 +271,38 @@ mod tests {
     fn unsupported_families_are_dropped_from_weight_field() {
         let pack = grammar_pack();
         let supported = |biome: &str| biome == "mountain";
-        let field = biome_weight_field_for_page(1337, &pack, 0.0, 0.0, 1024.0, 3, &supported);
+        let field =
+            biome_weight_field_for_page(1337, &pack, 0.0, 0.0, 1024.0, 3, usize::MAX, &supported);
 
         assert_eq!(field.names, vec!["mountain".to_string()]);
         assert_eq!(field.weights.len(), 1);
         assert!(field.weights[0].iter().all(|w| *w >= 0.0 && *w <= 1.0));
+    }
+
+    #[test]
+    fn weight_field_active_limit_preserves_partition_of_unity() {
+        let pack = grammar_pack();
+        let supported = |biome: &str| matches!(biome, "mountain" | "desert" | "wetland");
+        let field =
+            biome_weight_field_for_page(1337, &pack, -2048.0, 512.0, 4096.0, 9, 1, &supported);
+
+        assert_eq!(field.names.len(), 1);
+        assert_eq!(field.weights.len(), 1);
+        for idx in 0..81 {
+            assert!((field.weights[0][idx] - 1.0).abs() < 1.0e-6);
+        }
+    }
+
+    #[test]
+    fn single_biome_weight_field_is_uniform_page_selected() {
+        let pack = grammar_pack();
+        let supported = |biome: &str| matches!(biome, "mountain" | "desert" | "wetland");
+        let field =
+            single_biome_weight_field_for_page(1337, &pack, -2048.0, 512.0, 4096.0, 9, &supported);
+
+        assert_eq!(field.names.len(), 1);
+        assert_eq!(field.weights.len(), 1);
+        assert_eq!(field.weights[0].len(), 81);
+        assert!(field.weights[0].iter().all(|w| (*w - 1.0).abs() < 1.0e-6));
     }
 }

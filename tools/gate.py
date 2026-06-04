@@ -115,6 +115,12 @@ CHECKS = {
         "worldgen_terrain/tests/mountain_fly_review_smoke_check.gd",
         "worldgen_terrain/tests/mountain_fly_visibility_churn_check.gd",
     ],
+    # Owner fly-scene mode motion diagnostic. Exercises the shared review runtime for keys
+    # 1/2/3 (REFERENCE/MOUNTAIN/WORLD) and fails on visible HIDE/SHOW churn or large synchronous
+    # page-stream hitches.
+    "review_runtime_modes": [
+        "worldgen_terrain/tests/mountain_fly_modes_perf_check.gd",
+    ],
     # Windowed live-runtime visual capture. This writes the MOUNTAIN/network,
     # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence.
     "review_runtime_visual": [
@@ -134,6 +140,7 @@ WINDOWED_SUITES = {
     "review_static",
     "review_static_visual",
     "review_runtime",
+    "review_runtime_modes",
     "review_runtime_visual",
 }
 
