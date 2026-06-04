@@ -91,6 +91,12 @@ CHECKS = {
         "worldgen_terrain/m5/m5_detail_check.gd",
         "worldgen_terrain/tests/m5_perf_hardened_check.gd",
     ],
+    # Static/generated review artifacts. These prove offline review scenes load the accepted
+    # payload shape; they do not prove the live streaming runtime.
+    "review_static": [
+        "worldgen_terrain/tests/mountain_world_chunks_review_check.gd",
+        "worldgen_terrain/tests/mountain_network_chunks_review_check.gd",
+    ],
 }
 
 

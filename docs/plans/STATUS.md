@@ -3,6 +3,12 @@
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / SCALE-INVARIANCE PROOF DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
+> Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
+> records the current split between the owner-liked static mountain network chunk review
+> (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly
+> (`mountain_fly_review.tscn`). Treat the former as the mountain visual/content baseline and
+> the latter as the streaming producer/renderer proving scene until the live runtime is
+> configured to reproduce the same world/scale assumptions.
 > The tracked source tree was clean at `0b0d8a0` before the stabilization edits. The June 3
 > scale-invariance chain is implemented through the GPU producer plumbing: Python oracle
 > world-anchoring + regenerated fixtures, Rust parity, flow-off macro oracle, per-level
