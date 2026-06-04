@@ -160,6 +160,14 @@ impl Wg10PagePool {
                 Ok(reference) => reference,
                 Err(e) => return GString::from(&e),
             };
+        let (source_scale, source_offset_x_m, source_offset_z_m) =
+            match reference.source_transform_for_display() {
+                Ok(transform) => transform,
+                Err(e) => return GString::from(&e),
+            };
+        self.biome_source_scale = source_scale;
+        self.biome_source_offset_x_m = source_offset_x_m;
+        self.biome_source_offset_z_m = source_offset_z_m;
         self.mountain_layer_ref = Some(reference);
         GString::new()
     }

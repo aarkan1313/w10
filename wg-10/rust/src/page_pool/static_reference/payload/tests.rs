@@ -237,6 +237,12 @@ fn runtime_tile_payload_contract_metadata_and_materials_are_preserved() {
     assert_eq!(rt.source_span_x_m, 35.15625);
     assert_eq!(rt.source_span_z_m, 35.15625);
     assert_eq!(rt.source_scene_ratio, 3.515625);
+    let (source_scale, source_offset_x_m, source_offset_z_m) = rt
+        .source_transform_for_display()
+        .expect("source transform should derive from runtime tile mapping");
+    assert_eq!(source_scale, 3.515625);
+    assert_eq!(source_offset_x_m, 117.578125);
+    assert_eq!(source_offset_z_m, 217.578125);
     assert!((rt.material_hint_fracs.low_pass - 0.5).abs() < 1.0e-12);
     assert!((rt.material_hint_fracs.floor - 0.5).abs() < 1.0e-12);
     assert!((rt.material_hint_fracs.rock - 0.75).abs() < 1.0e-12);

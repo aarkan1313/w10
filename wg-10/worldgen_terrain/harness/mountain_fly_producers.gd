@@ -29,9 +29,6 @@ const FEATURE_SPAN_NETWORK_M := 90000.0
 const FEATURE_SPAN_CLOSE_DEBUG_M := 3500.0
 const RELIEF_M_DEFAULT := 1700.0
 const MOUNTAIN_NETWORK_VIEW_RELIEF_SCALE := 1.0
-const MOUNTAIN_NETWORK_SOURCE_SCALE := 3.515625
-const MOUNTAIN_NETWORK_SOURCE_OFFSET_X_M := 207000.0
-const MOUNTAIN_NETWORK_SOURCE_OFFSET_Z_M := 176000.0
 
 const MODE_WORLD := 0
 const MODE_MOUNTAIN := 1
@@ -112,18 +109,12 @@ func feature_span_m() -> float:
 	return FEATURE_SPAN_NETWORK_M
 
 func source_scale() -> float:
-	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
-		return MOUNTAIN_NETWORK_SOURCE_SCALE
 	return 1.0
 
 func source_offset_x_m() -> float:
-	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
-		return MOUNTAIN_NETWORK_SOURCE_OFFSET_X_M
 	return 0.0
 
 func source_offset_z_m() -> float:
-	if _mode == MODE_MOUNTAIN and _preset == PRESET_NETWORK:
-		return MOUNTAIN_NETWORK_SOURCE_OFFSET_Z_M
 	return 0.0
 
 func preset_label() -> String:
@@ -218,9 +209,6 @@ func _configure_mountain(pool: Object) -> String:
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
 		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, feature_span_m(), FLOW_ITERS, _relief_m, FLOW_MAX_LEVEL, runtime_seed()))
-	if err != "":
-		return err
-	err = str(pool.call("set_biome_source_transform", source_scale(), source_offset_x_m(), source_offset_z_m()))
 	if err != "":
 		return err
 	if _preset == PRESET_NETWORK:

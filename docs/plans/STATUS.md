@@ -92,6 +92,19 @@
 > 0.750 ms, WORLD 0.750 ms. The visual gate again proves REFERENCE vs
 > MOUNTAIN/network and REFERENCE vs WORLD preview at mean/p95 RGB delta
 > `0.000000/0.000000`.
+> Follow-up transform ownership fix: `MOUNTAIN/network_ref` no longer carries
+> duplicated source-scale/source-offset constants in the GDScript producer
+> helper. `bind_mountain_world_layer_reference(...)` now derives
+> `source = display * ratio + offset` from the accepted runtime tile mapping
+> when the reference is bound. Current proof: Rust fmt check passes, payload
+> Rust tests = 8/8, full Rust lib = 233/233,
+> `tools\build_rust.ps1` builds, `fast` = 8/8, `review_runtime` = 2/2,
+> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. The latest
+> scripted mode run still has zero hide/show/full events in REFERENCE,
+> MOUNTAIN, and WORLD; CPU p99/max is REFERENCE 9.882/10.427 ms, MOUNTAIN
+> 10.029/10.221 ms, WORLD 9.978/16.805 ms, and render GPU p99 is REFERENCE
+> 0.751 ms, MOUNTAIN 0.748 ms, WORLD 0.748 ms. Visual bridge deltas remain
+> `0.000000/0.000000`.
 > Follow-up harness separation: the owner-fly runtime snapshot/report builder
 > now lives in `wg-10/worldgen_terrain/harness/mountain_fly_snapshot.gd`.
 > `mountain_fly_review.gd` still exposes the same `debug_runtime_snapshot()`

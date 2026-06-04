@@ -88,6 +88,29 @@ impl StaticHeightRuntime {
         Self::from_payload(payload)
     }
 
+    pub(in crate::page_pool) fn source_transform_for_display(
+        &self,
+    ) -> Result<(f64, f64, f64), String> {
+        let scale = self.source_scene_ratio;
+        let offset_x = self.source_origin_x_m - self.origin_x_m * scale;
+        let offset_z = self.source_origin_z_m - self.origin_z_m * scale;
+        for (name, value) in [
+            ("source_scale", scale),
+            ("source_offset_x_m", offset_x),
+            ("source_offset_z_m", offset_z),
+        ] {
+            if !value.is_finite() {
+                return Err(format!("static reference: derived {name} must be finite"));
+            }
+        }
+        if scale <= 0.0 {
+            return Err(format!(
+                "static reference: derived source_scale must be > 0, got {scale}"
+            ));
+        }
+        Ok((scale, offset_x, offset_z))
+    }
+
     pub(super) fn write_page_texture(
         &self,
         rd: &mut Gd<RenderingDevice>,

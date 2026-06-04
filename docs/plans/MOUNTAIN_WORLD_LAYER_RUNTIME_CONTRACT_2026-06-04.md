@@ -144,8 +144,10 @@ single rendered page:
    pass-network, conditioning, low-pass/floor/rock/snow material facts, and the
    explicit display/source origin, span, and ratio fields.
    Current owner-fly bridge: REFERENCE, MOUNTAIN/network, and WORLD preview now
-   bind that runtime tile artifact. This is still a reference-backed bridge, not
-   final procedural world-layer synthesis.
+   bind that runtime tile artifact. The live `MOUNTAIN/network_ref` source
+   transform is derived from the bound tile mapping at bind time, not from
+   duplicated GDScript scene-scale constants. This is still a reference-backed
+   bridge, not final procedural world-layer synthesis.
    Remaining viable porting options:
    - GPU/CPU hybrid where the page producer consumes precomputed route/conditioning
      facts but still emits the page texture on the RenderingDevice.
@@ -310,6 +312,10 @@ single rendered page:
   REFERENCE and `MOUNTAIN/network_ref`: display origin `-38400,-38400`, display
   span `76800`, source origin `72000,41000`, source span `270000`, and
   `source_scene_ratio=3.515625`.
+- `fast` now proves the producer helper keeps its source transform identity
+  before runtime binding, while `review_runtime` proves the bound pool transform
+  is derived from the accepted runtime tile mapping (`scale=3.515625`, offsets
+  `207000,176000`). The fly harness no longer owns those scene-scale constants.
 - `cargo test -p wg10_terrain --lib` now passes 233 / 0 after the loader split.
 - `review_runtime` = 2/2, `review_runtime_modes` = 2/2,
   `review_runtime_visual` = 2/2, and `review_runtime_stress` = 1/1 after
