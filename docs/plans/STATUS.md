@@ -44,6 +44,20 @@
 > `fast` = 8/8, `review_runtime` = 2/2, `review_runtime_modes` = 2/2, and
 > `biome_world` = 1/1. Latest mode gate still reports zero hide/show; WORLD stays bounded
 > diagnostic with `cpu_p99=8.723 ms`, `cpu_max=10.612 ms`, render p99 `0.216 ms`.
+> Follow-up static-reference separation on 2026-06-04: runtime sampling moved into
+> `wg-10/rust/src/page_pool/static_reference/sampling.rs`, and renderer-facing material
+> code projection moved into `wg-10/rust/src/page_pool/static_reference/presentation.rs`.
+> `static_reference.rs` is now a 115-line facade/runtime holder instead of a mixed
+> payload/sampling/presentation file. Current proof: `cargo test -p wg10_terrain --lib`
+> = 227/0, `tools\build_rust.ps1` builds, `fast` = 8/8, `review_runtime` = 2/2,
+> `review_runtime_visual` = 1/1, and `review_runtime_modes` = 2/2. Latest scripted
+> motion numbers: REFERENCE `cpu_p99=34.640 ms`, MOUNTAIN `cpu_p99=9.161 ms`,
+> WORLD `cpu_p99=8.122 ms`, zero hide/show in all three; render p99 is
+> REFERENCE `0.234 ms`, MOUNTAIN `0.247 ms`, WORLD `0.488 ms`.
+> Fresh captures still match the owner report: mode 1 is an accepted static bridge,
+> mode 2 is the live producer to fix, and mode 3 remains a diagnostic WORLD preview
+> until multi-biome composition is made async/cached or given a cheaper preview
+> contract.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

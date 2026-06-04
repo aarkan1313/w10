@@ -107,6 +107,43 @@ then keep moving producer details out of `Wg10PagePool` storage/configuration to
 producer implementations. Next visual target: make live `MOUNTAIN` reproduce the accepted
 mountain-world-layer contract before trying to tune biome palettes or add more biomes.
 
+### Static-Reference Sampling/Presentation Split Checkpoint - 2026-06-04
+
+The follow-up static-reference split is complete. Runtime sampling now lives in
+`page_pool/static_reference/sampling.rs`, and the temporary renderer-facing material-code
+projection now lives in `page_pool/static_reference/presentation.rs`. The root
+`static_reference.rs` file is down to the runtime holder, JSON entrypoint, and height texture upload
+path (115 lines). Current split sizes:
+
+- `static_reference.rs` = 115 lines.
+- `static_reference/payload.rs` = 556 lines.
+- `static_reference/sampling.rs` = 126 lines.
+- `static_reference/presentation.rs` = 71 lines.
+
+Current proof after the split:
+
+- `cargo test -p wg10_terrain --lib` = 227 passed / 0 failed.
+- `powershell -ExecutionPolicy Bypass -File tools\build_rust.ps1` builds the Godot extension.
+- `python tools\gate.py --suite fast` = 8/8.
+- `python tools\gate.py --suite review_runtime` = 2/2.
+- `python tools\gate.py --suite review_runtime_visual` = 1/1.
+- `python tools\gate.py --suite review_runtime_modes` = 2/2. Latest scripted motion CPU p99:
+  REFERENCE 34.640 ms, MOUNTAIN 9.161 ms, WORLD 8.122 ms, with zero hide/show in all three.
+  Latest render p99: REFERENCE 0.234 ms, MOUNTAIN 0.247 ms, WORLD 0.488 ms.
+
+Fresh visual captures still support the same fix order:
+
+- Mode 1 / `REFERENCE` remains the accepted static mountain-network bridge, not the live runtime.
+- Mode 2 / `MOUNTAIN` is the correct shippable target and must port the accepted mountain-world-layer
+  contract: source/display mapping, macro field, connected pass-network routes, route carving,
+  page-stable conditioning, material hints, and facts/collision story.
+- Mode 3 / `WORLD` remains diagnostic until multi-biome composition is async/cached or replaced by a
+  cheaper preview contract. Do not chase palette tweaks there as the primary fix.
+
+Next refactor target: split static-reference report/diagnostic surfaces from `Wg10PagePool`
+state API, then keep moving producer details toward explicit producer implementations. Next visual
+target remains the live `MOUNTAIN` mountain-world-layer port.
+
 The highest-priority audit finding, F1 (missing scale-invariant cross-level macro gate), is now
 implemented in source: `Wg10BiomePageCompute::generate_runtime_page_flow(..., flow_on)` exposes the
 readback-only macro path, `wg-10/worldgen_terrain/tests/biome_crosslevel_check.gd` compares level 0
