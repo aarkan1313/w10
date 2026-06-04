@@ -129,9 +129,10 @@ void vertex() {
 	// (no modulation/fade yet).
 	float detail = wg_fbm_detail(world.xz) * wg_detail_amp;
 	v_detail_norm = abs(wg_detail_amp) > 1e-6 ? clamp(detail / wg_detail_amp, -1.0, 1.0) : 0.0;
-	// v_render_height is the DISPLAYED (debug/height-color) height = base + detail. It is NOT the
-	// facts/collision height: collision reads the separate CPU facts path, not this varying.
-	v_render_height = h + detail;
+	// v_render_height is the DISPLAYED (debug/height-color) height after the render-side relief
+	// multiplier. It is NOT the facts/collision height: collision reads the separate CPU facts path.
+	float displayed_h = (h + detail) * relief_scale;
+	v_render_height = displayed_h;
 
 	ivec2 page_size = textureSize(height_tex, 0);
 	float page_steps = max(float(page_size.x - 1), 1.0);
@@ -146,7 +147,7 @@ void vertex() {
 	float sz = ((h_u - h_d) * relief_scale) / (2.0 * cell_m);
 	v_slope = length(vec2(sx, sz));
 	v_terrain_normal = normalize(vec3(-sx, 1.0, -sz));
-	VERTEX.y = (h + detail) * relief_scale;
+	VERTEX.y = displayed_h;
 }
 
 vec3 wg_mountain_palette(float h, float slope) {

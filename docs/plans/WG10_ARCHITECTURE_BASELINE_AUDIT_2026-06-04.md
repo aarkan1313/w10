@@ -161,6 +161,23 @@ Validation:
   visual capture share producer constants, `configure_biome*` call shape,
   clipmap/view constants, morph/detail defaults, fog, and loaded edge.
 
+Follow-up live visual rerun:
+
+- `ring_displace.gdshader` now colors terrain from the same displayed height used
+  for `VERTEX.y`, after `relief_scale`. This fixes a presentation bug where the
+  palette saw unscaled page metres while the geometry was drawn at the scaled
+  height.
+- The corrected final capture still does not match
+  `mountain_network_chunks_review.tscn`. MOUNTAIN/network remains a raw live page
+  recipe over the current sampled region; the accepted baseline is a conditioned
+  270 km source field with connected pass-network carving, sliced into the
+  review scene.
+- Tried and rejected presentation-only relief changes (`RELIEF_SCALE=0.5` and
+  `1.0`): they can make silhouettes stronger, but they break close-debug/WORLD
+  captures by pushing cameras into terrain or producing foreground spikes. The
+  remaining mountain mismatch is content/world-layer architecture, not a safe
+  scalar-tuning fix.
+
 ## Why The Current Live BIOME View Does Not Match The Accepted Network Scene
 
 ### 1. It is not using the same world layer
@@ -176,6 +193,13 @@ scene no longer starts by showing arbitrary WORLD grammar content. The separate
 WORLD mode remains available through `B`; it calls `configure_biome_world(...)`,
 asks the grammar for active runtime-biome weights, and composes the active GPU
 biome recipes into the streamed page texture.
+
+The accepted network exporter (`tools/dem_pack/export_godot_mountain_network_chunks.py`)
+does one more thing the live page recipe does not: it carves a connected pass
+network into one large raw field, then applies percentile/tanh conditioning to
+that whole field before slicing it. The live page recipe is seam-safe and
+scale-proven, but it does not currently carry that full-field conditioning or
+pass-network fact.
 
 ### 2. The scale context changed
 
@@ -361,14 +385,20 @@ Steps:
 
 1. Add a runtime preset named after the baseline:
    - `mountain_network_reference`
-   - carries `feature_span_m=90000.0`, relief/reference scale, and pass-network
-     assumptions from the static artifact.
+   - carries `feature_span_m=90000.0`, the static payload origin/conditioning
+     contract, and pass-network assumptions from the accepted artifact.
 2. Keep the current close-up diagnostic preset separate:
    - `mountain_close_live_debug`
    - carries `feature_span_m=3500.0`.
-3. Add harness toggle or separate scene that makes the selected preset explicit
+3. Port or mirror the accepted world layer, not just its scalar defaults:
+   - sample the same source window (`world_origin_x_m=72000`,
+     `world_origin_z_m=41000`);
+   - apply a seam-safe equivalent of the full-field conditioning contract;
+   - decide whether the connected pass network is a runtime fact, a coarse
+     baked fact, or a static-reference-only acceptance target.
+4. Add harness toggle or separate scene that makes the selected preset explicit
    in HUD/log output.
-4. Compare screenshots/fly notes against `mountain_network_chunks_review.tscn`.
+5. Compare screenshots/fly notes against `mountain_network_chunks_review.tscn`.
 
 Exit: when the live mountain runtime looks wrong, we know whether it is because
 the producer cannot express the accepted terrain or because we selected a

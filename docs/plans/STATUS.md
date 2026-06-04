@@ -64,6 +64,13 @@
 > normal mode (`biome_material_mix=0.34`, gated by `ring_material_tint_check.gd`),
 > so composed WORLD no longer reads as one undifferentiated mountain palette. This
 > is a visual-readability bridge, not final per-pixel biome material blending.
+> Follow-up shader fix: the palette now uses the same displayed height as
+> `VERTEX.y` (`(h + detail) * relief_scale`) instead of coloring against unscaled
+> page metres. This removed the misleading snow/gray wash, but the latest final
+> MOUNTAIN/network capture still reads as a broad low-relief live page field, not
+> the accepted static pass-network artifact. Presentation relief experiments
+> (`RELIEF_SCALE=0.5` and `1.0`) were rejected because they break close-debug/WORLD
+> captures by driving the camera into terrain or creating foreground spikes.
 >
 > Runtime motion fix: the scheduler now maintains a camera-centred display ring
 > plus a velocity-led prefetch ring, and `Wg10TerrainView` displays only the
@@ -134,9 +141,12 @@
 > `D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png`,
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture.png`, and
 > `D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png`. Current evidence:
-> MOUNTAIN/network_ref streams 45 pages and reads as broad snow/rock massifs from
-> an overview; MOUNTAIN/close_debug streams 45 pages but is visibly faceted/lumpy
-> at close range, so it remains a diagnostic scale, not an acceptance target.
+> MOUNTAIN/network_ref streams 45 pages but still does not match the accepted
+> `mountain_network_chunks_review.tscn` look; after the shader height-color fix it
+> reads as a broad low-relief field with sparse ridge breaks, not the conditioned
+> full-field/pass-network mountain artifact. MOUNTAIN/close_debug streams 45 pages
+> but is visibly faceted/lumpy at close range, so it remains a diagnostic scale,
+> not an acceptance target.
 > WORLD streams 45 composed pages and route colors are visible; the normal WORLD
 > material now carries a route-color tint, but final per-pixel materials/content
 > remain open. Treat the capture as evidence of a less samey live read, not as
