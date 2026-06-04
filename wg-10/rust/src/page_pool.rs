@@ -18,16 +18,15 @@
 //! wrong/null content on re-acquire.
 
 use godot::prelude::*;
-use godot::classes::{
-    RenderingServer, RenderingDevice, RdTextureFormat, RdTextureView, Texture2Drd,
-    rendering_device::{DataFormat, TextureUsageBits},
-};
+use godot::classes::{RenderingServer, Texture2Drd};
 use crate::pack;
 use crate::gpu_compute::{build_pack_buffers, PackBuffers};
 use crate::page_policy::{PagePolicy, PageKey, Decision};
-use crate::page_compute::{PageComputeContext, build_page_compute_context, free_page_compute_context, compute_page_cached};
+use crate::page_compute::{PageComputeContext, build_page_compute_context, compute_page_cached};
 use crate::biome_page_compute;
 use std::path::Path;
+
+mod lifecycle;
 
 // ---------------------------------------------------------------------------
 // Wg10PagePool
@@ -664,173 +663,6 @@ impl Drop for Wg10PagePool {
     /// an explicit `free_all()` call.
     fn drop(&mut self) {
         self.free_all_impl();
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Private helpers
-// ---------------------------------------------------------------------------
-
-impl Wg10PagePool {
-    /// The actual teardown logic, callable from both the `#[func] free_all` and
-    /// `Drop` (B1). Frees every page-texture RID + the cached compute context on
-    /// the global RenderingDevice, then fully resets ALL configured state to the
-    /// unconfigured shape (F7) via `reset_configured_state`. Idempotent and safe
-    /// with no RenderingDevice (headless / already torn down).
-    ///
-    /// This is the ONLY site that calls `rd.free_rid` on page textures.
-    fn free_all_impl(&mut self) {
-        let rd_opt = RenderingServer::singleton().get_rendering_device();
-        if rd_opt.is_none() {
-            // No RenderingDevice — nothing to free on the GPU; drop our handles
-            // and fully reset to the UNCONFIGURED state (F7). Leaving `policy`/
-            // `pack`/`pack_buffers`/`glsl_source` Some here would let the
-            // `acquire_page` guard PASS while `compute_ctx` is None → the
-            // `compute_ctx.as_ref().unwrap()` would panic. Reset everything so the
-            // guard correctly sees "not configured".
-            Self::reset_configured_state(
-                &mut self.policy,
-                &mut self.slot_tex,
-                &mut self.slot_wrap,
-                &mut self.pack,
-                &mut self.pack_buffers,
-                &mut self.glsl_source,
-                &mut self.compute_ctx,
-                &mut self.use_biome_path,
-                &mut self.biome_ctx,
-            );
-            return;
-        }
-        let mut rd = rd_opt.unwrap();
-        // Free the cached compute context (slice 7) — the pool owns it, built at configure.
-        // Take it BEFORE the reset so we can free the GPU resources it holds.
-        if let Some(ctx) = self.compute_ctx.take() {
-            free_page_compute_context(&mut rd, &ctx);
-        }
-        // Free the cached biome compute context (Slice-4) the SAME way — take BEFORE reset, free its
-        // GPU RIDs (all apron buffers + pipeline + shader). Miss this = B1 device leak on the biome
-        // path. The reset below then drops the (now-taken) None handle + clears use_biome_path.
-        if let Some(bctx) = self.biome_ctx.take() {
-            biome_page_compute::free_biome_page_context(&mut rd, &bctx);
-        }
-        for rid_opt in self.slot_tex.iter_mut() {
-            if let Some(rid) = rid_opt.take() {
-                rd.free_rid(rid);
-            }
-        }
-        // GPU resources released above; now fully reset to the UNCONFIGURED state (F7)
-        // so `acquire_page`/`get_resident_page` guards see "not configured" and return
-        // None gracefully instead of unwrapping a None `compute_ctx` / indexing a
-        // cleared `slot_wrap` from stale policy state.
-        Self::reset_configured_state(
-            &mut self.policy,
-            &mut self.slot_tex,
-            &mut self.slot_wrap,
-            &mut self.pack,
-            &mut self.pack_buffers,
-            &mut self.glsl_source,
-            &mut self.compute_ctx,
-            &mut self.use_biome_path,
-            &mut self.biome_ctx,
-        );
-    }
-
-    /// Pure, engine-free reset of ALL configured state to the not-yet-configured
-    /// shape (F7). Operates only on plain data — NO `RenderingServer`, NO GPU
-    /// `free_rid`, NO `self.base` — so it is headless-unit-testable and cannot
-    /// panic. Callers that own GPU resources (the compute ctx, the slot RIDs) MUST
-    /// free them BEFORE calling this; here we only drop the (already-taken) handles
-    /// and clear the policy/slot vectors + the four `configure`-set Options.
-    ///
-    /// Post-condition (the F7 invariant): there is NO half-configured state that
-    /// would pass the `acquire_page` guard (policy/pack/pack_buffers/glsl_source
-    /// all Some) yet leave `compute_ctx` None. After this returns, `is_configured`
-    /// is false and every Option field is None.
-    ///
-    /// Idempotent: calling it on an already-empty/unconfigured pool is a harmless
-    /// no-op (Options already None, vectors already empty), which is what makes
-    /// `free_all` safe to call twice and `configure`'s free-before-reconfigure
-    /// (F8) safe on a fresh pool.
-    #[allow(clippy::too_many_arguments)]
-    fn reset_configured_state(
-        policy:          &mut Option<PagePolicy>,
-        slot_tex:        &mut Vec<Option<Rid>>,
-        slot_wrap:       &mut Vec<Option<Gd<Texture2Drd>>>,
-        pack:            &mut Option<pack::Pack>,
-        pack_buffers:    &mut Option<PackBuffers>,
-        glsl_source:     &mut Option<String>,
-        compute_ctx:     &mut Option<PageComputeContext>,
-        use_biome_path:  &mut bool,
-        biome_ctx:       &mut Option<biome_page_compute::BiomePageComputeContext>,
-    ) {
-        *policy = None;
-        slot_tex.clear();
-        slot_wrap.iter_mut().for_each(|w| *w = None);
-        slot_wrap.clear();
-        *pack = None;
-        *pack_buffers = None;
-        *glsl_source = None;
-        *compute_ctx = None;
-        // Biome path: the GPU resources `biome_ctx` holds MUST already be freed (the caller does so
-        // BEFORE this reset, like compute_ctx); here we only drop the already-taken handle + the flag
-        // so the guard sees "not configured" via either path's conjunct.
-        *use_biome_path = false;
-        *biome_ctx = None;
-    }
-
-    /// The exact predicate the `acquire_page` guard uses: a pool is "configured" when `policy` is
-    /// Some AND EITHER the legacy kernel path is fully built (pack + pack_buffers + glsl_source +
-    /// compute_ctx all Some) OR the biome path is built (biome_ctx Some). Mirrors the guard so the
-    /// F7 invariant (consistent configured-vs-unconfigured state) can be asserted headlessly.
-    ///
-    /// NOTE: unlike the original legacy-only predicate, `compute_ctx` is now INSIDE the legacy
-    /// conjunct (not excluded) — so the guard can never pass while the legacy `compute_ctx` is None.
-    /// Whichever ctx the matching path needs (`compute_ctx` for legacy, `biome_ctx` for biome) is
-    /// Some exactly when its branch of this predicate is true, so the producer-site
-    /// `.as_ref().unwrap()` in `acquire_page` is unwrap-safe on either path.
-    #[allow(dead_code)]
-    fn is_configured(&self) -> bool {
-        self.policy.is_some()
-            && (
-                // legacy kernel path: pack + buffers + glsl + compiled compute ctx
-                (self.pack.is_some()
-                    && self.pack_buffers.is_some()
-                    && self.glsl_source.is_some()
-                    && self.compute_ctx.is_some())
-                // OR biome path: the GPU biome producer context (no pack/glsl)
-                || self.biome_ctx.is_some()
-            )
-    }
-
-    /// Create a new R32F STORAGE+SAMPLING texture of `page_px × page_px`.
-    /// Returns `Some(Rid)` on success; logs a godot_error and returns `None` on
-    /// failure.  The ONLY `texture_create` call for page textures.
-    fn create_page_texture(&self, rd: &mut Gd<RenderingDevice>) -> Option<Rid> {
-        let px = self.page_px as u32;
-        let mut fmt = RdTextureFormat::new_gd();
-        fmt.set_width(px);
-        fmt.set_height(px);
-        fmt.set_format(DataFormat::R32_SFLOAT);
-        // STORAGE (compute writes it) + SAMPLING (the ring shader reads it). CAN_COPY_FROM lets a
-        // GATE read the page back with texture_get_data to assert seam-freeness against the real
-        // height_page.glsl output (slice 8). CAN_COPY_FROM only permits a copy source; unlike
-        // CPU_READ it allocates no CPU-side mirror, so page residency cost is unchanged on the
-        // render path.
-        fmt.set_usage_bits(
-            TextureUsageBits::STORAGE_BIT
-                | TextureUsageBits::SAMPLING_BIT
-                | TextureUsageBits::CAN_COPY_FROM_BIT,
-        );
-        let view    = RdTextureView::new_gd();
-        let tex_rid = rd.texture_create(&fmt, &view);
-        if tex_rid.is_invalid() {
-            godot_error!(
-                "Wg10PagePool: texture_create returned invalid RID (page_px={})",
-                self.page_px
-            );
-            return None;
-        }
-        Some(tex_rid)
     }
 }
 
