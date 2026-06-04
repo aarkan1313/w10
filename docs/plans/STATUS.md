@@ -114,6 +114,11 @@
 > `cpu_max=42.245 ms`; WORLD `cpu_p99=8.431 ms`, `cpu_max=19.247 ms`; zero
 > hide/show in all three. Latest render p99 is REFERENCE `0.232 ms`, MOUNTAIN
 > `0.367 ms`, WORLD `0.216 ms`.
+> Follow-up guard on 2026-06-04: `review_runtime_visual` now compares the
+> REFERENCE capture against the reference-backed `MOUNTAIN/network_ref` capture
+> and fails on drift. Latest proof: 57,600 sampled pixels at stride 4,
+> mean RGB delta `0.000000`, p95 RGB delta `0.000000` against budgets
+> `0.002500` / `0.020000`.
 > Architecture baseline note: `docs/plans/WG10_ARCHITECTURE_BASELINE_AUDIT_2026-06-04.md`
 > records the current split between the owner-liked static mountain network chunk review
 > (`mountain_network_chunks_review.tscn`) and the current live GPU biome fly

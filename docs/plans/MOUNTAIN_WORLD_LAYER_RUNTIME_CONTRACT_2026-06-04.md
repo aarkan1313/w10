@@ -167,7 +167,9 @@ single rendered page:
   jump to live `MOUNTAIN`, `WORLD`, `LEGACY`, and back to `REFERENCE`, and still
   passes the sprint-speed zero-hide churn gate.
 - `review_runtime_visual` writes separate visual evidence for REFERENCE,
-  MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes.
+  MOUNTAIN/network, MOUNTAIN/close, WORLD/material, and WORLD/routes. It also
+  compares the REFERENCE and reference-backed MOUNTAIN/network captures at the
+  reviewed frame and fails on drift.
 - `review_runtime_modes` proves the current owner WORLD mode is only a bounded
   diagnostic preview: one active biome per page keeps streaming within budget
   (latest WORLD `cpu_p99=7.686 ms`, `cpu_max=10.050 ms`, render p99 `0.505 ms`).
@@ -212,6 +214,9 @@ single rendered page:
   motion p99/max is 35.781/42.245 ms and render p99 is 0.367 ms. The latest
   visual capture shows MOUNTAIN/network matching the REFERENCE view at the
   reviewed frame.
+- Latest bridge-drift proof in `review_runtime_visual`: 57,600 sampled pixels at
+  stride 4, mean RGB delta `0.000000`, p95 RGB delta `0.000000`, budgets
+  `0.002500` / `0.020000`.
 - `python -m pytest tools\dem_pack\test_mountain_world_layer_contract.py -q -s`
   proves the tracked world-layer builder contract. With the generated review
   payload present, it also records the current seam-safe live-producer gap:

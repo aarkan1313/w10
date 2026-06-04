@@ -122,8 +122,9 @@ CHECKS = {
         "worldgen_terrain/tests/mountain_fly_modes_perf_check.gd",
         "worldgen_terrain/tests/mountain_fly_modes_render_perf_check.gd",
     ],
-    # Windowed live-runtime visual capture. This writes the MOUNTAIN/network,
-    # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence.
+    # Windowed live-runtime visual capture. This writes the REFERENCE, MOUNTAIN/network,
+    # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence, and fails if the
+    # reference-backed MOUNTAIN/network bridge drifts away from REFERENCE at the reviewed frame.
     "review_runtime_visual": [
         "worldgen_terrain/tests/biome_fly_capture.gd",
     ],

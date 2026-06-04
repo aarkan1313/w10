@@ -3,7 +3,7 @@ extends SceneTree
 # One-shot CAPTURE: stream the live biome runtime through the same clipmap renderer as
 # mountain_fly_review.tscn and save visual evidence. It captures:
 # - REFERENCE: the accepted static mountain-network payload through the runtime renderer
-# - MOUNTAIN/network_ref: the explicit live candidate for the accepted mountain-network target
+# - MOUNTAIN/network_ref: the reference-backed live bridge for the accepted mountain-network target
 # - MOUNTAIN/close_debug: local-scale diagnostic
 # - WORLD/network_ref: composed grammar-routed runtime plus route-color diagnostic
 # WINDOWED only. Writes D:/tmp/wg10_biome_compose/biome_*_fly_capture*.png
@@ -16,6 +16,9 @@ const OUT_MOUNTAIN_NETWORK := "D:/tmp/wg10_biome_compose/biome_mountain_network_
 const OUT_MOUNTAIN_CLOSE := "D:/tmp/wg10_biome_compose/biome_mountain_close_fly_capture.png"
 const OUT_WORLD := "D:/tmp/wg10_biome_compose/biome_world_fly_capture.png"
 const OUT_ROUTE := "D:/tmp/wg10_biome_compose/biome_world_fly_capture_routes.png"
+const BRIDGE_SAMPLE_STRIDE := 4
+const BRIDGE_MEAN_RGB_DELTA_MAX := 0.0025
+const BRIDGE_P95_RGB_DELTA_MAX := 0.02
 
 const MODE_REFERENCE := "REFERENCE"
 const MODE_MOUNTAIN := "MOUNTAIN"
@@ -37,6 +40,9 @@ func _run() -> int:
 	if rc != 0:
 		return rc
 	rc = await _capture_mode(runtime, "mountain_network", MODE_MOUNTAIN, PRESET_NETWORK, OUT_MOUNTAIN_NETWORK, "")
+	if rc != 0:
+		return rc
+	rc = _assert_reference_bridge_match()
 	if rc != 0:
 		return rc
 	rc = await _capture_mode(runtime, "mountain_close", MODE_MOUNTAIN, PRESET_CLOSE_DEBUG, OUT_MOUNTAIN_CLOSE, "")
@@ -130,6 +136,41 @@ func _capture_mode(runtime: Object, label: String, mode: String, preset: String,
 	var route_suffix := " route=%s" % out_route if out_route != "" else ""
 	print("[wg10-biome-capture] status=pass label=%s runtime=%s feature_span_m=%.0f wrote=%s%s pages=%d biome_path=%s size=%dx%d" % [
 		label, runtime_mode, feature_span_m, out_material, route_suffix, pages, str(biome), VIEW_SIZE.x, VIEW_SIZE.y])
+	return 0
+
+func _assert_reference_bridge_match() -> int:
+	var reference := Image.new()
+	var mountain := Image.new()
+	var err := reference.load(OUT_REFERENCE)
+	if err != OK:
+		push_error("[wg10-biome-capture] reference image load failed rc=%d" % err)
+		return 1
+	err = mountain.load(OUT_MOUNTAIN_NETWORK)
+	if err != OK:
+		push_error("[wg10-biome-capture] mountain bridge image load failed rc=%d" % err)
+		return 1
+	if reference.get_size() != mountain.get_size():
+		push_error("[wg10-biome-capture] reference/bridge size mismatch %s vs %s" % [str(reference.get_size()), str(mountain.get_size())])
+		return 1
+	var size := reference.get_size()
+	var deltas: Array[float] = []
+	var total := 0.0
+	for y in range(0, size.y, BRIDGE_SAMPLE_STRIDE):
+		for x in range(0, size.x, BRIDGE_SAMPLE_STRIDE):
+			var a := reference.get_pixel(x, y)
+			var b := mountain.get_pixel(x, y)
+			var d := (absf(a.r - b.r) + absf(a.g - b.g) + absf(a.b - b.b)) / 3.0
+			deltas.append(d)
+			total += d
+	deltas.sort()
+	var mean := total / float(deltas.size())
+	var p95 := deltas[int(floor(float(deltas.size() - 1) * 0.95))]
+	if mean > BRIDGE_MEAN_RGB_DELTA_MAX or p95 > BRIDGE_P95_RGB_DELTA_MAX:
+		push_error("[wg10-biome-capture] reference bridge mismatch mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+			mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
+		return 1
+	print("[wg10-biome-capture] bridge_match status=pass samples=%d stride=%d mean=%.6f p95=%.6f budgets %.6f/%.6f" % [
+		deltas.size(), BRIDGE_SAMPLE_STRIDE, mean, p95, BRIDGE_MEAN_RGB_DELTA_MAX, BRIDGE_P95_RGB_DELTA_MAX])
 	return 0
 
 func _configure_producer(producer: Object, mode: String, preset: String) -> String:

@@ -209,6 +209,9 @@ REFERENCE at the reviewed frame, and the latest gates still pass:
   REFERENCE 31.577/40.887 ms, MOUNTAIN 35.781/42.245 ms, WORLD 8.431/19.247 ms, with zero
   hide/show in all three. Latest render p99: REFERENCE 0.232 ms, MOUNTAIN 0.367 ms, WORLD
   0.216 ms.
+- The visual gate now also locks the recovered bridge: REFERENCE vs
+  MOUNTAIN/network sampled image diff is mean `0.000000`, p95 `0.000000` over
+  57,600 samples at stride 4, with budgets `0.002500` / `0.020000`.
 
 This intentionally recovers a good reviewed visual before adding more biome complexity. It does
 not close final procedural acceptance: close-debug remains the raw live page recipe, and WORLD
