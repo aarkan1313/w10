@@ -75,6 +75,15 @@
 > 21.969/23.291 ms, WORLD 6.592/14.465 ms. Render p99 remains below 0.5 ms in
 > all three modes, and `review_runtime_visual` = 1/1 with REFERENCE vs
 > MOUNTAIN/network still matching within bridge budgets along the sprint path.
+> Follow-up visual bridge guard: `review_runtime_visual` now also runs
+> `mountain_runtime_reference_static_compare.gd`, which captures the old static
+> `mountain_network_chunks_review.tscn` focus view and the runtime REFERENCE
+> bridge under matching focus framing. It compares terrain masks rather than
+> colors because the renderers/materials differ. Latest proof: static
+> terrain_frac `0.789`, runtime terrain_frac `0.778`, mask IoU `0.987`. This
+> proves the live REFERENCE bridge preserves the owner-liked accepted footprint;
+> remaining visual complaints are renderer/material/procedural-content quality,
+> not a wrong reference scale or camera/window.
 > Follow-up owner-visual fix on 2026-06-04: `mountain_fly_review.tscn` now starts from
 > an accepted-reference camera frame instead of near-surface origin, and `G` reframes to
 > that view during review. Runtime color normalization is now producer-owned:

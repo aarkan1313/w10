@@ -91,6 +91,15 @@ presentation mixes by `page_fade`, so material/tint changes fade over the same
 short window as height. This addresses visual pop during REPAGE without changing
 producer data, page ownership, scheduling, or facts.
 
+Latest accepted-reference bridge proof: `review_runtime_visual` now captures the
+old static review scene and the runtime REFERENCE bridge under matching focus
+framing, then compares terrain masks instead of colors. Latest result:
+static terrain_frac `0.789`, runtime terrain_frac `0.778`, mask IoU `0.987`.
+This proves the live REFERENCE bridge preserves the owner-liked mountain
+footprint/framing. Remaining owner-visible quality concerns should target
+runtime material/mesh presentation and final procedural world-layer content,
+not another source-window or camera-scale reset.
+
 ## 2026-06-04 Deep-Dive Addendum
 
 The latest source-window fix made the raw live mountain recipe sample the same

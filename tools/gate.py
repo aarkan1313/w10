@@ -125,8 +125,11 @@ CHECKS = {
     # Windowed live-runtime visual capture. This writes the REFERENCE, MOUNTAIN/network,
     # MOUNTAIN/close-debug, WORLD/material, and WORLD/route PNG evidence, and fails if the
     # reference-backed MOUNTAIN/network bridge drifts away from REFERENCE at the reviewed frame.
+    # It also compares runtime REFERENCE against the old static mountain-network review under
+    # matching focus framing so the bridge stays tied to the owner-liked artifact.
     "review_runtime_visual": [
         "worldgen_terrain/tests/biome_fly_capture.gd",
+        "worldgen_terrain/tests/mountain_runtime_reference_static_compare.gd",
     ],
 }
 
