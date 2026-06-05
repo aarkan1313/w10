@@ -1,5 +1,24 @@
 # WorldGen10 — Status
 
+> **NEXT-SESSION PICKUP: `docs/plans/WG10_HANDOFF_2026-06-05_CARVE_PORTED.md`** (the
+> live handoff; supersedes WG10_FINAL_HANDOFF_2026-06-05.md).
+
+> **PRODUCER-WIRING DESIGN FORCED BY MEASUREMENT (2026-06-05).** Goal: wire
+> `bake_region` into the live producer so the carved look reaches the screen (closes
+> the un-intercept Rung-1 gap). The simple "all-CPU bake off-frame, cache on LRU, pages
+> sample" design was MEASURED and does NOT fit: all-CPU `bake_region` over a
+> `region_size_m=32768` region (~16 pages) = **~961 ms (513px) / ~3319 ms (1025px)** —
+> the CPU macro (`mountain_seamsafe`, the GPU recipe's CPU twin) dominates; carve is only
+> ~19 ms, condition ~2 ms. Seconds/region is too slow for synchronous OR background.
+> **FORCED ARCHITECTURE (matches GPU/Rust-first principle): GPU macro (region) → ONE
+> off-frame readback (bake_collision_region model) → CPU carve (~19 ms) + condition
+> (~2 ms) → RegionFactRuntime (mirror StaticHeightRuntime) → pages sample.** This likely
+> drops a region bake from ~3 s to tens of ms. Next session builds it (see handoff for
+> concrete steps + the cross-region condition-seam boundary to validate). OWNER PRINCIPLE
+> reaffirmed: anything still CPU-bound that can move to GPU/Rust appropriately MUST — the
+> ~3 s all-CPU bake is the live example (macro is GPU-appropriate, was slow only because
+> bake_region ran it on CPU).
+
 > **WHOLE OFFLINE "BAKED LOOK" PIPELINE NOW IN RUST, END-TO-END PARITY (2026-06-05).**
 > `wg-10/rust/src/bake_region.rs` assembles the seam-safe pipeline — macro
 > (`recipes::mountain_seamsafe`) → carve (`carve_routes`→`carve_ramp_delta`, on the

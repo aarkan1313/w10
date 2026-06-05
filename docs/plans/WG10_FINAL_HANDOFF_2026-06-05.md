@@ -1,5 +1,10 @@
 # WG10 Final Handoff - 2026-06-05
 
+> **SUPERSEDED.** This doc predates the carve-port arc. The CURRENT pickup point is
+> `docs/plans/WG10_HANDOFF_2026-06-05_CARVE_PORTED.md` (carve fully ported to Rust,
+> all-11 biome parity confirmed, bake_region assembled, producer wiring next). Read
+> that + `docs/plans/STATUS.md` top. The content below is kept for history only.
+
 Purpose: stop this recovery session with one concise pickup point for the next
 chat. The next chat should continue from the progression harness and add one
 feature at a time. Do not restart the old mixed-mode investigation.
