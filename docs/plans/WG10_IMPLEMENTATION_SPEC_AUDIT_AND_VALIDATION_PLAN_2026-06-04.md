@@ -48,14 +48,14 @@ steps with explicit status and expected contract:
 4. `world_reference_preview`: bounded WORLD diagnostic over accepted reference
    height/materials.
 
-It also records and gates a machine-readable feature manifest. The first two
+It also records and gates a machine-readable feature manifest. The first three
 review features are implemented: each current step emits a
-`source_display_report` and `material_fact_report`, and the scene renders
-source/display plus material-fact mini-overlays that the smoke gate proves are
-visible and nondegenerate. The remaining planned features are pass-network
-facts, procedural mountain world-layer production, and facts/collision parity;
-each carries its label, added contract, proving gate, acceptance rule, and
-promotion blocker.
+`source_display_report`, `material_fact_report`, and `pass_network_report`, and
+the scene renders source/display, material-fact, and pass-network mini-overlays
+that the smoke gate proves are visible and nondegenerate. The remaining planned
+features are procedural mountain world-layer production and facts/collision
+parity; each carries its label, added contract, proving gate, acceptance rule,
+and promotion blocker.
 
 Latest strict-hitch fix checkpoint:
 
@@ -270,9 +270,9 @@ progression harness once feature overlays make it materially harder to review.
 - The recovery progression scene exposes the current four-step ladder with
   explicit status and contract kinds.
 - The scene exposes a gated progression manifest: current steps, future steps,
-  proving suites, promotion rule, and per-step `source_display_report` plus
-  `material_fact_report`.
-- The source/display and material-fact overlay features are implemented and
+  proving suites, promotion rule, and per-step `source_display_report`,
+  `material_fact_report`, and `pass_network_report`.
+- The source/display, material-fact, and pass-network overlay features are implemented and
   visible in normal scene mode, while probe mode hides those overlays so
   terrain visual-delta gates remain focused on the render path.
 - The same scene survives scripted page-boundary motion with zero hide/show/full
@@ -358,24 +358,26 @@ Implemented cross-cutting review features:
    - Accepted/bridge/preview steps expose low-pass/corridor, floor, rock, and
      snow fact channels; the raw close-debug step is expected to report the
      missing-material-facts gap.
+3. Pass-network report and overlay.
+   - Gated for all four active steps.
+   - REFERENCE and MOUNTAIN/network expose route/carve/corridor summaries and
+     page reports.
+   - The raw close-debug step reports the missing pass-network gap explicitly.
+   - WORLD preview exposes accepted pass-network contract booleans while
+     declaring its separate page-report API gap.
 
 Next feature queue:
 
-1. Pass-network facts.
-   - Add corridor/route report and overlay to the active ladder.
-   - Gate nonzero route/carve coverage for REFERENCE and MOUNTAIN/network.
-   - Gate the raw close-debug step as an explicit missing-gap report, not as a
-     failure hidden by the reference preview.
-2. Procedural/generated mountain world-layer candidate.
+1. Procedural/generated mountain world-layer candidate.
    - Consume generated/cached tile/fact data through the same runtime contract.
    - Promote only if numeric/visual gap to REFERENCE improves while
      `review_progression`, `review_runtime_visual`, and `review_runtime_stress`
      remain green.
-3. WORLD compose.
+2. WORLD compose.
    - Keep owner preview bounded until async/cache or a cheaper preview contract
      exists.
    - Synchronous full compose stays prohibited in the owner fly.
-4. Facts/collision parity.
+3. Facts/collision parity.
    - Collision/query authority must read the same facts presented by the visual
      layer.
    - Gate visible/queryable parity over sampled pages.
@@ -415,9 +417,11 @@ The next checkpoint is not "biomes look cool." It is:
 - The progression scene has static, motion, and fixed-camera visual repage
   gates.
 - The progression scene carries a machine-readable future-step manifest and
-  source/display plus material-fact reports/overlays for the active steps.
-- The next implemented feature is pass-network facts, with explicit route/carve
-  reports and overlays plus a gated missing-gap report for raw close-debug.
+  source/display, material-fact, and pass-network reports/overlays for the
+  active steps.
+- The next implemented feature is the procedural/generated mountain world-layer
+  candidate, which must reduce the measured gap to REFERENCE without breaking
+  the progression, visual, or strict owner-stress gates.
 - The strict owner-spike gate remains green under modes 1/2/3 with morph off/on.
 - Raw procedural mountain remains visibly/numerically compared against the
   accepted baseline instead of being promoted by feel.

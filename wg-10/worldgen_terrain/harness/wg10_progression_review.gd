@@ -89,11 +89,12 @@ const FUTURE_STEPS := [
 	{
 		"id": "pass_network_facts",
 		"label": "Pass-network facts",
-		"status": "planned",
+		"status": "implemented",
 		"adds": "connected pass route and route-carving facts beside the live candidate",
 		"gate": "review_progression",
 		"acceptance_rule": "routes/carving are nonzero, connected at world-layer scale, and page-stable",
 		"blocks": "raw live mountain terrain from being accepted as the mountain-network look",
+		"implemented_by": "pass_network_report plus visible progression overlay",
 	},
 	{
 		"id": "procedural_mountain_world_layer",
@@ -134,6 +135,11 @@ var _material_overlay_panel: Control
 var _material_overlay_label: Label
 var _material_overlay_bars: Dictionary = {}
 var _material_overlay_state := {}
+var _pass_overlay_layer: CanvasLayer
+var _pass_overlay_panel: Control
+var _pass_overlay_label: Label
+var _pass_overlay_bars: Dictionary = {}
+var _pass_overlay_state := {}
 var _step_index := 0
 var _last_config_error := ""
 var _frame := 0
@@ -182,6 +188,7 @@ func _ready() -> void:
 	layer.add_child(_label)
 	_create_source_display_overlay()
 	_create_material_fact_overlay()
+	_create_pass_network_overlay()
 	_refresh_label()
 
 func _exit_tree() -> void:
@@ -289,6 +296,7 @@ func debug_progression_snapshot() -> Dictionary:
 		"source_transform": source_transform,
 		"source_display_report": _current_source_display_report(),
 		"material_fact_report": _current_material_fact_report(),
+		"pass_network_report": _current_pass_network_report(),
 		"static_material_bound_tiles": _static_material_bound_tiles(),
 		"future_steps": FUTURE_STEPS,
 		"progression_manifest": progression_manifest(),
@@ -303,6 +311,8 @@ func set_probe_mode(enabled: bool) -> void:
 		_source_overlay_layer.visible = not enabled
 	if _material_overlay_layer != null:
 		_material_overlay_layer.visible = not enabled
+	if _pass_overlay_layer != null:
+		_pass_overlay_layer.visible = not enabled
 
 func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) -> void:
 	if _camera != null:
@@ -336,6 +346,10 @@ func debug_source_display_overlay_state() -> Dictionary:
 func debug_material_fact_overlay_state() -> Dictionary:
 	_refresh_material_fact_overlay()
 	return _material_overlay_state
+
+func debug_pass_network_overlay_state() -> Dictionary:
+	_refresh_pass_network_overlay()
+	return _pass_overlay_state
 
 func _process(_delta: float) -> void:
 	if _probe_mode:
@@ -422,6 +436,75 @@ func _current_material_fact_report() -> Dictionary:
 		"page_total": _channel_total(page_channels),
 		"display_total": _channel_total(display_channels),
 		"nonzero_channel_count": _nonzero_channel_count(display_channels),
+	}
+
+func _current_pass_network_report() -> Dictionary:
+	if _pool == null:
+		return {}
+	var contract: Dictionary = _pool.call("mountain_world_layer_contract_report")
+	var runtime_mode := str(_pool.call("biome_runtime_mode"))
+	var global_report := {}
+	var page_report := {}
+	var pass_source := "missing"
+	var report_gap := ""
+	var summary_available := false
+	var page_report_available := false
+
+	if runtime_mode == "static_reference":
+		pass_source = "static_reference_payload"
+		global_report = _pool.call("static_reference_report")
+		page_report = _pool.call("static_reference_page_report", 0, 0.0, 0.0, 17)
+		summary_available = true
+		page_report_available = true
+	elif runtime_mode == "single":
+		global_report = _pool.call("mountain_world_layer_reference_report")
+		if not global_report.is_empty():
+			pass_source = "bound_mountain_world_layer_reference"
+			page_report = _pool.call("mountain_world_layer_reference_page_report", 0, 0.0, 0.0, 17)
+			summary_available = true
+			page_report_available = true
+		else:
+			pass_source = "live_biome_recipe_missing_pass_network"
+			report_gap = "raw live candidate has no accepted pass-network routes or route-carving facts"
+	elif runtime_mode == "world":
+		pass_source = "world_preview_reference_contract"
+		report_gap = "WORLD preview exposes accepted pass-network contract booleans but no separate page-report API"
+
+	var contract_routes := bool(contract.get("has_pass_network_routes", false))
+	var contract_carving := bool(contract.get("has_route_carving", false))
+	var route_count := int(global_report.get("pass_network_routes", 0))
+	if route_count <= 0 and contract_routes:
+		route_count = 1
+	var global_walkable := float(global_report.get("pass_network_walkable_frac", 0.0))
+	var global_carved := float(global_report.get("pass_network_carved_frac", 0.0))
+	if global_carved <= 0.0 and contract_carving:
+		global_carved = 1.0
+	var global_corridor := float(global_report.get("corridor_frac", 0.0))
+	var page_corridor := float(page_report.get("corridor_frac", 0.0))
+	var display_corridor := page_corridor if page_report_available else global_corridor
+	var has_routes := contract_routes or route_count > 0
+	var has_carving := contract_carving or global_carved > 0.0
+	return {
+		"pass_source": pass_source,
+		"runtime_mode": runtime_mode,
+		"has_pass_network_routes": has_routes,
+		"has_route_carving": has_carving,
+		"summary_available": summary_available,
+		"page_report_available": page_report_available,
+		"expected_missing": pass_source == "live_biome_recipe_missing_pass_network",
+		"report_gap": report_gap,
+		"route_count": route_count,
+		"global_walkable_frac": global_walkable,
+		"global_carved_frac": global_carved,
+		"global_corridor_frac": global_corridor,
+		"page_corridor_frac": page_corridor,
+		"display_corridor_frac": display_corridor,
+		"bar_values": {
+			"routes": 1.0 if route_count > 0 else 0.0,
+			"corridor": clampf(display_corridor, 0.0, 1.0),
+			"walkable": clampf(global_walkable, 0.0, 1.0),
+			"carved": clampf(global_carved, 0.0, 1.0),
+		},
 	}
 
 func _channel_total(channels: Dictionary) -> float:
@@ -689,6 +772,116 @@ func _material_bar_report() -> Dictionary:
 			out[key] = _rect_report(Rect2(bar.position, bar.size))
 	return out
 
+func _create_pass_network_overlay() -> void:
+	_pass_overlay_layer = CanvasLayer.new()
+	add_child(_pass_overlay_layer)
+
+	_pass_overlay_panel = Control.new()
+	_pass_overlay_panel.anchor_left = 1.0
+	_pass_overlay_panel.anchor_right = 1.0
+	_pass_overlay_panel.offset_left = -370.0
+	_pass_overlay_panel.offset_right = -12.0
+	_pass_overlay_panel.offset_top = 364.0
+	_pass_overlay_panel.offset_bottom = 532.0
+	_pass_overlay_layer.add_child(_pass_overlay_panel)
+
+	var bg := ColorRect.new()
+	bg.position = Vector2.ZERO
+	bg.size = Vector2(358.0, 168.0)
+	bg.color = Color(0.02, 0.025, 0.03, 0.72)
+	_pass_overlay_panel.add_child(bg)
+
+	_pass_overlay_label = Label.new()
+	_pass_overlay_label.position = Vector2(14.0, 10.0)
+	_pass_overlay_label.size = Vector2(330.0, 46.0)
+	_pass_overlay_label.add_theme_font_size_override("font_size", 13)
+	_pass_overlay_label.add_theme_color_override("font_color", Color(0.94, 0.96, 1.0))
+	_pass_overlay_panel.add_child(_pass_overlay_label)
+
+	var specs := [
+		{"id": "routes", "label": "routes", "color": Color(0.94, 0.68, 0.20, 0.84), "y": 66.0},
+		{"id": "corridor", "label": "corridor", "color": Color(0.20, 0.62, 0.46, 0.84), "y": 90.0},
+		{"id": "walkable", "label": "walk", "color": Color(0.38, 0.70, 0.30, 0.84), "y": 114.0},
+		{"id": "carved", "label": "carved", "color": Color(0.62, 0.48, 0.34, 0.84), "y": 138.0},
+	]
+	for spec in specs:
+		var row_label := Label.new()
+		row_label.position = Vector2(14.0, float(spec["y"]) - 4.0)
+		row_label.size = Vector2(72.0, 18.0)
+		row_label.text = str(spec["label"])
+		row_label.add_theme_font_size_override("font_size", 12)
+		row_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.96))
+		_pass_overlay_panel.add_child(row_label)
+
+		var track := ColorRect.new()
+		track.position = Vector2(88.0, float(spec["y"]))
+		track.size = Vector2(224.0, 12.0)
+		track.color = Color(1.0, 1.0, 1.0, 0.12)
+		_pass_overlay_panel.add_child(track)
+
+		var bar := ColorRect.new()
+		bar.position = track.position
+		bar.size = Vector2(1.0, 12.0)
+		bar.color = spec["color"]
+		_pass_overlay_panel.add_child(bar)
+		_pass_overlay_bars[str(spec["id"])] = bar
+
+func _refresh_pass_network_overlay() -> void:
+	if _pass_overlay_layer == null:
+		return
+	var report := _current_pass_network_report()
+	if report.is_empty():
+		_pass_overlay_layer.visible = false
+		_pass_overlay_state = {"visible": false}
+		return
+	if not _probe_mode:
+		_pass_overlay_layer.visible = true
+
+	var values: Dictionary = report.get("bar_values", {})
+	for key in ["routes", "corridor", "walkable", "carved"]:
+		var bar := _pass_overlay_bars.get(key, null) as ColorRect
+		if bar == null:
+			continue
+		var value := clampf(float(values.get(key, 0.0)), 0.0, 1.0)
+		bar.size.x = maxf(1.0, 224.0 * value)
+
+	var source := str(report.get("pass_source", "missing"))
+	var step := _current_step()
+	var gap := str(report.get("report_gap", ""))
+	var route_text := "routes %d" % int(report.get("route_count", 0))
+	var carve_text := "carve yes" if bool(report.get("has_route_carving", false)) else "carve missing"
+	_pass_overlay_label.text = "pass network | %s\nstep %s | %s | %s%s" % [
+		source,
+		str(step.get("id", "")),
+		route_text,
+		carve_text,
+		" | " + gap if gap != "" else "",
+	]
+	_pass_overlay_state = {
+		"visible": _pass_overlay_layer.visible,
+		"step_id": str(step.get("id", "")),
+		"pass_source": source,
+		"has_pass_network_routes": bool(report.get("has_pass_network_routes", false)),
+		"has_route_carving": bool(report.get("has_route_carving", false)),
+		"summary_available": bool(report.get("summary_available", false)),
+		"page_report_available": bool(report.get("page_report_available", false)),
+		"expected_missing": bool(report.get("expected_missing", false)),
+		"report_gap": gap,
+		"route_count": int(report.get("route_count", 0)),
+		"display_corridor_frac": float(report.get("display_corridor_frac", 0.0)),
+		"bar_values": values,
+		"bars": _pass_bar_report(),
+		"label": _pass_overlay_label.text,
+	}
+
+func _pass_bar_report() -> Dictionary:
+	var out := {}
+	for key in ["routes", "corridor", "walkable", "carved"]:
+		var bar := _pass_overlay_bars.get(key, null) as ColorRect
+		if bar != null:
+			out[key] = _rect_report(Rect2(bar.position, bar.size))
+	return out
+
 func _configure_current_step() -> String:
 	if _producer == null or _pool == null:
 		return "missing producer or pool"
@@ -743,6 +936,7 @@ func _refresh_label() -> void:
 	]
 	_refresh_source_display_overlay()
 	_refresh_material_fact_overlay()
+	_refresh_pass_network_overlay()
 
 func _static_material_bound_tiles() -> int:
 	if _rings == null:

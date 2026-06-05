@@ -70,6 +70,7 @@ func _run() -> int:
 	_expect(scene.has_method("progression_manifest"), "scene missing progression_manifest", errs)
 	_expect(scene.has_method("debug_source_display_overlay_state"), "scene missing debug_source_display_overlay_state", errs)
 	_expect(scene.has_method("debug_material_fact_overlay_state"), "scene missing debug_material_fact_overlay_state", errs)
+	_expect(scene.has_method("debug_pass_network_overlay_state"), "scene missing debug_pass_network_overlay_state", errs)
 	if scene.has_method("step_count"):
 		_expect(int(scene.call("step_count")) == EXPECTED_STEPS.size(), "unexpected step_count", errs)
 	var future_count := int(scene.call("future_step_count")) if scene.has_method("future_step_count") else 0
@@ -89,6 +90,8 @@ func _run() -> int:
 			_expect_source_display_overlay(scene.call("debug_source_display_overlay_state"), snapshot, i, errs)
 		if scene.has_method("debug_material_fact_overlay_state"):
 			_expect_material_fact_overlay(scene.call("debug_material_fact_overlay_state"), snapshot, i, errs)
+		if scene.has_method("debug_pass_network_overlay_state"):
+			_expect_pass_network_overlay(scene.call("debug_pass_network_overlay_state"), snapshot, i, errs)
 
 	scene.queue_free()
 	scene = null
@@ -159,6 +162,8 @@ func _expect_step(snapshot: Dictionary, expected: Dictionary, index: int, errs: 
 	_expect_source_display(source_display, str(expected.get("id", "")), label, errs)
 	var material_fact: Dictionary = snapshot.get("material_fact_report", {})
 	_expect_material_fact(material_fact, str(expected.get("id", "")), label, errs)
+	var pass_network: Dictionary = snapshot.get("pass_network_report", {})
+	_expect_pass_network(pass_network, str(expected.get("id", "")), label, errs)
 	var manifest: Dictionary = snapshot.get("progression_manifest", {})
 	_expect(not manifest.is_empty(), "%s expected embedded progression manifest" % label, errs)
 
@@ -192,6 +197,9 @@ func _expect_future_metadata(future: Array, label: String, errs: Array[String]) 
 		if id == "material_fact_layers":
 			_expect(str(item.get("status", "")) == "implemented", "%s material fact layers should be implemented" % label, errs)
 			_expect(str(item.get("implemented_by", "")) != "", "%s material fact layers missing implementation pointer" % label, errs)
+		if id == "pass_network_facts":
+			_expect(str(item.get("status", "")) == "implemented", "%s pass-network facts should be implemented" % label, errs)
+			_expect(str(item.get("implemented_by", "")) != "", "%s pass-network facts missing implementation pointer" % label, errs)
 
 func _expect_source_display(report: Dictionary, step_id: String, label: String, errs: Array[String]) -> void:
 	_expect(not report.is_empty(), "%s expected source/display report" % label, errs)
@@ -256,6 +264,39 @@ func _expect_material_fact(report: Dictionary, step_id: String, label: String, e
 		_expect(int(report.get("static_material_bound_tiles", 0)) > 0, "%s expected WORLD preview material tiles" % label, errs)
 		_expect(str(report.get("report_gap", "")) != "", "%s WORLD preview expected material report gap" % label, errs)
 
+func _expect_pass_network(report: Dictionary, step_id: String, label: String, errs: Array[String]) -> void:
+	_expect(not report.is_empty(), "%s expected pass-network report" % label, errs)
+	var source := str(report.get("pass_source", ""))
+	if step_id == "reference_baseline":
+		_expect(source == "static_reference_payload", "%s expected static pass-network source" % label, errs)
+		_expect(bool(report.get("has_pass_network_routes", false)), "%s expected pass-network routes" % label, errs)
+		_expect(bool(report.get("has_route_carving", false)), "%s expected route carving" % label, errs)
+		_expect(bool(report.get("summary_available", false)), "%s expected pass summary" % label, errs)
+		_expect(bool(report.get("page_report_available", false)), "%s expected pass page report" % label, errs)
+		_expect(int(report.get("route_count", 0)) > 0, "%s expected route count" % label, errs)
+		_expect(float(report.get("global_carved_frac", 0.0)) > 0.0, "%s expected carved fraction" % label, errs)
+	elif step_id == "mountain_network_bridge":
+		_expect(source == "bound_mountain_world_layer_reference", "%s expected bridge pass-network source" % label, errs)
+		_expect(bool(report.get("has_pass_network_routes", false)), "%s expected bridge pass-network routes" % label, errs)
+		_expect(bool(report.get("has_route_carving", false)), "%s expected bridge route carving" % label, errs)
+		_expect(bool(report.get("summary_available", false)), "%s expected bridge pass summary" % label, errs)
+		_expect(bool(report.get("page_report_available", false)), "%s expected bridge pass page report" % label, errs)
+		_expect(int(report.get("route_count", 0)) > 0, "%s expected bridge route count" % label, errs)
+		_expect(float(report.get("global_carved_frac", 0.0)) > 0.0, "%s expected bridge carved fraction" % label, errs)
+	elif step_id == "mountain_close_debug_candidate":
+		_expect(source == "live_biome_recipe_missing_pass_network", "%s expected missing live pass-network source" % label, errs)
+		_expect(not bool(report.get("has_pass_network_routes", true)), "%s live candidate should not claim pass-network routes" % label, errs)
+		_expect(not bool(report.get("has_route_carving", true)), "%s live candidate should not claim route carving" % label, errs)
+		_expect(bool(report.get("expected_missing", false)), "%s live candidate should mark expected missing pass-network" % label, errs)
+		_expect(str(report.get("report_gap", "")) != "", "%s live candidate expected pass-network gap text" % label, errs)
+	elif step_id == "world_reference_preview":
+		_expect(source == "world_preview_reference_contract", "%s expected WORLD preview pass-network source" % label, errs)
+		_expect(bool(report.get("has_pass_network_routes", false)), "%s expected WORLD preview pass-network contract" % label, errs)
+		_expect(bool(report.get("has_route_carving", false)), "%s expected WORLD preview route carving contract" % label, errs)
+		_expect(not bool(report.get("page_report_available", true)), "%s WORLD preview should expose page-report API gap" % label, errs)
+		_expect(int(report.get("route_count", 0)) > 0, "%s expected WORLD preview route placeholder count" % label, errs)
+		_expect(str(report.get("report_gap", "")) != "", "%s WORLD preview expected pass-network report gap" % label, errs)
+
 func _expect_material_fact_overlay(state: Dictionary, snapshot: Dictionary, index: int, errs: Array[String]) -> void:
 	var label := "%d:%s" % [index, str(snapshot.get("step_id", ""))]
 	_expect(bool(state.get("visible", false)), "%s material overlay should be visible" % label, errs)
@@ -270,6 +311,21 @@ func _expect_material_fact_overlay(state: Dictionary, snapshot: Dictionary, inde
 	var bars: Dictionary = state.get("bars", {})
 	for key in ["low_pass", "floor", "rock", "snow"]:
 		_expect_rect(bars.get(key, {}), "%s material overlay %s bar" % [label, key], errs)
+
+func _expect_pass_network_overlay(state: Dictionary, snapshot: Dictionary, index: int, errs: Array[String]) -> void:
+	var label := "%d:%s" % [index, str(snapshot.get("step_id", ""))]
+	_expect(bool(state.get("visible", false)), "%s pass-network overlay should be visible" % label, errs)
+	_expect(str(state.get("step_id", "")) == str(snapshot.get("step_id", "")), "%s pass-network overlay step mismatch" % label, errs)
+	var report: Dictionary = snapshot.get("pass_network_report", {})
+	_expect(str(state.get("pass_source", "")) == str(report.get("pass_source", "")), "%s pass-network overlay source mismatch" % label, errs)
+	if bool(report.get("expected_missing", false)):
+		_expect(bool(state.get("expected_missing", false)), "%s pass-network overlay should mark expected missing facts" % label, errs)
+	else:
+		_expect(bool(state.get("has_pass_network_routes", false)), "%s pass-network overlay should expose routes" % label, errs)
+	_expect(str(state.get("label", "")).find("pass network") >= 0, "%s pass-network overlay label mismatch" % label, errs)
+	var bars: Dictionary = state.get("bars", {})
+	for key in ["routes", "corridor", "walkable", "carved"]:
+		_expect_rect(bars.get(key, {}), "%s pass-network overlay %s bar" % [label, key], errs)
 
 func _expect_rect(rect: Dictionary, label: String, errs: Array[String]) -> void:
 	_expect(float(rect.get("w", 0.0)) > 0.0, "%s width must be positive" % label, errs)

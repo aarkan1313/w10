@@ -40,11 +40,12 @@
 > motion through page boundaries with bounded repage bursts, and pass a
 > fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses. Latest
 > follow-up turns the scene into a machine-readable handoff and implements the
-> first two review features: every active step emits a `source_display_report`
-> and `material_fact_report`, the scene draws gated source/display and material
-> fact overlays, and the remaining pass-network/procedural/facts-collision
-> planned steps declare their labels, added contracts, proving gates,
-> acceptance rules, and blocking promotion gaps.
+> first three review features: every active step emits a
+> `source_display_report`, `material_fact_report`, and `pass_network_report`;
+> the scene draws gated source/display, material-fact, and pass-network
+> overlays; and the remaining procedural/facts-collision planned steps declare
+> their labels, added contracts, proving gates, acceptance rules, and blocking
+> promotion gaps.
 > Latest post-fix proof: `review_progression` = 3/3, `review_runtime` = 2/2,
 > `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
 > `review_runtime_stress` = 1/1 with CPU p99/max and GPU p99 capped at

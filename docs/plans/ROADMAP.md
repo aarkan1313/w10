@@ -61,9 +61,10 @@ Current work is Slice 4 stabilization and recovery:
   runtime modes, contract kinds, scripted page-boundary motion, and fixed-camera
   visual repage deltas at L0/L1/L2 page-boundary crosses. The harness now also
   exports a gated feature manifest, per-step `source_display_report`,
-  `material_fact_report`, and visible source/display plus material-fact
-  overlays. The next pass-network, procedural world-layer, and facts/collision
-  steps have explicit gates and promotion rules before work starts.
+  `material_fact_report`, `pass_network_report`, and visible source/display,
+  material-fact, and pass-network overlays. The next procedural world-layer and
+  facts/collision steps have explicit gates and promotion rules before work
+  starts.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same
