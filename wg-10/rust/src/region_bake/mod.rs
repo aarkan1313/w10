@@ -10,12 +10,16 @@ mod gpu_macro;
 pub use gpu_macro::gpu_macro_region;
 
 mod percentile_provider;
-pub use percentile_provider::{PercentileFields, PercentileProvider, ScalarRegionPercentiles};
+pub use percentile_provider::{
+    PercentileFields, PercentileProvider, ScalarRegionPercentiles, SmoothFieldPercentiles,
+};
 
 #[cfg(test)]
 mod region_bake_tests;
 #[cfg(test)]
 mod seam_tests;
+#[cfg(test)]
+mod percentile_seam_tests;
 
 /// Externally supplied conditioning percentiles (cross-region seam reconcile). When `None`,
 /// `bake_region_from_raw` self-computes them per-region (the single-region / interior case).

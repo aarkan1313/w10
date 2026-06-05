@@ -98,6 +98,13 @@ def main() -> None:
         "n": int(SAMPLE_N),
         "height_scale_m": float(HEIGHT_SCALE_M),
         "span_m": float(SOURCE_SPAN_M),
+        # Absolute world origins: region B abuts A at A.x + span (same Z). The Rust
+        # SmoothFieldPercentiles keys its coarse lattice + windows to these ABSOLUTE
+        # world coords, so A's right edge and B's left edge agree by construction.
+        "origin_a_x": float(SOURCE_ORIGIN_X),
+        "origin_a_z": float(SOURCE_ORIGIN_Z),
+        "origin_b_x": float(SOURCE_ORIGIN_X + SOURCE_SPAN_M),
+        "origin_b_z": float(SOURCE_ORIGIN_Z),
         "carved_a": carved_a.ravel().tolist(),
         "carved_b": carved_b.ravel().tolist(),
     }
