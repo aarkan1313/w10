@@ -16,9 +16,13 @@ const APRON_PX := 160
 const CAPACITY := 96
 const BASE_SPAN := 8192.0
 const MOUNTAIN_REVIEW_SEED := 177
+# Flow ON/OFF is gated by flow_max_level (a level-L page runs flow iff L < flow_max_level), NOT by
+# flow_iters. flow_iters MUST stay >= 1: the scheduler's discharge-buffer parity assert
+# (scheduler.rs:243) panics at flow_iters=0. So: macro/off = flow_max_level 0 (level 0 not < 0 -> no
+# flow); flow/on = flow_max_level 2 (level 0 < 2 -> flow). flow_iters stays 192 for both.
 const FLOW_ITERS := 192
-const FLOW_ITERS_OFF := 0
-const FLOW_MAX_LEVEL := 2
+const FLOW_MAX_LEVEL_OFF := 0
+const FLOW_MAX_LEVEL_ON := 2
 const FEATURE_SPAN_NETWORK_M := 90000.0
 const RELIEF_M_DEFAULT := 1700.0
 # Accepted source-window transform — VERIFIED exact (mountain_fly_review_smoke_check.gd:361-363).
@@ -67,9 +71,9 @@ func configure(pool: Object) -> String:
 		RUNG_ANALYTIC:
 			return _configure_analytic(pool)
 		RUNG_MOUNTAIN_MACRO:
-			return _configure_live_mountain(pool, FLOW_ITERS_OFF)
+			return _configure_live_mountain(pool, FLOW_MAX_LEVEL_OFF)
 		RUNG_MOUNTAIN_FLOW:
-			return _configure_live_mountain(pool, FLOW_ITERS)
+			return _configure_live_mountain(pool, FLOW_MAX_LEVEL_ON)
 		_:
 			return "ladder_producers: unknown rung %s" % _rung
 
@@ -82,14 +86,15 @@ func _configure_analytic(pool: Object) -> String:
 	return str(pool.call("configure_analytic",
 		CAPACITY, PAGE_PX, BASE_SPAN, ANALYTIC_AMP, ANALYTIC_LAMBDA))
 
-# Live mountain recipe at the accepted scale/seed/source-window. NO reference binding,
-# so dispatch_page_compute reaches compute_biome_page_cached. flow_iters selects flow on/off.
-func _configure_live_mountain(pool: Object, flow_iters: int) -> String:
+# Live mountain recipe at the accepted scale/seed/source-window. NO reference binding, so
+# dispatch_page_compute reaches compute_biome_page_cached. flow_max_level selects flow on/off for the
+# level-0 page (flow_iters stays >=1 — flow_iters=0 panics the scheduler discharge assert).
+func _configure_live_mountain(pool: Object, flow_max_level: int) -> String:
 	var err := str(pool.call("configure_biome",
 		ProjectSettings.globalize_path(PRIM),
 		ProjectSettings.globalize_path(MACHINE),
 		ProjectSettings.globalize_path(MOUNTAIN),
-		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_NETWORK_M, flow_iters, RELIEF_M_DEFAULT, FLOW_MAX_LEVEL, MOUNTAIN_REVIEW_SEED))
+		CAPACITY, PAGE_PX, APRON_PX, BASE_SPAN, FEATURE_SPAN_NETWORK_M, FLOW_ITERS, RELIEF_M_DEFAULT, flow_max_level, MOUNTAIN_REVIEW_SEED))
 	if err != "":
 		return err
 	# set_biome_source_transform requires SingleBiome/World already configured (so call it AFTER).

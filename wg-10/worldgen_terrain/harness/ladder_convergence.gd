@@ -40,14 +40,16 @@ func delta(live: PackedFloat32Array, ref: PackedFloat32Array) -> Dictionary:
 		"nonvacuous": live_relief > 1.0 and ref_relief > 1.0,
 	}
 
-# Flush the global RD so a fire-and-forget compute page becomes readable (biome_runtime_isolate idiom).
-func flush_gpu(tree: SceneTree) -> void:
-	for _i in range(4):
-		await tree.process_frame
-		RenderingServer.force_draw()
+# Let N frames pass so a queued compute list is submitted + CLOSED at the frame boundary BEFORE any
+# readback. Crucially does NOT call force_draw (which opens a screen draw list that collides with an
+# open compute list mid-script). This mirrors m3_continuity/biome_world: produce during frames, then
+# read resident pages. The engine submits the global-RD compute work at each frame's draw.
+func settle_frames(tree: SceneTree, n: int) -> void:
+	for _i in range(n):
 		await tree.process_frame
 
-# Read a resident page back as floats (m3_continuity_check._read_page idiom). Empty on miss.
+# Read a resident page back as floats (m3_continuity_check._read_page idiom). get_resident_page does
+# NOT dispatch a compute (the produce already happened) so this opens no compute list. Empty on miss.
 func read_resident_page(rd: RenderingDevice, pool: Object, level: int, ox: float, oz: float, page_px: int) -> PackedFloat32Array:
 	var tex: Object = pool.call("get_resident_page", level, ox, oz)
 	if tex == null:
@@ -60,11 +62,12 @@ func read_resident_page(rd: RenderingDevice, pool: Object, level: int, ox: float
 		return PackedFloat32Array()
 	return bytes.to_float32_array()
 
-# Acquire (produce) + flush + read one page for the CURRENTLY configured producer.
-# This is the one-call "produce a live page and read its heights" the rungs use.
+# Produce one page for the CURRENTLY configured producer, let the compute close over a few frames,
+# then read it back. acquire_page dispatches the compute; the frames submit+close it; get_resident
+# reads with no further compute. Do ONE producer's full produce->read before reconfiguring the pool.
 func produce_and_read(tree: SceneTree, rd: RenderingDevice, pool: Object, level: int, ox: float, oz: float, page_px: int) -> PackedFloat32Array:
 	var tex = pool.call("acquire_page", level, ox, oz)
 	if tex == null:
 		return PackedFloat32Array()
-	await flush_gpu(tree)
+	await settle_frames(tree, 6)
 	return await read_resident_page(rd, pool, level, ox, oz, page_px)

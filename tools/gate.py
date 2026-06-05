@@ -153,6 +153,11 @@ CHECKS = {
     "ladder_rung0": [
         "worldgen_terrain/tests/ladder_rung0_check.gd",
     ],
+    # Rung 1: live mountain macro (flow off) vs baked REFERENCE in metres. Self-baselining
+    # (direction + no-regression). The offline 1.21 number is normalized units, not the budget.
+    "ladder_rung1": [
+        "worldgen_terrain/tests/ladder_rung1_check.gd",
+    ],
     # Pure-GDScript self-test for the convergence helper math (headless; no GPU). Catches a
     # "helper always returns 0" bug before any rung trusts its verdict.
     "ladder_selftest": [
@@ -177,6 +182,7 @@ WINDOWED_SUITES = {
     "review_runtime_visual",
     "review_progression",
     "ladder_rung0",
+    "ladder_rung1",
 }
 
 
