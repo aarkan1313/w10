@@ -9,6 +9,9 @@ use crate::pass_network::{carve_ramp_delta, carve_routes, PassNetworkParams, Ram
 mod gpu_macro;
 pub use gpu_macro::gpu_macro_region;
 
+mod percentile_provider;
+pub use percentile_provider::{PercentileFields, PercentileProvider, ScalarRegionPercentiles};
+
 #[cfg(test)]
 mod region_bake_tests;
 #[cfg(test)]
