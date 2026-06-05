@@ -43,6 +43,30 @@ pub fn percentile_linear(sorted: &[f64], q: f64) -> f64 {
     sorted[lo] + frac * (sorted[hi] - sorted[lo])
 }
 
+/// Field-valued conditioning: `p05f/p50f/p95f` are EITHER length 1 (scalar, broadcast to every
+/// cell) OR length `n*n` (a per-cell percentile field, for seam-exact cross-region normalization).
+/// Identical math to `condition_world_with_percentiles` when the fields are length 1.
+///
+/// # Panics
+/// Panics if `z.len() != n*n`, or if any percentile field is neither length 1 nor length `n*n`.
+pub fn condition_world_with_percentile_fields(
+    z: &[f64], n: usize, p05f: &[f64], p50f: &[f64], p95f: &[f64],
+) -> Vec<f64> {
+    let nn = n * n;
+    assert_eq!(z.len(), nn, "condition_world_with_percentile_fields: z.len() != n*n");
+    for (name, f) in [("p05f", p05f), ("p50f", p50f), ("p95f", p95f)] {
+        assert!(f.len() == 1 || f.len() == nn,
+            "condition_world_with_percentile_fields: {name} len {} not 1 or {nn}", f.len());
+    }
+    let at = |f: &[f64], i: usize| -> f64 { if f.len() == 1 { f[0] } else { f[i] } };
+    let robust: Vec<f64> = (0..nn).map(|i| {
+        let denom = at(p95f, i) - at(p05f, i) + 1.0e-9;
+        (z[i] - at(p50f, i)) / denom * 2.10
+    }).collect();
+    let smoothed = gaussian_filter_nearest(&robust, n, n, 0.55, 4.0);
+    smoothed.iter().map(|v| v.tanh()).collect()
+}
+
 /// Condition a region field using EXTERNALLY SUPPLIED percentiles (for cross-region seam
 /// reconciliation). Identical math to `condition_world` from the `robust` step onward; only the
 /// p05/p50/p95 source differs. The returned ConditionStats reports the SUPPLIED percentiles.
@@ -50,11 +74,7 @@ pub fn percentile_linear(sorted: &[f64], q: f64) -> f64 {
 /// # Panics
 /// Panics if `z.len() != n * n`.
 pub fn condition_world_with_percentiles(z: &[f64], n: usize, p05: f64, p50: f64, p95: f64) -> Vec<f64> {
-    assert_eq!(z.len(), n * n, "condition_world_with_percentiles: z.len() != n*n");
-    let denom = p95 - p05 + 1.0e-9;
-    let robust: Vec<f64> = z.iter().map(|v| (v - p50) / denom * 2.10).collect();
-    let smoothed = gaussian_filter_nearest(&robust, n, n, 0.55, 4.0);
-    smoothed.iter().map(|v| v.tanh()).collect()
+    condition_world_with_percentile_fields(z, n, &[p05], &[p50], &[p95])
 }
 
 /// Port of `mountain_world_layer.condition_world`. `z` is a flat row-major `f64` field of length

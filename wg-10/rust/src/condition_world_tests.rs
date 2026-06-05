@@ -187,3 +187,30 @@ fn with_percentiles_self_computed_equals_original() {
         assert_eq!(got[i].to_bits(), want[i].to_bits(), "cell {i} differs");
     }
 }
+
+#[test]
+fn field_percentiles_length1_broadcast_equals_scalar() {
+    // A length-1 percentile "field" must broadcast to exactly the scalar path (bit-identical).
+    let n = 8usize;
+    let mut z = vec![0.0f64; n * n];
+    for i in 0..n * n { z[i] = ((i * 131 % 97) as f64) * 0.37 - 12.0; }
+    let (_w, stats) = cw::condition_world(&z, n);
+    let want = cw::condition_world_with_percentiles(&z, n, stats.p05, stats.p50, stats.p95);
+    let got = cw::condition_world_with_percentile_fields(
+        &z, n, &[stats.p05], &[stats.p50], &[stats.p95]);
+    assert_eq!(got.len(), want.len());
+    for i in 0..want.len() { assert_eq!(got[i].to_bits(), want[i].to_bits(), "cell {i}"); }
+}
+
+#[test]
+fn field_percentiles_per_cell_varies() {
+    // A genuine per-cell field: each cell normalized by its OWN p50 -> robust 0 everywhere pre-smooth.
+    let n = 4usize;
+    let z: Vec<f64> = (0..n*n).map(|i| i as f64).collect();
+    let p05: Vec<f64> = z.iter().map(|v| v - 1.0).collect();
+    let p50: Vec<f64> = z.clone();
+    let p95: Vec<f64> = z.iter().map(|v| v + 1.0).collect();
+    let got = cw::condition_world_with_percentile_fields(&z, n, &p05, &p50, &p95);
+    // robust[i] = (z-p50)/(p95-p05+eps)*2.10 = 0 -> tanh(gaussian(0)) = 0 everywhere.
+    for (i, &v) in got.iter().enumerate() { assert!(v.abs() < 1e-9, "cell {i} = {v}"); }
+}
