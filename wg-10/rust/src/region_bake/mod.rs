@@ -11,6 +11,8 @@ pub use gpu_macro::gpu_macro_region;
 
 #[cfg(test)]
 mod region_bake_tests;
+#[cfg(test)]
+mod seam_tests;
 
 /// Externally supplied conditioning percentiles (cross-region seam reconcile). When `None`,
 /// `bake_region_from_raw` self-computes them per-region (the single-region / interior case).
