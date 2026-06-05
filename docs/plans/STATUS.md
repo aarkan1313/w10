@@ -3,6 +3,58 @@
 > **NEXT-SESSION PICKUP: `docs/plans/WG10_HANDOFF_2026-06-05_CARVE_PORTED.md`** (the
 > live handoff; supersedes WG10_FINAL_HANDOFF_2026-06-05.md).
 
+> **✅ CARVED LOOK ON SCREEN — REGION-FACT PRODUCER WIRED + SEAM-EXACT (2026-06-05).** The
+> region-fact producer integration is DONE: the carved "baked look" now reaches the screen
+> through the live `Wg10PagePool`, via an off-frame async super-region bake. The Rung-1
+> un-intercept gap is CLOSED. Verified on hardware (RTX 5090, editor-closed): cargo lib
+> **265/265**; windowed gates `region_macro` ✅, `bake_worker` ✅, `region_rung1` ✅ (the
+> on-screen gate: a baked region page upgrades past the never-black fallback, is finite +
+> non-degenerate, AND two adjacent region pages AGREE at their shared internal super-region
+> border = seam-exact on screen); regression `gpu` 4/4 ✅ + `biome_page` 3/3 ✅ (no GPU-parity
+> disturbance). Branch `slice4-gpu-page-integration`, pushed.
+>
+> **Architecture shipped (GPU/Rust-first, engine-modular):**
+> - **Off-frame async bake worker** (`region_bake/worker.rs`): a dedicated thread with its OWN
+>   RenderingDevice (per-thread; never shares the pool's RD) — GPU super-macro readback → CPU
+>   carve+condition → sliced region facts, returned over a channel. Never-black coarse fallback
+>   while a region bakes. (Drop closes tx-then-joins; no deadlock, no detached thread.)
+> - **Seam-exactness in THREE layers, each proven (the measured ~1090 m seam decomposed):**
+>   1. **Percentiles** — `SmoothFieldPercentiles` (`region_bake/percentile_provider.rs`): a
+>      smooth, world-position-keyed percentile FIELD behind a swappable `PercentileProvider`
+>      interface (engine modularity). **0-ULP seam-exact** at the normalization layer (scalar
+>      per-region drift ~442–533 m → 0.0 m).
+>   2. **Carve + conditioning gaussian** — `bake_super_region` (`region_bake/mod.rs`): bake a
+>      k×k SUPER-region as ONE field (carve+condition over the whole super-field), then SLICE
+>      into per-region facts. Internal super-region borders are **0-ULP seam-exact BY
+>      CONSTRUCTION** (the global Dijkstra carve runs once over the super-field, not per-region;
+>      the edge-clamped gaussian likewise runs over the whole field). `k` is a modular knob
+>      (k=1 = single region). This is the proven carve-big-then-slice model.
+>   - Only super-region OUTER borders can still seam (k× rarer; percentiles stay exact there).
+> - **`condition_world` is now a pure transform** taking per-cell percentile fields (length-1 =
+>   scalar broadcast, bit-exact to the old path — all existing Python-parity + bake_region gates
+>   stay green). The percentile SOURCE is the swappable provider.
+>
+> **KEY FINDING this session (corrects a prior spec assumption):** the bake-region assembly spec
+> claimed "the seam-safe macro + carve are seam-exact." Only the MACRO is — the carve runs a
+> GLOBAL edge-to-edge Dijkstra, so INDEPENDENT per-region carves seam by ~3500 m (measured, the
+> dominant component of the old ~1090 m condition-seam number, which was actually carve+gaussian+
+> percentile combined). Fixed by super-region bake-then-slice (owner: "pillars" → the proven
+> seam-exact model, not the deferred scale-contract-coupled core-local-anchored carve).
+> Memory: `worldgen10-condition-seam-measured`, `worldgen10-standing-build-directives`.
+>
+> **Specs/plans (committed):** `docs/superpowers/specs/2026-06-05-wg10-region-fact-producer-integration-design.md`,
+> `...specs/2026-06-05-wg10-seam-exact-smooth-percentile-conditioning-design.md`,
+> `...plans/2026-06-05-wg10-region-fact-producer-integration.md` (Tasks 1-5,7-9),
+> `...plans/2026-06-05-wg10-seam-exact-smooth-percentile-conditioning.md` (revised Task 6a-e).
+>
+> **DEFERRED (owner-gated, flagged honestly):** (1) OWNER VISUAL A/B — smooth-field vs
+> per-region conditioned LOOK — before the carved look is declared "shipped" (numeric gates
+> green now; the eye-check is the build-batch-then-visual-approve rhythm). (2) Super-region
+> OUTER-border carve/gaussian seam (k× rarer; raise k or, long-term, the core-local-anchored
+> carve once the player-to-world SCALE CONTRACT is settled). (3) Worker GPU-context reuse —
+> currently rebuilds the RD+context per super-bake (correct + isolated; cache if super-bakes
+> become frequent on the live path).
+
 > **PRODUCER-WIRING DESIGN FORCED BY MEASUREMENT (2026-06-05).** Goal: wire
 > `bake_region` into the live producer so the carved look reaches the screen (closes
 > the un-intercept Rung-1 gap). The simple "all-CPU bake off-frame, cache on LRU, pages
