@@ -2,6 +2,7 @@
 //! (mountain_pass_network.py / traverse_corridor.py) to fast Rust. Reproduces the
 //! SAME routes (same chunk-network look) at a fraction of the cost. Pure Rust, no Godot.
 
+pub mod carve;
 pub mod cost;
 pub mod dijkstra;
 pub mod edt;
@@ -9,6 +10,47 @@ pub mod routes;
 
 #[cfg(test)]
 mod tests;
+
+/// Mirror of the `carve_ramp` knobs on Python `CorridorParams` (corridor_router.py). Defaults
+/// verified against `CorridorParams` (the `ramp_*` family + `slope_budget`).
+#[derive(Clone, Copy, Debug)]
+pub struct RampParams {
+    pub slope_budget: f64,
+    pub floor_grade_frac: f64,
+    pub wall_grade_frac: f64,
+    pub flat_half_m: f64,
+    pub half_width_m: f64,
+    pub floor_smooth_px: f64,
+    pub carve_max_m: f64,
+}
+impl Default for RampParams {
+    fn default() -> Self {
+        Self {
+            slope_budget: 0.28,
+            floor_grade_frac: 0.35,
+            wall_grade_frac: 0.80,
+            flat_half_m: 200.0,
+            half_width_m: 1200.0,
+            floor_smooth_px: 5.0,
+            carve_max_m: 3500.0,
+        }
+    }
+}
+
+/// carve_ramp delta for a core height grid + routes. Mirror of `carve_ramp`
+/// (corridor_router.py:213-266) with the `_core` step as identity (the routes are already in core
+/// index space). Returns the subtractive delta in HEIGHT units (n*n, row-major); add it to `height`.
+pub fn carve_ramp_delta(
+    height: &[f64],
+    n: usize,
+    span_m: f64,
+    height_scale_m: f64,
+    routes: &[Vec<(usize, usize)>],
+    ramp: &RampParams,
+) -> Vec<f64> {
+    let cell_m = span_m / (n - 1) as f64;
+    carve::carve_ramp(height, n, cell_m, height_scale_m, routes, ramp)
+}
 
 /// Public entry: connected pass-network routes for a single height field, full-res index space.
 /// Mirror of `mountain_pass_network._routes` (the routing half of `carve_pass_network`).

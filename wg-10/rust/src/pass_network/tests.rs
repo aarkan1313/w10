@@ -427,3 +427,99 @@ fn edt_full_grid_vs_brute_force() {
         }
     }
 }
+
+// --- carve_ramp tolerance parity gate ---
+// Composes EDT + gaussian into the full carve_ramp port (corridor_router.py:213-266) and proves the
+// carved-valley delta matches the Python oracle within a metres tolerance. A TOLERANCE (not bit) gate
+// because the EDT nearest-INDEX tie-break may differ from scipy on exact ties; the downstream Gaussian
+// smooth + carve_max clamp absorb those into sub-metre noise. A large p99/peak would mean a REAL bug
+// (wrong gather / profile pass / wall grading), not tie-break noise.
+
+#[test]
+fn carve_ramp_matches_python_within_tolerance() {
+    use std::path::Path;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tools/dem_pack/fixtures/carve_ramp_fixture.json");
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read ramp fixture {}: {e}", path.display()));
+    let v: serde_json::Value = serde_json::from_str(&raw).expect("parse ramp fixture");
+    let n = v["n"].as_u64().unwrap() as usize;
+    let span_m = v["span_m"].as_f64().unwrap();
+    let hs = v["height_scale_m"].as_f64().unwrap();
+    let height: Vec<f64> = v["height"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect();
+    let want: Vec<f64> = v["delta"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect();
+    let routes: Vec<Vec<(usize, usize)>> = v["routes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|rt| {
+            rt.as_array()
+                .unwrap()
+                .iter()
+                .map(|p| {
+                    let a = p.as_array().unwrap();
+                    (a[0].as_u64().unwrap() as usize, a[1].as_u64().unwrap() as usize)
+                })
+                .collect()
+        })
+        .collect();
+    let rp = super::RampParams {
+        slope_budget: v["params"]["slope_budget"].as_f64().unwrap(),
+        floor_grade_frac: v["params"]["ramp_floor_grade_frac"].as_f64().unwrap(),
+        wall_grade_frac: v["params"]["ramp_wall_grade_frac"].as_f64().unwrap(),
+        flat_half_m: v["params"]["ramp_flat_half_m"].as_f64().unwrap(),
+        half_width_m: v["params"]["ramp_half_width_m"].as_f64().unwrap(),
+        floor_smooth_px: v["params"]["ramp_floor_smooth_px"].as_f64().unwrap(),
+        carve_max_m: v["params"]["ramp_carve_max_m"].as_f64().unwrap(),
+    };
+    assert_eq!(height.len(), n * n, "height len {} != n*n", height.len());
+
+    let got = super::carve_ramp_delta(&height, n, span_m, hs, &routes, &rp);
+    assert_eq!(got.len(), want.len(), "delta len got {} want {}", got.len(), want.len());
+
+    // Compare in METRES (delta is stored in height units; * height_scale_m -> metres).
+    let mut diffs: Vec<f64> = (0..got.len()).map(|i| ((got[i] - want[i]) * hs).abs()).collect();
+    diffs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let nd = diffs.len();
+    let mean = diffs.iter().sum::<f64>() / nd as f64;
+    let p99 = diffs[((nd as f64) * 0.99) as usize];
+    let peak = *diffs.last().unwrap();
+    let carved = want.iter().filter(|d| **d < -1e-9).count();
+    let over_1m = diffs.iter().filter(|d| **d > 1.0).count();
+    println!(
+        "[ramp-parity] carved_cells={carved} mean_m={mean:.4} p99_m={p99:.4} peak_m={peak:.4} cells_over_1m={over_1m}"
+    );
+    assert!(carved > 0, "vacuous fixture (no carved cells)");
+
+    // The carve is bit-exact for ~99.5% of cells (p99 measured EXACTLY 0.0m). The only residual is a
+    // sparse set of cells (179/37249 here) sitting on an EDT *distance tie* (5957 cells have >=2
+    // equidistant on-path cells), where our exact-EDT envelope tie-break may gather a different (but
+    // equidistant) on-path profile value than scipy's distance_transform_edt -- benign and absorbed by
+    // the Gaussian smooth + carve_max clamp. Two guards, both with large margin over the measured
+    // residual, so a REAL bug (wrong gather / profile sweep / wall grading) -- which would push p99
+    // itself off zero OR flood the >1m tail across the whole band -- still trips, while cross-platform
+    // tie reshuffling does not.
+    let p99_budget_m = 0.05; // measured p99 = 0.0000m; this is pure headroom.
+    assert!(
+        p99 < p99_budget_m,
+        "carve_ramp p99 {p99:.4}m > {p99_budget_m}m -- the carve diverges across the band, not just \
+         on isolated EDT ties: a real bug (gather / profile sweep / wall grading), debug don't widen"
+    );
+    // Tie cells are sparse by construction; a systematic error would diverge far more widely.
+    let over_1m_budget = nd / 100; // <=1% of cells may differ by >1m (measured 115/37249 = 0.31%).
+    assert!(
+        over_1m <= over_1m_budget,
+        "carve_ramp {over_1m} cells differ by >1m (> {over_1m_budget} = 1% of grid) -- too widespread \
+         for EDT tie-break noise; likely a real bug"
+    );
+}
