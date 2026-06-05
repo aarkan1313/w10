@@ -14,6 +14,9 @@ pub use percentile_provider::{
     PercentileFields, PercentileProvider, ScalarRegionPercentiles, SmoothFieldPercentiles,
 };
 
+mod worker;
+pub use worker::{BakeWorker, BakedRegionFact, SuperBakeRequest, SuperBakeResult};
+
 #[cfg(test)]
 mod region_bake_tests;
 #[cfg(test)]

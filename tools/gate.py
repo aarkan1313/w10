@@ -169,6 +169,12 @@ CHECKS = {
     "region_macro": [
         "worldgen_terrain/tests/region_macro_readback_check.gd",
     ],
+    # Task 7 async bake worker: proves the dedicated bake-worker thread (its OWN per-thread
+    # RenderingDevice) round-trips a real GPU super-region bake (GPU super-macro -> carve+condition
+    # -> sliced region facts). Windowed (RenderingDevice compute).
+    "bake_worker": [
+        "worldgen_terrain/tests/bake_worker_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -190,6 +196,7 @@ WINDOWED_SUITES = {
     "ladder_rung0",
     "ladder_rung1",
     "region_macro",
+    "bake_worker",
 }
 
 

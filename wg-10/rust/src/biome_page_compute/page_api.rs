@@ -528,4 +528,161 @@ impl Wg10BiomePageCompute {
             }
         }
     }
+
+    /// Windowed round-trip gate entry: spawn an async `BakeWorker` (its own per-thread RD), send
+    /// TWO small super-region bake requests back-to-back (to catch RD-context reuse issues), receive
+    /// both `SuperBakeResult`s, and return the FIRST region fact's conditioned grid (in METRES,
+    /// row-major `region_n*region_n`) of the first super-region. Returns an empty array on any error
+    /// (matching the existing func error style). The deep seam/parity checks are cargo-gated; this
+    /// proves the WORKER THREAD + its own-RD GPU bake round-trips.
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn bake_super_region_via_worker(
+        &self,
+        spacing: f64,
+        region_span_m: f64,
+        ox: f64,
+        oz: f64,
+        region_n: i64,
+        k: i64,
+        apron_px: i64,
+        seed: i64,
+        feature_span_m: f64,
+        height_scale_m: f64,
+        mountain_fragment_path: GString,
+        flow_iters: i64,
+        flow_on: bool,
+    ) -> PackedFloat64Array {
+        use crate::pass_network::{PassNetworkParams, RampParams, TraverseParams};
+        use crate::region_bake::{BakeWorker, SuperBakeRequest};
+
+        if region_n < 2 || k < 1 || apron_px < 0 {
+            godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: invalid region_n={region_n} k={k} apron_px={apron_px}");
+            return PackedFloat64Array::new();
+        }
+        if flow_iters < 1 {
+            godot_error!(
+                "Wg10BiomePageCompute::bake_super_region_via_worker: flow_iters must be >= 1"
+            );
+            return PackedFloat64Array::new();
+        }
+        if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
+            godot_error!(
+                "Wg10BiomePageCompute::bake_super_region_via_worker: seed {seed} outside i32 range"
+            );
+            return PackedFloat64Array::new();
+        }
+
+        let prim = match self.primitives_src.as_deref() {
+            Some(s) => s.to_string(),
+            None => {
+                godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let machine = match self.machine_src.as_deref() {
+            Some(s) => s.to_string(),
+            None => {
+                godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let frag_path = mountain_fragment_path.to_string();
+        let fragment = match std::fs::read_to_string(&frag_path) {
+            Ok(s) => s,
+            Err(e) => {
+                godot_error!(
+                    "Wg10BiomePageCompute::bake_super_region_via_worker: mountain fragment glsl: {e}"
+                );
+                return PackedFloat64Array::new();
+            }
+        };
+
+        let worker = BakeWorker::spawn(prim, machine, fragment);
+
+        let mk_request = |super_idx: i64| -> SuperBakeRequest {
+            // Lay super-regions side-by-side in X so the two bakes hit distinct world windows.
+            let super_x0 = ox + super_idx as f64 * region_span_m * k as f64;
+            SuperBakeRequest {
+                super_key: (super_idx, 0),
+                region_n: region_n as usize,
+                k: k as usize,
+                apron_px: apron_px as usize,
+                flow_iters: flow_iters as usize,
+                flow_on,
+                feature_span_m,
+                region_span_m,
+                spacing_m: spacing,
+                height_scale_m,
+                super_x0_m: super_x0,
+                super_z0_m: oz,
+                seed,
+                pass: PassNetworkParams::default(),
+                traverse: TraverseParams {
+                    scene_width_m: region_span_m * k as f64,
+                    height_scale_m,
+                    ..Default::default()
+                },
+                ramp: RampParams::default(),
+                coarse_stride_m: region_span_m,
+                window_radius_m: region_span_m * 0.5,
+                window_samples: 9,
+            }
+        };
+
+        // Send TWO requests back-to-back, then drain both results (catches RD-context reuse issues).
+        let worker_tx = worker.tx.as_ref().expect("worker tx open");
+        if worker_tx.send(mk_request(0)).is_err() {
+            godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: worker send #0 failed");
+            return PackedFloat64Array::new();
+        }
+        if worker_tx.send(mk_request(1)).is_err() {
+            godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: worker send #1 failed");
+            return PackedFloat64Array::new();
+        }
+
+        let mut first_grid: Option<Vec<f32>> = None;
+        for n in 0..2 {
+            let res = match worker.rx.recv() {
+                Ok(r) => r,
+                Err(e) => {
+                    godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: recv #{n} failed: {e}");
+                    return PackedFloat64Array::new();
+                }
+            };
+            let facts = match res.result {
+                Ok(f) => f,
+                Err(e) => {
+                    godot_error!(
+                        "Wg10BiomePageCompute::bake_super_region_via_worker: bake #{n} error: {e}"
+                    );
+                    return PackedFloat64Array::new();
+                }
+            };
+            let expect = (k * k) as usize;
+            if facts.len() != expect {
+                godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: bake #{n} returned {} facts, expected {expect}", facts.len());
+                return PackedFloat64Array::new();
+            }
+            if res.super_key.0 == 0 {
+                first_grid = Some(facts[0].grid_m.clone());
+            }
+        }
+
+        match first_grid {
+            Some(g) => {
+                let mut out = PackedFloat64Array::new();
+                out.resize(g.len());
+                let sl = out.as_mut_slice();
+                for (i, &v) in g.iter().enumerate() {
+                    sl[i] = v as f64;
+                }
+                out
+            }
+            None => {
+                godot_error!("Wg10BiomePageCompute::bake_super_region_via_worker: no super_key=0 result received");
+                PackedFloat64Array::new()
+            }
+        }
+    }
 }
