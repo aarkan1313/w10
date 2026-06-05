@@ -4,10 +4,23 @@
 
 pub mod cost;
 pub mod dijkstra;
-// routes module is added in Task 4.
+pub mod routes;
 
 #[cfg(test)]
 mod tests;
+
+/// Public entry: connected pass-network routes for a single height field, full-res index space.
+/// Mirror of `mountain_pass_network._routes` (the routing half of `carve_pass_network`).
+pub fn carve_routes(
+    height: &[f64],
+    n: usize,
+    span_m: f64,
+    height_scale_m: f64,
+    params: &PassNetworkParams,
+    traverse: &TraverseParams,
+) -> Vec<Vec<(usize, usize)>> {
+    routes::routes(height, n, span_m, height_scale_m, traverse, params)
+}
 
 /// Mirror of Python `PassNetworkParams` (mountain_pass_network.py:30-37). Same defaults.
 #[derive(Clone, Copy, Debug)]

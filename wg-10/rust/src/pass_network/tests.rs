@@ -3,6 +3,92 @@ use super::cost::step_cost;
 use super::dijkstra::{dijkstra_cost_field, reconstruct_path};
 use super::TraverseParams;
 
+/// THE PARITY GATE: Rust `carve_routes` vs the committed Python `_routes` fixture.
+/// If this passes, the whole port (cost model + Dijkstra + routing) is validated end-to-end:
+/// the fixture is n=193==coarse_n (zoom identity) so this isolates routing, and the fixture
+/// was adversarially proven a meaningful oracle (wrong cost formula / heap tie-break => different
+/// routes). Asserts every route matches point-for-point.
+#[test]
+fn routes_match_python_fixture() {
+    use std::path::Path;
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tools/dem_pack/fixtures/pass_network_routes_fixture.json");
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("read fixture {}: {e}", path.display()));
+    let v: serde_json::Value = serde_json::from_str(&raw).expect("parse fixture");
+    let n = v["n"].as_u64().unwrap() as usize;
+    let span_m = v["span_m"].as_f64().unwrap();
+    let height_scale_m = v["height_scale_m"].as_f64().unwrap();
+    let height: Vec<f64> = v["height"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect();
+    let pp = super::PassNetworkParams {
+        n_we: v["params"]["n_we"].as_u64().unwrap() as usize,
+        n_ns: v["params"]["n_ns"].as_u64().unwrap() as usize,
+        coarse_n: v["params"]["coarse_n"].as_u64().unwrap() as usize,
+    };
+    let tp = super::TraverseParams {
+        slope_budget: v["params"]["slope_budget"].as_f64().unwrap(),
+        slope_penalty: v["params"]["slope_penalty"].as_f64().unwrap(),
+        drainage_bias: v["params"]["drainage_bias"].as_f64().unwrap(),
+        scene_width_m: span_m,
+        height_scale_m,
+    };
+    // Echo the loaded params so a parity failure can be debugged against the fixture.
+    eprintln!(
+        "[carve-parity] loaded n={n} span_m={span_m} height_scale_m={height_scale_m} \
+         n_we={} n_ns={} coarse_n={} slope_budget={} slope_penalty={} drainage_bias={}",
+        pp.n_we, pp.n_ns, pp.coarse_n, tp.slope_budget, tp.slope_penalty, tp.drainage_bias
+    );
+    assert_eq!(height.len(), n * n, "height len {} != n*n", height.len());
+
+    let got = super::carve_routes(&height, n, span_m, height_scale_m, &pp, &tp);
+    let want: Vec<Vec<(usize, usize)>> = v["routes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|rt| {
+            rt.as_array()
+                .unwrap()
+                .iter()
+                .map(|p| {
+                    let a = p.as_array().unwrap();
+                    (a[0].as_u64().unwrap() as usize, a[1].as_u64().unwrap() as usize)
+                })
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        got.len(),
+        want.len(),
+        "route count: got {} want {}",
+        got.len(),
+        want.len()
+    );
+    let mut total = 0usize;
+    for (i, (g, w)) in got.iter().zip(want.iter()).enumerate() {
+        if g != w {
+            // Pinpoint the first differing cell to make debugging concrete.
+            let first_diff = g
+                .iter()
+                .zip(w.iter())
+                .position(|(a, b)| a != b)
+                .map(|j| format!("at cell {j}: got {:?} want {:?}", g.get(j), w.get(j)))
+                .unwrap_or_else(|| "lengths differ only".to_string());
+            panic!(
+                "route {i} differs (len got {} want {}) {first_diff}",
+                g.len(),
+                w.len()
+            );
+        }
+        total += g.len();
+    }
+    println!("[carve-parity] routes={} total_points={} MATCH", got.len(), total);
+}
+
 #[test]
 fn dijkstra_finds_min_cost_crossing_on_tiny_grid() {
     // 3x3 uniform-cost grid (slope below budget, no channel, h=0 -> step_cost = cell_m everywhere).
