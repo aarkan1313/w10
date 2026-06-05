@@ -9,7 +9,7 @@ use crate::biome_page_compute::f32s_to_bytes;
 
 #[derive(Clone)]
 pub(in crate::page_pool) struct RegionFactRuntime {
-    grid: Vec<f32>,
+    grid: Vec<f32>, // METRES (already height-scaled by the worker; unlike StaticHeightRuntime this is post-scale)
     grid_n: usize,
     origin_x_m: f64,
     origin_z_m: f64,

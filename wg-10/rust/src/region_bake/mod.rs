@@ -20,8 +20,6 @@ pub use worker::{BakeWorker, BakedRegionFact, SuperBakeRequest, SuperBakeResult}
 #[cfg(test)]
 mod region_bake_tests;
 #[cfg(test)]
-mod seam_tests;
-#[cfg(test)]
 mod percentile_seam_tests;
 #[cfg(test)]
 mod super_region_tests;

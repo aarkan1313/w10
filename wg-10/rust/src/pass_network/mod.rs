@@ -85,6 +85,11 @@ pub struct TraverseParams {
     pub slope_budget: f64,    // traverse_corridor.py: 0.28 (== PASSABLE_SLOPE)
     pub slope_penalty: f64,   // traverse_corridor.py: 24.0
     pub drainage_bias: f64,   // traverse_corridor.py: 0.55
+    // NOTE: scene_width_m / height_scale_m are NOT read by routes()/carve — those take span_m and
+    // height_scale_m POSITIONALLY (the single source of truth; see cost::slope_grid). These two
+    // fields are kept only for parity-struct shape with the Python TraverseParams; setting them
+    // does nothing. Do NOT rely on them to scale a carve (callers that "configure" them here are
+    // no-ops — pass the real span/height positionally to carve_routes/carve_ramp_delta).
     pub scene_width_m: f64,
     pub height_scale_m: f64,  // analyze_rough_world_traversability.BASE_HEIGHT_SCALE_M = 260.0
 }
