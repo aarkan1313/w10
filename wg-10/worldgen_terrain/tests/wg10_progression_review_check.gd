@@ -68,6 +68,7 @@ func _run() -> int:
 	_expect(scene.has_method("set_step_index"), "scene missing set_step_index", errs)
 	_expect(scene.has_method("step_count"), "scene missing step_count", errs)
 	_expect(scene.has_method("progression_manifest"), "scene missing progression_manifest", errs)
+	_expect(scene.has_method("debug_source_display_overlay_state"), "scene missing debug_source_display_overlay_state", errs)
 	if scene.has_method("step_count"):
 		_expect(int(scene.call("step_count")) == EXPECTED_STEPS.size(), "unexpected step_count", errs)
 	var future_count := int(scene.call("future_step_count")) if scene.has_method("future_step_count") else 0
@@ -83,6 +84,8 @@ func _run() -> int:
 			continue
 		var snapshot: Dictionary = scene.call("debug_progression_snapshot")
 		_expect_step(snapshot, EXPECTED_STEPS[i], i, errs)
+		if scene.has_method("debug_source_display_overlay_state"):
+			_expect_source_display_overlay(scene.call("debug_source_display_overlay_state"), snapshot, i, errs)
 
 	scene.queue_free()
 	scene = null
@@ -178,6 +181,9 @@ func _expect_future_metadata(future: Array, label: String, errs: Array[String]) 
 		_expect(str(item.get("gate", "")) != "", "%s future %s missing gate" % [label, id], errs)
 		_expect(str(item.get("acceptance_rule", "")) != "", "%s future %s missing acceptance_rule" % [label, id], errs)
 		_expect(str(item.get("blocks", "")) != "", "%s future %s missing blocks" % [label, id], errs)
+		if id == "source_display_overlay":
+			_expect(str(item.get("status", "")) == "implemented", "%s source/display overlay should be implemented" % label, errs)
+			_expect(str(item.get("implemented_by", "")) != "", "%s source/display overlay missing implementation pointer" % label, errs)
 
 func _expect_source_display(report: Dictionary, step_id: String, label: String, errs: Array[String]) -> void:
 	_expect(not report.is_empty(), "%s expected source/display report" % label, errs)
@@ -198,6 +204,23 @@ func _expect_source_display(report: Dictionary, step_id: String, label: String, 
 		_expect(not bool(report.get("reference_mapping", true)), "%s should not report reference mapping" % label, errs)
 	elif step_id == "world_reference_preview":
 		_expect(str(report.get("mapping_kind", "")) == "world_preview_reference_contract", "%s expected WORLD preview mapping contract" % label, errs)
+
+func _expect_source_display_overlay(state: Dictionary, snapshot: Dictionary, index: int, errs: Array[String]) -> void:
+	var label := "%d:%s" % [index, str(snapshot.get("step_id", ""))]
+	_expect(bool(state.get("visible", false)), "%s source/display overlay should be visible" % label, errs)
+	_expect(str(state.get("step_id", "")) == str(snapshot.get("step_id", "")), "%s source/display overlay step mismatch" % label, errs)
+	var source_display: Dictionary = snapshot.get("source_display_report", {})
+	_expect(str(state.get("mapping_kind", "")) == str(source_display.get("mapping_kind", "")), "%s source/display overlay mapping mismatch" % label, errs)
+	_expect(float(state.get("source_span_x_m", 0.0)) > 0.0, "%s source overlay span must be positive" % label, errs)
+	_expect(float(state.get("display_span_x_m", 0.0)) > 0.0, "%s display overlay span must be positive" % label, errs)
+	_expect(float(state.get("ratio", 0.0)) > 0.0, "%s overlay ratio must be positive" % label, errs)
+	_expect_rect(state.get("source_rect", {}), "%s source overlay rect" % label, errs)
+	_expect_rect(state.get("display_rect", {}), "%s display overlay rect" % label, errs)
+	_expect(str(state.get("label", "")).find("source = display *") >= 0, "%s overlay label missing sample rule" % label, errs)
+
+func _expect_rect(rect: Dictionary, label: String, errs: Array[String]) -> void:
+	_expect(float(rect.get("w", 0.0)) > 0.0, "%s width must be positive" % label, errs)
+	_expect(float(rect.get("h", 0.0)) > 0.0, "%s height must be positive" % label, errs)
 
 func _future_contains(future: Array, id: String) -> bool:
 	return not _future_item(future, id).is_empty()

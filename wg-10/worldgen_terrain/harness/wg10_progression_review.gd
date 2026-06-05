@@ -69,11 +69,12 @@ const FUTURE_STEPS := [
 	{
 		"id": "source_display_overlay",
 		"label": "Source/display mapping overlay",
-		"status": "next",
+		"status": "implemented",
 		"adds": "visible display-window and sampled-source-window facts for every current lane",
 		"gate": "review_progression",
 		"acceptance_rule": "mapping origin/span/scale is explicit and no scene-local scale constants are duplicated",
 		"blocks": "material/pass-network work that depends on knowing which source window is sampled",
+		"implemented_by": "source_display_report plus visible progression overlay",
 	},
 	{
 		"id": "material_fact_layers",
@@ -121,6 +122,12 @@ var _rings: Object
 var _view: Object
 var _camera: Camera3D
 var _label: Label
+var _source_overlay_layer: CanvasLayer
+var _source_overlay_panel: Control
+var _source_overlay_source_rect: ColorRect
+var _source_overlay_display_rect: ColorRect
+var _source_overlay_label: Label
+var _source_overlay_state := {}
 var _step_index := 0
 var _last_config_error := ""
 var _frame := 0
@@ -167,6 +174,7 @@ func _ready() -> void:
 	_label.position = Vector2(12, 12)
 	_label.add_theme_font_size_override("font_size", 16)
 	layer.add_child(_label)
+	_create_source_display_overlay()
 	_refresh_label()
 
 func _exit_tree() -> void:
@@ -239,7 +247,6 @@ func debug_progression_snapshot() -> Dictionary:
 	var runtime_mode := "missing"
 	var biome_path := false
 	var source_transform := {}
-	var source_display_report := {}
 	if _pool != null:
 		stats = _pool.call("stats")
 		contract = _pool.call("mountain_world_layer_contract_report")
@@ -248,7 +255,6 @@ func debug_progression_snapshot() -> Dictionary:
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
 		biome_path = bool(_pool.call("uses_biome_path"))
 		source_transform = _pool.call("biome_source_transform")
-		source_display_report = _source_display_report(contract, static_reference, mountain_reference, runtime_mode, source_transform)
 		if runtime_mode == "world":
 			world_route_report = _pool.call("debug_world_biome_report_for_page", 0, 0.0, 0.0)
 			world_weight_report = _pool.call("debug_world_biome_weight_field_report_for_page", 0, 0.0, 0.0, 17)
@@ -274,7 +280,7 @@ func debug_progression_snapshot() -> Dictionary:
 		"world_route_report": world_route_report,
 		"world_weight_report": world_weight_report,
 		"source_transform": source_transform,
-		"source_display_report": source_display_report,
+		"source_display_report": _current_source_display_report(),
 		"static_material_bound_tiles": _static_material_bound_tiles(),
 		"future_steps": FUTURE_STEPS,
 		"progression_manifest": progression_manifest(),
@@ -285,6 +291,8 @@ func set_probe_mode(enabled: bool) -> void:
 	set_process(not enabled)
 	if _label != null:
 		_label.visible = not enabled
+	if _source_overlay_layer != null:
+		_source_overlay_layer.visible = not enabled
 
 func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) -> void:
 	if _camera != null:
@@ -311,6 +319,10 @@ func debug_streamer_stats() -> Dictionary:
 		return {}
 	return _streamer.call("stats")
 
+func debug_source_display_overlay_state() -> Dictionary:
+	_refresh_source_display_overlay()
+	return _source_overlay_state
+
 func _process(_delta: float) -> void:
 	if _probe_mode:
 		return
@@ -325,6 +337,16 @@ func _process(_delta: float) -> void:
 
 func _current_step() -> Dictionary:
 	return STEPS[clampi(_step_index, 0, STEPS.size() - 1)]
+
+func _current_source_display_report() -> Dictionary:
+	if _pool == null:
+		return {}
+	var contract: Dictionary = _pool.call("mountain_world_layer_contract_report")
+	var static_reference: Dictionary = _pool.call("static_reference_report")
+	var mountain_reference: Dictionary = _pool.call("mountain_world_layer_reference_report")
+	var runtime_mode := str(_pool.call("biome_runtime_mode"))
+	var source_transform: Dictionary = _pool.call("biome_source_transform")
+	return _source_display_report(contract, static_reference, mountain_reference, runtime_mode, source_transform)
 
 func _source_display_report(
 	contract: Dictionary,
@@ -370,6 +392,106 @@ func _source_display_report(
 		out["source_scene_ratio"] = float(reference.get("source_scene_ratio", 0.0))
 
 	return out
+
+func _create_source_display_overlay() -> void:
+	_source_overlay_layer = CanvasLayer.new()
+	add_child(_source_overlay_layer)
+
+	_source_overlay_panel = Control.new()
+	_source_overlay_panel.anchor_left = 1.0
+	_source_overlay_panel.anchor_right = 1.0
+	_source_overlay_panel.offset_left = -370.0
+	_source_overlay_panel.offset_right = -12.0
+	_source_overlay_panel.offset_top = 12.0
+	_source_overlay_panel.offset_bottom = 166.0
+	_source_overlay_layer.add_child(_source_overlay_panel)
+
+	var bg := ColorRect.new()
+	bg.position = Vector2.ZERO
+	bg.size = Vector2(358.0, 154.0)
+	bg.color = Color(0.02, 0.025, 0.03, 0.72)
+	_source_overlay_panel.add_child(bg)
+
+	_source_overlay_source_rect = ColorRect.new()
+	_source_overlay_source_rect.color = Color(0.12, 0.38, 0.95, 0.34)
+	_source_overlay_panel.add_child(_source_overlay_source_rect)
+
+	_source_overlay_display_rect = ColorRect.new()
+	_source_overlay_display_rect.color = Color(1.0, 0.84, 0.16, 0.62)
+	_source_overlay_panel.add_child(_source_overlay_display_rect)
+
+	_source_overlay_label = Label.new()
+	_source_overlay_label.position = Vector2(14.0, 12.0)
+	_source_overlay_label.size = Vector2(330.0, 132.0)
+	_source_overlay_label.add_theme_font_size_override("font_size", 13)
+	_source_overlay_label.add_theme_color_override("font_color", Color(0.94, 0.96, 1.0))
+	_source_overlay_panel.add_child(_source_overlay_label)
+
+func _refresh_source_display_overlay() -> void:
+	if _source_overlay_layer == null:
+		return
+	var report := _current_source_display_report()
+	if report.is_empty():
+		_source_overlay_layer.visible = false
+		_source_overlay_state = {"visible": false}
+		return
+	if not _probe_mode:
+		_source_overlay_layer.visible = true
+
+	var source_span := float(report.get("source_span_x_m", 0.0))
+	var display_span := float(report.get("display_span_x_m", 0.0))
+	if source_span <= 0.0:
+		source_span = maxf(1.0, float(report.get("source_scale", 1.0)))
+	if display_span <= 0.0:
+		display_span = 1.0
+	var ratio := clampf(display_span / maxf(source_span, 1.0), 0.08, 1.0)
+
+	var source_rect := Rect2(18.0, 74.0, 216.0, 58.0)
+	var display_w := source_rect.size.x * ratio
+	var display_rect := Rect2(
+		source_rect.position.x + (source_rect.size.x - display_w) * 0.5,
+		source_rect.position.y + 18.0,
+		display_w,
+		22.0
+	)
+	_source_overlay_source_rect.position = source_rect.position
+	_source_overlay_source_rect.size = source_rect.size
+	_source_overlay_display_rect.position = display_rect.position
+	_source_overlay_display_rect.size = display_rect.size
+
+	var kind := str(report.get("mapping_kind", "missing"))
+	var step := _current_step()
+	var ratio_text := "%.3f" % float(report.get("source_scene_ratio", float(report.get("source_scale", 1.0))))
+	_source_overlay_label.text = "source/display | %s\nstep %s\nsource %.0fm  display %.0fm  x%s\nsource = display * %.3f + (%.0f, %.0f)" % [
+		kind,
+		str(step.get("id", "")),
+		source_span,
+		display_span,
+		ratio_text,
+		float(report.get("source_scale", 1.0)),
+		float(report.get("source_offset_x_m", 0.0)),
+		float(report.get("source_offset_z_m", 0.0)),
+	]
+
+	_source_overlay_state = {
+		"visible": _source_overlay_layer.visible,
+		"mapping_kind": kind,
+		"step_id": str(step.get("id", "")),
+		"source_span_x_m": source_span,
+		"display_span_x_m": display_span,
+		"ratio": ratio,
+		"source_rect": _rect_report(source_rect),
+		"display_rect": _rect_report(display_rect),
+		"label": _source_overlay_label.text,
+	}
+
+func _rect_report(rect: Rect2) -> Dictionary:
+	return {
+		"x": rect.position.x,
+		"y": rect.position.y,
+		"w": rect.size.x,
+		"h": rect.size.y,
+	}
 
 func _configure_current_step() -> String:
 	if _producer == null or _pool == null:
@@ -423,6 +545,7 @@ func _refresh_label() -> void:
 		int(stats.get("created", 0)),
 		int(stats.get("full_events", 0)),
 	]
+	_refresh_source_display_overlay()
 
 func _static_material_bound_tiles() -> int:
 	if _rings == null:

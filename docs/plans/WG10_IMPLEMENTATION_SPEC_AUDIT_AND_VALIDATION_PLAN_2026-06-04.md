@@ -43,13 +43,13 @@ steps with explicit status and expected contract:
 4. `world_reference_preview`: bounded WORLD diagnostic over accepted reference
    height/materials.
 
-It also records and gates a machine-readable feature manifest for the next
-steps: source/display overlay, material fact layers, pass-network facts,
-procedural mountain world-layer production, and facts/collision parity. Each
-future step now carries its label, added contract, proving gate, acceptance
-rule, and what promotion it blocks. Each current step also emits a
-`source_display_report`, so the next feature starts from an explicit mapping
-contract rather than scene-local scale constants.
+It also records and gates a machine-readable feature manifest. The first
+feature, source/display overlay, is implemented: each current step emits a
+`source_display_report`, and the scene renders a source/display mini-overlay
+that the smoke gate proves is visible and nondegenerate. The remaining planned
+features are material fact layers, pass-network facts, procedural mountain
+world-layer production, and facts/collision parity; each carries its label,
+added contract, proving gate, acceptance rule, and promotion blocker.
 
 Latest motion fix checkpoint:
 
@@ -216,6 +216,9 @@ impossible to confuse.
   explicit status and contract kinds.
 - The scene exposes a gated progression manifest: current steps, future steps,
   proving suites, promotion rule, and per-step `source_display_report`.
+- The source/display overlay feature is implemented and visible in normal scene
+  mode, while probe mode hides the overlay so terrain visual-delta gates remain
+  focused on the render path.
 - The same scene survives scripted page-boundary motion with zero hide/show/full
   events and bounded repage bursts.
 - The same scene passes fixed-camera pixel-delta checks at L0/L1/L2
@@ -287,10 +290,9 @@ Steps:
 
 3. Source/display mapping overlay.
    - Show display window and sampled source window.
-   - Current machine-readable `source_display_report` is implemented and gated
-     for all four active steps.
-   - Next visual overlay should display that report without adding hidden scale
-     constants.
+   - Implemented and gated for all four active steps.
+   - The smoke gate checks `source_display_report`, overlay visibility, mapping
+     kind, positive source/display spans, and nonzero overlay rectangles.
 
 4. MOUNTAIN/network_ref bridge.
    - Same accepted payload through the single-producer lane.
@@ -359,7 +361,8 @@ The next checkpoint is not "biomes look cool." It is:
 - The progression scene has static, motion, and fixed-camera visual repage
   gates.
 - The progression scene carries a machine-readable future-step manifest and
-  source/display reports for the active steps.
+  source/display reports plus a visible source/display overlay for the active
+  steps.
 - The strict owner-spike gate remains green under modes 1/2/3 with morph off/on.
 - Raw procedural mountain remains visibly/numerically compared against the
   accepted baseline instead of being promoted by feel.

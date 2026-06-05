@@ -106,10 +106,11 @@ The manual owner-stress gate now also fails CPU p99/max or GPU p99 above
 one-frame synchronous hitch is no longer permitted just because the broader p99
 path stays green.
 Latest progression-handoff status: `wg10_progression_review.tscn` now exposes a
-gated feature manifest and a per-step `source_display_report`. The future steps
-for source/display overlay, material facts, pass-network facts, procedural
-mountain world-layer production, and facts/collision parity each name the added
-contract, proving gate, acceptance rule, and blocking promotion gap.
+gated feature manifest, per-step `source_display_report`, and a visible
+source/display overlay for the current recovery steps. The remaining material
+facts, pass-network facts, procedural mountain world-layer, and facts/collision
+parity steps each name the added contract, proving gate, acceptance rule, and
+blocking promotion gap.
 
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,
