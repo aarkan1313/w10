@@ -19,6 +19,8 @@ const STEPS := [
 		"status": "accepted",
 		"expected_runtime": "static_reference",
 		"expected_contract": "accepted_static_reference_visual_baseline",
+		"adds": "accepted mountain-network height, material, pass-network, and conditioning facts",
+		"blocks": "nothing; this is the visual baseline every candidate compares against",
 	},
 	{
 		"id": "mountain_network_bridge",
@@ -28,6 +30,8 @@ const STEPS := [
 		"status": "bridge",
 		"expected_runtime": "single",
 		"expected_contract": "single_mountain_world_layer_reference_bridge",
+		"adds": "single-producer runtime lane with accepted world-layer facts bound beside it",
+		"blocks": "final procedural synthesis; height is still reference-backed",
 	},
 	{
 		"id": "mountain_close_debug_candidate",
@@ -37,6 +41,8 @@ const STEPS := [
 		"status": "prototype",
 		"expected_runtime": "single",
 		"expected_contract": "single_seam_safe_mountain_page_recipe",
+		"adds": "raw live seam-safe mountain page synthesis for measured comparison",
+		"blocks": "owner acceptance until pass-network, conditioning, material facts, and visual gap close",
 	},
 	{
 		"id": "world_reference_preview",
@@ -46,15 +52,65 @@ const STEPS := [
 		"status": "diagnostic",
 		"expected_runtime": "world",
 		"expected_contract": "world_route_reference_height_preview",
+		"adds": "WORLD route/weight diagnostics over accepted reference height",
+		"blocks": "full WORLD height composition until async/cache or cheaper preview is proven",
 	},
 ]
 
+const PROGRESSION_RULES := {
+	"principle": "one shared renderer/streamer path, one feature added per step, gated before promotion",
+	"gate_suite": "review_progression",
+	"owner_gate_suite": "review_runtime_stress",
+	"visual_gate_suite": "review_runtime_visual",
+	"promotion_rule": "a step cannot become accepted terrain unless its contract facts, motion, visual repage, owner stress, and docs are green",
+}
+
 const FUTURE_STEPS := [
-	{"id": "source_display_overlay", "status": "planned"},
-	{"id": "material_fact_layers", "status": "planned"},
-	{"id": "pass_network_facts", "status": "planned"},
-	{"id": "procedural_mountain_world_layer", "status": "planned"},
-	{"id": "facts_collision_parity", "status": "planned"},
+	{
+		"id": "source_display_overlay",
+		"label": "Source/display mapping overlay",
+		"status": "next",
+		"adds": "visible display-window and sampled-source-window facts for every current lane",
+		"gate": "review_progression",
+		"acceptance_rule": "mapping origin/span/scale is explicit and no scene-local scale constants are duplicated",
+		"blocks": "material/pass-network work that depends on knowing which source window is sampled",
+	},
+	{
+		"id": "material_fact_layers",
+		"label": "Material fact layers",
+		"status": "planned",
+		"adds": "low-pass/corridor, floor, rock, and snow layers as separately gated facts",
+		"gate": "review_progression + review_runtime_visual",
+		"acceptance_rule": "each channel is non-vacuous, page-stable, and visually bounded against REFERENCE",
+		"blocks": "procedural candidate promotion without accepted material readability",
+	},
+	{
+		"id": "pass_network_facts",
+		"label": "Pass-network facts",
+		"status": "planned",
+		"adds": "connected pass route and route-carving facts beside the live candidate",
+		"gate": "review_progression",
+		"acceptance_rule": "routes/carving are nonzero, connected at world-layer scale, and page-stable",
+		"blocks": "raw live mountain terrain from being accepted as the mountain-network look",
+	},
+	{
+		"id": "procedural_mountain_world_layer",
+		"label": "Procedural mountain world layer",
+		"status": "planned",
+		"adds": "generated/cached world-layer height that consumes the accepted facts contract",
+		"gate": "review_progression + review_runtime_visual + review_runtime_stress",
+		"acceptance_rule": "numeric/visual gap to REFERENCE improves while strict streaming budgets stay green",
+		"blocks": "replacing the reference-backed MOUNTAIN bridge",
+	},
+	{
+		"id": "facts_collision_parity",
+		"label": "Facts/collision parity",
+		"status": "planned",
+		"adds": "query/collision authority reading the same facts as the visual layer",
+		"gate": "gpu + review_progression",
+		"acceptance_rule": "visible terrain facts and queryable/collision facts agree over sampled pages",
+		"blocks": "gameplay-facing terrain acceptance",
+	},
 ]
 
 var _runtime: Object
@@ -134,6 +190,13 @@ func step_count() -> int:
 func future_step_count() -> int:
 	return FUTURE_STEPS.size()
 
+func progression_manifest() -> Dictionary:
+	return {
+		"rules": PROGRESSION_RULES,
+		"active_steps": STEPS,
+		"future_steps": FUTURE_STEPS,
+	}
+
 func current_step_id() -> String:
 	return str(_current_step().get("id", "missing"))
 
@@ -176,6 +239,7 @@ func debug_progression_snapshot() -> Dictionary:
 	var runtime_mode := "missing"
 	var biome_path := false
 	var source_transform := {}
+	var source_display_report := {}
 	if _pool != null:
 		stats = _pool.call("stats")
 		contract = _pool.call("mountain_world_layer_contract_report")
@@ -184,6 +248,7 @@ func debug_progression_snapshot() -> Dictionary:
 		runtime_mode = str(_pool.call("biome_runtime_mode"))
 		biome_path = bool(_pool.call("uses_biome_path"))
 		source_transform = _pool.call("biome_source_transform")
+		source_display_report = _source_display_report(contract, static_reference, mountain_reference, runtime_mode, source_transform)
 		if runtime_mode == "world":
 			world_route_report = _pool.call("debug_world_biome_report_for_page", 0, 0.0, 0.0)
 			world_weight_report = _pool.call("debug_world_biome_weight_field_report_for_page", 0, 0.0, 0.0, 17)
@@ -209,8 +274,10 @@ func debug_progression_snapshot() -> Dictionary:
 		"world_route_report": world_route_report,
 		"world_weight_report": world_weight_report,
 		"source_transform": source_transform,
+		"source_display_report": source_display_report,
 		"static_material_bound_tiles": _static_material_bound_tiles(),
 		"future_steps": FUTURE_STEPS,
+		"progression_manifest": progression_manifest(),
 	}
 
 func set_probe_mode(enabled: bool) -> void:
@@ -258,6 +325,51 @@ func _process(_delta: float) -> void:
 
 func _current_step() -> Dictionary:
 	return STEPS[clampi(_step_index, 0, STEPS.size() - 1)]
+
+func _source_display_report(
+	contract: Dictionary,
+	static_reference: Dictionary,
+	mountain_reference: Dictionary,
+	runtime_mode: String,
+	source_transform: Dictionary
+) -> Dictionary:
+	var out := {
+		"has_contract_mapping": bool(contract.get("has_source_display_mapping", false)),
+		"runtime_mode": runtime_mode,
+		"sample_rule": "source = display * source_scale + source_offset",
+		"source_scale": float(source_transform.get("source_scale", 1.0)),
+		"source_offset_x_m": float(source_transform.get("source_offset_x_m", 0.0)),
+		"source_offset_z_m": float(source_transform.get("source_offset_z_m", 0.0)),
+		"reference_mapping": false,
+		"mapping_kind": "none",
+		"promotion_gate": str(PROGRESSION_RULES.get("gate_suite", "")),
+	}
+
+	var reference := {}
+	if not static_reference.is_empty():
+		reference = static_reference
+		out["mapping_kind"] = "static_reference_payload"
+	elif not mountain_reference.is_empty():
+		reference = mountain_reference
+		out["mapping_kind"] = "bound_mountain_world_layer_reference"
+	elif runtime_mode == "single":
+		out["mapping_kind"] = "live_biome_source_transform"
+	elif runtime_mode == "world":
+		out["mapping_kind"] = "world_preview_reference_contract"
+
+	if not reference.is_empty():
+		out["reference_mapping"] = bool(reference.get("has_source_display_mapping", false))
+		out["display_origin_x_m"] = float(reference.get("display_origin_x_m", 0.0))
+		out["display_origin_z_m"] = float(reference.get("display_origin_z_m", 0.0))
+		out["display_span_x_m"] = float(reference.get("display_span_x_m", 0.0))
+		out["display_span_z_m"] = float(reference.get("display_span_z_m", 0.0))
+		out["source_origin_x_m"] = float(reference.get("source_origin_x_m", 0.0))
+		out["source_origin_z_m"] = float(reference.get("source_origin_z_m", 0.0))
+		out["source_span_x_m"] = float(reference.get("source_span_x_m", 0.0))
+		out["source_span_z_m"] = float(reference.get("source_span_z_m", 0.0))
+		out["source_scene_ratio"] = float(reference.get("source_scene_ratio", 0.0))
+
+	return out
 
 func _configure_current_step() -> String:
 	if _producer == null or _pool == null:

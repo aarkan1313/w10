@@ -51,7 +51,11 @@ Current work is Slice 4 stabilization and recovery:
   chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
   WORLD/reference-preview as explicit steps with `review_progression` guarding
   runtime modes, contract kinds, scripted page-boundary motion, and fixed-camera
-  visual repage deltas at L0/L1/L2 page-boundary crosses.
+  visual repage deltas at L0/L1/L2 page-boundary crosses. The harness now also
+  exports a gated feature manifest and per-step `source_display_report` so the
+  next source/display, material, pass-network, procedural world-layer, and
+  facts/collision steps have explicit gates and promotion rules before work
+  starts.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same

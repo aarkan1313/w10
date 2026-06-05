@@ -105,6 +105,11 @@ The manual owner-stress gate now also fails CPU p99/max or GPU p99 above
 `16.7 ms` across REFERENCE, MOUNTAIN, and WORLD with morph off/on, so a
 one-frame synchronous hitch is no longer permitted just because the broader p99
 path stays green.
+Latest progression-handoff status: `wg10_progression_review.tscn` now exposes a
+gated feature manifest and a per-step `source_display_report`. The future steps
+for source/display overlay, material facts, pass-network facts, procedural
+mountain world-layer production, and facts/collision parity each name the added
+contract, proving gate, acceptance rule, and blocking promotion gap.
 
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,
@@ -149,6 +154,9 @@ single rendered page:
 1. **Lock the taxonomy.**
    `review_runtime` must prove all four owner-scene architectures reconfigure:
    `MOUNTAIN`, `REFERENCE`, `WORLD`, and `LEGACY`.
+   Current follow-up: `review_progression` now also proves the four current
+   recovery steps and their future-step manifest, so the taxonomy is available
+   from the scene snapshot itself.
 
 2. **Add a mountain-layer fixture/probe.**
    Build a small numeric artifact that compares:
@@ -239,6 +247,9 @@ single rendered page:
    accepted mountain-network baseline. `MOUNTAIN` remains the explicit live
    candidate mode for checking whether the procedural producer has closed this
    contract gap.
+   Current progression harness rule: a step cannot become accepted terrain
+   unless its contract facts, motion, visual repage, owner stress, and docs are
+   green.
 
 ## Open Decisions
 

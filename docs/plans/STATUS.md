@@ -22,7 +22,10 @@
 > bounded WORLD reference preview. `review_progression` = 3/3 now proves those
 > steps report their expected runtime modes/contract kinds, survive scripted
 > motion through page boundaries with bounded repage bursts, and pass a
-> fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses.
+> fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses. Latest
+> follow-up turns the scene into a machine-readable handoff: every active step
+> emits a `source_display_report`, and every future step declares its label,
+> added contract, proving gate, acceptance rule, and blocking promotion gap.
 > Latest post-fix proof: `review_progression` = 3/3, `review_runtime` = 2/2,
 > `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
 > `review_runtime_stress` = 1/1 with CPU p99/max and GPU p99 capped at
