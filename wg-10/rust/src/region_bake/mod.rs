@@ -20,6 +20,8 @@ mod region_bake_tests;
 mod seam_tests;
 #[cfg(test)]
 mod percentile_seam_tests;
+#[cfg(test)]
+mod super_region_tests;
 
 /// Externally supplied conditioning percentiles (cross-region seam reconcile). When `None`,
 /// `bake_region_from_raw` self-computes them per-region (the single-region / interior case).
@@ -111,4 +113,66 @@ pub fn bake_region_from_raw_with_provider(
         conditioned_min: cmin, conditioned_max: cmax, conditioned_ptp: cmax - cmin,
     };
     BakeResult { height, carve_delta, stats }
+}
+
+/// A baked region sliced from a super-region: the conditioned height grid (n*n, row-major) + its
+/// world origin/span. The grid is the conditioned height (tanh units); callers scale by height_scale
+/// when writing page textures (matching the RegionFactRuntime convention).
+pub struct RegionSlice {
+    pub grid: Vec<f64>,      // n*n conditioned height (tanh units)
+    pub grid_n: usize,       // = n
+    pub origin_x_m: f64,
+    pub origin_z_m: f64,
+    pub span_m: f64,
+}
+
+/// Bake a k*k super-region as ONE field (carve + condition over the whole super-field), then SLICE
+/// into k*k region grids. Internal borders are seam-exact BY CONSTRUCTION (the carve's global path
+/// is computed once over the super-field, not per-region). `super_n` MUST equal k*(n-1)+1.
+/// `span_m` is ONE region's span; the super-field spans k*span_m. `super_x0/z0` is the super-region
+/// world origin. Returns k*k RegionSlice in row-major (gj*k + gi) order, gi/gj the region's column/row.
+#[allow(clippy::too_many_arguments)]
+pub fn bake_super_region(
+    super_raw: &[f64],
+    super_n: usize,
+    n: usize,
+    k: usize,
+    span_m: f64,
+    height_scale_m: f64,
+    super_x0_m: f64,
+    super_z0_m: f64,
+    pass: &PassNetworkParams,
+    traverse: &TraverseParams,
+    ramp: &RampParams,
+    provider: &dyn PercentileProvider,
+) -> Vec<RegionSlice> {
+    assert_eq!(super_n, k*(n-1) + 1, "bake_super_region: super_n must be k*(n-1)+1");
+    assert_eq!(super_raw.len(), super_n*super_n, "bake_super_region: super_raw size");
+    let super_span_m = span_m * k as f64;
+    // Carve + condition over the WHOLE super-field (seam-exact internally).
+    let baked = bake_region_from_raw_with_provider(
+        super_raw, super_n, super_span_m, height_scale_m, super_x0_m, super_z0_m,
+        pass, traverse, ramp, provider);
+    // Slice into k*k region grids (texel-corner: region (gi,gj) takes cells
+    // [gi*(n-1) .. gi*(n-1)+n) x [gj*(n-1) .. gj*(n-1)+n), overlapping by 1 at shared edges).
+    let mut out = Vec::with_capacity(k*k);
+    for gj in 0..k {
+        for gi in 0..k {
+            let c0 = gi*(n-1);
+            let r0 = gj*(n-1);
+            let mut grid = vec![0.0f64; n*n];
+            for r in 0..n {
+                for c in 0..n {
+                    grid[r*n + c] = baked.height[(r0 + r)*super_n + (c0 + c)];
+                }
+            }
+            out.push(RegionSlice {
+                grid, grid_n: n,
+                origin_x_m: super_x0_m + gi as f64 * span_m,
+                origin_z_m: super_z0_m + gj as f64 * span_m,
+                span_m,
+            });
+        }
+    }
+    out
 }
