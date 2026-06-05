@@ -5,6 +5,7 @@ mod bind_worldgen;
 mod biome_compose;
 mod biome_page_compute;
 mod clipmap_rings;
+mod condition_world;
 mod edit_layer;
 mod facts;
 mod facts_api;
@@ -45,6 +46,8 @@ mod array_ops_tests;
 mod biome_compose_tests;
 #[cfg(test)]
 mod biome_page_runtime_tests;
+#[cfg(test)]
+mod condition_world_tests;
 #[cfg(test)]
 mod edit_layer_tests;
 #[cfg(test)]
