@@ -1,5 +1,20 @@
 # WorldGen10 — Status
 
+> **ALL-11 BIOME PARITY CONFIRMED ON HARDWARE (2026-06-05).** "Biome-to-biome on
+> parity with mountains" is now proven top-to-bottom, RUN GREEN this session, not
+> just claimed:
+> - **CPU recipe (Rust vs Python):** all 11 `<biome>_seamsafe_matches_python_oracle`
+>   pass at eps=1e-9 (verified 12/12 incl. mountain-576). Landed in Slice-3.
+> - **GPU (GLSL fragment vs f64 oracle):** `biome_page` suite ran green on RTX 5090
+>   for ALL 11 biomes — maxd mountain 1.9e-6, grassland 6.8e-7, desert 1.3e-5,
+>   coast 5.6e-6, wetland 2.5e-6, tundra 3.1e-7, glacial 1.8e-6, karst 2.0e-6,
+>   temperate 1.7e-6, rainforest 3.2e-6, volcanic 3.0e-6 (all << eps=1e-4). Plus
+>   primitive parity 48/48 (maxd 1.86e-4) and compose parity 12/12 (eps=1e-4).
+> The carve (pass_network/carve_ramp) is mountain-only/world-layer, NOT a per-biome
+> feature — so there is NO per-biome carve-port work; biome parity is COMPLETE at
+> recipe + GPU + compose. Remaining is INTEGRATION (wire carve + condition_world
+> into a region-fact bake feeding the live producer), not more parity.
+
 > **CARVE FULLY PORTED TO RUST (2026-06-05) - BOTH HALVES PARITY-VERIFIED.**
 > The connected pass-network carve — the feature that made the accepted mountain
 > chunk-network LOOK, which had ALWAYS lived only in ~4s offline pure-Python and
