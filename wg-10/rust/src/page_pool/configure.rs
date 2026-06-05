@@ -61,6 +61,7 @@ impl Wg10PagePool {
         self.static_ref = None;
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;
+        self.analytic = None;
         self.reset_biome_source_transform();
         self.page_px = page_px;
         self.world_span = world_span;
@@ -89,6 +90,7 @@ impl Wg10PagePool {
         self.static_ref = None;
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;
+        self.analytic = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
@@ -121,6 +123,7 @@ impl Wg10PagePool {
         self.static_ref = None;
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;
+        self.analytic = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = flow_max_level;
@@ -150,12 +153,41 @@ impl Wg10PagePool {
         self.static_ref = Some(static_ref);
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;
+        self.analytic = None;
         self.biome_feature_span_m = feature_span_m;
         self.reset_biome_source_transform();
         self.biome_flow_max_level = 0;
         self.page_px = page_px;
         self.world_span = world_span;
         self.seed = seed;
+        self.reset_stats();
+    }
+
+    /// Ladder Rung 0: install the analytic closed-form plumbing producer. Clears every other
+    /// producer Option so `active_producer_kind` resolves to `Analytic`.
+    pub(super) fn install_analytic_configuration(
+        &mut self,
+        params: super::producer::AnalyticParams,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+    ) {
+        self.init_policy_slots(capacity);
+        self.pack = None;
+        self.pack_buffers = None;
+        self.glsl_source = None;
+        self.compute_ctx = None;
+        self.biome_ctx = None;
+        self.biome_world = None;
+        self.static_ref = None;
+        self.mountain_layer_ref = None;
+        self.world_preview_ref = None;
+        self.analytic = Some(params);
+        self.reset_biome_source_transform();
+        self.biome_flow_max_level = 0;
+        self.page_px = page_px;
+        self.world_span = world_span;
+        self.seed = 0;
         self.reset_stats();
     }
 }

@@ -347,4 +347,33 @@ impl Wg10PagePool {
 
         GString::new()
     }
+
+    /// Ladder Rung 0 plumbing producer: write a CLOSED-FORM height
+    /// `h = amp * sin(wx/lambda) * cos(wz/lambda)` into each page so a gate can predict every
+    /// texel. De-risks the un-intercept flip (produce -> stream -> read -> match an oracle)
+    /// independent of biome content. This is a debug/proving producer, not shipped terrain.
+    #[func]
+    pub fn configure_analytic(
+        &mut self,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+        amp: f64,
+        lambda: f64,
+    ) -> GString {
+        if !amp.is_finite() || !lambda.is_finite() || lambda == 0.0 {
+            return GString::from("configure_analytic: amp/lambda must be finite and lambda != 0");
+        }
+        if page_px < 2 {
+            return GString::from(&format!("configure_analytic: page_px {page_px} must be >= 2"));
+        }
+        self.free_before_reconfigure();
+        self.install_analytic_configuration(
+            super::producer::AnalyticParams { amp, lambda },
+            capacity,
+            page_px,
+            world_span,
+        );
+        GString::new()
+    }
 }

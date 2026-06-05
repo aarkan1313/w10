@@ -78,6 +78,10 @@ pub struct Wg10PagePool {
     static_ref: Option<StaticHeightRuntime>,
     mountain_layer_ref: Option<BoundWorldLayerReference>,
     world_preview_ref: Option<BoundWorldLayerReference>,
+    /// Ladder Rung 0 plumbing producer: writes a CLOSED-FORM height so a gate can predict every
+    /// texel. De-risks the un-intercept flip (produce->stream->read) independent of biome content.
+    /// `Some` => active producer is `Analytic` (checked first in `active_producer_kind`).
+    analytic: Option<producer::AnalyticParams>,
     biome_feature_span_m: f64,
     biome_source_scale: f64,
     biome_source_offset_x_m: f64,
@@ -119,6 +123,7 @@ impl IRefCounted for Wg10PagePool {
             static_ref: None,
             mountain_layer_ref: None,
             world_preview_ref: None,
+            analytic: None,
             biome_feature_span_m: 90000.0,
             biome_source_scale: 1.0,
             biome_source_offset_x_m: 0.0,

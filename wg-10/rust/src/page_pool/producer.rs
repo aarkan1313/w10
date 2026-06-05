@@ -7,9 +7,17 @@
 use godot::classes::{RenderingDevice, Texture2Drd};
 use godot::prelude::*;
 
+use crate::biome_page_compute::f32s_to_bytes;
 use crate::page_compute::compute_page_cached;
 
 use super::{StaticHeightRuntime, Wg10PagePool};
+
+/// Parameters for the ladder Rung 0 analytic plumbing producer (closed-form height).
+#[derive(Clone, Copy, Debug)]
+pub(super) struct AnalyticParams {
+    pub amp: f64,
+    pub lambda: f64,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum ProducerKind {
@@ -17,6 +25,7 @@ pub(super) enum ProducerKind {
     SingleBiome,
     World,
     StaticReference,
+    Analytic,
 }
 
 impl ProducerKind {
@@ -26,17 +35,21 @@ impl ProducerKind {
             Self::SingleBiome => "single",
             Self::World => "world",
             Self::StaticReference => "static_reference",
+            Self::Analytic => "analytic",
         }
     }
 
     pub(super) fn uses_biome_path(self) -> bool {
-        !matches!(self, Self::Legacy)
+        // Analytic is a debug plumbing producer, not the biome GPU path.
+        !matches!(self, Self::Legacy | Self::Analytic)
     }
 }
 
 impl Wg10PagePool {
     pub(super) fn active_producer_kind(&self) -> Option<ProducerKind> {
-        if self.static_ref.is_some() {
+        if self.analytic.is_some() {
+            Some(ProducerKind::Analytic)
+        } else if self.static_ref.is_some() {
             Some(ProducerKind::StaticReference)
         } else if self.biome_world.is_some() {
             Some(ProducerKind::World)
@@ -189,6 +202,35 @@ impl Wg10PagePool {
                     page_px,
                     seed,
                 )
+            }
+            Some(ProducerKind::Analytic) => {
+                let a = self
+                    .analytic
+                    .as_ref()
+                    .ok_or("analytic producer missing params")?;
+                if page_px < 2 {
+                    return Err(format!("analytic producer: page_px {page_px} must be >= 2"));
+                }
+                let n = page_px as usize;
+                let denom = (n - 1) as f64;
+                let mut samples = vec![0.0_f32; n * n];
+                for z in 0..n {
+                    // texel-CORNER convention (u = px/(N-1)) so abutting pages SHARE boundary
+                    // samples -> seam-exact by construction (matches static_reference height write).
+                    let wz = origin_z + world_span * z as f64 / denom;
+                    for x in 0..n {
+                        let wx = origin_x + world_span * x as f64 / denom;
+                        let h = a.amp * (wx / a.lambda).sin() * (wz / a.lambda).cos();
+                        samples[z * n + x] = h as f32;
+                    }
+                }
+                let bytes = f32s_to_bytes(&samples);
+                let pba = PackedByteArray::from(bytes.as_slice());
+                let err = rd.texture_update(tex_rid, 0, &pba);
+                if err != godot::global::Error::OK {
+                    return Err(format!("analytic producer: texture_update failed: {err:?}"));
+                }
+                Ok(())
             }
             None => Err("Wg10PagePool: no configured page producer".into()),
         }

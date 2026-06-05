@@ -40,6 +40,9 @@ impl Wg10PagePool {
                 &mut self.mountain_layer_ref,
                 &mut self.world_preview_ref,
             );
+            // `reset_configured_state` predates the analytic producer; clear it here so the
+            // headless reset path also fully unconfigures the pool.
+            self.analytic = None;
             return;
         }
 
@@ -56,6 +59,7 @@ impl Wg10PagePool {
         self.static_ref = None;
         self.mountain_layer_ref = None;
         self.world_preview_ref = None;
+        self.analytic = None;
         for rid_opt in self.slot_tex.iter_mut() {
             if let Some(rid) = rid_opt.take() {
                 rd.free_rid(rid);
