@@ -3,7 +3,7 @@
 //! macro entry (`bake_region::bake_region`) delegates here so the existing end-to-end parity
 //! gate still covers the tail.
 #![allow(dead_code)]
-use crate::condition_world::{condition_world, condition_world_with_percentiles, ConditionStats};
+use crate::condition_world::{condition_world, condition_world_with_percentile_fields, condition_world_with_percentiles, ConditionStats};
 use crate::pass_network::{carve_ramp_delta, carve_routes, PassNetworkParams, RampParams, TraverseParams};
 
 mod gpu_macro;
@@ -72,6 +72,43 @@ pub fn bake_region_from_raw(
             };
             (h, stats)
         }
+    };
+    BakeResult { height, carve_delta, stats }
+}
+
+/// Carve (on RAW) -> raw+delta -> condition VIA a PercentileProvider (the swappable cross-region
+/// seam strategy). `region_x0_m/region_z0_m` are the region's world origin (the smooth provider
+/// needs them; the scalar provider ignores them). Routing the `None`/scalar path through
+/// ScalarRegionPercentiles is BIT-EXACT to `condition_world` (gated).
+#[allow(clippy::too_many_arguments)]
+pub fn bake_region_from_raw_with_provider(
+    raw: &[f64],
+    n: usize,
+    span_m: f64,
+    height_scale_m: f64,
+    region_x0_m: f64,
+    region_z0_m: f64,
+    pass: &PassNetworkParams,
+    traverse: &TraverseParams,
+    ramp: &RampParams,
+    provider: &dyn PercentileProvider,
+) -> BakeResult {
+    let routes = carve_routes(raw, n, span_m, height_scale_m, pass, traverse);
+    let carve_delta = carve_ramp_delta(raw, n, span_m, height_scale_m, &routes, ramp);
+    let raw_carved: Vec<f64> = raw.iter().zip(carve_delta.iter()).map(|(r, d)| r + d).collect();
+    let pf = provider.percentiles(&raw_carved, region_x0_m, region_z0_m, span_m, n);
+    let height = condition_world_with_percentile_fields(&raw_carved, n, &pf.p05, &pf.p50, &pf.p95);
+    // stats: source from sorted raw_carved ends; percentiles = the field MEAN (well-defined for
+    // length-1 broadcast AND per-cell fields); conditioned from the shaped field.
+    let mut sorted = raw_carved.clone();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let mean = |f: &[f64]| f.iter().sum::<f64>() / f.len() as f64;
+    let (mut cmin, mut cmax) = (height[0], height[0]);
+    for &v in &height { if v < cmin { cmin = v; } if v > cmax { cmax = v; } }
+    let stats = ConditionStats {
+        source_min: sorted[0], source_max: sorted[n * n - 1], source_ptp: sorted[n * n - 1] - sorted[0],
+        p05: mean(&pf.p05), p50: mean(&pf.p50), p95: mean(&pf.p95),
+        conditioned_min: cmin, conditioned_max: cmax, conditioned_ptp: cmax - cmin,
     };
     BakeResult { height, carve_delta, stats }
 }
