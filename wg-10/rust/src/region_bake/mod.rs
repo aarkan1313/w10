@@ -6,6 +6,9 @@
 use crate::condition_world::{condition_world, condition_world_with_percentiles, ConditionStats};
 use crate::pass_network::{carve_ramp_delta, carve_routes, PassNetworkParams, RampParams, TraverseParams};
 
+mod gpu_macro;
+pub use gpu_macro::gpu_macro_region;
+
 #[cfg(test)]
 mod region_bake_tests;
 

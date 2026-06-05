@@ -163,6 +163,12 @@ CHECKS = {
     "ladder_selftest": [
         "worldgen_terrain/tests/ladder_convergence_selftest_check.gd",
     ],
+    # Task 4 GPU region-macro readback: proves bake_region_macro_readback returns the same field
+    # as the proven generate_runtime_page_flow for the identical padded grid (self-consistency /
+    # new-plumbing regression gate). Windowed (RenderingDevice compute).
+    "region_macro": [
+        "worldgen_terrain/tests/region_macro_readback_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -183,6 +189,7 @@ WINDOWED_SUITES = {
     "review_progression",
     "ladder_rung0",
     "ladder_rung1",
+    "region_macro",
 }
 
 

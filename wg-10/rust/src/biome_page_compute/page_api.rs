@@ -433,4 +433,99 @@ impl Wg10BiomePageCompute {
         }
         f32s_to_packed_f64(&core)
     }
+
+    /// Bake the seam-safe macro over a full region grid and return the region-core RAW field.
+    ///
+    /// Calls `crate::region_bake::gpu_macro_region` — a bare local RD, no scene/viewport.
+    /// `ox`/`oz` are the PADDED origin (top-left of apron); the core origin is offset inward.
+    /// Returns a flat `PackedFloat64Array` of `core_px * core_px` values (row-major), or an
+    /// empty array on any error (matching the existing func error style).
+    #[allow(clippy::too_many_arguments)]
+    #[func]
+    pub fn bake_region_macro_readback(
+        &self,
+        spacing: f64,
+        ox: f64,
+        oz: f64,
+        core_px: i64,
+        apron_px: i64,
+        seed: i64,
+        feature_span_m: f64,
+        mountain_fragment_path: GString,
+        flow_iters: i64,
+        flow_on: bool,
+    ) -> PackedFloat64Array {
+        if flow_iters < 1 {
+            godot_error!(
+                "Wg10BiomePageCompute::bake_region_macro_readback: flow_iters must be >= 1"
+            );
+            return PackedFloat64Array::new();
+        }
+        if seed < i32::MIN as i64 || seed > i32::MAX as i64 {
+            godot_error!(
+                "Wg10BiomePageCompute::bake_region_macro_readback: seed {seed} outside i32 range"
+            );
+            return PackedFloat64Array::new();
+        }
+        if core_px < 1 || apron_px < 0 {
+            godot_error!(
+                "Wg10BiomePageCompute::bake_region_macro_readback: invalid core_px={core_px} apron_px={apron_px}"
+            );
+            return PackedFloat64Array::new();
+        }
+
+        let prim = match self.primitives_src.as_deref() {
+            Some(s) => s,
+            None => {
+                godot_error!("Wg10BiomePageCompute::bake_region_macro_readback: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let machine = match self.machine_src.as_deref() {
+            Some(s) => s,
+            None => {
+                godot_error!("Wg10BiomePageCompute::bake_region_macro_readback: no GLSL source loaded (call load_shaders)");
+                return PackedFloat64Array::new();
+            }
+        };
+        let frag_path = mountain_fragment_path.to_string();
+        let fragment = match std::fs::read_to_string(&frag_path) {
+            Ok(s) => s,
+            Err(e) => {
+                godot_error!(
+                    "Wg10BiomePageCompute::bake_region_macro_readback: mountain fragment glsl: {e}"
+                );
+                return PackedFloat64Array::new();
+            }
+        };
+
+        match crate::region_bake::gpu_macro_region(
+            prim,
+            machine,
+            &fragment,
+            ox,
+            oz,
+            spacing,
+            core_px as usize,
+            apron_px as usize,
+            flow_iters as usize,
+            feature_span_m,
+            seed,
+            flow_on,
+        ) {
+            Ok(field) => {
+                let mut out = PackedFloat64Array::new();
+                out.resize(field.len());
+                let sl = out.as_mut_slice();
+                for (i, &v) in field.iter().enumerate() {
+                    sl[i] = v;
+                }
+                out
+            }
+            Err(e) => {
+                godot_error!("Wg10BiomePageCompute::bake_region_macro_readback: {e}");
+                PackedFloat64Array::new()
+            }
+        }
+    }
 }
