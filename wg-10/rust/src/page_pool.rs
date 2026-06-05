@@ -30,6 +30,7 @@ mod config_api;
 mod configure;
 mod lifecycle;
 mod producer;
+mod region_fact;
 mod state_api;
 mod static_reference;
 mod static_reports;
