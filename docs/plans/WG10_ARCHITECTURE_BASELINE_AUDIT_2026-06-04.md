@@ -3,6 +3,26 @@
 Purpose: reconcile the owner-accepted mountain review artifact with the current
 Slice 4 live GPU runtime. This is a current-state audit, not a new feature spec.
 
+## Latest Addendum - 2026-06-04
+
+- Commit `6860e6a` is the latest scoped backup checkpoint:
+  `fix(slice4): reduce material fact hitch`.
+- Accepted/reference-backed material fact pages now stream at `page_px / 4`.
+  Height pages remain full resolution; only low-frequency RGBA material masks
+  are cheaper.
+- Fresh gate reruns after the checkpoint: `review_runtime_modes` = 2/2,
+  `review_progression` = 3/3, and `review_runtime_stress` = 1/1. The strict
+  owner-stress gate keeps all six REFERENCE/MOUNTAIN/WORLD morph off/on cases
+  under the `16.7 ms` CPU p99/max and GPU p99 budgets, with zero
+  hide/show/full events.
+- Current source-size audit found no active Rust/GDScript/GLSL/Python terrain
+  source file over 1000 lines. The large files are docs, fixture data, or
+  config data; the next refactor target is ownership/taxonomy, not arbitrary
+  line-count cutting.
+- Final terrain textures are not part of this checkpoint. The live shader uses
+  a simple palette, debug modes, and material fact masks for readability while
+  geometry/streaming/contracts are hardened.
+
 ## Executive Read
 
 The project currently has multiple terrain architectures alive at once:
@@ -192,8 +212,10 @@ accepted static material facts as a renderer-facing RGBA32F page instead of the
 temporary one-channel material code. Channels are R=low-pass/corridor, G=floor,
 B=rock, and A=snow; `ring_displace.gdshader` samples those channels directly
 and blends separate terrain targets. The material fact texture is lower
-resolution than height (`page_px / 2`) to keep synchronous owner-fly page misses
-under frame budget. Latest proof: `cargo test -p wg10_terrain --lib` = 231/0,
+resolution than height (`page_px / 4`) to keep synchronous owner-fly page misses
+under frame budget. Latest proof for the quarter-resolution recovery is in the
+implementation audit and `STATUS.md`; original channel-separation proof:
+`cargo test -p wg10_terrain --lib` = 231/0,
 `tools\build_rust.ps1` builds, `m3` = 10/10, `review_runtime_visual` = 2/2,
 and `review_runtime_modes` = 2/2. The mode gate dropped from the failing
 17-18 ms CPU p95 range to about 9.5 ms p95 with zero hide/show in modes 1/2/3.

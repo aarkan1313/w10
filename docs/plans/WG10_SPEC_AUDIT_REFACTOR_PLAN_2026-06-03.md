@@ -15,10 +15,13 @@ R=low-pass/corridor, G=floor, B=rock, A=snow. `ring_displace.gdshader` samples
 those channels directly and blends separate terrain targets.
 
 To keep the synchronous owner fly under frame budget, the material fact page is
-lower resolution than height (`page_px / 2`). Height pages remain full
-resolution; material facts are low-frequency presentation masks.
+lower resolution than height. The current recovery value is `page_px / 4`.
+Height pages remain full resolution; material facts are low-frequency
+presentation masks.
 
-Current proof:
+Original channel-separation proof, superseded on material-page resolution by
+the 2026-06-04 hitch fix documented in `STATUS.md` and the implementation
+audit:
 
 - `cargo fmt -p wg10_terrain -- --check` passes.
 - `cargo test -p wg10_terrain --lib` = 231 passed / 0 failed.

@@ -5,6 +5,11 @@
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > **Latest owner-report audit:** see
 > `docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`.
+> Current texture scope: final terrain textures have not been started. The
+> accepted runtime bridge has a simple height/slope palette, debug modes, and
+> low-resolution material fact masks for readability only. Do not treat palette
+> polish as the next acceptance target; pass-network facts, generated mountain
+> world-layer content, and facts/collision parity come first.
 > Latest hitch fix: accepted/reference-backed material fact pages now stream at
 > quarter height resolution (`page_px / 4`) instead of half resolution. Height
 > pages remain full resolution; only the low-frequency RGBA material masks are

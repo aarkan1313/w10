@@ -8,7 +8,12 @@ accepted, what is only diagnostic, and how to fix the current owner-visible
 
 Branch: `slice4-gpu-page-integration`.
 
-Latest committed backup before this audit pass:
+Current scoped backup checkpoint:
+
+- `6860e6a fix(slice4): reduce material fact hitch`
+- tag `backup-slice4-material-hitch-20260604-6860e6a`
+
+Earlier split checkpoint kept for archaeology:
 
 - `a9e76f7 refactor(slice4): split world layer reports`
 - tag `backup-slice4-world-layer-reports-20260604-a9e76f7`
@@ -153,6 +158,22 @@ Mode `4` / `LEGACY`:
 - Old DEM/kernel atlas regression path.
 - Useful for renderer A/B checks, not a target look.
 
+## Texture Scope
+
+Final terrain textures have not been started and are not part of the current
+acceptance bar. The live review shader only provides:
+
+- a height/slope mountain palette;
+- low-resolution RGBA material facts for low-pass/corridor, floor, rock, and
+  snow readability;
+- morph and route debug modes.
+
+Do not treat the current palette as final art. For this checkpoint the visual
+bar is geometry, streaming stability, accepted reference readability, and
+contract evidence. Texture/art production starts only after pass-network facts,
+procedural mountain world-layer generation, and facts/collision parity are
+proved through the progression scene.
+
 ## Requirement Audit Against The Mountain World-Layer Contract
 
 | Requirement | Current evidence | Status | Gap |
@@ -188,6 +209,27 @@ The current risk is not one giant file. The risk is that accepted baseline,
 reference bridge, raw procedural prototype, WORLD diagnostics, and legacy atlas
 are still co-present in one fly scene. The next work should make that taxonomy
 impossible to confuse.
+
+## Current Source-Size Evidence
+
+Fresh line-count audit on the active terrain/runtime/tooling paths found no
+Rust, GDScript, GLSL, or Python source file over 1000 lines.
+
+| Path | Lines | Meaning |
+| --- | ---: | --- |
+| `tools/dem_pack/fixtures/recipe_noise_fixtures.json` | 3646 | Fixture data, not source. |
+| `docs/plans/STATUS.md` | 2019 | Living history document. |
+| `tools/dem_pack/proposed_family_tags.json` | 1280 | Data/config. |
+| `tools/dem_pack/export_godot_rough_world_chunks.py` | 745 | Largest active Python source. |
+| `wg-10/worldgen_terrain/harness/mountain_world_chunks_review.gd` | 695 | Largest accepted static-review harness. |
+| `wg-10/worldgen_terrain/harness/wg10_progression_review.gd` | 687 | Current progression harness. |
+| `wg-10/worldgen_terrain/shaders/biome_page.glsl` | 612 | Largest active shader. |
+| `wg-10/rust/src/recipes_karst.rs` | 566 | Largest active Rust source in the audit set. |
+| `wg-10/rust/src/biome_page_compute/local_compose.rs` | 565 | Largest shared biome compose Rust module. |
+
+Conclusion: the refactor priority is not "split every 1000-line file." It is
+to keep accepted/reference/prototype/diagnostic lanes separate, and to split the
+progression harness once feature overlays make it materially harder to review.
 
 ## What The Current Gates Prove
 
@@ -228,7 +270,8 @@ impossible to confuse.
 - The recovery progression scene exposes the current four-step ladder with
   explicit status and contract kinds.
 - The scene exposes a gated progression manifest: current steps, future steps,
-  proving suites, promotion rule, and per-step `source_display_report`.
+  proving suites, promotion rule, and per-step `source_display_report` plus
+  `material_fact_report`.
 - The source/display and material-fact overlay features are implemented and
   visible in normal scene mode, while probe mode hides those overlays so
   terrain visual-delta gates remain focused on the render path.
@@ -293,54 +336,49 @@ Implemented files:
 Principle: one shared renderer/streamer path, one feature added per step, and a
 snapshot/gate for each step before promotion.
 
-Steps:
+Current active ladder:
 
-1. Baseline render shell.
-   - Flat/simple static height.
-   - Same streamer, rings, camera, profiler.
-   - Gate: nonblank terrain, no hide/show/full events, stable p99.
+1. `reference_baseline`: accepted REFERENCE runtime baseline from
+   `mountain_world_layer_tiles.json`.
+2. `mountain_network_bridge`: MOUNTAIN single-producer lane with the accepted
+   world-layer reference bound beside it.
+3. `mountain_close_debug_candidate`: raw live mountain recipe, explicitly
+   prototype-only and measured against REFERENCE.
+4. `world_reference_preview`: WORLD route/weight diagnostics over the accepted
+   reference height/material preview.
 
-2. Accepted static REFERENCE.
-   - Load `mountain_world_layer_tiles.json`.
-   - Gate against `mountain_network_chunks_review.tscn` focus view.
+Implemented cross-cutting review features:
 
-3. Source/display mapping overlay.
-   - Show display window and sampled source window.
-   - Implemented and gated for all four active steps.
-   - The smoke gate checks `source_display_report`, overlay visibility, mapping
+1. Source/display mapping report and overlay.
+   - Gated for all four active steps.
+   - Smoke checks cover `source_display_report`, overlay visibility, mapping
      kind, positive source/display spans, and nonzero overlay rectangles.
+2. Material fact report and overlay.
+   - Gated for all four active steps.
+   - Accepted/bridge/preview steps expose low-pass/corridor, floor, rock, and
+     snow fact channels; the raw close-debug step is expected to report the
+     missing-material-facts gap.
 
-4. MOUNTAIN/network_ref bridge.
-   - Same accepted payload through the single-producer lane.
-   - Gate byte/visual equivalence to REFERENCE.
+Next feature queue:
 
-5. Material facts.
-   - Toggle low-pass/corridor, floor, rock, snow channels one at a time.
-   - Gate nonvacuous visual deltas and no perf regression.
-
-6. Pass-network facts.
-   - Add corridor overlay and route reports.
-   - Gate nonzero route/carve coverage.
-
-7. Raw MOUNTAIN close-debug candidate.
-   - Show it as a candidate only.
-   - Gate and document measured visual/numeric gap versus REFERENCE.
-
-8. Procedural/generated mountain world-layer candidate.
-   - Consume generated tile/fact data through the runtime contract.
-   - Goal is to reduce the measured gap from step 7.
-
-9. WORLD route/weight diagnostic.
-   - Keep active biome preview bounded and explicit.
-   - Gate route/weight reports separately from owner terrain acceptance.
-
-10. Full WORLD compose.
-    - Only after async/cache or a cheaper preview contract exists.
-    - Explicit perf gate; synchronous full compose stays prohibited.
-
-11. Facts/collision.
-    - Collision must read the same terrain facts that the visual layer presents.
-    - Gate visible/queryable parity.
+1. Pass-network facts.
+   - Add corridor/route report and overlay to the active ladder.
+   - Gate nonzero route/carve coverage for REFERENCE and MOUNTAIN/network.
+   - Gate the raw close-debug step as an explicit missing-gap report, not as a
+     failure hidden by the reference preview.
+2. Procedural/generated mountain world-layer candidate.
+   - Consume generated/cached tile/fact data through the same runtime contract.
+   - Promote only if numeric/visual gap to REFERENCE improves while
+     `review_progression`, `review_runtime_visual`, and `review_runtime_stress`
+     remain green.
+3. WORLD compose.
+   - Keep owner preview bounded until async/cache or a cheaper preview contract
+     exists.
+   - Synchronous full compose stays prohibited in the owner fly.
+4. Facts/collision parity.
+   - Collision/query authority must read the same facts presented by the visual
+     layer.
+   - Gate visible/queryable parity over sampled pages.
 
 ## Do Not Do
 
@@ -377,8 +415,9 @@ The next checkpoint is not "biomes look cool." It is:
 - The progression scene has static, motion, and fixed-camera visual repage
   gates.
 - The progression scene carries a machine-readable future-step manifest and
-  source/display reports plus a visible source/display overlay for the active
-  steps.
+  source/display plus material-fact reports/overlays for the active steps.
+- The next implemented feature is pass-network facts, with explicit route/carve
+  reports and overlays plus a gated missing-gap report for raw close-debug.
 - The strict owner-spike gate remains green under modes 1/2/3 with morph off/on.
 - Raw procedural mountain remains visibly/numerically compared against the
   accepted baseline instead of being promoted by feel.

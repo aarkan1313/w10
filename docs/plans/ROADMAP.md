@@ -36,6 +36,11 @@ Current work is Slice 4 stabilization and recovery:
 - Current source-size audit found no Rust/GDScript/GLSL/Python source file over
   1000 lines in the active terrain/runtime/tooling paths; the next refactor risk
   is ownership and mode taxonomy, not one giant still-unsplit source file.
+- Texture/art production is not part of the current acceptance bar. The runtime
+  has a simple height/slope palette, debug modes, and low-resolution material
+  facts for readability; it does not have final terrain textures. Do not chase
+  texture quality before pass-network facts, generated mountain world-layer
+  content, and facts/collision parity are proven.
 - The latest owner-report fix adds the missing shared fly-camera
   `sync_mouse_from_rotation()` hook so review-camera reframing cannot leave
   stale mouse-look state. The follow-up owner-motion fix changes live clipmap
