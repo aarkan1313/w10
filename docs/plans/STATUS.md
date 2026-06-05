@@ -24,9 +24,10 @@
 > motion through page boundaries with bounded repage bursts, and pass a
 > fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses.
 > Latest post-fix proof: `review_progression` = 3/3, `review_runtime` = 2/2,
-> `review_runtime_modes` = 2/2, and `review_runtime_visual` = 2/2. The visual
-> repage gate checked 12 before/after boundary pairs with worst mean/p95/p99
-> RGB delta `0.000831/0.002614/0.020915`. The visual bridge gate confirms
+> `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
+> `review_runtime_stress` = 1/1 with CPU p99/max and GPU p99 capped at
+> `16.7 ms`. The visual repage gate checked 12 before/after boundary pairs with
+> worst mean/p95/p99 RGB delta `0.000831/0.002614/0.020915`. The visual bridge gate confirms
 > REFERENCE, MOUNTAIN/network, and WORLD preview match where they are supposed
 > to match; raw `MOUNTAIN/close_debug` and route/debug coloring remain
 > prototype/diagnostic and are not accepted terrain.
@@ -94,6 +95,11 @@
 > deltas `0.000000/0.000000` for MOUNTAIN and WORLD with morph off/on. This
 > improves coverage for the manual "modes 1/2/3 feel slow/weird" report; it
 > still does not make raw procedural MOUNTAIN or full WORLD composition accepted.
+> Follow-up strict owner-spike budget on 2026-06-04: the same stress gate now
+> fails any CPU p99/max or GPU p99 over `16.7 ms`. Latest pass keeps all six
+> REFERENCE/MOUNTAIN/WORLD morph off/on cases inside that one-frame budget while
+> preserving zero hide/show/full events and exact bridge captures where modes
+> are supposed to match.
 > Follow-up WORLD ownership split on 2026-06-04: `BiomeWorldRuntime` moved out
 > of core `page_pool.rs` into `page_pool/world_runtime.rs`, with WORLD context
 > construction and teardown owned beside the WORLD producer path. Current source

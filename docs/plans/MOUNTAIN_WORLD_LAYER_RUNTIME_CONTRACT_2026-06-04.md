@@ -101,6 +101,10 @@ fixed across L0/L1/L2 page-boundary crosses and compares terrain-mask pixels;
 latest 12-pair proof reports worst mean/p95/p99 RGB delta
 `0.000831/0.002614/0.020915`. This does not promote raw
 `MOUNTAIN/close_debug` or full WORLD compose to accepted terrain.
+The manual owner-stress gate now also fails CPU p99/max or GPU p99 above
+`16.7 ms` across REFERENCE, MOUNTAIN, and WORLD with morph off/on, so a
+one-frame synchronous hitch is no longer permitted just because the broader p99
+path stays green.
 
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,
@@ -362,6 +366,9 @@ single rendered page:
   visual gate proves REFERENCE vs MOUNTAIN/network and REFERENCE vs WORLD
   preview remain mean/p95 RGB delta `0.000000/0.000000`, and the old static
   chunks scene vs runtime REFERENCE comparison passes at mask IoU `0.986`.
+- The current `review_runtime_stress` budget is strict: CPU p99/max and GPU p99
+  must stay at or below `16.7 ms` in all six REFERENCE/MOUNTAIN/WORLD morph
+  off/on manual-stress cases, with zero hide/show/full events.
 - Current live `MOUNTAIN/network_ref` does not yet satisfy this contract because
   pass-network and page-stable conditioning facts do not exist in the live
   producer. The contract report now makes that explicit by requiring its

@@ -72,6 +72,8 @@ Latest proofs after the camera and clipmap fixes:
 - `python tools/gate.py --suite review_runtime_modes` = 2/2.
 - `python tools/gate.py --suite review_runtime_visual` = 2/2.
 - `python tools/gate.py --suite review_progression` = 3/3.
+- `python tools/gate.py --suite review_runtime_stress` = 1/1 with strict
+  CPU p99/max and GPU p99 budgets at `16.7 ms`.
 
 Mode-gate numbers after the toroidal slot fix:
 
@@ -83,13 +85,15 @@ Mode-gate numbers after the toroidal slot fix:
 
 Manual stress after the camera fix:
 
-- Six cases across REFERENCE, MOUNTAIN, WORLD and morph off/on passed.
+- Six cases across REFERENCE, MOUNTAIN, WORLD and morph off/on pass under the
+  stricter owner-spike budget.
 - All six had `hide=0`, `show=0`, `full_events=0`.
 - REFERENCE/MOUNTAIN and REFERENCE/WORLD final images remained identical in the
   reference-backed bridge captures.
-- One residual single-frame spike remains worth hardening: MOUNTAIN morph-on
-  reported `cpu_max=22.349 ms` with p99 still below 10 ms. Current gates permit
-  that; a future owner-spike gate should make the intended budget explicit.
+- The manual stress gate now fails any measured CPU p99 or CPU max over
+  `16.7 ms`, making one-frame owner-visible hitches explicit failures instead
+  of tolerated tail events. Latest fresh visible morph-on tail peaked at
+  REFERENCE `cpu_max=10.779 ms`; all six cases passed the stricter max budget.
 
 ## Mode Truth
 
@@ -143,7 +147,7 @@ Mode `4` / `LEGACY`:
 | Conditioning | Accepted payload includes whole-field conditioning stats. | Partial | Live producer lacks equivalent page-stable conditioning. |
 | Material/fact hints | Runtime material pages preserve low-pass/corridor, floor, rock, snow channels. | Partial | Works for accepted reference payload; final procedural material facts remain open. |
 | Facts/collision | Base facts API exists. | Open | Mountain world-layer facts are not yet the collision authority for final procedural content. |
-| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3; progression motion bounds same-frame repage bursts to 8; progression visual repage checks 12 fixed-camera boundary pairs with worst mean/p95/p99 RGB delta `0.000831/0.002614/0.020915`. | Partial | Strict single-frame owner-spike budgets remain open. |
+| Streaming stability | Current bridge gates zero hide/show/full events in modes 1/2/3; progression motion bounds same-frame repage bursts to 8; progression visual repage checks 12 fixed-camera boundary pairs with worst mean/p95/p99 RGB delta `0.000831/0.002614/0.020915`; manual stress now fails CPU p99/max or GPU p99 over `16.7 ms`. | Partial | Scripted/manual stress is covered; unscripted editor free-fly remains human confirmation. |
 | Owner visual acceptance | Static network scene and runtime REFERENCE bridge match by silhouette/color gates. | Partial | Procedural MOUNTAIN and full WORLD are not accepted. |
 
 ## Architecture Audit
@@ -193,7 +197,8 @@ impossible to confuse.
 - The progression suite now owns the fixed-camera pixel-delta repage proof; this
   stress gate still focuses on hand-style path perf, hide/show/full events, and
   bridge image matching.
-- It does not yet fail on single-frame spikes below the current max budget.
+- It now fails CPU p99/max or GPU p99 above `16.7 ms`, so one-frame synchronous
+  owner hitches are budgeted directly.
 
 `review_runtime_visual` proves:
 
@@ -236,10 +241,11 @@ impossible to confuse.
    - Latest worst mean/p95/p99 RGB delta is
      `0.000831/0.002614/0.020915`.
 
-5. Add a stricter owner-spike gate.
-   - Current stress allows a one-frame `22.349 ms` MOUNTAIN morph-on spike.
-   - Decide an owner review max budget and fail it explicitly.
-   - Record frame, mode, morph state, acquired pages, and repage count.
+5. Keep the strict owner-spike gate.
+   - Implemented in `mountain_fly_manual_stress_check.gd`.
+   - The stress gate fails CPU p99/max or GPU p99 above `16.7 ms`.
+   - It records frame, mode, morph state, acquired pages, repage count, and
+     evidence captures for the bridge comparisons.
 
 6. Keep modes 1/2/3 honest.
    - Mode 1 is the accepted baseline.
@@ -343,7 +349,7 @@ The next checkpoint is not "biomes look cool." It is:
 - Steps 1-4 replay the current accepted bridge without ambiguity.
 - The progression scene has static, motion, and fixed-camera visual repage
   gates.
-- A stricter owner-spike gate exists.
+- The strict owner-spike gate remains green under modes 1/2/3 with morph off/on.
 - Raw procedural mountain remains visibly/numerically compared against the
   accepted baseline instead of being promoted by feel.
 - The docs continue to state which modes are accepted, bridge, prototype, or

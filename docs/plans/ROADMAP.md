@@ -42,6 +42,11 @@ Current work is Slice 4 stabilization and recovery:
   binding to toroidal page slots, reducing progression-scene visible repages
   from `72` to `26` and same-frame repage bursts from `18` to `8` with zero
   hide/show/full events.
+- The manual owner-stress gate now treats one-frame hitches as first-class
+  failures: modes 1/2/3 with morph off/on must keep CPU p99/max and GPU p99 at
+  or below `16.7 ms`, while preserving zero hide/show/full events and exact
+  bridge captures where MOUNTAIN/network_ref and WORLD preview intentionally
+  match REFERENCE.
 - `wg10_progression_review.tscn` is now the progression harness for the next
   chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
   WORLD/reference-preview as explicit steps with `review_progression` guarding
