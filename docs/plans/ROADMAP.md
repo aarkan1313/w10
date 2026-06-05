@@ -4,6 +4,9 @@ Ordered milestones. Mark `[x]` only when the item meets the definition of done
 in DESIGN.md §7.3 (perf gate + visual gate + manual confirmation, as
 applicable). Update this file in place; do not create new plan docs.
 
+**Final handoff 2026-06-05:** read
+`docs/plans/WG10_FINAL_HANDOFF_2026-06-05.md` first.
+
 **Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
 `docs/plans/STATUS.md` top plus
 `docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md` plus the current

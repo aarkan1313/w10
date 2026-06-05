@@ -4,6 +4,10 @@ Purpose: give the next session one clear source for where WG10 stands, what is
 accepted, what is only diagnostic, and how to fix the current owner-visible
 "slow, laggy, weird in modes 1/2/3" report without mixing architectures again.
 
+Final pickup note: read
+`docs/plans/WG10_FINAL_HANDOFF_2026-06-05.md` first, then use this document for
+the full audit detail.
+
 ## Current Checkpoint
 
 Branch: `slice4-gpu-page-integration`.
