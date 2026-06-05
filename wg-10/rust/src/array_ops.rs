@@ -99,6 +99,105 @@ fn clamp_idx(i: i64, n: usize) -> usize {
     }
 }
 
+/// Map an out-of-bounds index using scipy's `mode='reflect'` (half-sample symmetric:
+/// `(d c b a | a b c d | d c b a)` — the EDGE sample is duplicated under the fold).
+///
+/// Folds with period `2n`: `i' = i mod 2n` (non-negative), then if `i' >= n` reflect via
+/// `2n - 1 - i'`. Matches scipy's `_extend_mode_to_code('reflect')` boundary exactly.
+// Reached only via carve_ramp, whose producer seam is not wired to the runtime yet.
+#[allow(dead_code)]
+#[inline]
+fn reflect_idx(i: i64, n: usize) -> usize {
+    if n == 1 {
+        return 0;
+    }
+    let p = 2 * n as i64;
+    let mut m = i % p;
+    if m < 0 {
+        m += p;
+    }
+    if m >= n as i64 {
+        (p - 1 - m) as usize
+    } else {
+        m as usize
+    }
+}
+
+/// Gaussian blur with scipy's DEFAULT `mode='reflect'` boundary (NOT 'nearest').
+///
+/// Same kernel + accumulation order as [`gaussian_filter_nearest`]; only the boundary
+/// extension differs ([`reflect_idx`] instead of [`clamp_idx`]). Needed where the input
+/// field has large gradients up to the border (e.g. `pass_network::carve_ramp`'s gathered
+/// floor profile, which descends thousands of metres along a route): there the
+/// reflect-vs-nearest border difference is hundreds of metres, not the sub-metre noise the
+/// 'nearest' approximation incurs on the gently-conditioned fields. Mirrors
+/// `scipy.ndimage.gaussian_filter(field, sigma, truncate)` with its default mode.
+// Reached only via carve_ramp, whose producer seam is not wired to the runtime yet.
+#[allow(dead_code)]
+pub fn gaussian_filter_reflect(
+    field: &[f64],
+    rows: usize,
+    cols: usize,
+    sigma: f64,
+    truncate: f64,
+) -> Vec<f64> {
+    assert_eq!(
+        field.len(),
+        rows * cols,
+        "gaussian_filter_reflect: field.len() ({}) != rows*cols ({}*{})",
+        field.len(),
+        rows,
+        cols
+    );
+    if !(sigma > 1e-15) {
+        return field.to_vec();
+    }
+    let kernel = gaussian_kernel1d(sigma, truncate);
+    let after_axis0 = correlate1d_axis0_reflect(field, rows, cols, &kernel);
+    correlate1d_axis1_reflect(&after_axis0, rows, cols, &kernel)
+}
+
+/// 1-D symmetric correlation along axis 0 (the row index) with scipy 'reflect' boundary.
+#[allow(dead_code)]
+fn correlate1d_axis0_reflect(field: &[f64], rows: usize, cols: usize, kernel: &[f64]) -> Vec<f64> {
+    let lw = (kernel.len() - 1) / 2;
+    let mut out = vec![0.0_f64; rows * cols];
+    for x in 0..cols {
+        for y in 0..rows {
+            let center = field[y * cols + x];
+            let mut s = center * kernel[lw];
+            for j in 1..=lw {
+                let plus = field[reflect_idx(y as i64 + j as i64, rows) * cols + x];
+                let minus = field[reflect_idx(y as i64 - j as i64, rows) * cols + x];
+                s += (plus + minus) * kernel[lw + j];
+            }
+            out[y * cols + x] = s;
+        }
+    }
+    out
+}
+
+/// 1-D symmetric correlation along axis 1 (the column index) with scipy 'reflect' boundary.
+#[allow(dead_code)]
+fn correlate1d_axis1_reflect(field: &[f64], rows: usize, cols: usize, kernel: &[f64]) -> Vec<f64> {
+    let lw = (kernel.len() - 1) / 2;
+    let mut out = vec![0.0_f64; rows * cols];
+    for y in 0..rows {
+        let base = y * cols;
+        for x in 0..cols {
+            let center = field[base + x];
+            let mut s = center * kernel[lw];
+            for j in 1..=lw {
+                let plus = field[base + reflect_idx(x as i64 + j as i64, cols)];
+                let minus = field[base + reflect_idx(x as i64 - j as i64, cols)];
+                s += (plus + minus) * kernel[lw + j];
+            }
+            out[base + x] = s;
+        }
+    }
+    out
+}
+
 /// 1-D symmetric correlation along axis 0 (the row index) with 'nearest' boundary.
 ///
 /// Accumulation order mirrors scipy's symmetric fast path: center tap first, then each

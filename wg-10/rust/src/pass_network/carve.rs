@@ -17,7 +17,7 @@
 
 use super::edt::edt_with_indices;
 use super::RampParams;
-use crate::array_ops::gaussian_filter_nearest;
+use crate::array_ops::gaussian_filter_reflect;
 
 /// Carve a walkable valley delta (HEIGHT units, n*n row-major) for `routes` over the core grid
 /// `height`. `cell_m` is the per-cell spacing in metres (`spec.spacing_m`). Mirror of
@@ -62,7 +62,10 @@ pub fn carve_ramp(
         let (distpx, nearest) = edt_with_indices(&on_path, n, n);
         // prof_field[iy, ix]: for each cell, the profile value at its nearest on-path cell.
         let gathered: Vec<f64> = (0..n * n).map(|i| prof_field[nearest[i]]).collect();
-        let floor = gaussian_filter_nearest(&gathered, n, n, p.floor_smooth_px, 4.0);
+        // scipy gaussian_filter DEFAULT mode='reflect' (corridor_router.carve_ramp passes no mode);
+        // the gathered floor has thousands-of-metres border gradients, so 'nearest' would diverge by
+        // 100m+ at the edges (latent: the narrow-band carve_ramp fixture excluded those border cells).
+        let floor = gaussian_filter_reflect(&gathered, n, n, p.floor_smooth_px, 4.0);
 
         for i in 0..n * n {
             let d_m = distpx[i] * cell_m;

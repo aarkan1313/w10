@@ -1,6 +1,7 @@
 use godot::prelude::*;
 
 mod array_ops;
+mod bake_region;
 mod bind_worldgen;
 mod biome_compose;
 mod biome_page_compute;
@@ -42,6 +43,8 @@ mod terrain_view;
 
 #[cfg(test)]
 mod array_ops_tests;
+#[cfg(test)]
+mod bake_region_tests;
 #[cfg(test)]
 mod biome_compose_tests;
 #[cfg(test)]
