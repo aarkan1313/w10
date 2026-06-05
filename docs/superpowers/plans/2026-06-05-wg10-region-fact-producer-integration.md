@@ -635,7 +635,19 @@ git commit -m "test(region_bake): G-seam measurement gate (cross-region conditio
 
 ---
 
-## Task 6: Deterministic percentile reconcile (verdict-driven)
+## Task 6: Deterministic percentile reconcile (verdict-driven) — ⚠️ SUPERSEDED
+
+> **SUPERSEDED by the G-seam measurement (2026-06-05).** Task 5 measured the cross-region
+> condition seam at **~1090 m** (RAW+carve seam-exact to ~2 m, but per-region scalar
+> percentiles diverge: A p50 −0.6 vs B p50 −1.0). The symmetric-mean reconcile below does NOT
+> close a 1090 m seam (averaging still conditions each region's interior against percentiles
+> that don't match its distribution, and reconciles only ONE of 4 borders). The owner directed
+> the architecturally-correct fix: a **shared smooth percentile FIELD**. See spec
+> `docs/superpowers/specs/2026-06-05-wg10-seam-exact-smooth-percentile-conditioning-design.md`
+> and plan `docs/superpowers/plans/2026-06-05-wg10-seam-exact-smooth-percentile-conditioning.md`
+> (the revised Task 6). The text below is retained for history only — DO NOT implement it.
+
+### (historical) Deterministic percentile reconcile
 
 **Files:**
 - Modify: `wg-10/rust/src/region_bake/mod.rs` (`reconciled_percentiles` helper)
