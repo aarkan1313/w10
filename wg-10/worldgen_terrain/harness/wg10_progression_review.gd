@@ -79,11 +79,12 @@ const FUTURE_STEPS := [
 	{
 		"id": "material_fact_layers",
 		"label": "Material fact layers",
-		"status": "planned",
+		"status": "implemented",
 		"adds": "low-pass/corridor, floor, rock, and snow layers as separately gated facts",
 		"gate": "review_progression + review_runtime_visual",
 		"acceptance_rule": "each channel is non-vacuous, page-stable, and visually bounded against REFERENCE",
 		"blocks": "procedural candidate promotion without accepted material readability",
+		"implemented_by": "material_fact_report plus visible progression overlay",
 	},
 	{
 		"id": "pass_network_facts",
@@ -128,6 +129,11 @@ var _source_overlay_source_rect: ColorRect
 var _source_overlay_display_rect: ColorRect
 var _source_overlay_label: Label
 var _source_overlay_state := {}
+var _material_overlay_layer: CanvasLayer
+var _material_overlay_panel: Control
+var _material_overlay_label: Label
+var _material_overlay_bars: Dictionary = {}
+var _material_overlay_state := {}
 var _step_index := 0
 var _last_config_error := ""
 var _frame := 0
@@ -175,6 +181,7 @@ func _ready() -> void:
 	_label.add_theme_font_size_override("font_size", 16)
 	layer.add_child(_label)
 	_create_source_display_overlay()
+	_create_material_fact_overlay()
 	_refresh_label()
 
 func _exit_tree() -> void:
@@ -281,6 +288,7 @@ func debug_progression_snapshot() -> Dictionary:
 		"world_weight_report": world_weight_report,
 		"source_transform": source_transform,
 		"source_display_report": _current_source_display_report(),
+		"material_fact_report": _current_material_fact_report(),
 		"static_material_bound_tiles": _static_material_bound_tiles(),
 		"future_steps": FUTURE_STEPS,
 		"progression_manifest": progression_manifest(),
@@ -293,6 +301,8 @@ func set_probe_mode(enabled: bool) -> void:
 		_label.visible = not enabled
 	if _source_overlay_layer != null:
 		_source_overlay_layer.visible = not enabled
+	if _material_overlay_layer != null:
+		_material_overlay_layer.visible = not enabled
 
 func update_for_probe(pos_x: float, pos_z: float, vel_x: float, vel_z: float) -> void:
 	if _camera != null:
@@ -323,6 +333,10 @@ func debug_source_display_overlay_state() -> Dictionary:
 	_refresh_source_display_overlay()
 	return _source_overlay_state
 
+func debug_material_fact_overlay_state() -> Dictionary:
+	_refresh_material_fact_overlay()
+	return _material_overlay_state
+
 func _process(_delta: float) -> void:
 	if _probe_mode:
 		return
@@ -347,6 +361,81 @@ func _current_source_display_report() -> Dictionary:
 	var runtime_mode := str(_pool.call("biome_runtime_mode"))
 	var source_transform: Dictionary = _pool.call("biome_source_transform")
 	return _source_display_report(contract, static_reference, mountain_reference, runtime_mode, source_transform)
+
+func _current_material_fact_report() -> Dictionary:
+	if _pool == null:
+		return {}
+	var contract: Dictionary = _pool.call("mountain_world_layer_contract_report")
+	var runtime_mode := str(_pool.call("biome_runtime_mode"))
+	var material_source := "missing"
+	var global_report := {}
+	var page_report := {}
+	var channel_report_available := false
+	var report_gap := ""
+
+	if runtime_mode == "static_reference":
+		material_source = "static_reference_payload"
+		global_report = _pool.call("static_reference_report")
+		page_report = _pool.call("static_reference_page_report", 0, 0.0, 0.0, 17)
+		channel_report_available = true
+	elif runtime_mode == "single":
+		global_report = _pool.call("mountain_world_layer_reference_report")
+		if not global_report.is_empty():
+			material_source = "bound_mountain_world_layer_reference"
+			page_report = _pool.call("mountain_world_layer_reference_page_report", 0, 0.0, 0.0, 17)
+			channel_report_available = true
+		else:
+			material_source = "live_biome_recipe_missing_material_facts"
+			report_gap = "raw live candidate has no accepted material fact layers"
+	elif runtime_mode == "world":
+		material_source = "world_preview_reference_material_pages"
+		report_gap = "WORLD preview binds accepted material pages but has no separate page-report API"
+
+	var has_material_hints := bool(contract.get("has_material_hints", false))
+	if not global_report.is_empty():
+		has_material_hints = bool(global_report.get("has_material_hints", false))
+
+	var global_channels := {
+		"low_pass": float(global_report.get("low_pass_hint_frac", 0.0)),
+		"floor": float(global_report.get("floor_hint_frac", 0.0)),
+		"rock": float(global_report.get("rock_hint_frac", 0.0)),
+		"snow": float(global_report.get("snow_hint_frac", 0.0)),
+	}
+	var page_channels := {
+		"low_pass": float(page_report.get("low_pass_hint_mean", 0.0)),
+		"floor": float(page_report.get("floor_hint_mean", 0.0)),
+		"rock": float(page_report.get("rock_hint_mean", 0.0)),
+		"snow": float(page_report.get("snow_hint_mean", 0.0)),
+	}
+	var display_channels := page_channels if channel_report_available else global_channels
+	return {
+		"material_source": material_source,
+		"has_material_hints": has_material_hints,
+		"channel_report_available": channel_report_available,
+		"expected_missing": material_source == "live_biome_recipe_missing_material_facts",
+		"report_gap": report_gap,
+		"static_material_bound_tiles": _static_material_bound_tiles(),
+		"global_channels": global_channels,
+		"page_channels": page_channels,
+		"display_channels": display_channels,
+		"global_total": _channel_total(global_channels),
+		"page_total": _channel_total(page_channels),
+		"display_total": _channel_total(display_channels),
+		"nonzero_channel_count": _nonzero_channel_count(display_channels),
+	}
+
+func _channel_total(channels: Dictionary) -> float:
+	var total := 0.0
+	for key in ["low_pass", "floor", "rock", "snow"]:
+		total += maxf(0.0, float(channels.get(key, 0.0)))
+	return total
+
+func _nonzero_channel_count(channels: Dictionary) -> int:
+	var count := 0
+	for key in ["low_pass", "floor", "rock", "snow"]:
+		if float(channels.get(key, 0.0)) > 0.0001:
+			count += 1
+	return count
 
 func _source_display_report(
 	contract: Dictionary,
@@ -493,6 +582,113 @@ func _rect_report(rect: Rect2) -> Dictionary:
 		"h": rect.size.y,
 	}
 
+func _create_material_fact_overlay() -> void:
+	_material_overlay_layer = CanvasLayer.new()
+	add_child(_material_overlay_layer)
+
+	_material_overlay_panel = Control.new()
+	_material_overlay_panel.anchor_left = 1.0
+	_material_overlay_panel.anchor_right = 1.0
+	_material_overlay_panel.offset_left = -370.0
+	_material_overlay_panel.offset_right = -12.0
+	_material_overlay_panel.offset_top = 178.0
+	_material_overlay_panel.offset_bottom = 352.0
+	_material_overlay_layer.add_child(_material_overlay_panel)
+
+	var bg := ColorRect.new()
+	bg.position = Vector2.ZERO
+	bg.size = Vector2(358.0, 174.0)
+	bg.color = Color(0.02, 0.025, 0.03, 0.72)
+	_material_overlay_panel.add_child(bg)
+
+	_material_overlay_label = Label.new()
+	_material_overlay_label.position = Vector2(14.0, 10.0)
+	_material_overlay_label.size = Vector2(330.0, 52.0)
+	_material_overlay_label.add_theme_font_size_override("font_size", 13)
+	_material_overlay_label.add_theme_color_override("font_color", Color(0.94, 0.96, 1.0))
+	_material_overlay_panel.add_child(_material_overlay_label)
+
+	var specs := [
+		{"id": "low_pass", "label": "low/corr", "color": Color(0.12, 0.55, 0.48, 0.82), "y": 70.0},
+		{"id": "floor", "label": "floor", "color": Color(0.38, 0.70, 0.30, 0.82), "y": 94.0},
+		{"id": "rock", "label": "rock", "color": Color(0.58, 0.55, 0.50, 0.82), "y": 118.0},
+		{"id": "snow", "label": "snow", "color": Color(0.86, 0.88, 0.82, 0.86), "y": 142.0},
+	]
+	for spec in specs:
+		var row_label := Label.new()
+		row_label.position = Vector2(14.0, float(spec["y"]) - 4.0)
+		row_label.size = Vector2(72.0, 18.0)
+		row_label.text = str(spec["label"])
+		row_label.add_theme_font_size_override("font_size", 12)
+		row_label.add_theme_color_override("font_color", Color(0.92, 0.94, 0.96))
+		_material_overlay_panel.add_child(row_label)
+
+		var track := ColorRect.new()
+		track.position = Vector2(88.0, float(spec["y"]))
+		track.size = Vector2(224.0, 12.0)
+		track.color = Color(1.0, 1.0, 1.0, 0.12)
+		_material_overlay_panel.add_child(track)
+
+		var bar := ColorRect.new()
+		bar.position = track.position
+		bar.size = Vector2(1.0, 12.0)
+		bar.color = spec["color"]
+		_material_overlay_panel.add_child(bar)
+		_material_overlay_bars[str(spec["id"])] = bar
+
+func _refresh_material_fact_overlay() -> void:
+	if _material_overlay_layer == null:
+		return
+	var report := _current_material_fact_report()
+	if report.is_empty():
+		_material_overlay_layer.visible = false
+		_material_overlay_state = {"visible": false}
+		return
+	if not _probe_mode:
+		_material_overlay_layer.visible = true
+
+	var channels: Dictionary = report.get("display_channels", {})
+	var total := maxf(float(report.get("display_total", 0.0)), 1.0)
+	for key in ["low_pass", "floor", "rock", "snow"]:
+		var bar := _material_overlay_bars.get(key, null) as ColorRect
+		if bar == null:
+			continue
+		var value := clampf(float(channels.get(key, 0.0)) / total, 0.0, 1.0)
+		bar.size.x = maxf(1.0, 224.0 * value)
+
+	var source := str(report.get("material_source", "missing"))
+	var step := _current_step()
+	var gap := str(report.get("report_gap", ""))
+	var hint_state := "facts yes" if bool(report.get("has_material_hints", false)) else "facts missing"
+	_material_overlay_label.text = "material facts | %s\nstep %s | %s%s" % [
+		source,
+		str(step.get("id", "")),
+		hint_state,
+		" | " + gap if gap != "" else "",
+	]
+	_material_overlay_state = {
+		"visible": _material_overlay_layer.visible,
+		"step_id": str(step.get("id", "")),
+		"material_source": source,
+		"has_material_hints": bool(report.get("has_material_hints", false)),
+		"channel_report_available": bool(report.get("channel_report_available", false)),
+		"expected_missing": bool(report.get("expected_missing", false)),
+		"report_gap": gap,
+		"nonzero_channel_count": int(report.get("nonzero_channel_count", 0)),
+		"display_total": float(report.get("display_total", 0.0)),
+		"static_material_bound_tiles": int(report.get("static_material_bound_tiles", 0)),
+		"bars": _material_bar_report(),
+		"label": _material_overlay_label.text,
+	}
+
+func _material_bar_report() -> Dictionary:
+	var out := {}
+	for key in ["low_pass", "floor", "rock", "snow"]:
+		var bar := _material_overlay_bars.get(key, null) as ColorRect
+		if bar != null:
+			out[key] = _rect_report(Rect2(bar.position, bar.size))
+	return out
+
 func _configure_current_step() -> String:
 	if _producer == null or _pool == null:
 		return "missing producer or pool"
@@ -546,6 +742,7 @@ func _refresh_label() -> void:
 		int(stats.get("full_events", 0)),
 	]
 	_refresh_source_display_overlay()
+	_refresh_material_fact_overlay()
 
 func _static_material_bound_tiles() -> int:
 	if _rings == null:

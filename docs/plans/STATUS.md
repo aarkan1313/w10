@@ -5,6 +5,17 @@
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.
 > **Latest owner-report audit:** see
 > `docs/plans/WG10_IMPLEMENTATION_SPEC_AUDIT_AND_VALIDATION_PLAN_2026-06-04.md`.
+> Latest hitch fix: accepted/reference-backed material fact pages now stream at
+> quarter height resolution (`page_px / 4`) instead of half resolution. Height
+> pages remain full resolution; only the low-frequency RGBA material masks are
+> cheaper. This removed the strict manual-stress failure where REFERENCE
+> morph-off hit `cpu_max=22.436 ms`; the rebuilt run passes
+> `review_runtime_stress` with all six REFERENCE/MOUNTAIN/WORLD morph off/on
+> cases under the `16.7 ms` CPU p99/max and GPU p99 budgets, with zero
+> hide/show/full events and exact bridge captures where modes are supposed to
+> match. Serial post-fix gates: `review_runtime_modes` = 2/2,
+> `review_runtime_visual` = 2/2, `review_progression` = 3/3, and targeted Rust
+> `cargo test static_reference` = 10/10.
 > Latest fix in this pass: the live clipmap now uses toroidal page slots in
 > `terrain_view.rs`, so already-visible pages keep their mesh/material slot when
 > the camera crosses page boundaries. This directly addresses the owner report
@@ -24,10 +35,11 @@
 > motion through page boundaries with bounded repage bursts, and pass a
 > fixed-camera pixel-delta guard at L0/L1/L2 page-boundary crosses. Latest
 > follow-up turns the scene into a machine-readable handoff and implements the
-> first feature: every active step emits a `source_display_report`, the scene
-> draws a gated source/display overlay, and the remaining planned steps declare
-> their labels, added contracts, proving gates, acceptance rules, and blocking
-> promotion gaps.
+> first two review features: every active step emits a `source_display_report`
+> and `material_fact_report`, the scene draws gated source/display and material
+> fact overlays, and the remaining pass-network/procedural/facts-collision
+> planned steps declare their labels, added contracts, proving gates,
+> acceptance rules, and blocking promotion gaps.
 > Latest post-fix proof: `review_progression` = 3/3, `review_runtime` = 2/2,
 > `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2, and
 > `review_runtime_stress` = 1/1 with CPU p99/max and GPU p99 capped at
@@ -147,7 +159,7 @@
 > 80/160/240, all now `0.000000/0.000000` mean/p95. The static-reference material page now
 > preserves the accepted facts as RGBA channels (`low_pass/corridor`, `floor`,
 > `rock`, `snow`) instead of collapsing them to a scalar class code. The material
-> fact texture is intentionally lower resolution than height (`page_px / 2`) to
+> fact texture is intentionally lower resolution than height (`page_px / 4`) to
 > keep synchronous owner-fly page misses under frame budget while preserving the
 > low-frequency material story. The legacy
 > `m3_accept` wall-time gate now initializes the shader globals it renders with,
@@ -225,8 +237,9 @@
 > code page has been replaced with a renderer-facing RGBA32F fact page:
 > R=low-pass/corridor, G=floor, B=rock, A=snow. The shader samples those
 > channels directly and blends separate terrain targets instead of decoding
-> nearest class codes. To avoid reintroducing owner-fly hitches, the material
-> fact texture is `page_px / 2` while height remains full resolution. Proof:
+> nearest class codes. The current owner-hitch recovery keeps the material
+> fact texture at `page_px / 4` while height remains full resolution; current
+> proof is listed at the top of this file. Original RGBA channel proof:
 > `cargo test -p wg10_terrain --lib` = 231/0, `tools\build_rust.ps1` builds,
 > `m3` = 10/10, `review_runtime_visual` = 2/2, and
 > `review_runtime_modes` = 2/2. This dropped the failing scripted mode CPU p95

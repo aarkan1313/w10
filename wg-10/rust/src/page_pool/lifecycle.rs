@@ -139,7 +139,7 @@ impl Wg10PagePool {
     /// low-frequency presentation masks, while the synchronous owner fly must keep page-miss upload
     /// work under frame budget.
     pub(super) fn static_material_page_px(&self) -> i64 {
-        (self.page_px / 2).max(2)
+        (self.page_px / 4).max(2)
     }
 
     /// Create a new RGBA32F SAMPLING texture for static-reference material facts.

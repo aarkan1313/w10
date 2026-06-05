@@ -76,9 +76,11 @@ Latest material-presentation status: the accepted material facts are now carried
 through the runtime bridge as a renderer-facing RGBA fact page instead of a
 temporary one-channel class code. Channels are R=low-pass/corridor, G=floor,
 B=rock, and A=snow. The shader blends those channels as separate terrain hints.
-The fact texture is intentionally lower resolution than height (`page_px / 2`)
+The fact texture is intentionally lower resolution than height (`page_px / 4`)
 because these are low-frequency presentation masks and the owner fly still uses
-synchronous page misses.
+synchronous page misses. This quarter-resolution material page keeps full-height
+terrain intact while fixing the fresh strict-stress CPU max spike in the
+reference-backed review lane.
 
 Latest owner-review presentation status: the review scene now opens with
 procedural display detail disabled, with `N` as the explicit opt-in toggle. The
@@ -106,11 +108,11 @@ The manual owner-stress gate now also fails CPU p99/max or GPU p99 above
 one-frame synchronous hitch is no longer permitted just because the broader p99
 path stays green.
 Latest progression-handoff status: `wg10_progression_review.tscn` now exposes a
-gated feature manifest, per-step `source_display_report`, and a visible
-source/display overlay for the current recovery steps. The remaining material
-facts, pass-network facts, procedural mountain world-layer, and facts/collision
-parity steps each name the added contract, proving gate, acceptance rule, and
-blocking promotion gap.
+gated feature manifest, per-step `source_display_report` and
+`material_fact_report`, plus visible source/display and material-fact overlays
+for the current recovery steps. The remaining pass-network facts, procedural
+mountain world-layer, and facts/collision parity steps each name the added
+contract, proving gate, acceptance rule, and blocking promotion gap.
 
 Latest visual-acceptance status: the runtime fly presentation now uses the same
 warm accepted-review sky/ambient framing as `mountain_network_chunks_review.tscn`,

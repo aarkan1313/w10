@@ -69,6 +69,7 @@ func _run() -> int:
 	_expect(scene.has_method("step_count"), "scene missing step_count", errs)
 	_expect(scene.has_method("progression_manifest"), "scene missing progression_manifest", errs)
 	_expect(scene.has_method("debug_source_display_overlay_state"), "scene missing debug_source_display_overlay_state", errs)
+	_expect(scene.has_method("debug_material_fact_overlay_state"), "scene missing debug_material_fact_overlay_state", errs)
 	if scene.has_method("step_count"):
 		_expect(int(scene.call("step_count")) == EXPECTED_STEPS.size(), "unexpected step_count", errs)
 	var future_count := int(scene.call("future_step_count")) if scene.has_method("future_step_count") else 0
@@ -86,6 +87,8 @@ func _run() -> int:
 		_expect_step(snapshot, EXPECTED_STEPS[i], i, errs)
 		if scene.has_method("debug_source_display_overlay_state"):
 			_expect_source_display_overlay(scene.call("debug_source_display_overlay_state"), snapshot, i, errs)
+		if scene.has_method("debug_material_fact_overlay_state"):
+			_expect_material_fact_overlay(scene.call("debug_material_fact_overlay_state"), snapshot, i, errs)
 
 	scene.queue_free()
 	scene = null
@@ -154,6 +157,8 @@ func _expect_step(snapshot: Dictionary, expected: Dictionary, index: int, errs: 
 
 	var source_display: Dictionary = snapshot.get("source_display_report", {})
 	_expect_source_display(source_display, str(expected.get("id", "")), label, errs)
+	var material_fact: Dictionary = snapshot.get("material_fact_report", {})
+	_expect_material_fact(material_fact, str(expected.get("id", "")), label, errs)
 	var manifest: Dictionary = snapshot.get("progression_manifest", {})
 	_expect(not manifest.is_empty(), "%s expected embedded progression manifest" % label, errs)
 
@@ -184,6 +189,9 @@ func _expect_future_metadata(future: Array, label: String, errs: Array[String]) 
 		if id == "source_display_overlay":
 			_expect(str(item.get("status", "")) == "implemented", "%s source/display overlay should be implemented" % label, errs)
 			_expect(str(item.get("implemented_by", "")) != "", "%s source/display overlay missing implementation pointer" % label, errs)
+		if id == "material_fact_layers":
+			_expect(str(item.get("status", "")) == "implemented", "%s material fact layers should be implemented" % label, errs)
+			_expect(str(item.get("implemented_by", "")) != "", "%s material fact layers missing implementation pointer" % label, errs)
 
 func _expect_source_display(report: Dictionary, step_id: String, label: String, errs: Array[String]) -> void:
 	_expect(not report.is_empty(), "%s expected source/display report" % label, errs)
@@ -217,6 +225,51 @@ func _expect_source_display_overlay(state: Dictionary, snapshot: Dictionary, ind
 	_expect_rect(state.get("source_rect", {}), "%s source overlay rect" % label, errs)
 	_expect_rect(state.get("display_rect", {}), "%s display overlay rect" % label, errs)
 	_expect(str(state.get("label", "")).find("source = display *") >= 0, "%s overlay label missing sample rule" % label, errs)
+
+func _expect_material_fact(report: Dictionary, step_id: String, label: String, errs: Array[String]) -> void:
+	_expect(not report.is_empty(), "%s expected material fact report" % label, errs)
+	var source := str(report.get("material_source", ""))
+	if step_id == "reference_baseline":
+		_expect(source == "static_reference_payload", "%s expected static material source" % label, errs)
+		_expect(bool(report.get("has_material_hints", false)), "%s expected material hints" % label, errs)
+		_expect(bool(report.get("channel_report_available", false)), "%s expected page material channel report" % label, errs)
+		_expect(int(report.get("static_material_bound_tiles", 0)) > 0, "%s expected bound material tiles" % label, errs)
+		_expect(float(report.get("display_total", 0.0)) > 0.0, "%s expected nonzero material channels" % label, errs)
+		_expect(int(report.get("nonzero_channel_count", 0)) >= 1, "%s expected nonzero material channel count" % label, errs)
+	elif step_id == "mountain_network_bridge":
+		_expect(source == "bound_mountain_world_layer_reference", "%s expected bridge material source" % label, errs)
+		_expect(bool(report.get("has_material_hints", false)), "%s expected bridge material hints" % label, errs)
+		_expect(bool(report.get("channel_report_available", false)), "%s expected bridge page channel report" % label, errs)
+		_expect(int(report.get("static_material_bound_tiles", 0)) > 0, "%s expected bridge material tiles" % label, errs)
+		_expect(float(report.get("display_total", 0.0)) > 0.0, "%s expected bridge material channels" % label, errs)
+		_expect(int(report.get("nonzero_channel_count", 0)) >= 1, "%s expected bridge nonzero material channels" % label, errs)
+	elif step_id == "mountain_close_debug_candidate":
+		_expect(source == "live_biome_recipe_missing_material_facts", "%s expected missing live material source" % label, errs)
+		_expect(not bool(report.get("has_material_hints", true)), "%s live candidate should not claim material hints" % label, errs)
+		_expect(bool(report.get("expected_missing", false)), "%s live candidate should mark expected missing material facts" % label, errs)
+		_expect(int(report.get("static_material_bound_tiles", -1)) == 0, "%s live candidate should not bind material tiles" % label, errs)
+		_expect(str(report.get("report_gap", "")) != "", "%s live candidate expected material gap text" % label, errs)
+	elif step_id == "world_reference_preview":
+		_expect(source == "world_preview_reference_material_pages", "%s expected WORLD preview material source" % label, errs)
+		_expect(bool(report.get("has_material_hints", false)), "%s expected WORLD preview material hints" % label, errs)
+		_expect(not bool(report.get("channel_report_available", true)), "%s WORLD preview should expose API gap" % label, errs)
+		_expect(int(report.get("static_material_bound_tiles", 0)) > 0, "%s expected WORLD preview material tiles" % label, errs)
+		_expect(str(report.get("report_gap", "")) != "", "%s WORLD preview expected material report gap" % label, errs)
+
+func _expect_material_fact_overlay(state: Dictionary, snapshot: Dictionary, index: int, errs: Array[String]) -> void:
+	var label := "%d:%s" % [index, str(snapshot.get("step_id", ""))]
+	_expect(bool(state.get("visible", false)), "%s material overlay should be visible" % label, errs)
+	_expect(str(state.get("step_id", "")) == str(snapshot.get("step_id", "")), "%s material overlay step mismatch" % label, errs)
+	var report: Dictionary = snapshot.get("material_fact_report", {})
+	_expect(str(state.get("material_source", "")) == str(report.get("material_source", "")), "%s material overlay source mismatch" % label, errs)
+	if bool(report.get("expected_missing", false)):
+		_expect(bool(state.get("expected_missing", false)), "%s material overlay should mark expected missing facts" % label, errs)
+	else:
+		_expect(bool(state.get("has_material_hints", false)), "%s material overlay should expose material hints" % label, errs)
+	_expect(str(state.get("label", "")).find("material facts") >= 0, "%s material overlay label mismatch" % label, errs)
+	var bars: Dictionary = state.get("bars", {})
+	for key in ["low_pass", "floor", "rock", "snow"]:
+		_expect_rect(bars.get(key, {}), "%s material overlay %s bar" % [label, key], errs)
 
 func _expect_rect(rect: Dictionary, label: String, errs: Array[String]) -> void:
 	_expect(float(rect.get("w", 0.0)) > 0.0, "%s width must be positive" % label, errs)

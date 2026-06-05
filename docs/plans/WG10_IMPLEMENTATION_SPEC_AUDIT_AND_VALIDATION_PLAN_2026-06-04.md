@@ -43,13 +43,26 @@ steps with explicit status and expected contract:
 4. `world_reference_preview`: bounded WORLD diagnostic over accepted reference
    height/materials.
 
-It also records and gates a machine-readable feature manifest. The first
-feature, source/display overlay, is implemented: each current step emits a
-`source_display_report`, and the scene renders a source/display mini-overlay
-that the smoke gate proves is visible and nondegenerate. The remaining planned
-features are material fact layers, pass-network facts, procedural mountain
-world-layer production, and facts/collision parity; each carries its label,
-added contract, proving gate, acceptance rule, and promotion blocker.
+It also records and gates a machine-readable feature manifest. The first two
+review features are implemented: each current step emits a
+`source_display_report` and `material_fact_report`, and the scene renders
+source/display plus material-fact mini-overlays that the smoke gate proves are
+visible and nondegenerate. The remaining planned features are pass-network
+facts, procedural mountain world-layer production, and facts/collision parity;
+each carries its label, added contract, proving gate, acceptance rule, and
+promotion blocker.
+
+Latest strict-hitch fix checkpoint:
+
+- Accepted/reference-backed material fact pages now stream at `page_px / 4`
+  instead of `page_px / 2`. Height pages stay full resolution; only the
+  low-frequency RGBA fact masks are cheaper.
+- This fixed the fresh `review_runtime_stress` failure where REFERENCE
+  morph-off hit `cpu_max=22.436 ms` against the `16.7 ms` strict budget.
+- Rebuilt proof after the fix: `review_runtime_stress` = 1/1,
+  `review_runtime_modes` = 2/2, `review_runtime_visual` = 2/2,
+  `review_progression` = 3/3, and targeted Rust
+  `cargo test static_reference` = 10/10.
 
 Latest motion fix checkpoint:
 
@@ -216,9 +229,9 @@ impossible to confuse.
   explicit status and contract kinds.
 - The scene exposes a gated progression manifest: current steps, future steps,
   proving suites, promotion rule, and per-step `source_display_report`.
-- The source/display overlay feature is implemented and visible in normal scene
-  mode, while probe mode hides the overlay so terrain visual-delta gates remain
-  focused on the render path.
+- The source/display and material-fact overlay features are implemented and
+  visible in normal scene mode, while probe mode hides those overlays so
+  terrain visual-delta gates remain focused on the render path.
 - The same scene survives scripted page-boundary motion with zero hide/show/full
   events and bounded repage bursts.
 - The same scene passes fixed-camera pixel-delta checks at L0/L1/L2
@@ -255,6 +268,9 @@ impossible to confuse.
    - The stress gate fails CPU p99/max or GPU p99 above `16.7 ms`.
    - It records frame, mode, morph state, acquired pages, repage count, and
      evidence captures for the bridge comparisons.
+   - Latest concrete failure/fix: REFERENCE morph-off hit `cpu_max=22.436 ms`
+     before accepted material fact pages were reduced to `page_px / 4`; after
+     the rebuild, the strict stress suite passes all six cases.
 
 6. Keep modes 1/2/3 honest.
    - Mode 1 is the accepted baseline.

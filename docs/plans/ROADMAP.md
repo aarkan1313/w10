@@ -46,16 +46,19 @@ Current work is Slice 4 stabilization and recovery:
   failures: modes 1/2/3 with morph off/on must keep CPU p99/max and GPU p99 at
   or below `16.7 ms`, while preserving zero hide/show/full events and exact
   bridge captures where MOUNTAIN/network_ref and WORLD preview intentionally
-  match REFERENCE.
+  match REFERENCE. Latest recovery reduced accepted/reference-backed material
+  fact page uploads to `page_px / 4` while leaving height full resolution; this
+  fixes the strict manual-stress CPU max spike without changing the accepted
+  visual bridge.
 - `wg10_progression_review.tscn` is now the progression harness for the next
   chat: it replays REFERENCE, MOUNTAIN/network_ref, MOUNTAIN/close_debug, and
   WORLD/reference-preview as explicit steps with `review_progression` guarding
   runtime modes, contract kinds, scripted page-boundary motion, and fixed-camera
   visual repage deltas at L0/L1/L2 page-boundary crosses. The harness now also
-  exports a gated feature manifest, per-step `source_display_report`, and a
-  visible source/display overlay. The next material, pass-network, procedural
-  world-layer, and facts/collision steps have explicit gates and promotion
-  rules before work starts.
+  exports a gated feature manifest, per-step `source_display_report`,
+  `material_fact_report`, and visible source/display plus material-fact
+  overlays. The next pass-network, procedural world-layer, and facts/collision
+  steps have explicit gates and promotion rules before work starts.
 
 Next roadmap target: keep the recovered visual baseline stable while converting the
 reference-backed mountain bridge into a generated/procedural world-layer producer with the same
