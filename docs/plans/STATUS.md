@@ -1,5 +1,21 @@
 # WorldGen10 — Status
 
+> **CARVE PORT TASK 5 (2026-06-04) - RUST CARVE COST MEASURED -> DELIVERY DECIDED.**
+> The connected pass-network carve's routing (the ~4000 ms offline pure-Python
+> Dijkstra) is now ported to Rust (`wg-10/rust/src/pass_network/`) and is
+> parity-verified end-to-end (Task 4 GREEN: Rust routes == Python routes
+> bit-faithfully, adversarially tamper-tested). Task 5 timed the ported routing
+> in `--release`: at n=193 / coarse_n=193 (zoom-identity, so this is pure routing
+> work — 8 routes, 2103 path points, non-vacuous) the measured Rust cost is
+> **best 19.052 ms / median 19.443 ms** — vs ~4000 ms in Python, an **~206x
+> speedup**. (Test: `pass_network::tests::measure_carve_cost_production_scale`;
+> full lib suite 241/241 green.)
+> **Delivery decision:** median (~19 ms) is comfortably under the ~50 ms bar, so
+> the delivery backbone is a **synchronous off-frame region bake riding the
+> existing page-pool LRU** (model: `facts_api.bake_collision_region`) — **no
+> async job system needed**. Follow-on: port `carve_ramp`, wire the region-fact
+> bake into the live producer.
+
 > **CURRENT (2026-06-04) - SLICE 4 STABILIZATION / OWNER VISUAL + ARCHITECTURE DEBT.**
 > Branch `slice4-gpu-page-integration`, with backup ref
 > `backup-slice4-stabilize-before-crosslevel-20260604-0b0d8a0` created before this pass.

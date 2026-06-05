@@ -90,6 +90,65 @@ fn routes_match_python_fixture() {
 }
 
 #[test]
+fn measure_carve_cost_production_scale() {
+    use std::time::Instant;
+    // Representative routing-grid scale. coarse_n=193 is what the Dijkstra actually routes on
+    // (the carve downsamples to coarse_n), so cost is ~independent of the full n; use n==coarse_n
+    // so zoom is identity and we time pure routing (the part that was 4s in Python).
+    let n = 193usize;
+    let span_m = 270000.0;
+    let height_scale_m = 1700.0;
+    // Deterministic wall-dense field (same shape as the fixture generator: forces real weaving,
+    // not trivial straight lines, so the timing reflects genuine least-cost routing work).
+    let amp = 2.0_f64;
+    let f = 2.0_f64;
+    let mut height = vec![0.0_f64; n * n];
+    for r in 0..n {
+        for c in 0..n {
+            let u = c as f64 / (n - 1) as f64;
+            let v = r as f64 / (n - 1) as f64;
+            let h = (u * 9.0 * f).sin() * (v * 7.0 * f).cos()
+                + 0.5 * (u * 17.0 * f + 1.3).sin() * (v * 13.0 * f - 0.7).cos()
+                + 0.25 * (u * 31.0 * f).sin() * (v * 29.0 * f).cos();
+            height[r * n + c] = h;
+        }
+    }
+    // center/normalize to ~unit std then scale (mirror the fixture field so routing is non-trivial)
+    let mean: f64 = height.iter().sum::<f64>() / (n * n) as f64;
+    let var: f64 = height.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / (n * n) as f64;
+    let std = var.sqrt() + 1e-9;
+    for x in height.iter_mut() {
+        *x = (*x - mean) / std * amp;
+    }
+
+    let pp = super::PassNetworkParams::default();
+    let tp = super::TraverseParams { scene_width_m: span_m, height_scale_m, ..Default::default() };
+
+    // Warm + measure a few runs; report the median-ish (min is fine for a floor; also report mean).
+    let _ = super::carve_routes(&height, n, span_m, height_scale_m, &pp, &tp); // warm
+    let runs = 5;
+    let mut times_ms = Vec::new();
+    let mut routes_len = 0;
+    let mut total_pts = 0;
+    for _ in 0..runs {
+        let t0 = Instant::now();
+        let routes = super::carve_routes(&height, n, span_m, height_scale_m, &pp, &tp);
+        times_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
+        routes_len = routes.len();
+        total_pts = routes.iter().map(|r| r.len()).sum();
+    }
+    times_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let best = times_ms[0];
+    let median = times_ms[times_ms.len() / 2];
+    println!(
+        "[carve-cost] n={n} coarse_n={} routes={} total_points={} best={:.3}ms median={:.3}ms (python was ~4000ms)",
+        pp.coarse_n, routes_len, total_pts, best, median
+    );
+    // Non-vacuous: it actually routed something.
+    assert!(routes_len > 0 && total_pts > 0, "carve produced no routes (vacuous measurement)");
+}
+
+#[test]
 fn dijkstra_finds_min_cost_crossing_on_tiny_grid() {
     // 3x3 uniform-cost grid (slope below budget, no channel, h=0 -> step_cost = cell_m everywhere).
     // Source = all of column 0; target = column 2. Shortest path is a straight horizontal line, 3 cells.
