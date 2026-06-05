@@ -1,5 +1,33 @@
 # WorldGen10 — Status
 
+> **WHOLE OFFLINE "BAKED LOOK" PIPELINE NOW IN RUST, END-TO-END PARITY (2026-06-05).**
+> `wg-10/rust/src/bake_region.rs` assembles the seam-safe pipeline — macro
+> (`recipes::mountain_seamsafe`) → carve (`carve_routes`→`carve_ramp_delta`, on the
+> RAW field) → `raw+delta` → `condition_world` — the exact composition + ORDER of the
+> accepted chunk-network look. End-to-end parity gate vs the Python seam-safe oracle
+> (`bake_region_fixture.json`): **RAW bit-exact (2.2e-16), carve_delta bit-exact (0.0),
+> condition stats bit-exact (0.0), final height mean 0.0035 m / p99 0.092 m** (the only
+> residual is condition_world's documented reflect-border ring; interior bit-exact).
+> So everything that made the mountain chunk networks look good — macro + connected
+> carve + conditioning — now runs in Rust and matches Python.
+> **The assembly gate also FIXED a latent bug in the already-shipped carve_ramp:** it
+> used `gaussian_filter_nearest` but Python `carve_ramp` uses scipy `mode='reflect'`.
+> The narrow carve_ramp fixture (half-width 1200 m) never exercised the border cells;
+> the WIDE bake ramp (span-relative half=5400 m, flat=1620 m — itself a Task-1 catch:
+> `carve_pass_network` uses SPAN-RELATIVE ramp widths, NOT CorridorParams defaults)
+> exposed it. Added `array_ops::gaussian_filter_reflect`; carve_ramp is now FULLY
+> bit-exact (the prior "0.48% EDT-tie residual" was the gaussian border mode all along).
+> cargo lib **251/251** green. Spec/plan
+> `docs/superpowers/specs/2026-06-05-wg10-bake-region-assembly-design.md` +
+> `...plans/2026-06-05-wg10-bake-region-assembly-plan.md`. Pushed.
+> **NEXT (the remaining integration, next session):** wire `bake_region` into the live
+> producer (`Wg10PagePool`) as an off-frame region-fact bake + region-fact LRU + page
+> sampling, with GPU-macro/CPU-carve coordination — this puts the carved look ON SCREEN
+> and closes the un-intercept Rung-1 gap. KNOWN BOUNDARY to validate then: condition_world's
+> per-region percentiles can differ across adjacent regions → potential cross-region
+> conditioned-height seam (the macro+carve are seam-exact; only condition normalization
+> varies by region).
+
 > **ALL-11 BIOME PARITY CONFIRMED ON HARDWARE (2026-06-05).** "Biome-to-biome on
 > parity with mountains" is now proven top-to-bottom, RUN GREEN this session, not
 > just claimed:
