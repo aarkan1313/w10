@@ -4,6 +4,7 @@
 
 pub mod cost;
 pub mod dijkstra;
+pub mod edt;
 pub mod routes;
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 use super::cost::slope_grid;
 use super::cost::step_cost;
 use super::dijkstra::{dijkstra_cost_field, reconstruct_path};
+use super::edt::edt_with_indices;
 use super::TraverseParams;
 
 /// THE PARITY GATE: Rust `carve_routes` vs the committed Python `_routes` fixture.
@@ -301,5 +302,128 @@ fn slope_grid_diagonal_ramp_uses_hypot() {
     let expected = (2.0_f64).sqrt() * g;
     for v in &s {
         assert!((v - expected).abs() < 1e-9, "got {v} expected {expected}");
+    }
+}
+
+// --- EDT (exact Euclidean distance transform with nearest-feature index) ---
+// Backs carve_ramp's `distance_transform_edt(~on_path, return_indices=True)` (corridor_router.py:256):
+// distance to nearest on-path cell + the flat index of that cell (to gather the floor profile).
+
+#[test]
+fn edt_distance_and_index_1d_row() {
+    // 1x5, feature at col 2. distances 2,1,0,1,2; nearest idx all = 2.
+    let (dist, idx) = edt_with_indices(&[false, false, true, false, false], 1, 5);
+    let exp = [2.0, 1.0, 0.0, 1.0, 2.0];
+    for c in 0..5 {
+        assert!((dist[c] - exp[c]).abs() < 1e-9, "dist[{c}]={}", dist[c]);
+    }
+    for c in 0..5 {
+        assert_eq!(idx[c], 2);
+    }
+}
+
+#[test]
+fn edt_euclidean_diagonal() {
+    // 3x3, feature at (0,0)=idx0. distance at (2,2) = sqrt(8); nearest idx 0.
+    let mut feat = vec![false; 9];
+    feat[0] = true;
+    let (dist, idx) = edt_with_indices(&feat, 3, 3);
+    assert!((dist[8] - (8.0_f64).sqrt()).abs() < 1e-9, "got {}", dist[8]);
+    assert_eq!(idx[8], 0);
+}
+
+#[test]
+fn edt_two_features_picks_nearest_index() {
+    // 1x7, features at col 1 (idx1) and col 5 (idx5). col 2 -> nearest idx1 (dist1);
+    // col 4 -> nearest idx5 (dist1); col 3 -> tie dist2, idx is implementation tie-break
+    // (assert it's 1 or 5).
+    let mut feat = vec![false; 7];
+    feat[1] = true;
+    feat[5] = true;
+    let (dist, idx) = edt_with_indices(&feat, 1, 7);
+    assert!((dist[2] - 1.0).abs() < 1e-9);
+    assert_eq!(idx[2], 1);
+    assert!((dist[4] - 1.0).abs() < 1e-9);
+    assert_eq!(idx[4], 5);
+    assert!((dist[3] - 2.0).abs() < 1e-9);
+    assert!(idx[3] == 1 || idx[3] == 5, "tie idx {}", idx[3]);
+}
+
+#[test]
+fn edt_validates_against_scipy_on_small_grid() {
+    // Spot-checked against scipy.ndimage.distance_transform_edt(~on_path) for a 5x5 with features
+    // (true) at idx 0=(0,0), 12=(2,2), 24=(4,4). Distances are Euclidean (cell size 1).
+    let mut feat = vec![false; 25];
+    feat[0] = true;
+    feat[12] = true;
+    feat[24] = true;
+    let (dist, _idx) = edt_with_indices(&feat, 5, 5);
+    // (1,1)=idx6: nearest is (0,0) or (2,2), both sqrt(2) -> dist sqrt(2).
+    assert!((dist[6] - (2.0_f64).sqrt()).abs() < 1e-9, "got {}", dist[6]);
+    // (0,4)=idx4: nearest (2,2) = sqrt(4+4) = sqrt(8) (beats (0,0)=4 and (4,4)=4).
+    assert!((dist[4] - (8.0_f64).sqrt()).abs() < 1e-9, "got {}", dist[4]);
+    // (4,0)=idx20: symmetric -> (2,2) dist sqrt(8).
+    assert!((dist[20] - (8.0_f64).sqrt()).abs() < 1e-9, "got {}", dist[20]);
+}
+
+#[test]
+fn edt_feature_cells_are_self() {
+    // Every feature cell: distance 0, index = itself.
+    let mut feat = vec![false; 9];
+    feat[0] = true;
+    feat[4] = true;
+    feat[8] = true;
+    let (dist, idx) = edt_with_indices(&feat, 3, 3);
+    for &i in &[0usize, 4, 8] {
+        assert!((dist[i] - 0.0).abs() < 1e-12, "feature dist[{i}]={}", dist[i]);
+        assert_eq!(idx[i], i, "feature idx[{i}] must be self");
+    }
+}
+
+#[test]
+fn edt_full_grid_vs_brute_force() {
+    // Exhaustive cross-check on a non-trivial 6x7 grid: compare exact-EDT distances against a
+    // brute-force nearest-feature scan, and verify each carried index actually sits at that
+    // minimal distance (guards the separable INDEX carry through both 1D passes).
+    let rows = 6usize;
+    let cols = 7usize;
+    let mut feat = vec![false; rows * cols];
+    // A scattered, asymmetric set of features (no symmetry to hide carry bugs).
+    for &i in &[3usize, 9, 16, 22, 30, 41] {
+        feat[i] = true;
+    }
+    let (dist, idx) = edt_with_indices(&feat, rows, cols);
+    let feats: Vec<(i64, i64)> = (0..rows * cols)
+        .filter(|&i| feat[i])
+        .map(|i| ((i / cols) as i64, (i % cols) as i64))
+        .collect();
+    for r in 0..rows {
+        for c in 0..cols {
+            let q = r * cols + c;
+            // brute-force exact nearest distance
+            let mut best = f64::INFINITY;
+            for &(fr, fc) in &feats {
+                let dr = r as i64 - fr;
+                let dc = c as i64 - fc;
+                let d2 = (dr * dr + dc * dc) as f64;
+                if d2 < best {
+                    best = d2;
+                }
+            }
+            let best = best.sqrt();
+            assert!((dist[q] - best).abs() < 1e-9, "dist[{q}]={} brute={best}", dist[q]);
+            // the carried index must be a feature, and exactly at the minimal distance
+            let s = idx[q];
+            assert!(s != usize::MAX, "idx[{q}] unset");
+            assert!(feat[s], "idx[{q}]={s} is not a feature");
+            let (sr, sc) = ((s / cols) as i64, (s % cols) as i64);
+            let dr = r as i64 - sr;
+            let dc = c as i64 - sc;
+            let carried = ((dr * dr + dc * dc) as f64).sqrt();
+            assert!(
+                (carried - best).abs() < 1e-9,
+                "carried idx[{q}]={s} at dist {carried} but nearest is {best}"
+            );
+        }
     }
 }
