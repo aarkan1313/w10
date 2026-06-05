@@ -65,7 +65,7 @@ def build_height(n: int) -> np.ndarray:
     drainage_bias reward in _step_cost pulls routes toward), then scaled by AMPLITUDE_MULT at FREQ_MULT
     spatial frequency so slope exceeds slope_budget in bands -- the over-budget walls the routes must
     thread around (NOT a flat field, which yields trivial straight-line routes)."""
-    ys, xs = np.mgrid[0:n, 0:n].astype(float)
+    ys, xs = np.mgrid[0:n, 0:n].astype(np.float64)   # explicit f64: this field is the Rust port's oracle
     u = xs / (n - 1)
     v = ys / (n - 1)
     f = FREQ_MULT
