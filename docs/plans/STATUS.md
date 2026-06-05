@@ -1,5 +1,33 @@
 # WorldGen10 — Status
 
+> **CARVE FULLY PORTED TO RUST (2026-06-05) - BOTH HALVES PARITY-VERIFIED.**
+> The connected pass-network carve — the feature that made the accepted mountain
+> chunk-network LOOK, which had ALWAYS lived only in ~4s offline pure-Python and
+> was never on the live path (THE divergence: the live seam-safe recipe dropped
+> carving → "GPU but carveless") — is now fully in Rust under
+> `wg-10/rust/src/pass_network/`:
+> - **Routing** (Dijkstra least-cost paths): bit-exact vs Python, tamper-tested,
+>   ~19 ms (206× faster than Python). Commits c694f16..f9cfd11.
+> - **carve_ramp** (routes → walkable-valley height delta) + **EDT**
+>   (`edt.rs`, exact separable Felzenszwalb-Huttenlocher with nearest-index,
+>   brute-force-verified): tolerance-gated (owner-chose tolerance since the output
+>   is Gaussian-smoothed + clamped) vs the Python `carve_ramp` oracle —
+>   **mean 0.14 m, p99 0.0 m (99% of cells bit-identical)** on the 1700 m-relief
+>   field; the 0.48% residual is provably EDT distance-TIE cells, not a bug (gate
+>   fails at 2436 m with a stub). Reuses `array_ops::gaussian_filter_nearest`.
+>   Commits 3d619bf..f9872e0. cargo lib **248/248** green.
+> Specs/plans: `docs/superpowers/specs/2026-06-04-wg10-connected-carve-to-live-path-design.md`,
+> `docs/superpowers/plans/2026-06-04-wg10-connected-carve-rust-port-plan.md`,
+> `docs/superpowers/plans/2026-06-05-wg10-carve-ramp-rust-port-plan.md`.
+> Branch `slice4-gpu-page-integration`, pushed to origin.
+> **NEXT:** (a) bring ALL biomes to this same parity bar (each biome's recipe/carve
+> ported to Rust + parity-gated, "biome-to-biome on parity with mountains"); then
+> (b) wire a region-fact bake (macro GPU + condition_world + carve routing + ramp,
+> all CPU off-frame, well under budget) into the live producer so the carved look
+> reaches the screen + closes the un-intercept-ladder Rung-1 gap (live recipe was
+> ~2× reference relief because it lacked carve + condition_world). condition_world
+> port is cheap (~2 ms, per-region percentiles).
+
 > **CARVE PORT TASK 5 (2026-06-04) - RUST CARVE COST MEASURED -> DELIVERY DECIDED.**
 > The connected pass-network carve's routing (the ~4000 ms offline pure-Python
 > Dijkstra) is now ported to Rust (`wg-10/rust/src/pass_network/`) and is

@@ -7,6 +7,19 @@ applicable). Update this file in place; do not create new plan docs.
 **Final handoff 2026-06-05:** read
 `docs/plans/WG10_FINAL_HANDOFF_2026-06-05.md` first.
 
+**Update 2026-06-05 (parity frontier):** the connected pass-network CARVE (routing +
+carve_ramp) — the chunk-network look that was ALWAYS offline-Python and never on the
+live path (the divergence) — is now fully ported to Rust + parity-verified
+(`wg-10/rust/src/pass_network/`; routing bit-exact, carve_ramp 99% bit-identical via a
+tolerance gate). SEPARATELY confirmed this session: **all 11 biome recipes already pass
+CPU Rust-vs-Python parity at 1e-9** (`<biome>_seamsafe_matches_python_oracle`, verified
+12/12 green) — "biome-to-biome parity with mountains" is DONE at the CPU recipe level
+(it landed in the Slice-3 port). The carve is mountain-only/world-layer, NOT a per-biome
+feature, so there is no per-biome carve-port work. Remaining parity frontier = (a) confirm
+the all-11 GPU/GLSL parity gate (`biome_page` suite, written for all 11, eps=1e-4) runs
+green on hardware, then (b) wire the carve + condition_world into a region-fact bake feeding
+the live producer (the integration that puts the carved look on screen). STATUS.md top is live.
+
 **Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
 `docs/plans/STATUS.md` top plus
 `docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md` plus the current
