@@ -147,6 +147,17 @@ CHECKS = {
         "worldgen_terrain/tests/wg10_progression_motion_check.gd",
         "worldgen_terrain/tests/wg10_progression_repage_visual_check.gd",
     ],
+    # Un-intercept proving ladder. Each rung flips one baked crutch to a live procedural path and
+    # gates convergence toward the accepted baked REFERENCE (direction + no-regression), real
+    # GPU-time perf, and non-vacuous "did it actually run" guards. Windowed (RenderingDevice).
+    "ladder_rung0": [
+        "worldgen_terrain/tests/ladder_rung0_check.gd",
+    ],
+    # Pure-GDScript self-test for the convergence helper math (headless; no GPU). Catches a
+    # "helper always returns 0" bug before any rung trusts its verdict.
+    "ladder_selftest": [
+        "worldgen_terrain/tests/ladder_convergence_selftest_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -165,6 +176,7 @@ WINDOWED_SUITES = {
     "review_runtime_stress",
     "review_runtime_visual",
     "review_progression",
+    "ladder_rung0",
 }
 
 

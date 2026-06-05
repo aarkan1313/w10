@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://b8wg10unintercept0"]
+
+[ext_resource type="Script" path="res://worldgen_terrain/harness/wg10_unintercept_ladder.gd" id="1"]
+
+[node name="Wg10UninterceptLadder" type="Node3D"]
+script = ExtResource("1")
