@@ -3,7 +3,8 @@
 //! SAME routes (same chunk-network look) at a fraction of the cost. Pure Rust, no Godot.
 
 pub mod cost;
-// dijkstra + routes modules are added in Tasks 3 and 4.
+pub mod dijkstra;
+// routes module is added in Task 4.
 
 #[cfg(test)]
 mod tests;

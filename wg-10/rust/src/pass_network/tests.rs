@@ -1,6 +1,64 @@
 use super::cost::slope_grid;
 use super::cost::step_cost;
+use super::dijkstra::{dijkstra_cost_field, reconstruct_path};
 use super::TraverseParams;
+
+#[test]
+fn dijkstra_finds_min_cost_crossing_on_tiny_grid() {
+    // 3x3 uniform-cost grid (slope below budget, no channel, h=0 -> step_cost = cell_m everywhere).
+    // Source = all of column 0; target = column 2. Shortest path is a straight horizontal line, 3 cells.
+    let n = 3;
+    let slope = vec![0.0_f64; n * n];
+    let h = vec![0.0_f64; n * n];
+    let chan = vec![0.0_f64; n * n];
+    let p = TraverseParams {
+        slope_budget: 0.28,
+        slope_penalty: 0.0,
+        drainage_bias: 0.0,
+        ..Default::default()
+    };
+    let cell = 100.0;
+    let sources: Vec<(usize, usize)> = (0..n).map(|r| (r, 0)).collect();
+    let (prev, _dist, target) =
+        dijkstra_cost_field(&slope, &h, &chan, n, n, cell, &p, &sources, |_r, c| c == n - 1);
+    assert!(target >= 0, "no target reached");
+    let path = reconstruct_path(&prev, target as usize, n);
+    assert_eq!(path.first().unwrap().1, 0, "path must start at column 0");
+    assert_eq!(path.last().unwrap().1, n - 1, "path must end at column n-1");
+    assert_eq!(path.len(), n, "straight crossing is n cells");
+}
+
+#[test]
+fn dijkstra_tiebreak_prefers_lowest_flattened_index() {
+    // Uniform-cost grid: every cell costs the same, so EVERY source/path is cost-tied.
+    // The (cost, idx) min-heap must resolve those ~ties by lowest flattened index, exactly
+    // like Python heapq on (cost, idx) tuples. With all of column 0 as sources, row 0 (idx 0)
+    // is the smallest flattened index, so the popped target on row 0 must be reached via the
+    // row-0 source, giving a straight path along row 0: [(0,0),(0,1),(0,2)].
+    let n = 3;
+    let slope = vec![0.0_f64; n * n];
+    let h = vec![0.0_f64; n * n];
+    let chan = vec![0.0_f64; n * n];
+    let p = TraverseParams {
+        slope_budget: 0.28,
+        slope_penalty: 0.0,
+        drainage_bias: 0.0,
+        ..Default::default()
+    };
+    let cell = 100.0;
+    let sources: Vec<(usize, usize)> = (0..n).map(|r| (r, 0)).collect();
+    let (prev, _dist, target) =
+        dijkstra_cost_field(&slope, &h, &chan, n, n, cell, &p, &sources, |_r, c| c == n - 1);
+    assert!(target >= 0, "no target reached");
+    // Lowest-index target column-2 cell is (0,2) = idx 2; lower-index wins the tie.
+    assert_eq!(target, 2, "tie-break must pop the lowest flattened-index target first");
+    let path = reconstruct_path(&prev, target as usize, n);
+    assert_eq!(
+        path,
+        vec![(0, 0), (0, 1), (0, 2)],
+        "lower-index tie-break yields the straight row-0 path"
+    );
+}
 
 #[test]
 fn step_cost_matches_python_formula() {
