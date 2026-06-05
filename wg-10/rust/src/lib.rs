@@ -36,6 +36,7 @@ mod recipes_temperate;
 mod recipes_tundra;
 mod recipes_volcanic;
 mod recipes_wetland;
+mod region_bake;
 mod ring_geometry;
 mod schedule_policy;
 mod streamer;
