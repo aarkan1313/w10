@@ -170,3 +170,20 @@ fn condition_world_matches_python_within_tolerance() {
          residual: a real bug, debug don't widen"
     );
 }
+
+#[test]
+fn with_percentiles_self_computed_equals_original() {
+    // A small deterministic field; the injected-percentile path with self-computed
+    // percentiles must be BIT-IDENTICAL to the original condition_world.
+    let n = 8usize;
+    let mut z = vec![0.0f64; n * n];
+    for i in 0..n * n {
+        z[i] = ((i * 131 % 97) as f64) * 0.37 - 12.0;
+    }
+    let (want, stats) = cw::condition_world(&z, n);
+    let got = cw::condition_world_with_percentiles(&z, n, stats.p05, stats.p50, stats.p95);
+    assert_eq!(got.len(), want.len());
+    for i in 0..want.len() {
+        assert_eq!(got[i].to_bits(), want[i].to_bits(), "cell {i} differs");
+    }
+}

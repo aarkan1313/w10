@@ -43,6 +43,20 @@ pub fn percentile_linear(sorted: &[f64], q: f64) -> f64 {
     sorted[lo] + frac * (sorted[hi] - sorted[lo])
 }
 
+/// Condition a region field using EXTERNALLY SUPPLIED percentiles (for cross-region seam
+/// reconciliation). Identical math to `condition_world` from the `robust` step onward; only the
+/// p05/p50/p95 source differs. The returned ConditionStats reports the SUPPLIED percentiles.
+///
+/// # Panics
+/// Panics if `z.len() != n * n`.
+pub fn condition_world_with_percentiles(z: &[f64], n: usize, p05: f64, p50: f64, p95: f64) -> Vec<f64> {
+    assert_eq!(z.len(), n * n, "condition_world_with_percentiles: z.len() != n*n");
+    let denom = p95 - p05 + 1.0e-9;
+    let robust: Vec<f64> = z.iter().map(|v| (v - p50) / denom * 2.10).collect();
+    let smoothed = gaussian_filter_nearest(&robust, n, n, 0.55, 4.0);
+    smoothed.iter().map(|v| v.tanh()).collect()
+}
+
 /// Port of `mountain_world_layer.condition_world`. `z` is a flat row-major `f64` field of length
 /// `n*n` (the grid side is `n`). Returns the conditioned field `shaped` (same layout) plus the
 /// whole-region [`ConditionStats`].
@@ -73,13 +87,8 @@ pub fn condition_world(z: &[f64], n: usize) -> (Vec<f64>, ConditionStats) {
     let p50 = percentile_linear(&sorted, 50.0);
     let p95 = percentile_linear(&sorted, 95.0);
 
-    // robust = (z - p50) / (p95 - p05 + 1e-9) * 2.10  (per-cell, exactly as Python writes it).
-    let denom = p95 - p05 + 1.0e-9;
-    let robust: Vec<f64> = z.iter().map(|v| (v - p50) / denom * 2.10).collect();
-
-    // shaped = tanh(gaussian_filter(robust, sigma=0.55, truncate=4.0[default], mode='nearest']).
-    let smoothed = gaussian_filter_nearest(&robust, n, n, 0.55, 4.0);
-    let shaped: Vec<f64> = smoothed.iter().map(|v| v.tanh()).collect();
+    // Delegate to the injected-percentile variant (bit-identical math from the robust step onward).
+    let shaped = condition_world_with_percentiles(z, n, p05, p50, p95);
 
     // Source stats from the sorted ends (np.min / np.max / np.ptp over z).
     let source_min = sorted[0];
