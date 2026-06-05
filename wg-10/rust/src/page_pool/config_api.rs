@@ -87,6 +87,115 @@ impl Wg10PagePool {
         GString::new()
     }
 
+    /// Configure the pool to produce pages via the RegionFact baked-look path: an async
+    /// super-region bake worker (carve + condition, off-frame on its own RenderingDevice) feeds
+    /// per-region facts the pool samples for each page. Windowed-only (the worker spawns its own RD,
+    /// the pool's acquire still needs the global RD to write page textures).
+    ///
+    /// `region_span_m` is ONE region cell's world span; it is forced to equal the grammar
+    /// `region_size_m` so the sliced region facts tile the world exactly on the grammar region grid
+    /// (the pack's region_size_m is overridden to match — a small `region_span_m` makes a fast gate).
+    ///
+    /// Returns `""` on success, or an error string on failure.
+    #[func]
+    #[allow(clippy::too_many_arguments)]
+    pub fn configure_region_fact(
+        &mut self,
+        pack_json_path: GString,
+        primitives_path: GString,
+        machine_path: GString,
+        mountain_fragment_path: GString,
+        region_n: i64,
+        k: i64,
+        apron_px: i64,
+        seed: i64,
+        feature_span_m: f64,
+        height_scale_m: f64,
+        flow_iters: i64,
+        flow_on: bool,
+        page_px: i64,
+        region_span_m: f64,
+    ) -> GString {
+        self.free_before_reconfigure();
+
+        if region_n < 2 || k < 1 || apron_px < 0 {
+            return GString::from("configure_region_fact: need region_n>=2, k>=1, apron_px>=0");
+        }
+        if region_span_m <= 0.0 {
+            return GString::from("configure_region_fact: region_span_m must be > 0");
+        }
+
+        // Split the full pack JSON path into (dir, file) for load_pack_dir.
+        let pack_path = pack_json_path.to_string();
+        let pack_path_buf = Path::new(&pack_path);
+        let pack_dir = match pack_path_buf.parent() {
+            Some(d) => d,
+            None => return GString::from("configure_region_fact: pack_json_path has no parent dir"),
+        };
+        let pack_file = match pack_path_buf.file_name().and_then(|f| f.to_str()) {
+            Some(f) => f.to_string(),
+            None => return GString::from("configure_region_fact: pack_json_path has no filename"),
+        };
+        let mut pack = match pack::load_pack_dir(pack_dir, &pack_file) {
+            Ok(p) => p,
+            Err(e) => return GString::from(&format!("pack: {e}")),
+        };
+        // Tile the world on a region grid whose cell == region_span_m so the worker's sliced facts
+        // (origins at gi*region_span_m) line up exactly with `region_of`.
+        pack.grammar_constants.region_size_m = region_span_m;
+
+        let prim = match std::fs::read_to_string(primitives_path.to_string()) {
+            Ok(s) => s,
+            Err(e) => return GString::from(&format!("primitives glsl: {e}")),
+        };
+        let machine = match std::fs::read_to_string(machine_path.to_string()) {
+            Ok(s) => s,
+            Err(e) => return GString::from(&format!("machine glsl: {e}")),
+        };
+        let fragment = match std::fs::read_to_string(mountain_fragment_path.to_string()) {
+            Ok(s) => s,
+            Err(e) => return GString::from(&format!("mountain fragment glsl: {e}")),
+        };
+
+        let region_n = region_n as usize;
+        let spacing_m = region_span_m / (region_n - 1) as f64;
+        let worker = crate::region_bake::BakeWorker::spawn(prim, machine, fragment);
+
+        let cfg = super::RegionFactConfig {
+            region_n,
+            k: k as usize,
+            apron_px: apron_px as usize,
+            flow_iters: flow_iters.max(0) as usize,
+            flow_on,
+            feature_span_m,
+            region_span_m,
+            spacing_m,
+            height_scale_m,
+            seed,
+            region_size_m: region_span_m,
+            pass: crate::pass_network::PassNetworkParams::default(),
+            traverse: crate::pass_network::TraverseParams::default(),
+            ramp: crate::pass_network::RampParams::default(),
+            coarse_stride_m: region_span_m,
+            window_radius_m: region_span_m * 0.5,
+            window_samples: 33,
+        };
+
+        // world_span: one page's world span. Use region_span_m as a sane default (a page tile);
+        // the gate/owner can drive any clipmap level off this base.
+        self.install_region_fact_configuration(
+            pack,
+            worker,
+            cfg,
+            64, // capacity: enough pages for a small fly + the bake-pending fallbacks
+            page_px,
+            region_span_m,
+            seed,
+        );
+
+        GString::new()
+    }
+
     /// Configure the pool to produce pages via the GPU biome path (mountain,
     /// Slice-4 live-fly) instead of the legacy kernel atlas. Builds the biome
     /// compute context on the global rd. Legacy `configure` stays available for

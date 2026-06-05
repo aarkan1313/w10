@@ -8,7 +8,7 @@ use godot::prelude::*;
 use crate::biome_page_compute::f32s_to_bytes;
 
 #[derive(Clone)]
-pub(super) struct RegionFactRuntime {
+pub(in crate::page_pool) struct RegionFactRuntime {
     grid: Vec<f32>,
     grid_n: usize,
     origin_x_m: f64,

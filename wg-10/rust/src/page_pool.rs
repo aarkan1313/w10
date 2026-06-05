@@ -31,6 +31,7 @@ mod configure;
 mod lifecycle;
 mod producer;
 mod region_fact;
+mod region_producer;
 mod state_api;
 mod static_reference;
 mod static_reports;
@@ -45,6 +46,31 @@ mod world_runtime;
 use static_reference::StaticHeightRuntime;
 use world_layer_reference::BoundWorldLayerReference;
 use world_runtime::BiomeWorldRuntime;
+
+/// Per-super-region bake parameters for the RegionFact producer. Held by the pool while the
+/// region-fact producer is active; each `ensure_super_baked` turns this (plus a super origin) into a
+/// `SuperBakeRequest`. `region_span_m == region_size_m` so the sliced region facts tile the world
+/// exactly on the grammar's region grid.
+#[derive(Clone)]
+pub(in crate::page_pool) struct RegionFactConfig {
+    pub region_n: usize,
+    pub k: usize,
+    pub apron_px: usize,
+    pub flow_iters: usize,
+    pub flow_on: bool,
+    pub feature_span_m: f64,
+    pub region_span_m: f64, // == region_size_m (one region cell)
+    pub spacing_m: f64,     // region_span_m / (region_n - 1)
+    pub height_scale_m: f64,
+    pub seed: i64,
+    pub region_size_m: f64, // pack grammar region size (== region_span_m by construction)
+    pub pass: crate::pass_network::PassNetworkParams,
+    pub traverse: crate::pass_network::TraverseParams,
+    pub ramp: crate::pass_network::RampParams,
+    pub coarse_stride_m: f64,
+    pub window_radius_m: f64,
+    pub window_samples: usize,
+}
 
 // ---------------------------------------------------------------------------
 // Wg10PagePool
@@ -93,6 +119,13 @@ pub struct Wg10PagePool {
     /// suffices and the two flow passes are too costly). Set by `configure_biome`.
     biome_flow_max_level: i64,
 
+    // Region-fact producer (the carved baked-look path): an async super-region bake worker + a
+    // region cache (keyed by region cell). Active when `region_worker` is Some.
+    region_worker: Option<crate::region_bake::BakeWorker>,
+    region_cache: std::collections::HashMap<(i64, i64), region_fact::RegionFactRuntime>,
+    region_baking: std::collections::HashSet<(i64, i64)>, // super-keys in flight (enqueue-once)
+    region_cfg: Option<RegionFactConfig>,
+
     page_px: i64,
     world_span: f64,
     seed: i64,
@@ -125,6 +158,10 @@ impl IRefCounted for Wg10PagePool {
             mountain_layer_ref: None,
             world_preview_ref: None,
             analytic: None,
+            region_worker: None,
+            region_cache: std::collections::HashMap::new(),
+            region_baking: std::collections::HashSet::new(),
+            region_cfg: None,
             biome_feature_span_m: 90000.0,
             biome_source_scale: 1.0,
             biome_source_offset_x_m: 0.0,

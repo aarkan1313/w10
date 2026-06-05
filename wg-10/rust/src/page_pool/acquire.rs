@@ -25,6 +25,19 @@ impl Wg10PagePool {
             return None;
         }
 
+        // RegionFact producer: drain any finished super-region bakes into the cache and enqueue the
+        // super-region containing this page (enqueue-once). Done here on the main thread (acquire is
+        // `&mut self`); `dispatch_page_compute` is `&self` and only reads the cache.
+        if self.region_cfg.is_some() {
+            self.drain_region_bakes();
+            if let Some(pack) = self.pack.as_ref() {
+                let (rx, rz) = crate::grammar::region_of(origin_x, origin_z, pack);
+                if !self.region_cache.contains_key(&(rx, rz)) {
+                    self.ensure_super_baked(rx, rz);
+                }
+            }
+        }
+
         let mut rd = match RenderingServer::singleton().get_rendering_device() {
             Some(r) => r,
             None => {
@@ -69,12 +82,9 @@ impl Wg10PagePool {
                     return None;
                 }
 
-                if let Err(e) =
-                    self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
+                if let Err(e) = self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
                 {
-                    godot_error!(
-                        "Wg10PagePool: static material page failed (slot {slot}): {e}"
-                    );
+                    godot_error!("Wg10PagePool: static material page failed (slot {slot}): {e}");
                     self.rollback_failed_allocate(&mut rd, key, slot, tex_rid);
                     return None;
                 }
@@ -101,8 +111,7 @@ impl Wg10PagePool {
                     return None;
                 }
 
-                if let Err(e) =
-                    self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
+                if let Err(e) = self.refresh_static_material_texture(&mut rd, slot, ox, oz, ws, ppx)
                 {
                     godot_error!(
                         "Wg10PagePool: static material page failed on eviction (slot {slot}): {e}"

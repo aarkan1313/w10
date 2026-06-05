@@ -163,6 +163,44 @@ impl Wg10PagePool {
         self.reset_stats();
     }
 
+    /// Install the RegionFact producer: clears every other producer Option (so `active_producer_kind`
+    /// resolves to `RegionFact`), stores the pack (for `region_of`), the spawned bake worker, and the
+    /// per-super-region bake config.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn install_region_fact_configuration(
+        &mut self,
+        pack: pack::Pack,
+        worker: crate::region_bake::BakeWorker,
+        cfg: super::RegionFactConfig,
+        capacity: i64,
+        page_px: i64,
+        world_span: f64,
+        seed: i64,
+    ) {
+        self.init_policy_slots(capacity);
+        self.pack = Some(pack);
+        self.pack_buffers = None;
+        self.glsl_source = None;
+        self.compute_ctx = None;
+        self.biome_ctx = None;
+        self.biome_world = None;
+        self.static_ref = None;
+        self.mountain_layer_ref = None;
+        self.world_preview_ref = None;
+        self.analytic = None;
+        self.region_worker = Some(worker);
+        self.region_cache.clear();
+        self.region_baking.clear();
+        self.biome_feature_span_m = cfg.feature_span_m;
+        self.biome_flow_max_level = 0;
+        self.region_cfg = Some(cfg);
+        self.reset_biome_source_transform();
+        self.page_px = page_px;
+        self.world_span = world_span;
+        self.seed = seed;
+        self.reset_stats();
+    }
+
     /// Ladder Rung 0: install the analytic closed-form plumbing producer. Clears every other
     /// producer Option so `active_producer_kind` resolves to `Analytic`.
     pub(super) fn install_analytic_configuration(

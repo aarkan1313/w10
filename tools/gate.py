@@ -175,6 +175,12 @@ CHECKS = {
     "bake_worker": [
         "worldgen_terrain/tests/bake_worker_check.gd",
     ],
+    # Task 8 capstone: proves the RegionFact PRODUCER path (async super-region bake worker wired into
+    # Wg10PagePool + region cache + per-acquire drain + dispatch) puts a carved, non-black baked-look
+    # page on screen, seam-exact at an internal super-region region border. Windowed (RenderingDevice).
+    "region_rung1": [
+        "worldgen_terrain/tests/region_fact_runtime_check.gd",
+    ],
 }
 
 WINDOWED_SUITES = {
@@ -197,6 +203,7 @@ WINDOWED_SUITES = {
     "ladder_rung1",
     "region_macro",
     "bake_worker",
+    "region_rung1",
 }
 
 

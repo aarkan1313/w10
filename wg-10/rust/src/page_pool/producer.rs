@@ -26,6 +26,7 @@ pub(super) enum ProducerKind {
     World,
     StaticReference,
     Analytic,
+    RegionFact,
 }
 
 impl ProducerKind {
@@ -36,18 +37,23 @@ impl ProducerKind {
             Self::World => "world",
             Self::StaticReference => "static_reference",
             Self::Analytic => "analytic",
+            Self::RegionFact => "region_fact",
         }
     }
 
     pub(super) fn uses_biome_path(self) -> bool {
-        // Analytic is a debug plumbing producer, not the biome GPU path.
+        // Analytic is a debug plumbing producer, not the biome GPU path. RegionFact IS the baked
+        // biome path (it samples baked region facts derived from the biome GPU macro).
         !matches!(self, Self::Legacy | Self::Analytic)
     }
 }
 
 impl Wg10PagePool {
     pub(super) fn active_producer_kind(&self) -> Option<ProducerKind> {
-        if self.analytic.is_some() {
+        if self.region_cfg.is_some() {
+            // The carved baked-look producer wins when configured (checked first).
+            Some(ProducerKind::RegionFact)
+        } else if self.analytic.is_some() {
             Some(ProducerKind::Analytic)
         } else if self.static_ref.is_some() {
             Some(ProducerKind::StaticReference)
@@ -231,6 +237,20 @@ impl Wg10PagePool {
                     return Err(format!("analytic producer: texture_update failed: {err:?}"));
                 }
                 Ok(())
+            }
+            Some(ProducerKind::RegionFact) => {
+                let pack = self
+                    .pack
+                    .as_ref()
+                    .ok_or("region fact: no pack")?;
+                let (rx, rz) = crate::grammar::region_of(origin_x, origin_z, pack);
+                if let Some(region) = self.region_cache.get(&(rx, rz)) {
+                    region.write_page_texture(rd, tex_rid, origin_x, origin_z, world_span, page_px)
+                } else {
+                    // Not baked yet: write a flat fallback so the screen is never black. The page
+                    // upgrades to the carved look on a later acquire once the bake lands.
+                    self.write_flat_fallback_page(rd, tex_rid, page_px)
+                }
             }
             None => Err("Wg10PagePool: no configured page producer".into()),
         }
