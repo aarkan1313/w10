@@ -100,6 +100,17 @@ impl Wg10PagePool {
         d
     }
 
+    /// Region-fact producer stats for HUD/review: how many region grids are cached, how many
+    /// super-region bakes are in flight, and whether the region-fact producer is active. Read-only.
+    #[func]
+    pub fn region_fact_stats(&self) -> Dictionary<GString, Variant> {
+        let mut d = Dictionary::<GString, Variant>::new();
+        d.set("active", self.region_cfg.is_some());
+        d.set("cached_regions", self.region_cache.len() as i64);
+        d.set("baking_in_flight", self.region_baking.len() as i64);
+        d
+    }
+
     /// Resident page keys as a flat array of `(level, origin_x, origin_z)` triples.
     #[func]
     pub fn resident_keys(&self) -> PackedInt64Array {
