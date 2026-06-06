@@ -1,7 +1,9 @@
 # WorldGen10 — Status
 
-> **NEXT-SESSION PICKUP: `docs/plans/WG10_HANDOFF_2026-06-05_CARVE_PORTED.md`** (the
-> live handoff; supersedes WG10_FINAL_HANDOFF_2026-06-05.md).
+> **NEXT-SESSION PICKUP: `docs/plans/WG10_HANDOFF_2026-06-05_REGION_FACT_ON_SCREEN.md`**
+> (the live handoff; supersedes WG10_HANDOFF_2026-06-05_CARVE_PORTED.md, which predates the
+> producer integration). The ONE open blocker is the OWNER VISUAL A/B — fly Step 4 of
+> `wg-10/worldgen_terrain/harness/feature_review.tscn`.
 
 > **✅ CARVED LOOK ON SCREEN — REGION-FACT PRODUCER WIRED + SEAM-EXACT (2026-06-05).** The
 > region-fact producer integration is DONE: the carved "baked look" now reaches the screen
@@ -66,16 +68,23 @@
 > gate (max_err 0.0) and a `Wg10PagePool::region_fact_stats()` getter (active/cached_regions/
 > baking_in_flight) for the review HUD.
 > **NEW UNIFIED REVIEW SCENE — `wg-10/worldgen_terrain/harness/feature_review.tscn`** (run
-> WINDOWED): fly + profile EVERY shippable terrain feature SEQUENTIALLY, one producer per step,
-> on the SAME clipmap pipeline. Steps: 1 accepted reference · 2 live macro · 3 live+flow ·
-> **4 CARVED BAKED LOOK (region-fact producer — this session's feature, first time it has a fly
-> scene)** · 5 world diagnostic · 6 legacy. Controls: `]`/`[` next/prev, `1-0` jump, WASD+Shift
-> fly (~1000 m/s), M morph heatmap, N detail, R reframe, P profiling snapshot. HUD shows fps /
-> frame p99 / **real GPU p99** (viewport_get_measured_render_time_gpu) / pool stats / region-fact
-> bake progress. Composes the existing harness (Wg10FlyCamera/Profiler/config helper/TerrainView)
-> — no duplication. Smoke-verified windowed: loads + configures every step, no script errors,
-> startup transient identical to the accepted `m3_review` baseline. OWNER FLY = the deferred
-> visual A/B (smooth-field vs per-region look) now has a home — Step 4 is where to judge it.
+> WINDOWED): fly + profile EVERY shippable terrain feature SEQUENTIALLY on the SAME clipmap
+> pipeline. **8 steps** (audited against the actual feature set, not a guessed list): 1 accepted
+> reference · 2 live procedural mountain (macro+flow, NOT reference-bound — the genuine live look)
+> · 3 reference-backed bridge (matches step 1 by design) · **4 CARVED BAKED LOOK (region-fact
+> producer — this session's feature; its first fly scene)** · 5 world diagnostic · 6 legacy ·
+> **7 FACTS/COLLISION field** (get_collision_field drawn as a height-colored point cloud — the
+> shipped facts subsystem's FIRST visual surface) · **8 TERRAIN EDITS** (apply_edit: F=crater
+> G=mound X=clear; collision overlay updates live — the M4 edit API's FIRST visual surface).
+> Controls: `]`/`[` next/prev, `1-0` jump, WASD+Shift fly (~1000 m/s), M morph, N detail, R
+> reframe, P snapshot, F/G/X edits. HUD: fps / frame p99 / **real GPU p99**
+> (viewport_get_measured_render_time_gpu) / pool stats / region-fact bake progress / facts status.
+> Composes the existing harness (Wg10FlyCamera/Profiler/config helper/producer helpers/TerrainView)
+> — no duplication. Smoke-verified windowed (RTX 5090): every step configures clean, no script
+> errors; facts/collision + edit API verified (crater drops sampled height by the edit depth,
+> clear restores). AUDIT NOTE: individual non-mountain biomes are NOT live-flyable by architecture
+> (the pool streams mountain + all-11-via-WORLD only; per-biome = the static `*_world_review.tscn`
+> scenes). OWNER FLY = the deferred visual A/B (smooth-field vs per-region look) — Step 4.
 
 > **PRODUCER-WIRING DESIGN FORCED BY MEASUREMENT (2026-06-05).** Goal: wire
 > `bake_region` into the live producer so the carved look reaches the screen (closes

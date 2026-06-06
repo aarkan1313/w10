@@ -20,6 +20,20 @@ the all-11 GPU/GLSL parity gate (`biome_page` suite, written for all 11, eps=1e-
 green on hardware, then (b) wire the carve + condition_world into a region-fact bake feeding
 the live producer (the integration that puts the carved look on screen). STATUS.md top is live.
 
+**Update 2026-06-05 (frontier CLOSED — carved look ON SCREEN):** both remaining frontier items
+are done. (a) The all-11 GPU/GLSL `biome_page` parity gate runs GREEN on hardware (RTX 5090).
+(b) The carve + condition_world are wired into a region-fact bake feeding the LIVE producer
+(`ProducerKind::RegionFact`): off-frame async super-region bake (own-RD worker) → GPU super-macro
+→ CPU carve+condition → sliced region facts → on screen. Seam-exact: smooth percentile FIELD
+0-ULP (incl. across super-region outer borders); super-region carve-then-slice 0-ULP internal
+borders by construction. cargo 268/268; windowed `region_macro`/`bake_worker`/`region_rung1` +
+`gpu`/`biome_page` all green. KEY FINDING: the carve is a GLOBAL Dijkstra (NOT seam-exact
+per-region as the assembly spec assumed) → fixed by super-region bake-then-slice; the
+infinite-per-region core-local-anchored carve stays deferred behind the scale contract. A unified
+fly+profile review scene (`feature_review.tscn`, 8 steps incl. the carved look + facts/collision +
+terrain edits) now exists. ONE open blocker: the owner VISUAL A/B of the carved look (Step 4).
+Handoff: `docs/plans/WG10_HANDOFF_2026-06-05_REGION_FACT_ON_SCREEN.md`.
+
 **Update 2026-06-04:** this roadmap's detailed phase text is historical; the live truth source is
 `docs/plans/STATUS.md` top plus
 `docs/plans/MOUNTAIN_WORLD_LAYER_RUNTIME_CONTRACT_2026-06-04.md` plus the current

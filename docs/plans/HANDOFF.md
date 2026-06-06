@@ -28,11 +28,18 @@ plan `docs/superpowers/plans/2026-06-02-slice4-gpu-page-integration.md`.
 flow hooks + volcanic vent SSBO); all 11 biomes parity-proven; compose_biomes/blend GPU-proven (a flat-field
 f32 bug was caught+fixed by the windowed gate); the §3.1 drainage question MEASURED + DECIDED (on-demand
 full-res flow bake off-frame + per-region fact cache; coarse shortcuts refuted, exact solver parked).
-**IMMEDIATE NEXT (recommended order):** (1) OWNER reviews the runtime-drainage spec; (2) **4b.11 PART B** —
-port the grammar region/palette/family selection (legacy `height_page.glsl` lines ~90-180) into the biome path
-so a page picks its ACTIVE biomes + partition-of-unity weights, then composes them via the now-proven compose
-layer (smaller, unblocks real multi-biome terrain — do FIRST); (3) build the drainage subsystem per the approved
-spec; (4) Slice 4c (flip runtime to the biome path + remove the 25MB atlas + hardened perf gate + owner fly).
+**IMMEDIATE NEXT — SUPERSEDED (2026-06-05): see `docs/plans/STATUS.md` top + the live handoff
+`docs/plans/WG10_HANDOFF_2026-06-05_REGION_FACT_ON_SCREEN.md`.** Since this 2026-06-02 block was
+written: the connected carve was ported to Rust (the divergence fix), and the carve+condition were
+wired into a LIVE region-fact producer that puts the carved "baked look" ON SCREEN (off-frame async
+super-region bake → GPU super-macro → CPU carve+condition → sliced seam-exact region facts). cargo
+268/268; windowed region_macro/bake_worker/region_rung1 + gpu/biome_page green. A unified
+fly+profile review scene exists (`feature_review.tscn`, 8 steps incl. the carved look, facts/collision,
+terrain edits). The ONE open blocker is the OWNER VISUAL A/B of the carved look (fly Step 4). The old
+4b.11-PART-B / drainage-subsystem ordering below is HISTORY — the drainage question was answered by
+the region-fact bake (full-res off-frame, per-region fact cache, on screen). (Original block kept for
+trace:) (1) OWNER reviews the runtime-drainage spec; (2) 4b.11 PART B grammar region/palette/family
+selection; (3) build the drainage subsystem; (4) Slice 4c flip + remove atlas + perf gate + owner fly.
 **HOW TO RUN GATES (this session's recipe):** windowed suites need a real GPU + rebuilt dll. Rebuild:
 `$env:CARGO_TARGET_DIR=$null; cargo build -p wg10_terrain` from `wg-10/rust` (the gdextension loads
 `res://rust/target/debug/wg10_terrain.dll`, the DEFAULT target — NOT the isolated check target). Run:

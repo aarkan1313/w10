@@ -4,11 +4,17 @@ extends Node3D
 # WG10 UNIFIED FEATURE REVIEW (§ owner sequential visual review)
 # ----------------------------------------------------------------------------
 # ONE scene to fly + profile EVERY shippable terrain feature, one at a time, in
-# order. Each STEP reconfigures the SAME pool/streamer/rings/view with a different
-# producer (deterministic teardown between steps, B1), repositions the camera, and
-# updates the HUD. Pure assembly: it reuses the existing harness components
-# (Wg10FlyCamera, Wg10Profiler, the config helper, Wg10TerrainView/ClipmapRings)
-# and the producer-config helpers — it does NOT duplicate them.
+# order, on the SAME clipmap pipeline. Each STEP reconfigures the SAME pool with a
+# different producer (deterministic teardown between steps, B1), repositions the
+# camera, and updates the HUD. Pure assembly: it reuses the existing harness
+# components (Wg10FlyCamera, Wg10Profiler, the runtime-config helper, the producer
+# helpers, Wg10TerrainView/ClipmapRings) — it does NOT duplicate them.
+#
+# Plus two steps for shipped subsystems that previously had NO visual surface:
+#   - FACTS / COLLISION: samples the authoritative collision field around the camera
+#     (Wg10Facts.get_collision_field) and draws it as a point cloud you can fly.
+#   - TERRAIN EDITS: stamp a crater / mound (Wg10Facts.apply_edit) and watch the
+#     collision overlay update live.
 #
 # LAUNCH: run this scene WINDOWED (RenderingDevice compute is windowed-only).
 # CONTROLS:
@@ -16,12 +22,15 @@ extends Node3D
 #   1..9 / 0     jump to step N (0 = step 10)
 #   WASD         fly (camera-local), Shift = sprint (~1000s m/s)
 #   Space / C    up / down,  mouse = look,  ESC = release mouse
-#   M            morph-band heatmap toggle (blue fine / green blend / red coarse)
-#   N            M5 detail overlay toggle
+#   M            morph-band heatmap toggle (clipmap steps)
+#   N            M5 detail overlay toggle (clipmap steps)
 #   R            reframe camera to this step's start pose
 #   P            print the current step's profiling snapshot to the console
-# HUD (top-left): step name + role + acceptance; fps / frame p99 / GPU p99 ms;
-#   pool stats (resident/created/recomputed); region-fact stats when active.
+#   F            (facts/edit steps) stamp a CRATER at the camera ground point
+#   G            (facts/edit steps) stamp a MOUND at the camera ground point
+#   X            (facts/edit steps) clear all edits
+# HUD (top-left): step name + role + acceptance; fps / frame p99 / real GPU p99 ms;
+#   pool stats; region-fact bake progress (active step); facts/edit status.
 # ============================================================================
 
 const CONFIG := "res://worldgen_terrain/harness/mountain_fly_runtime_config.gd"
@@ -35,52 +44,75 @@ const RF_PRIM := "res://worldgen_terrain/shaders/recipe_primitives.glsl"
 const RF_MACHINE := "res://worldgen_terrain/shaders/biome_page.glsl"
 const RF_FRAGMENT := "res://worldgen_terrain/shaders/biome_mountain.glsl"
 
+# Facts node pack (Wg10Facts loads its OWN pack: a dir + file).
+const FACTS_PACK_DIR := "res://worldgen_terrain/packs/dem_v1"
+const FACTS_PACK_FILE := "terrain_pack.gate.json"
+const FACTS_SEED := 1337
+const FACTS_GRID_N := 33            # samples per side of the collision field
+const FACTS_GRID_SPAN_M := 4096.0   # world size of the sampled collision patch
+const EDIT_RADIUS_M := 400.0
+const EDIT_DEPTH_M := 220.0         # crater digs -, mound raises +
+
 # ---- the ordered feature list -------------------------------------------------
-# Each step is a dictionary describing WHAT to review and how to set it up. The
-# `setup` field names a method on this script (called via Callable) that configures
-# the pool for that step and returns "" on success or an error string.
+# Each step describes WHAT to review. `kind` selects the runtime behaviour:
+#   "producer" — reconfigure the page pool + clipmap with a producer (fly the terrain).
+#   "facts"    — sample + draw the authoritative collision field (no page producer).
 var _steps: Array = [
 	{
 		"name": "1. Accepted reference baseline",
 		"role": "static mountain-network payload streamed through the live clipmap",
 		"accept": "accepted visual baseline",
-		"setup": "_setup_reference",
+		"kind": "producer", "setup": "_setup_reference",
 		"cam": Vector3(0.0, 1800.0, 0.0),
 	},
 	{
-		"name": "2. Live mountain macro (no flow)",
-		"role": "GPU seam-safe macro recipe, flow OFF — pure ridged/warped structure",
-		"accept": "procedural macro, not final",
-		"setup": "_setup_mountain_macro",
+		"name": "2. Live procedural mountain (macro + flow)",
+		"role": "GPU seam-safe mountain recipe, live (NOT reference-bound) — raw procedural look",
+		"accept": "live procedural, not the accepted baseline (close-debug)",
+		"kind": "producer", "setup": "_setup_mountain_live",
 		"cam": Vector3(0.0, 1800.0, 0.0),
 	},
 	{
-		"name": "3. Live mountain + flow (carved drainage)",
-		"role": "GPU recipe with flow relaxation — drainage-carved valleys",
-		"accept": "procedural with flow, not final",
-		"setup": "_setup_mountain_flow",
+		"name": "3. Reference-backed mountain bridge",
+		"role": "live mountain producer bound to the accepted payload (should MATCH step 1)",
+		"accept": "bridge — matches reference by design, not final procedural",
+		"kind": "producer", "setup": "_setup_mountain_bridge",
 		"cam": Vector3(0.0, 1800.0, 0.0),
 	},
 	{
 		"name": "4. CARVED BAKED LOOK (region-fact producer)",
 		"role": "off-frame super-region bake -> carve+condition -> sliced region facts on screen",
-		"accept": "this session's feature: carved look on screen, internal-seam-exact",
-		"setup": "_setup_region_fact",
+		"accept": "this session's feature: carved look on screen, internal-seam-exact (owner A/B here)",
+		"kind": "producer", "setup": "_setup_region_fact",
 		"cam": Vector3(0.0, 2200.0, 0.0),
 	},
 	{
 		"name": "5. World composition (diagnostic)",
 		"role": "grammar-routed route/weight overlay on accepted reference height",
 		"accept": "diagnostic, not accepted (compose hitches)",
-		"setup": "_setup_world",
+		"kind": "producer", "setup": "_setup_world",
 		"cam": Vector3(0.0, 1800.0, 0.0),
 	},
 	{
 		"name": "6. Legacy DEM atlas (regression baseline)",
 		"role": "the original kernel-atlas renderer — regression reference only",
 		"accept": "legacy regression, not accepted",
-		"setup": "_setup_legacy",
+		"kind": "producer", "setup": "_setup_legacy",
 		"cam": Vector3(0.0, 1800.0, 0.0),
+	},
+	{
+		"name": "7. FACTS / COLLISION field (authoritative)",
+		"role": "Wg10Facts.get_collision_field sampled around the camera, drawn as a point cloud",
+		"accept": "shipped facts/collision subsystem (parity-proven); first visual surface",
+		"kind": "facts", "setup": "",
+		"cam": Vector3(0.0, 1400.0, 0.0),
+	},
+	{
+		"name": "8. TERRAIN EDITS (stamp crater / mound)",
+		"role": "Wg10Facts.apply_edit — F=crater G=mound X=clear; collision overlay updates live",
+		"accept": "shipped M4 edit API; first visual surface",
+		"kind": "facts", "setup": "",
+		"cam": Vector3(0.0, 1400.0, 0.0),
 	},
 ]
 
@@ -100,6 +132,11 @@ var _detail_on := false
 # rolling GPU-time p99 (real GPU time, vsync-immune — memory: viewport_get_measured_render_time_gpu)
 var _gpu_samples: Array[float] = []
 const GPU_WINDOW := 240
+
+# facts/collision overlay state
+var _facts: Object             # Wg10Facts
+var _facts_points: MultiMeshInstance3D
+var _facts_status := ""
 
 func _ready() -> void:
 	if RenderingServer.get_rendering_device() == null:
@@ -130,6 +167,14 @@ func _ready() -> void:
 	add_child(_profiler)
 	_cfg.call("register_shader_globals", false)
 
+	# Facts node (own pack) + a point-cloud overlay for the collision field.
+	_facts = ClassDB.instantiate("Wg10Facts")
+	var ferr := str(_facts.call("configure",
+		ProjectSettings.globalize_path(FACTS_PACK_DIR), FACTS_PACK_FILE, FACTS_SEED))
+	if ferr != "":
+		push_error("feature_review: Wg10Facts configure failed: %s" % ferr)
+	_build_facts_overlay()
+
 	# HUD.
 	var layer := CanvasLayer.new()
 	add_child(layer)
@@ -146,34 +191,105 @@ func _exit_tree() -> void:
 		_pool.call("free_all")
 		_pool = null
 
+# ---- facts/collision overlay --------------------------------------------------
+
+func _build_facts_overlay() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var cube := BoxMesh.new()
+	cube.size = Vector3(60.0, 60.0, 60.0)
+	mm.mesh = cube
+	mm.instance_count = FACTS_GRID_N * FACTS_GRID_N
+	_facts_points = MultiMeshInstance3D.new()
+	_facts_points.multimesh = mm
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_facts_points.material_override = mat
+	_facts_points.visible = false
+	add_child(_facts_points)
+
+func _update_facts_overlay() -> void:
+	if _facts == null or _facts_points == null:
+		return
+	var cx: float = _camera.global_position.x
+	var cz: float = _camera.global_position.z
+	var grid: PackedFloat32Array = _facts.call("get_collision_field", cx, cz, FACTS_GRID_SPAN_M, FACTS_GRID_N)
+	if grid.size() != FACTS_GRID_N * FACTS_GRID_N:
+		_facts_status = "get_collision_field returned %d (expected %d)" % [grid.size(), FACTS_GRID_N * FACTS_GRID_N]
+		return
+	var mm: MultiMesh = _facts_points.multimesh
+	var corner_x := cx - FACTS_GRID_SPAN_M * 0.5
+	var corner_z := cz - FACTS_GRID_SPAN_M * 0.5
+	var step := FACTS_GRID_SPAN_M / float(FACTS_GRID_N - 1)
+	var hmin := 1e30
+	var hmax := -1e30
+	for h in grid:
+		hmin = minf(hmin, h); hmax = maxf(hmax, h)
+	var span := maxf(1.0, hmax - hmin)
+	var i := 0
+	for j in range(FACTS_GRID_N):
+		for k in range(FACTS_GRID_N):
+			var h: float = grid[i]
+			var wx := corner_x + float(k) * step
+			var wz := corner_z + float(j) * step
+			mm.set_instance_transform(i, Transform3D(Basis(), Vector3(wx, h, wz)))
+			var t := (h - hmin) / span    # color by height: blue low -> red high
+			mm.set_instance_color(i, Color(t, 0.25, 1.0 - t))
+			i += 1
+	_facts_status = "collision %dx%d  span %.0fm  height [%.0f, %.0f] m" % [
+		FACTS_GRID_N, FACTS_GRID_N, FACTS_GRID_SPAN_M, hmin, hmax]
+
+func _stamp_edit(depth: float) -> void:
+	if _facts == null:
+		return
+	var cx: float = _camera.global_position.x
+	var cz: float = _camera.global_position.z
+	_facts.call("apply_edit", cx, cz, EDIT_RADIUS_M, depth, 1.0)
+	_update_facts_overlay()
+
 # ---- step lifecycle -----------------------------------------------------------
 
 func _load_step(idx: int) -> void:
 	_step_idx = clampi(idx, 0, _steps.size() - 1)
 	var step: Dictionary = _steps[_step_idx]
+	_step_err = ""
 
-	# Fresh pool per step (deterministic; a producer's configure_* calls free_before_reconfigure,
-	# but a brand-new pool avoids any cross-producer state leak between steps).
+	var is_facts: bool = step["kind"] == "facts"
+	# Clipmap rings render only on producer steps; the facts overlay only on facts steps.
+	_rings.visible = not is_facts
+	if _facts_points != null:
+		_facts_points.visible = is_facts
+
+	if is_facts:
+		# No page producer; tear down any prior one so the streamer doesn't churn.
+		if _pool != null:
+			_pool.call("free_all")
+			_pool = null
+		_view = ClassDB.instantiate("Wg10TerrainView")   # detach view from the freed pool
+		_profiler.call("reset")
+		_gpu_samples.clear()
+		_camera.global_position = step["cam"]
+		_update_facts_overlay()
+		return
+
+	# Producer step: fresh pool, configure, (re)wire streamer + view.
 	if _pool != null:
 		_pool.call("free_all")
 	_pool = ClassDB.instantiate("Wg10PagePool")
-
 	var setup_name: String = step["setup"]
 	_step_err = str(call(setup_name))
 	if _step_err != "":
 		push_error("feature_review: step '%s' setup failed: %s" % [step["name"], _step_err])
-		# Leave the renderer pointed at the (failed) pool; HUD will show the error.
 		return
-
-	# (Re)wire the streamer + view to the new pool.
 	_cfg.call("configure_streamer", _streamer, _pool)
 	_cfg.call("configure_view", _view, _pool, _streamer, _rings, _morph_on)
-
 	_profiler.call("reset")
 	_gpu_samples.clear()
 	_camera.global_position = step["cam"]
 
-# ---- per-step pool setup (one method per feature) -----------------------------
+# ---- per-step pool setup (one method per producer feature) --------------------
 
 func _producer() -> Object:
 	return load(PRODUCERS).new()
@@ -183,17 +299,21 @@ func _setup_reference() -> String:
 	p.set_mode_label("REFERENCE")
 	return str(p.configure(_pool))
 
-func _setup_mountain_macro() -> String:
+func _setup_mountain_live() -> String:
+	# Raw live procedural mountain recipe (close_debug = NOT reference-bound) — the genuine
+	# live look (macro + flow per flow_max_level), distinct from the accepted baseline.
 	var p := _producer()
 	p.set_mode_label("MOUNTAIN")
-	p.set_preset_label("close_debug")   # raw live recipe (no reference bind)
-	# flow OFF for "macro" is handled by the producer's flow_max_level; close_debug shows live macro.
+	p.set_preset_label("close_debug")
 	return str(p.configure(_pool))
 
-func _setup_mountain_flow() -> String:
+func _setup_mountain_bridge() -> String:
+	# Reference-backed bridge: live mountain producer that binds the accepted payload for height.
+	# Renders ~= step 1 BY DESIGN (it's a bridge, not a distinct procedural look) — kept so the
+	# bridge contract is reviewable next to the raw live look (step 2) and the reference (step 1).
 	var p := _producer()
 	p.set_mode_label("MOUNTAIN")
-	p.set_preset_label("network_ref")   # reference-backed bridge (flow-on network look)
+	p.set_preset_label("network_ref")
 	return str(p.configure(_pool))
 
 func _setup_world() -> String:
@@ -240,8 +360,8 @@ func _input(event: InputEvent) -> void:
 		KEY_M:
 			_morph_on = not _morph_on
 			RenderingServer.global_shader_parameter_set("wg_dbg_mode", 1.0 if _morph_on else 0.0)
-			# re-apply morph to the view
-			_cfg.call("configure_view", _view, _pool, _streamer, _rings, _morph_on)
+			if _pool != null and _steps[_step_idx]["kind"] == "producer":
+				_cfg.call("configure_view", _view, _pool, _streamer, _rings, _morph_on)
 		KEY_N:
 			_detail_on = not _detail_on
 			_cfg.call("set_detail_enabled", _detail_on)
@@ -249,8 +369,17 @@ func _input(event: InputEvent) -> void:
 			_camera.global_position = _steps[_step_idx]["cam"]
 		KEY_P:
 			_print_snapshot()
+		KEY_F:
+			if _steps[_step_idx]["kind"] == "facts":
+				_stamp_edit(-EDIT_DEPTH_M)   # crater (dig)
+		KEY_G:
+			if _steps[_step_idx]["kind"] == "facts":
+				_stamp_edit(EDIT_DEPTH_M)    # mound (raise)
+		KEY_X:
+			if _steps[_step_idx]["kind"] == "facts" and _facts != null:
+				_facts.call("clear_edits")
+				_update_facts_overlay()
 		_:
-			# number keys 1..9,0 jump to a step
 			var n := _digit_for(event.keycode)
 			if n >= 0:
 				_load_step(n)
@@ -265,14 +394,20 @@ func _digit_for(keycode: int) -> int:
 # ---- per-frame update + HUD ---------------------------------------------------
 
 func _process(delta: float) -> void:
-	if _view == null or _camera == null:
+	if _camera == null:
 		return
-	var p: Vector3 = _camera.global_position
-	var v: Vector3 = _camera.call("get_velocity")
-	_view.call("update", p.x, p.z, v.x, v.z)
+	var is_facts: bool = _steps[_step_idx]["kind"] == "facts"
+	if not is_facts and _view != null:
+		var p: Vector3 = _camera.global_position
+		var v: Vector3 = _camera.call("get_velocity")
+		_view.call("update", p.x, p.z, v.x, v.z)
+	elif is_facts:
+		# Re-sample the collision field as the camera moves (cheap; CPU sparse query).
+		_update_facts_overlay()
 
 	# Sample real GPU time (vsync-immune, no stall) for a rolling p99.
-	var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(get_viewport().get_viewport_rid())
+	var vp_rid := get_viewport().get_viewport_rid()
+	var gpu_ms := RenderingServer.viewport_get_measured_render_time_gpu(vp_rid)
 	if gpu_ms > 0.0:
 		_gpu_samples.append(gpu_ms)
 		if _gpu_samples.size() > GPU_WINDOW:
@@ -303,16 +438,18 @@ func _refresh_hud() -> void:
 	lines.append("")
 	lines.append("fps %.0f   frame p99 %.2f ms   mean %.2f ms   GPU p99 %.2f ms" % [
 		_profiler.call("fps"), _profiler.call("p99_ms"), _profiler.call("mean_ms"), _gpu_p99_ms()])
-	if _view != null:
+	if step["kind"] == "producer" and _view != null:
 		var s: Dictionary = _view.call("stats")
 		lines.append("pages: resident %d   created %d   recomputed %d   full %d" % [
 			int(s.get("resident", 0)), int(s.get("created", 0)), int(s.get("recomputed", 0)), int(s.get("full_events", 0))])
-	# Region-fact stats when that producer is active.
-	if _pool != null and _pool.has_method("region_fact_stats"):
-		var rf: Dictionary = _pool.call("region_fact_stats")
-		if bool(rf.get("active", false)):
-			lines.append("region-fact: cached %d   baking %d   (off-frame super-region bake)" % [
-				int(rf.get("cached_regions", 0)), int(rf.get("baking_in_flight", 0))])
+		if _pool != null and _pool.has_method("region_fact_stats"):
+			var rf: Dictionary = _pool.call("region_fact_stats")
+			if bool(rf.get("active", false)):
+				lines.append("region-fact: cached %d   baking %d   (off-frame super-region bake)" % [
+					int(rf.get("cached_regions", 0)), int(rf.get("baking_in_flight", 0))])
+	elif step["kind"] == "facts":
+		lines.append("facts: %s" % _facts_status)
+		lines.append("   F = crater   G = mound   X = clear edits  (at camera ground point)")
 	lines.append("")
 	lines.append("] next  [ prev  1-0 jump  R reframe  M morph  N detail  P snapshot  WASD+Shift fly")
 	_hud.text = "\n".join(lines)
@@ -320,8 +457,12 @@ func _refresh_hud() -> void:
 func _print_snapshot() -> void:
 	var step: Dictionary = _steps[_step_idx]
 	var rf := {}
-	if _pool != null and _pool.has_method("region_fact_stats"):
-		rf = _pool.call("region_fact_stats")
-	print("[feature-review] step='%s' fps=%.0f frame_p99_ms=%.3f gpu_p99_ms=%.3f pool=%s region_fact=%s" % [
+	var pool_stats := {}
+	if step["kind"] == "producer":
+		if _view != null:
+			pool_stats = _view.call("stats")
+		if _pool != null and _pool.has_method("region_fact_stats"):
+			rf = _pool.call("region_fact_stats")
+	print("[feature-review] step='%s' fps=%.0f frame_p99_ms=%.3f gpu_p99_ms=%.3f pool=%s region_fact=%s facts='%s'" % [
 		step["name"], _profiler.call("fps"), _profiler.call("p99_ms"), _gpu_p99_ms(),
-		str(_view.call("stats")), str(rf)])
+		str(pool_stats), str(rf), _facts_status])
