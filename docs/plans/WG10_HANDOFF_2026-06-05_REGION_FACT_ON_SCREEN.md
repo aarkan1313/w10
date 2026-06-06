@@ -13,9 +13,14 @@ for the producer path; what remains is one owner **visual A/B** and a short list
 honestly-deferred items.
 
 Branch `slice4-gpu-page-integration`, everything committed + pushed to origin
-(`github.com/aarkan1313/w10`). cargo lib **268/268** green. Worktree has ~245 preexisting
-dirty files (old backlog) — DO NOT clean/reset/broad-checkout; all this session's work was
-committed via scoped `git add` of only its own files.
+(`github.com/aarkan1313/w10`; HEAD `857807e`). cargo lib **268/268** green.
+**Worktree has ~244 preexisting dirty files — BOTH ~75 modified-tracked (e.g.
+`array_ops_tests.rs`, `bind_worldgen.rs`, all `biome_page_compute/schedule_*.rs`) AND ~169
+untracked (e.g. `docs/plans/*_BIOME_PROMOTION_*.md`).** These are an OLD backlog, NOT this
+session's work — DO NOT clean/reset/broad-checkout/`git add -A`. ALWAYS commit with a SCOPED
+`git add <specific files>` of only the files you touch. (Trap: `git status | grep -v '^??'`
+still shows the 75 modified ones — don't assume "no untracked" means "clean".) Verify origin
+sync with: `git rev-parse HEAD` == `git rev-parse origin/slice4-gpu-page-integration`.
 
 ## What this session built (all gated; on hardware where windowed)
 
@@ -116,11 +121,45 @@ height/slope palette).
   iterations; super-region slice is the proven seam-exact model meanwhile).
 - "Biome parity" is DONE (CPU 1e-9, GPU 1e-6, compose 1e-4) — not remaining work.
 
+## One accuracy note carried from the spec-to-impl audit (2026-06-05)
+`carve_ramp` is bit-exact ON THE BAKE ASSEMBLY FIXTURE'S ROUTES (dp99 < 1e-6), NOT universally:
+the standalone `carve_ramp` parity gate stays TOLERANCE-bounded (p99 < 0.05 m) to absorb EDT
+distance-TIE cells. Don't re-assert "carve_ramp is fully bit-exact" — it was an overstatement,
+corrected in STATUS + memory. Everything else in the docs audited HONEST + merge-accurate
+(cargo 268/268 exact, all region-fact/worker/seam/biome claims real + wired, no phantom methods).
+
 ## First files to read next session
-1. `docs/plans/STATUS.md` (top — the live truth)
+1. `docs/plans/STATUS.md` (top — the live truth) + `docs/plans/FEATURE_TRACKER.md` (per-feature
+   def-of-done checklist — the scannable "what we have / what each owes" table)
 2. This handoff
 3. `wg-10/worldgen_terrain/harness/feature_review.gd` (the review scene — fly it)
 4. `wg-10/rust/src/region_bake/` (mod.rs bake_super_region, percentile_provider.rs, worker.rs)
 5. `wg-10/rust/src/page_pool/region_producer.rs` + `region_fact.rs` (the producer + cache)
 6. Memories: `worldgen10-condition-seam-measured`, `worldgen10-standing-build-directives`,
-   `worldgen10-carve-ported-to-rust`, `worldgen10-gpu-readback-bare-pool`.
+   `worldgen10-carve-ported-to-rust`, `worldgen10-gpu-readback-bare-pool`,
+   `worldgen10-gdscript-untyped-return-inference` (Dictionary access needs explicit type annot —
+   bit the review scene), `worldgen10-build-gotchas` / `worldgen10-gate-run-recipe`.
+
+## Pickup commands (VERIFIED this session)
+```powershell
+# 0. Confirm clean + synced (HEAD should == origin; the 244 dirty files are PREEXISTING backlog):
+git -C D:\workflows\worldgen10 rev-parse HEAD
+git -C D:\workflows\worldgen10 rev-parse origin/slice4-gpu-page-integration   # must match
+# 1. cargo lib (isolated target, NO editor) — expect 268 passed / 0 failed:
+$env:CARGO_TARGET_DIR='D:/tmp/wg10_check_target'
+Push-Location 'D:\workflows\worldgen10\wg-10\rust'; cargo test -p wg10_terrain --lib; Pop-Location
+# 2. Windowed gates (editor CLOSED, RTX 5090). Each prints `[gate] suite=<n> ... fail=0 skip=0`:
+$env:GODOT_BIN='C:\Godot\v4.6.2\Godot_v4.6.2-stable_mono_win64\Godot_v4.6.2-stable_mono_win64_console.exe'
+Set-Location 'D:\workflows\worldgen10'
+python tools\gate.py --suite region_macro   # GPU super-macro readback
+python tools\gate.py --suite bake_worker     # async worker round-trip (own RD, 2 super-regions)
+python tools\gate.py --suite region_rung1    # ON-SCREEN carved page + INTERNAL super-region seam
+python tools\gate.py --suite gpu             # regression (4/4)
+python tools\gate.py --suite biome_page      # all-11 GPU parity regression (3/3)
+# 3. THE OWNER A/B: run the review scene WINDOWED, fly Step 4 (press `4`):
+& $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/feature_review.tscn
+```
+(Windowed gates work WINDOWED ONLY — headless returns no RenderingDevice and they `skip`. The
+worktree's 244 dirty files are an old backlog; the gate/scene `.uid` files this session generated
+are committed. If the editor is open, ASK the owner to close it before windowed gates — do NOT
+force-kill it.)
