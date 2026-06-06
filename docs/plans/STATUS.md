@@ -117,9 +117,13 @@
 > The narrow carve_ramp fixture (half-width 1200 m) never exercised the border cells;
 > the WIDE bake ramp (span-relative half=5400 m, flat=1620 m — itself a Task-1 catch:
 > `carve_pass_network` uses SPAN-RELATIVE ramp widths, NOT CorridorParams defaults)
-> exposed it. Added `array_ops::gaussian_filter_reflect`; carve_ramp is now FULLY
-> bit-exact (the prior "0.48% EDT-tie residual" was the gaussian border mode all along).
-> cargo lib **251/251** green. Spec/plan
+> exposed it. Added `array_ops::gaussian_filter_reflect`; carve_ramp is **bit-exact on the
+> bake assembly fixture's routes (dp99 < 1e-6)** — the reflect-gaussian fix removed the
+> border-mode error. NOTE (audit 2026-06-05): the STANDALONE `carve_ramp` parity gate stays
+> TOLERANCE-bounded (p99 < 0.05 m, ≤1% cells may differ > 1 m) to absorb EDT distance-TIE
+> cells (nearest-INDEX ties can diverge from scipy on exact ties); it is NOT a universal
+> bit-exact assertion. Bit-exactness holds for the assembly fixture's particular routes, not
+> for every possible route. cargo lib **251/251** green. Spec/plan
 > `docs/superpowers/specs/2026-06-05-wg10-bake-region-assembly-design.md` +
 > `...plans/2026-06-05-wg10-bake-region-assembly-plan.md`. Pushed.
 > **NEXT (the remaining integration, next session):** wire `bake_region` into the live
