@@ -9,8 +9,10 @@
 > un-intercept gap is CLOSED. Verified on hardware (RTX 5090, editor-closed): cargo lib
 > **265/265**; windowed gates `region_macro` ✅, `bake_worker` ✅, `region_rung1` ✅ (the
 > on-screen gate: a baked region page upgrades past the never-black fallback, is finite +
-> non-degenerate, AND two adjacent region pages AGREE at their shared internal super-region
-> border = seam-exact on screen); regression `gpu` 4/4 ✅ + `biome_page` 3/3 ✅ (no GPU-parity
+> non-degenerate, AND two adjacent region pages AGREE to ~1 mm at their shared **INTERNAL**
+> super-region border = internal-seam-exact on screen. NOTE: both test regions map to the same
+> super-key, so this gate proves the by-construction INTERNAL seam only — the super-region OUTER
+> border is NOT yet covered on screen, see deferred item below); regression `gpu` 4/4 ✅ + `biome_page` 3/3 ✅ (no GPU-parity
 > disturbance). Branch `slice4-gpu-page-integration`, pushed.
 >
 > **Architecture shipped (GPU/Rust-first, engine-modular):**

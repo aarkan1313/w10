@@ -10,11 +10,17 @@ mod gpu_macro;
 pub use gpu_macro::gpu_macro_region;
 
 mod percentile_provider;
+// Public engine-API surface: the swappable percentile-provider types. Some are not yet referenced
+// inside the crate (consumed by tests / downstream games / pending wiring) -> allow unused re-export.
+#[allow(unused_imports)]
 pub use percentile_provider::{
     PercentileFields, PercentileProvider, ScalarRegionPercentiles, SmoothFieldPercentiles,
 };
 
 mod worker;
+// Public worker API surface (result types are consumed by the pool's drain + tests). Allow the
+// re-exports the crate doesn't reference internally yet.
+#[allow(unused_imports)]
 pub use worker::{BakeWorker, BakedRegionFact, SuperBakeRequest, SuperBakeResult};
 
 #[cfg(test)]
