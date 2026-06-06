@@ -29,6 +29,8 @@ mod region_bake_tests;
 mod percentile_seam_tests;
 #[cfg(test)]
 mod super_region_tests;
+#[cfg(test)]
+mod outer_seam_tests;
 
 /// Externally supplied conditioning percentiles (cross-region seam reconcile). When `None`,
 /// `bake_region_from_raw` self-computes them per-region (the single-region / interior case).
