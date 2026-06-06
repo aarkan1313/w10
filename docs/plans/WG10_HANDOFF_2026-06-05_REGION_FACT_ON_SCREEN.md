@@ -159,7 +159,14 @@ python tools\gate.py --suite biome_page      # all-11 GPU parity regression (3/3
 # 3. THE OWNER A/B: run the review scene WINDOWED, fly Step 4 (press `4`):
 & $env:GODOT_BIN --path D:\workflows\worldgen10\wg-10 res://worldgen_terrain/harness/feature_review.tscn
 ```
-(Windowed gates work WINDOWED ONLY — headless returns no RenderingDevice and they `skip`. The
-worktree's 244 dirty files are an old backlog; the gate/scene `.uid` files this session generated
-are committed. If the editor is open, ASK the owner to close it before windowed gates — do NOT
-force-kill it.)
+(Windowed gates work WINDOWED ONLY — headless returns no RenderingDevice and they `skip`. If the
+editor is open, ASK the owner to close it before windowed gates — do NOT force-kill it.)
+
+**Untracked `.uid` noise (harmless, expected):** running the windowed gates triggers a Godot
+project-import pass that generates `~58 *.gd.uid` files across the WHOLE harness/tests tree (for
+already-tracked `.gd` scenes I did NOT author). These are regenerable import artifacts, NOT source
+— leave them untracked; do NOT bulk-commit them (that would sweep in files for scenes you didn't
+touch). Only the THREE `.uid`s for THIS session's NEW gates
+(`region_macro_readback_check`, `bake_worker_check`, `region_fact_runtime_check`) are committed
+(they had no prior tracked companion; the repo convention tracks `.gd.uid`). So a fresh `git
+status` showing dozens of untracked `*.gd.uid` is EXPECTED after gate runs — ignore it.
