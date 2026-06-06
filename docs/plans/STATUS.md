@@ -56,6 +56,26 @@
 > carve once the player-to-world SCALE CONTRACT is settled). (3) Worker GPU-context reuse —
 > currently rebuilds the RD+context per super-bake (correct + isolated; cache if super-bakes
 > become frequent on the live path).
+>
+> **POST-INTEGRATION (2026-06-05): non-visual fixes + UNIFIED REVIEW SCENE.** cargo lib now
+> **268/268** (added 3 gates). Closed the audit's #1 gap: `region_bake/outer_seam_tests.rs`
+> proves the smooth percentile field is **0-ULP seam-exact across SUPER-region OUTER borders**
+> (different super-keys, shared world sampler) — and MEASURES the remaining ~5.9 m conditioned
+> outer residual (`[outer-seam] percentile_border=0 ULP conditioned_border=5.8716m`, the
+> carve+gaussian k-knob tradeoff, printed not hidden). Added a slice→sample bit-faithfulness
+> gate (max_err 0.0) and a `Wg10PagePool::region_fact_stats()` getter (active/cached_regions/
+> baking_in_flight) for the review HUD.
+> **NEW UNIFIED REVIEW SCENE — `wg-10/worldgen_terrain/harness/feature_review.tscn`** (run
+> WINDOWED): fly + profile EVERY shippable terrain feature SEQUENTIALLY, one producer per step,
+> on the SAME clipmap pipeline. Steps: 1 accepted reference · 2 live macro · 3 live+flow ·
+> **4 CARVED BAKED LOOK (region-fact producer — this session's feature, first time it has a fly
+> scene)** · 5 world diagnostic · 6 legacy. Controls: `]`/`[` next/prev, `1-0` jump, WASD+Shift
+> fly (~1000 m/s), M morph heatmap, N detail, R reframe, P profiling snapshot. HUD shows fps /
+> frame p99 / **real GPU p99** (viewport_get_measured_render_time_gpu) / pool stats / region-fact
+> bake progress. Composes the existing harness (Wg10FlyCamera/Profiler/config helper/TerrainView)
+> — no duplication. Smoke-verified windowed: loads + configures every step, no script errors,
+> startup transient identical to the accepted `m3_review` baseline. OWNER FLY = the deferred
+> visual A/B (smooth-field vs per-region look) now has a home — Step 4 is where to judge it.
 
 > **PRODUCER-WIRING DESIGN FORCED BY MEASUREMENT (2026-06-05).** Goal: wire
 > `bake_region` into the live producer so the carved look reaches the screen (closes
